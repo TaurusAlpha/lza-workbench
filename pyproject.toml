@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lza-workbench"
+version = "0.1.0"
+description = "Toolkit for initializing and managing AWS Landing Zone Accelerator projects"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+lza = "lza_workbench.cli:main"
+lza-workbench = "lza_workbench.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.4.0", "ruff>=0.12.0"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
