@@ -2,16 +2,16 @@
 
 ## Project Setup
 
-- [ ] Create Python project structure.
-- [ ] Choose final package name.
-- [ ] Add CLI entrypoint.
-- [ ] Add basic `README.md`.
-- [ ] Add `PROJECT.md`.
-- [ ] Add `TODO.md`.
-- [ ] Add `.gitignore`.
-- [ ] Add formatter/linter configuration.
-- [ ] Add basic test structure.
-- [ ] Decide whether to use `uv`, Poetry, Hatch, or plain pip.
+- [x] Create Python project structure.
+- [x] Choose final package name.
+- [x] Add CLI entrypoint.
+- [x] Add basic `README.md`.
+- [x] Add `PROJECT.md`.
+- [x] Add `TODO.md`.
+- [x] Add `.gitignore`.
+- [x] Add formatter/linter configuration.
+- [x] Add basic test structure.
+- [x] Decide whether to use `uv`, Poetry, Hatch, or plain pip.
 
 ## init command
 
