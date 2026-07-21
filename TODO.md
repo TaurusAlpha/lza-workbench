@@ -13,25 +13,196 @@
 - [x] Add basic test structure.
 - [x] Decide whether to use `uv`, Poetry, Hatch, or plain pip.
 
-## init command
+## CLI Commands
 
-Features:
+- [ ] `lza init`
+- [ ] `lza profile check`
+- [ ] `lza installer deploy`
+- [ ] `lza installer update`
+- [ ] `lza config upload`
+- [ ] `lza config download`
+- [ ] `lza pipeline start`
+- [ ] `lza pipeline watch`
+- [ ] `lza status`
+- [ ] `lza doctor`
 
-- [ ] Normalize customer name into slug.
+### `lza init`
+
+Create a new customer-specific LZA project workspace.
+
+Implementation checklist:
+
+- [ ] Accept customer name as an argument.
+- [ ] Normalize customer name into a filesystem-safe slug.
   - Example: `Comm-IT` -> `comm-it`
-- [ ] Create customer workspace folder.
+- [ ] Accept or ask for the target workspace directory.
+- [ ] Prevent accidental overwrite of an existing project.
+- [ ] Support explicit overwrite or reinitialization behavior.
+- [ ] Create the customer workspace folder.
 - [ ] Create `lza-project.yaml`.
-- [ ] Ask for AWS profile.
-- [ ] Ask for AWS region.
-- [ ] Ask for LZA version.
-- [ ] Ask for template source.
-- [ ] Ask for template name.
-- [ ] Copy selected `aws-accelerator-config` template.
+- [ ] Ask for or accept AWS profile.
+- [ ] Ask for or accept AWS region.
+- [ ] Ask for or accept LZA version.
+- [ ] Ask for or accept template source.
+- [ ] Ask for or accept template name.
+- [ ] Copy the selected `aws-accelerator-config` template.
+- [ ] Validate the copied template structure.
 - [ ] Generate initial `.lza/state.json`.
-- [ ] Generate installer folder.
-- [ ] Generate initial installer parameter file.
-- [ ] Generate helper scripts.
-- [ ] Print next recommended commands.
+- [ ] Generate installer parameter files.
+- [ ] Store all selected initialization values in `lza-project.yaml`.
+- [ ] Validate the selected AWS profile unless skipped.
+- [ ] Print a concise initialization summary.
+- [ ] Print the next recommended commands.
+- [ ] Support non-interactive execution through CLI options.
+- [ ] Support `--dry-run`.
+- [ ] Support `--force`.
+- [ ] Support `--skip-aws-check`.
+
+### `lza profile check`
+
+Validate AWS access for the profile configured in the current project or provided explicitly.
+
+Implementation checklist:
+
+- [ ] Read profile and region from `lza-project.yaml`.
+- [ ] Support explicit `--profile`.
+- [ ] Support explicit `--region`.
+- [ ] Run `sts:GetCallerIdentity`.
+- [ ] Show AWS account ID.
+- [ ] Show caller ARN.
+- [ ] Show detected user or role identity.
+- [ ] Compare the detected account with the expected management account.
+- [ ] Return a non-zero exit code when validation fails.
+- [ ] Provide clear errors for expired SSO sessions or invalid credentials.
+
+### `lza installer deploy`
+
+Deploy the LZA installer stack for the current project.
+
+Implementation checklist:
+
+- [ ] Read installer settings from `lza-project.yaml`.
+- [ ] Resolve the installer template for the selected LZA version.
+- [ ] Load installer parameters.
+- [ ] Validate required parameters before deployment.
+- [ ] Show the planned stack name, account, and region.
+- [ ] Support `--dry-run`.
+- [ ] Create the installer stack.
+- [ ] Wait for stack completion.
+- [ ] Display stack events when deployment fails.
+- [ ] Save deployment metadata to `.lza/state.json`.
+
+### `lza installer update`
+
+Update an existing LZA installer stack.
+
+Implementation checklist:
+
+- [ ] Detect the existing installer stack.
+- [ ] Compare current and requested parameters.
+- [ ] Show planned changes before execution.
+- [ ] Support `--dry-run`.
+- [ ] Update the stack.
+- [ ] Handle no-change responses cleanly.
+- [ ] Wait for update completion.
+- [ ] Display stack events when the update fails.
+- [ ] Update `.lza/state.json`.
+
+### `lza config upload`
+
+Upload the customer `aws-accelerator-config` to the configured LZA configuration source.
+
+Implementation checklist:
+
+- [ ] Read configuration source settings from `lza-project.yaml`.
+- [ ] Validate required configuration files.
+- [ ] Detect unresolved replacement values.
+- [ ] Package the configuration when required.
+- [ ] Support S3 configuration repositories.
+- [ ] Support additional repository types later.
+- [ ] Show the target destination before upload.
+- [ ] Support `--dry-run`.
+- [ ] Save upload metadata to `.lza/state.json`.
+
+### `lza config download`
+
+Download the current aws-accelerator-config from the configured LZA configuration source into the customer workspace.
+
+Implementation checklist:
+
+- [ ] Read configuration source settings from `lza-project.yaml`.
+- [ ] Detect the configured repository type.
+- [ ] Support S3 configuration repositories.
+- [ ] Support additional repository types later.
+- [ ] Validate the destination workspace.
+- [ ] Prevent accidental overwrite of local changes.
+- [ ] Support `--force`.
+- [ ] Support `--dry-run`.
+- [ ] Download the complete aws-accelerator-config.
+- [ ] Validate the downloaded template structure.
+- [ ] Preserve file permissions where applicable.
+- [ ] Update `.lza/state.json` with download metadata.
+- [ ] Print a concise summary of downloaded files and source location.
+
+### `lza pipeline start`
+
+Start the configured LZA pipeline.
+
+Implementation checklist:
+
+- [ ] Detect the pipeline name from project configuration or AWS.
+- [ ] Show the target account, region, and pipeline.
+- [ ] Start a new pipeline execution.
+- [ ] Return the pipeline execution ID.
+- [ ] Save execution metadata to `.lza/state.json`.
+- [ ] Prevent accidental duplicate execution when appropriate.
+
+### `lza pipeline watch`
+
+Monitor an LZA pipeline execution.
+
+Implementation checklist:
+
+- [ ] Watch the latest execution by default.
+- [ ] Support a specific execution ID.
+- [ ] Show stage and action status.
+- [ ] Refresh output without excessive API calls.
+- [ ] Detect failed CodeBuild actions.
+- [ ] Show relevant failure details.
+- [ ] Exit successfully when the pipeline succeeds.
+- [ ] Return a non-zero exit code when the pipeline fails.
+
+### `lza status`
+
+Show the current state of the customer LZA project.
+
+Implementation checklist:
+
+- [ ] Read `lza-project.yaml`.
+- [ ] Read `.lza/state.json`.
+- [ ] Show customer name and workspace path.
+- [ ] Show configured AWS profile and region.
+- [ ] Show selected LZA version.
+- [ ] Show installer stack status.
+- [ ] Show configuration source.
+- [ ] Show latest pipeline execution status.
+- [ ] Clearly distinguish configured, detected, and unknown values.
+
+### `lza doctor`
+
+Run local and AWS checks for the current project.
+
+Implementation checklist:
+
+- [ ] Validate `lza-project.yaml`.
+- [ ] Validate required project files and directories.
+- [ ] Validate template structure.
+- [ ] Validate AWS profile access.
+- [ ] Validate expected AWS account.
+- [ ] Validate installer parameter completeness.
+- [ ] Validate configuration upload target.
+- [ ] Detect unresolved placeholders.
+- [ ] Produce a concise pass, warning, and failure summary.
 
 ## AWS Profile handling
 
