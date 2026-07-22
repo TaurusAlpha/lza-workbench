@@ -15,7 +15,7 @@
 
 ## CLI Commands
 
-- [ ] `lza init`
+- [x] `lza init`
 - [ ] `lza profile check`
 - [ ] `lza installer deploy`
 - [ ] `lza installer update`
@@ -32,31 +32,31 @@ Create a new customer-specific LZA project workspace.
 
 Implementation checklist:
 
-- [ ] Accept customer name as an argument.
-- [ ] Normalize customer name into a filesystem-safe slug.
+- [x] Accept customer name as an argument.
+- [x] Normalize customer name into a filesystem-safe slug.
   - Example: `Comm-IT` -> `comm-it`
-- [ ] Accept or ask for the target workspace directory.
-- [ ] Prevent accidental overwrite of an existing project.
-- [ ] Support explicit overwrite or reinitialization behavior.
-- [ ] Create the customer workspace folder.
-- [ ] Create `lza-project.yaml`.
-- [ ] Ask for or accept AWS profile.
-- [ ] Ask for or accept AWS region.
-- [ ] Ask for or accept LZA version.
-- [ ] Ask for or accept template source.
+- [x] Accept or ask for the target workspace directory.
+- [x] Prevent accidental overwrite of an existing project.
+- [x] Support explicit overwrite or reinitialization behavior.
+- [x] Create the customer workspace folder.
+- [x] Create `lza-project.yaml`.
+- [x] Ask for or accept AWS profile.
+- [x] Ask for or accept AWS region.
+- [x] Ask for or accept LZA version.
+- [x] Ask for or accept template source.
 - [ ] Ask for or accept template name.
-- [ ] Copy the selected `aws-accelerator-config` template.
-- [ ] Validate the copied template structure.
-- [ ] Generate initial `.lza/state.json`.
-- [ ] Generate installer parameter files.
-- [ ] Store all selected initialization values in `lza-project.yaml`.
-- [ ] Validate the selected AWS profile unless skipped.
-- [ ] Print a concise initialization summary.
-- [ ] Print the next recommended commands.
-- [ ] Support non-interactive execution through CLI options.
-- [ ] Support `--dry-run`.
-- [ ] Support `--force`.
-- [ ] Support `--skip-aws-check`.
+- [x] Copy the selected `aws-accelerator-config` template.
+- [x] Validate the copied template structure.
+- [x] Generate initial `.lza/state.json`.
+- [x] Generate installer parameter files.
+- [x] Store all selected initialization values in `lza-project.yaml`.
+- [x] Validate the selected AWS profile unless skipped.
+- [x] Print a concise initialization summary.
+- [x] Print the next recommended commands.
+- [x] Support non-interactive execution through CLI options.
+- [x] Support `--dry-run`.
+- [x] Support `--force`.
+- [x] Support `--skip-aws-check`.
 
 ### `lza profile check`
 
