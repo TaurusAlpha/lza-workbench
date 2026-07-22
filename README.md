@@ -2,13 +2,13 @@
 
 A local CLI toolkit for initializing and managing AWS Landing Zone Accelerator (LZA) projects.
 
-The repository contains the application source code, reusable LZA templates, and development assets. It does not contain customer projects or deployment artifacts.
+The repository contains the application source code, bundled LZA templates, and development assets. It does not contain customer projects or deployment artifacts.
 
 ## Repository Layout
 
 - `src/` — Application source code and all execution logic.
 - `tests/` — Automated tests.
-- `templates/` — Reusable starter LZA configuration templates.
+- `src/lza_workbench/templates/` — Bundled templates shipped with the CLI.
 - `PROJECT.md` — Long-term project vision, architecture, and design principles.
 - `TODO.md` — Feature backlog and implementation ideas.
 
@@ -20,6 +20,30 @@ Clone the repository, install the development dependencies, and run the quality 
 uv sync --group dev
 uv run ruff check .
 uv run pytest
+```
+
+Create a customer workspace from the bundled default template:
+
+```bash
+uv run lza init comm-it --skip-aws-check
+```
+
+The command prompts for missing values and writes:
+
+```text
+comm-it/
+  lza-project.yaml
+  aws-accelerator-config/
+  aws-accelerator-installer/
+  .lza/
+    state.json
+    logs/
+```
+
+Use `--dry-run` to preview the file operations without writing anything:
+
+```bash
+uv run lza init comm-it --dry-run --skip-aws-check
 ```
 
 ## Design Principles
@@ -70,6 +94,12 @@ Test from any directory:
 ```bash
 lza
 lza-workbench
+```
+
+Initialize a workspace after installing the CLI:
+
+```bash
+lza init comm-it --skip-aws-check
 ```
 
 Reinstall after code changes to test latest local version:

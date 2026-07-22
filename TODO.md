@@ -17,6 +17,7 @@
 
 - [x] `lza init`
 - [ ] `lza profile check`
+- [ ] `lza installer download`
 - [ ] `lza installer deploy`
 - [ ] `lza installer update`
 - [ ] `lza config upload`
@@ -29,7 +30,6 @@
 ### `lza init`
 
 Create a new customer-specific LZA project workspace.
-
 Implementation checklist:
 
 - [x] Accept customer name as an argument.
@@ -44,11 +44,9 @@ Implementation checklist:
 - [x] Ask for or accept AWS region.
 - [x] Ask for or accept LZA version.
 - [x] Ask for or accept template source.
-- [ ] Ask for or accept template name.
 - [x] Copy the selected `aws-accelerator-config` template.
 - [x] Validate the copied template structure.
 - [x] Generate initial `.lza/state.json`.
-- [x] Generate installer parameter files.
 - [x] Store all selected initialization values in `lza-project.yaml`.
 - [x] Validate the selected AWS profile unless skipped.
 - [x] Print a concise initialization summary.
@@ -57,11 +55,13 @@ Implementation checklist:
 - [x] Support `--dry-run`.
 - [x] Support `--force`.
 - [x] Support `--skip-aws-check`.
+- [x] Detect a non-empty target workspace.
+- [ ] Offer to import the existing workspace instead of creating a new project.
+- [ ] Generate missing LZA Workbench metadata (`lza-project.yaml`, `.lza/state.json`, etc.) without modifying the existing customer configuration.
 
 ### `lza profile check`
 
 Validate AWS access for the profile configured in the current project or provided explicitly.
-
 Implementation checklist:
 
 - [ ] Read profile and region from `lza-project.yaml`.
@@ -75,16 +75,28 @@ Implementation checklist:
 - [ ] Return a non-zero exit code when validation fails.
 - [ ] Provide clear errors for expired SSO sessions or invalid credentials.
 
+### `lza installer download`
+
+Download the LZA installer template for the selected version into the customer workspace.
+Implementation checklist:
+
+- [ ] Read selected LZA version from `lza-project.yaml`.
+- [ ] Locate the downloaded installer template.
+- [ ] Download it automatically if it is missing.
+- [ ] Update the downloaded template structure with Anonymous Data Sharing disabled by default.
+- Template URL Latest: <https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/latest/AWSAccelerator-InstallerStack.template>
+- Template URL Versioned: <https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/{LZA_VERSION}/AWSAccelerator-InstallerStack.template>
+- LZA_VERSION format: `v1.0.0`, `v2.0.0`, etc.
+
 ### `lza installer deploy`
 
 Deploy the LZA installer stack for the current project.
-
 Implementation checklist:
 
 - [ ] Read installer settings from `lza-project.yaml`.
 - [ ] Resolve the installer template for the selected LZA version.
-- [ ] Load installer parameters.
-- [ ] Validate required parameters before deployment.
+- [ ] Render CloudFormation parameters from `lza-project.yaml`.
+- [ ] Validate required installer settings before deployment.
 - [ ] Show the planned stack name, account, and region.
 - [ ] Support `--dry-run`.
 - [ ] Create the installer stack.
@@ -107,11 +119,12 @@ Implementation checklist:
 - [ ] Wait for update completion.
 - [ ] Display stack events when the update fails.
 - [ ] Update `.lza/state.json`.
+- [ ] Read installer settings from `lza-project.yaml`.
+- [ ] Render CloudFormation parameters from `lza-project.yaml`.
 
 ### `lza config upload`
 
 Upload the customer `aws-accelerator-config` to the configured LZA configuration source.
-
 Implementation checklist:
 
 - [ ] Read configuration source settings from `lza-project.yaml`.
@@ -127,7 +140,6 @@ Implementation checklist:
 ### `lza config download`
 
 Download the current aws-accelerator-config from the configured LZA configuration source into the customer workspace.
-
 Implementation checklist:
 
 - [ ] Read configuration source settings from `lza-project.yaml`.
@@ -147,7 +159,6 @@ Implementation checklist:
 ### `lza pipeline start`
 
 Start the configured LZA pipeline.
-
 Implementation checklist:
 
 - [ ] Detect the pipeline name from project configuration or AWS.
@@ -160,7 +171,6 @@ Implementation checklist:
 ### `lza pipeline watch`
 
 Monitor an LZA pipeline execution.
-
 Implementation checklist:
 
 - [ ] Watch the latest execution by default.
@@ -175,7 +185,6 @@ Implementation checklist:
 ### `lza status`
 
 Show the current state of the customer LZA project.
-
 Implementation checklist:
 
 - [ ] Read `lza-project.yaml`.
@@ -191,7 +200,6 @@ Implementation checklist:
 ### `lza doctor`
 
 Run local and AWS checks for the current project.
-
 Implementation checklist:
 
 - [ ] Validate `lza-project.yaml`.
@@ -199,34 +207,24 @@ Implementation checklist:
 - [ ] Validate template structure.
 - [ ] Validate AWS profile access.
 - [ ] Validate expected AWS account.
-- [ ] Validate installer parameter completeness.
+- [ ] Validate installer settings completeness.
 - [ ] Validate configuration upload target.
 - [ ] Detect unresolved placeholders.
 - [ ] Produce a concise pass, warning, and failure summary.
 
-## AWS Profile handling
-
-- [ ] Run `sts:GetCallerIdentity` using selected profile.
-- [ ] Show account ID, ARN, and user/role identity.
-- [ ] Warn if profile does not work.
-- [ ] Warn if actual account ID does not match expected management account ID.
-- [ ] Support `--skip-aws-check`.
-- [ ] Support `--profile`.
-- [ ] Support `--region`.
+## Authentication
 
 Authentication ownership:
 
 - [ ] Keep AWS authentication external to the tool.
 - [ ] Document that AWS SSO/static keys/assume-role/proxy/bastion setup is user-managed.
+- [ ] Centralize AWS session/profile resolution for reuse by all commands.
 - [ ] Lowest priority future feature: helper for AWS profile creation or authentication onboarding.
 
-## Installer
+## Installer Components
 
-### Parameters
-
-- [ ] Define installer parameter schema.
-- [ ] Render `installer/parameters.yaml`.
-- [ ] Render `installer/parameters.json`.
+- [ ] Define installer settings schema in `lza-project.yaml`.
+- [ ] Render CloudFormation parameters in memory for deploy/update.
 - [ ] Support default values.
 - [ ] Disable anonymous data sharing by default.
 - [ ] Support approval stage email list.
@@ -239,23 +237,13 @@ Authentication ownership:
 - [ ] Support existing config repository options.
 - [ ] Support S3 configuration location.
 
-### Operations
-
-- [ ] `lza profile check`
-- [ ] `lza installer deploy`
-- [ ] `lza installer update`
-- [ ] `lza config upload`
-- [ ] `lza pipeline start`
-- [ ] `lza pipeline watch`
-- [ ] `lza status`
-
 ## Templates
 
-- [ ] Support local template source.
-- [ ] Validate that template contains `aws-accelerator-config`.
-- [ ] Copy template into customer workspace.
-- [ ] Avoid overwriting existing customer config unless explicitly approved.
-- [ ] Support `--force`.
+- [x] Support local template source.
+- [ ] Implement reusable template validation.
+- [x] Copy template into customer workspace.
+- [x] Avoid overwriting existing customer config unless explicitly approved.
+- [x] Support `--force`.
 - [ ] Support template list command.
 - [ ] Support template validation command.
 
@@ -266,43 +254,24 @@ Authentication ownership:
 - [ ] Support template version/ref.
 - [ ] Support cached templates.
 
-## Scripts
+## Validation
 
-Generate simple reviewable scripts:
-
-- [ ] `installer/deploy.sh`
-- [ ] `installer/update.sh`
-- [ ] `scripts/upload-config.sh`
-- [ ] `scripts/start-pipeline.sh`
-- [ ] `scripts/watch-pipeline.sh`
-
-Rules:
-
-- [ ] Scripts should use values from `lza-project.yaml`.
-- [ ] Scripts should be simple and readable.
-- [ ] Scripts should not hide dangerous AWS mutations.
-- [ ] Scripts should include `set -euo pipefail`.
-
-## Validation & Diagnostics
+Shared validation components:
 
 - [ ] Validate `lza-project.yaml`.
-- [ ] Validate required installer parameters.
-- [ ] Validate expected files exist.
-- [ ] Validate selected template structure.
-- [ ] Validate AWS profile identity.
-- [ ] Validate config upload target.
-- [ ] Add `lza doctor`.
-- [ ] Integrate LZA schema validation.
 - [ ] Validate YAML formatting.
-- [ ] Validate replacement placeholders.
-- [ ] Detect unresolved template values.
-- [ ] Detect common LZA config mistakes.
+- [ ] Integrate LZA schema validation.
+- [ ] Validate required installer settings.
+- [ ] Validate selected template structure.
+- [ ] Validate expected project files.
+- [ ] Validate configuration upload target.
+- [ ] Detect unresolved placeholders.
+- [ ] Detect common LZA configuration mistakes.
 
 ## Reports
 
 - [ ] Generate `reports/init-report.md`.
 - [ ] Generate `reports/aws-profile-check.md`.
-- [ ] Generate `reports/installer-params.md`.
 - [ ] Generate `reports/status.md`.
 - [ ] Generate pipeline execution reports.
 - [ ] Generate CodeBuild failure summaries.
@@ -310,8 +279,8 @@ Rules:
 
 ## LZA Versions
 
-- [ ] Store selected LZA version in `lza-project.yaml`.
-- [ ] Support manual version input.
+- [x] Store selected LZA version in `lza-project.yaml`.
+- [x] Support manual version input.
 - [ ] Support version-specific installer template URL.
 - [ ] Support version-specific default branch.
 - [ ] Support blocked/unsupported versions list.
@@ -350,7 +319,6 @@ Rules:
 - [ ] Add example customer project.
 - [ ] Add example template.
 - [ ] Add safe defaults.
-- [ ] Add dry-run mode.
 - [ ] Add clearer error messages.
 - [ ] Add command examples.
 - [ ] Add contribution guidelines.

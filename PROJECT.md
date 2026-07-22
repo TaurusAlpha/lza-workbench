@@ -4,7 +4,7 @@
 
 LZA Workbench is a local, project-based helper tool for AWS Landing Zone Accelerator engineers.
 
-Its initial goal is to automate the customer onboarding/init phase for AWS Landing Zone Accelerator projects by creating a clean customer workspace, copying selected LZA configuration templates, generating project metadata, preparing installer parameters, and providing helper commands for common LZA bootstrap operations.
+Its initial goal is to automate the customer onboarding/init phase for AWS Landing Zone Accelerator projects by creating a clean customer workspace, copying selected LZA configuration templates, generating project metadata, and providing helper commands for common LZA bootstrap operations.
 
 The tool starts as a personal productivity helper but should be structured cleanly enough to become usable by coworkers or the wider community later.
 
@@ -18,7 +18,7 @@ In scope:
 - Copy or initialize `aws-accelerator-config`.
 - Use local or Git-based LZA configuration templates.
 - Generate and store project metadata.
-- Prepare installer stack parameters.
+- Copy or resolve the LZA installer stack template.
 - Generate helper scripts or commands for LZA bootstrap workflows.
 - Validate that the selected AWS profile can access the target account.
 - Support multiple LZA versions.
@@ -63,7 +63,7 @@ customers/
   comm-it/
     lza-project.yaml
     aws-accelerator-config/
-    installer/
+    aws-accelerator-installer/
     scripts/
     .lza/
 ```
@@ -97,7 +97,8 @@ lza:
   version: v1.12.1
   accelerator_prefix: AWSAccelerator
   config_repository_location: s3
-  template_name: comm-it-default
+  template_source_type: bundled
+  template_source: default
 
 installer:
   control_tower_enabled: true
@@ -112,20 +113,20 @@ The CLI may collect these values interactively, but it should persist them into 
 
 Templates may come from:
 
+- bundled templates
 - local folder
 - Git repository
 - Bitbucket repository
 - future custom template providers
 
-Initial version should support local templates first.
+Initial version supports the bundled default template and local template folders. Git and Bitbucket template sources are future work.
 
 Example:
 
 ```yaml
-templates:
-  source_type: local
-  source: ~/templates/lza
-  name: comm-it-default
+lza:
+  template_source_type: local
+  template_source: ~/templates/lza/default
 ```
 
 After a template is copied into a customer workspace, it becomes customer-owned configuration.
@@ -140,7 +141,7 @@ The first supported workflow is customer initialization. The primary entry point
 lza init comm-it
 ```
 
-This workflow creates a new customer workspace, collects the minimum required project metadata, copies the selected LZA template, prepares installer configuration, validates the selected AWS profile, and leaves the project ready for the next deployment steps. The exact implementation of this workflow is intentionally maintained in TODO.md rather than this document.
+This workflow creates a new customer workspace, collects the minimum required project metadata, copies the selected LZA configuration template, creates local state, validates the selected AWS profile unless skipped, and leaves the project ready for the next deployment steps. The exact implementation of this workflow is intentionally maintained in TODO.md rather than this document.
 
 ## Workspace Model
 
@@ -156,16 +157,8 @@ comm-it/
     security-config.yaml
     replacements-config.yaml
 
-  installer/
-    parameters.yaml
-    parameters.json
-    deploy.sh
-    update.sh
-
-  scripts/
-    upload-config.sh
-    start-pipeline.sh
-    watch-pipeline.sh
+  aws-accelerator-installer/
+    AWSAccelerator-InstallerStack.template.json
 
   .lza/
     state.json
@@ -189,6 +182,7 @@ Example state:
   "customer": "comm-it",
   "lza_version": "v1.12.1",
   "aws_profile": "comm-it-root",
+  "aws_region": "eu-west-1",
   "installer_stack_name": "AWSAccelerator-InstallerStack",
   "config_location": "s3",
   "last_pipeline_execution_id": null
