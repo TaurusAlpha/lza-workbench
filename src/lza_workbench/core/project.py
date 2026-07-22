@@ -75,10 +75,6 @@ def state_metadata(request: InitRequest) -> dict[str, Any]:
     }
 
 
-def installer_parameters(request: InitRequest) -> dict[str, Any]:
-    return request.installer.model_dump()
-
-
 def write_yaml(path: Path, data: dict[str, Any]) -> None:
     yaml = YAML()
     yaml.default_flow_style = False

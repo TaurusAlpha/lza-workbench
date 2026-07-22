@@ -10,7 +10,6 @@ import typer
 
 from lza_workbench.core.project import (
     InitRequest,
-    installer_parameters,
     project_metadata,
     state_metadata,
     write_json,
@@ -47,15 +46,13 @@ def create_workspace(request: InitRequest) -> None:
     """Create or reinitialize generated workspace files."""
     request.project_dir.mkdir(parents=True, exist_ok=True)
     (request.project_dir / ".lza" / "logs").mkdir(parents=True, exist_ok=True)
-    (request.project_dir / "installer").mkdir(parents=True, exist_ok=True)
+    (request.project_dir / "aws-accelerator-installer").mkdir(parents=True, exist_ok=True)
 
     _replace_directory(
         source=request.template_config_dir,
         destination=request.project_dir / "aws-accelerator-config",
     )
     write_yaml(request.project_dir / "lza-project.yaml", project_metadata(request))
-    write_yaml(request.project_dir / "installer" / "parameters.yaml", installer_parameters(request))
-    write_json(request.project_dir / "installer" / "parameters.json", installer_parameters(request))
     write_json(request.project_dir / ".lza" / "state.json", state_metadata(request))
 
 
@@ -64,8 +61,7 @@ def planned_write_paths(request: InitRequest) -> list[Path]:
         request.project_dir,
         request.project_dir / "lza-project.yaml",
         request.project_dir / "aws-accelerator-config",
-        request.project_dir / "installer" / "parameters.yaml",
-        request.project_dir / "installer" / "parameters.json",
+        request.project_dir / "aws-accelerator-installer",
         request.project_dir / ".lza" / "state.json",
         request.project_dir / ".lza" / "logs",
     ]

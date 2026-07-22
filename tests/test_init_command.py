@@ -114,10 +114,10 @@ def test_create_workspace_generates_expected_files(tmp_path: Path) -> None:
 
     project_file = request.project_dir / "lza-project.yaml"
     state_file = request.project_dir / ".lza" / "state.json"
-    parameters_json = request.project_dir / "installer" / "parameters.json"
 
     assert project_file.is_file()
     assert (request.project_dir / "aws-accelerator-config" / "iam-config.yaml").is_file()
+    assert (request.project_dir / "aws-accelerator-installer").is_dir()
     assert (request.project_dir / ".lza" / "logs").is_dir()
     assert json.loads(state_file.read_text(encoding="utf-8")) == {
         "customer": "comm-it",
@@ -128,13 +128,9 @@ def test_create_workspace_generates_expected_files(tmp_path: Path) -> None:
         "config_location": "s3",
         "last_pipeline_execution_id": None,
     }
-    assert json.loads(parameters_json.read_text(encoding="utf-8")) == {
-        "control_tower_enabled": True,
-        "enable_approval_stage": True,
-        "enable_diagnostics_pack": True,
-        "anonymous_data": False,
-    }
-    assert "template_source_type: local" in project_file.read_text(encoding="utf-8")
+    project_text = project_file.read_text(encoding="utf-8")
+    assert "template_source_type: local" in project_text
+    assert "anonymous_data: false" in project_text
 
 
 def test_run_init_dry_run_does_not_create_workspace(tmp_path: Path) -> None:
