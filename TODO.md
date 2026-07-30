@@ -56,8 +56,37 @@ Implementation checklist:
 - [x] Support `--force`.
 - [x] Support `--skip-aws-check`.
 - [x] Detect a non-empty target workspace.
-- [ ] Offer to import the existing workspace instead of creating a new project.
-- [ ] Generate missing LZA Workbench metadata (`lza-project.yaml`, `.lza/state.json`, etc.) without modifying the existing customer configuration.
+- [x] Offer to import the existing workspace instead of creating a new project.
+
+### `lza import`
+
+Adopt an existing local LZA configuration without modifying customer-owned files.
+
+- [x] Accept a workspace root or its direct `aws-accelerator-config` directory.
+- [x] Default the workspace to the current directory.
+- [x] Validate the existing `aws-accelerator-config` structure before import.
+- [x] Reject nested, missing, or symlinked configuration layouts with a clear error.
+- [x] Preserve all existing customer configuration files byte-for-byte.
+- [x] Generate only `lza-project.yaml` and `.lza/state.json`.
+- [x] Store imported configuration as a local workspace template source.
+- [x] Support interactive prompts and non-interactive CLI options.
+- [x] Support `--dry-run`.
+- [x] Detect complete, partial, invalid, and inconsistent Workbench metadata.
+- [x] Update only selected metadata and preserve unknown or operational fields.
+- [x] Preserve YAML comments and formatting where practical.
+- [x] Treat unchanged repeat imports as a successful no-op.
+- [x] Write changed metadata atomically.
+- [x] Offer the import workflow from interactive `lza init`.
+- [x] Keep `lza init --force` as the explicit reinitialization path.
+
+Future import enhancements:
+
+- [ ] Repair missing or invalid Workbench metadata.
+- [ ] Support forced metadata replacement.
+- [ ] Parse and validate imported YAML content.
+- [ ] Integrate version-aware official LZA schema validation.
+- [ ] Record or resolve remote/Git template provenance.
+- [ ] Generate installer parameters as part of the installer workflow, not import.
 
 ### `lza profile check`
 

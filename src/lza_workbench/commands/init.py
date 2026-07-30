@@ -40,11 +40,11 @@ def collect_init_request(
 ) -> InitRequest:
     """Resolve CLI inputs and prompt for required missing values when possible."""
     customer_slug = normalize_customer_slug(customer_name)
-    project_dir = _workspace_dir_or_prompt(
-        workspace_dir,
-        default=Path.cwd() / customer_slug,
+    project_dir = resolve_init_project_dir(
+        customer_name=customer_name,
+        workspace_dir=workspace_dir,
         interactive=interactive,
-    ).expanduser().resolve()
+    )
     selected_aws_profile = _string_value_or_prompt(
         "AWS profile",
         aws_profile,
@@ -86,6 +86,21 @@ def collect_init_request(
         force=force,
         skip_aws_check=skip_aws_check,
     )
+
+
+def resolve_init_project_dir(
+    *,
+    customer_name: str,
+    workspace_dir: Path | None,
+    interactive: bool,
+) -> Path:
+    """Resolve the init target before collecting template and AWS settings."""
+    customer_slug = normalize_customer_slug(customer_name)
+    return _workspace_dir_or_prompt(
+        workspace_dir,
+        default=Path.cwd() / customer_slug,
+        interactive=interactive,
+    ).expanduser().resolve()
 
 
 def run_init(request: InitRequest) -> None:
