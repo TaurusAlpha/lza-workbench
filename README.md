@@ -46,6 +46,46 @@ Use `--dry-run` to preview the file operations without writing anything:
 uv run lza init comm-it --dry-run --skip-aws-check
 ```
 
+## Import an Existing Workspace
+
+Adopt an existing customer-owned LZA configuration from its workspace root:
+
+```bash
+lza import /path/to/comm-it
+```
+
+You can also point directly to the configuration directory:
+
+```bash
+lza import /path/to/comm-it/aws-accelerator-config
+```
+
+When run without a path, import uses the current directory. Missing metadata values
+are prompted for in an interactive terminal and can be supplied explicitly for scripts:
+
+```bash
+lza import /path/to/comm-it \
+  --customer-name Comm-IT \
+  --aws-profile comm-it-root \
+  --aws-region eu-west-1 \
+  --lza-version v1.15.5
+```
+
+Import validates the existing configuration structure but never writes beneath
+`aws-accelerator-config/`. It creates or updates only `lza-project.yaml` and
+`.lza/state.json`. It does not contact AWS; use `lza profile check` when that command
+is available to validate the stored profile.
+
+Preview metadata changes without writing:
+
+```bash
+lza import /path/to/comm-it --dry-run
+```
+
+Interactive `lza init` also offers to import a valid existing configuration when its
+target directory is already populated. `lza init --force` retains its explicit
+reinitialization behavior.
+
 ## Design Principles
 
 - Keep business logic in Python.

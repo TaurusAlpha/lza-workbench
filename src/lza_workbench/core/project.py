@@ -42,7 +42,26 @@ class InitRequest(BaseModel):
     installer: InstallerSettings = InstallerSettings()
 
 
-def project_metadata(request: InitRequest) -> dict[str, Any]:
+class ImportRequest(BaseModel):
+    """Resolved inputs for importing an existing customer workspace."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    customer_name: str
+    customer_slug: str
+    workspace_dir: Path
+    project_dir: Path
+    aws_profile: str
+    aws_region: str
+    lza_version: str
+    template_source: str
+    template_source_type: str = "local"
+    template_config_dir: Path
+    dry_run: bool = False
+    installer: InstallerSettings = InstallerSettings()
+
+
+def project_metadata(request: InitRequest | ImportRequest) -> dict[str, Any]:
     return {
         "customer": {
             "name": request.customer_name,
@@ -63,7 +82,7 @@ def project_metadata(request: InitRequest) -> dict[str, Any]:
     }
 
 
-def state_metadata(request: InitRequest) -> dict[str, Any]:
+def state_metadata(request: InitRequest | ImportRequest) -> dict[str, Any]:
     return {
         "customer": request.customer_slug,
         "lza_version": request.lza_version,
