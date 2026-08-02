@@ -1,8 +1,8 @@
 # LZA Workbench
 
-A local CLI toolkit for initializing and managing AWS Landing Zone Accelerator (LZA) projects.
+A local CLI toolkit for initializing and managing AWS Landing Zone Accelerator (LZA) workspaces.
 
-The repository contains the application source code, bundled LZA templates, and development assets. It does not contain customer projects or deployment artifacts.
+The repository contains the application source code, bundled LZA templates, and development assets. It does not contain customer workspaces or deployment artifacts.
 
 ## Repository Layout
 
@@ -32,7 +32,7 @@ The command prompts for missing values and writes:
 
 ```text
 comm-it/
-  lza-project.yaml
+  lza-workspace.yaml
   aws-accelerator-config/
   aws-accelerator-installer/
   .lza/
@@ -48,38 +48,40 @@ uv run lza init comm-it --dry-run --skip-aws-check
 
 ## Import an Existing Workspace
 
-Adopt an existing customer-owned LZA configuration from its workspace root:
+Adopt an existing customer-owned LZA configuration from the default workspace path,
+derived from the customer name:
 
 ```bash
-lza import /path/to/comm-it
+lza import comm-it
 ```
 
-You can also point directly to the configuration directory:
+Override the default workspace path, or point directly to the configuration directory:
 
 ```bash
-lza import /path/to/comm-it/aws-accelerator-config
+lza import comm-it --workspace-dir /path/to/comm-it/aws-accelerator-config
 ```
 
-When run without a path, import uses the current directory. Missing metadata values
-are prompted for in an interactive terminal and can be supplied explicitly for scripts:
+When `--workspace-dir` is omitted, import uses `<current-directory>/<customer-slug>`,
+matching `lza init`. Missing metadata values are prompted for in an interactive terminal
+and can be supplied explicitly for scripts:
 
 ```bash
-lza import /path/to/comm-it \
-  --customer-name Comm-IT \
+lza import Comm-IT \
+  --workspace-dir /path/to/comm-it \
   --aws-profile comm-it-root \
   --aws-region eu-west-1 \
   --lza-version v1.15.5
 ```
 
 Import validates the existing configuration structure but never writes beneath
-`aws-accelerator-config/`. It creates or updates only `lza-project.yaml` and
+`aws-accelerator-config/`. It creates or updates only `lza-workspace.yaml` and
 `.lza/state.json`. It does not contact AWS; use `lza profile check` when that command
 is available to validate the stored profile.
 
 Preview metadata changes without writing:
 
 ```bash
-lza import /path/to/comm-it --dry-run
+lza import comm-it --dry-run
 ```
 
 Interactive `lza init` also offers to import a valid existing configuration when its
