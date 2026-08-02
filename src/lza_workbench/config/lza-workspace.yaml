@@ -121,12 +121,10 @@ configuration:
 
 pipelines:
   installer:
-    name: AWSAccelerator-Installer
+    name: AWSAccelerator-InstallerStack
 
   configuration:
     name: AWSAccelerator-Pipeline
 
 cli_defaults:
   debug: false
-  watch_pipeline: true
-  poll_interval_seconds: 30

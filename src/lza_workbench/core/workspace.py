@@ -8,7 +8,9 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 import typer
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -23,7 +25,7 @@ WORKSPACE_STATE_FILE = Path(".lza") / "state.json"
 class WorkspaceModel(BaseModel):
     """Base model for forward-compatible workspace metadata."""
 
-    model_config = ConfigDict(extra="allow", strict=True)
+    model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class CustomerConfig(WorkspaceModel):
@@ -36,36 +38,142 @@ class CustomerConfig(WorkspaceModel):
 class AwsConfig(WorkspaceModel):
     """AWS defaults stored in lza-workspace.yaml."""
 
-    profile: str
-    region: str
+    account_id: str | None = None
+    region: str = "us-east-1"
+    profile: str | None = None
+    role: str | None = None
+    access_key: str | None = None
+    secret_access_key: str | None = None
 
 
 class LzaConfig(WorkspaceModel):
     """Landing Zone Accelerator settings stored in lza-workspace.yaml."""
 
-    version: str
+    version: str = "v1.15.5"
     accelerator_prefix: str = "AWSAccelerator"
-    config_repository_location: str = "s3"
-    template_source_type: str
-    template_source: str
 
 
-class InstallerSettings(WorkspaceModel):
+class InstallerStackTemplateConfig(WorkspaceModel):
+    """Source of the CloudFormation template for the installer stack."""
+
+    source: Literal["amazon", "local", "git", "s3"] = "amazon"
+    path: str | None = None
+    repository: str | None = None
+    ref: str | None = None
+
+
+class InstallerSourceCodeConfig(WorkspaceModel):
+    """Source code consumed by the installer pipeline."""
+
+    repository_type: Literal["github", "codecommit", "s3", "codeconnection"] = "github"
+    owner: str | None = None
+    repository_name: str | None = None
+    branch: str | None = None
+    bucket: str | None = None
+    key: str | None = None
+    connection_arn: str | None = None
+
+
+class InstallerOptionsConfig(WorkspaceModel):
+    """CloudFormation parameters for the installer stack."""
+
+    enable_approval_stage: bool = False
+    enable_diagnostics_pack: bool = False
+    anonymous_data: bool = False
+    approval_stage_notify_email_list: list[str] = Field(default_factory=list)
+    management_account_email: str | None = None
+    audit_account_email: str | None = None
+    log_archive_account_email: str | None = None
+    control_tower_enabled: bool = True
+
+
+class LzaInstaller(WorkspaceModel):
     """Installer defaults persisted for later commands."""
 
-    control_tower_enabled: bool = True
-    enable_approval_stage: bool = True
-    enable_diagnostics_pack: bool = True
-    anonymous_data: bool = False
+    local_path: str = "aws-accelerator-installer"
+    stack_template: InstallerStackTemplateConfig = Field(
+        default_factory=InstallerStackTemplateConfig
+    )
+    source_code: InstallerSourceCodeConfig = Field(default_factory=InstallerSourceCodeConfig)
+    options: InstallerOptionsConfig = Field(default_factory=InstallerOptionsConfig)
+
+
+class ConfigurationTemplateConfig(WorkspaceModel):
+    """Source of the starter LZA configuration."""
+
+    source: Literal["packaged", "local", "git"] = "packaged"
+    name: str | None = "default"
+    path: str | None = None
+    repository: str | None = None
+    ref: str | None = None
+
+
+class ConfigurationRepositoryConfig(WorkspaceModel):
+    """Destination repository for the LZA configuration pipeline."""
+
+    type: Literal["s3", "codecommit", "git"] = "s3"
+    bucket: str | None = None
+    prefix: str | None = None
+    repository_name: str | None = None
+    repository: str | None = None
+    branch: str | None = None
+
+
+class PackagingExcludeConfig(WorkspaceModel):
+    """Files omitted from configuration archives."""
+
+    directories: list[str] = Field(default_factory=lambda: [".git", "backup"])
+    files: list[str] = Field(default_factory=lambda: [".DS_Store"])
+
+
+class PackagingConfig(WorkspaceModel):
+    """Configuration archive packaging settings."""
+
+    exclude: PackagingExcludeConfig = Field(default_factory=PackagingExcludeConfig)
+
+
+class ConfigurationConfig(WorkspaceModel):
+    """Local LZA configuration and its pipeline destination."""
+
+    local_path: str = "aws-accelerator-config"
+    template: ConfigurationTemplateConfig = Field(default_factory=ConfigurationTemplateConfig)
+    repository: ConfigurationRepositoryConfig = Field(default_factory=ConfigurationRepositoryConfig)
+    packaging: PackagingConfig = Field(default_factory=PackagingConfig)
+
+
+class PipelineConfig(WorkspaceModel):
+    """A named configuration LZA pipeline."""
+
+    name: str = "AWSAccelerator-Pipeline"
+    watch: bool = True
+    execute: bool = True
+    detailed_error_reporting: bool = False
+    poll_interval_seconds: int = 30
+
+class PipelineInstaller(WorkspaceModel):
+    """A named installer LZA pipeline."""
+
+    name: str = "AWSAccelerator-InstallerStack"
+
+
+class CliConfig(WorkspaceModel):
+    """Default behavior for interactive and pipeline CLI operations."""
+
+    debug: bool = False
 
 
 class WorkspaceConfig(WorkspaceModel):
     """Validated representation of lza-workspace.yaml."""
 
+    schema_version: int = 2
     customer: CustomerConfig
     aws: AwsConfig
-    lza: LzaConfig
-    installer: InstallerSettings = Field(default_factory=InstallerSettings)
+    lza: LzaConfig = Field(default_factory=LzaConfig)
+    installer: LzaInstaller = Field(default_factory=LzaInstaller)
+    configuration: ConfigurationConfig = Field(default_factory=ConfigurationConfig)
+    config_pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
+    installer_pipeline: PipelineInstaller = Field(default_factory=PipelineInstaller)
+    cli_defaults: CliConfig = Field(default_factory=CliConfig)
 
     @classmethod
     def create(
@@ -75,45 +183,34 @@ class WorkspaceConfig(WorkspaceModel):
         customer_slug: str,
         aws_profile: str,
         aws_region: str,
-        lza_version: str,
-        template_source: str,
-        template_source_type: str,
-        installer: InstallerSettings | None = None,
+        lza_config: LzaConfig,
+        lza_installer: LzaInstaller | None = None,
+
     ) -> WorkspaceConfig:
         """Build workspace configuration from resolved command values."""
         return cls(
             customer=CustomerConfig(name=customer_name, slug=customer_slug),
             aws=AwsConfig(profile=aws_profile, region=aws_region),
-            lza=LzaConfig(
-                version=lza_version,
-                template_source=template_source,
-                template_source_type=template_source_type,
-            ),
-            installer=installer or InstallerSettings(),
+            lza=lza_config or LzaConfig(),
+            installer=lza_installer or LzaInstaller(),
         )
 
 
 class WorkspaceState(WorkspaceModel):
     """Mutable operational metadata stored in .lza/state.json."""
 
-    customer: str
-    lza_version: str
-    aws_profile: str
-    aws_region: str
-    installer_stack_name: str = INSTALLER_STACK_NAME
-    config_location: str
-    last_pipeline_execution_id: str | None = None
-
-    @classmethod
-    def from_config(cls, config: WorkspaceConfig) -> WorkspaceState:
-        """Initialize operational state from durable workspace configuration."""
-        return cls(
-            customer=config.customer.slug,
-            lza_version=config.lza.version,
-            aws_profile=config.aws.profile,
-            aws_region=config.aws.region,
-            config_location=config.lza.config_repository_location,
-        )
+    initialized_at: datetime | None = None
+    updated_at: datetime | None = None
+    management_account_id: str | None = None
+    caller_arn: str | None = None
+    installer_stack_id: str | None = None
+    installer_stack_status: str | None = None
+    installer_stack_updated_at: datetime | None = None
+    installer_pipeline_execution_id: str | None = None
+    config_pipeline_execution_id: str | None = None
+    config_uploaded_at: datetime | None = None
+    config_artifact_etag: str | None = None
+    config_artifact_version_id: str | None = None
 
 
 def load_workspace_config(path: Path) -> WorkspaceConfig:
