@@ -11,11 +11,10 @@ import sys
 import typer
 
 from lza_workbench import cli_parameters as params
-from lza_workbench.commands.import_workspace import (CONFIG_DIRECTORY_NAME,
-                                                     collect_import_options,
-                                                     run_import)
+from lza_workbench.commands.import_workspace import run_import
 from lza_workbench.commands.init_workspace import (resolve_init_workspace_dir,
                                                    run_init)
+from lza_workbench.core.workspace import ConfigurationConfig
 
 app = typer.Typer(
     help="LZA Workbench CLI",
@@ -53,7 +52,7 @@ def init_command(
         interactive=interactive,
     )
 
-    candidate_config = resolved_workspace_dir / CONFIG_DIRECTORY_NAME
+    candidate_config = resolved_workspace_dir / ConfigurationConfig().local_path
 
     if not force and (candidate_config.exists() or candidate_config.is_symlink()):
         raise typer.BadParameter(
@@ -80,28 +79,29 @@ def init_command(
 def import_command(
     customer_name: params.CustomerName,
     workspace_dir: params.WorkspaceDir = None,
+    config_dir: params.LzaConfigDir = None,
     aws_profile: params.AwsProfile = None,
     aws_region: params.AwsRegion = None,
     lza_version: params.LzaVersion = None,
-    config_repository_location: params.ConfigRepositoryLocation = "s3",
-    config_repository_path: params.ConfigRepositoryPath = None,
     dry_run: params.DryRun = False,
+    force: params.Force = False,
+    skip_aws_check: params.SkipAwsCheck = False,
 ) -> None:
     """Adopt an existing customer-owned LZA configuration."""
-    request = collect_import_options(
-        workspace_dir=workspace_dir,
+    run_import(
         customer_name=customer_name,
+        workspace_dir=workspace_dir,
+        config_dir=config_dir,
         aws_profile=aws_profile,
         aws_region=aws_region,
         lza_version=lza_version,
-        config_repository_location=config_repository_location,
-        config_repository_path=config_repository_path,
         dry_run=dry_run,
+        force=force,
+        skip_aws_check=skip_aws_check,
         interactive=_is_interactive(),
     )
-    run_import(request)
 
-
+    
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI and return a process-style exit code."""
     try:

@@ -61,14 +61,6 @@ WorkspaceDir = Annotated[
     ),
 ]
 
-TemplateSource = Annotated[
-    str | None,
-    typer.Option(
-        "--template-source",
-        help="Template source. Use 'default' or a local path.",
-    ),
-]
-
 Force = Annotated[
     bool,
     typer.Option("--force", help="Reinitialize generated files in an existing workspace."),
@@ -77,4 +69,12 @@ Force = Annotated[
 SkipAwsCheck = Annotated[
     bool,
     typer.Option("--skip-aws-check", help="Skip STS caller identity validation."),
+]
+
+LzaConfigDir = Annotated[
+    Path | None,
+    typer.Option(
+        "--lza-config-dir",
+        help="Path to the existing LZA configuration directory (aws-accelerator-config).",
+    ),
 ]
