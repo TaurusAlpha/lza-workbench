@@ -149,16 +149,26 @@ class PipelineConfig(WorkspaceModel):
     detailed_error_reporting: bool = False
     poll_interval_seconds: int = 30
 
+
 class PipelineInstaller(WorkspaceModel):
     """A named installer LZA pipeline."""
 
     name: str = "AWSAccelerator-InstallerStack"
 
 
+class PipelinesConfig(WorkspaceModel):
+    """Named LZA pipelines for configuration and installer."""
+
+    installer: PipelineInstaller = Field(default_factory=PipelineInstaller)
+    configuration: PipelineConfig = Field(default_factory=PipelineConfig)
+    
+
 class CliConfig(WorkspaceModel):
     """Default behavior for interactive and pipeline CLI operations."""
 
     debug: bool = False
+    validate_aws_credentials: bool = False
+    dry_run: bool = False
 
 
 class WorkspaceConfig(WorkspaceModel):
@@ -170,8 +180,7 @@ class WorkspaceConfig(WorkspaceModel):
     lza: LzaConfig = Field(default_factory=LzaConfig)
     installer: LzaInstaller = Field(default_factory=LzaInstaller)
     configuration: ConfigurationConfig = Field(default_factory=ConfigurationConfig)
-    config_pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
-    installer_pipeline: PipelineInstaller = Field(default_factory=PipelineInstaller)
+    pipelines: PipelinesConfig = Field(default_factory=PipelinesConfig)
     cli_defaults: CliConfig = Field(default_factory=CliConfig)
 
     @classmethod

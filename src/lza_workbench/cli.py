@@ -41,7 +41,7 @@ def init_command(
     lza_version: params.LzaVersion = None,
     dry_run: params.DryRun = False,
     force: params.Force = False,
-    skip_aws_check: params.SkipAwsCheck = False,
+    skip_aws_check: params.SkipAwsCheck = True,
 ) -> None:
     """Create a new customer-specific LZA workspace."""
     interactive = _is_interactive()
@@ -85,7 +85,7 @@ def import_command(
     lza_version: params.LzaVersion = None,
     dry_run: params.DryRun = False,
     force: params.Force = False,
-    skip_aws_check: params.SkipAwsCheck = False,
+    skip_aws_check: params.SkipAwsCheck = True,
 ) -> None:
     """Adopt an existing customer-owned LZA configuration."""
     run_import(

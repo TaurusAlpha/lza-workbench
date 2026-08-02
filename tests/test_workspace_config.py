@@ -28,7 +28,7 @@ def test_minimal_workspace_uses_nested_defaults() -> None:
     assert config.lza.version == "v1.15.5"
     assert config.installer.local_path == "aws-accelerator-installer"
     assert config.configuration.template.source == "packaged"
-    assert config.config_pipeline.name == "AWSAccelerator-Pipeline"
+    assert config.pipelines.configuration.name == "AWSAccelerator-Pipeline"
 
 
 def test_full_workspace_preserves_explicit_values() -> None:

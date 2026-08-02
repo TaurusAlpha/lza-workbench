@@ -52,8 +52,12 @@ pipelines:
     name: AWSAccelerator-Installer
   configuration:
     name: AWSAccelerator-Pipeline
+    watch: true
+    execute: true
+    detailed_error_reporting: false
+    poll_interval_seconds: 30
 
 cli_defaults:
   debug: false
-  watch_pipeline: true
-  poll_interval_seconds: 30
+  validate_aws_credentials: false
+  dry_run: false
