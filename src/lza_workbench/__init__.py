@@ -1,3 +1,8 @@
+"""LZA Workbench package metadata.
+
+Expose package-level values such as the installed application version.
+"""
+
 from importlib.metadata import PackageNotFoundError, version
 
 try:

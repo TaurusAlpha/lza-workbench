@@ -1,4 +1,7 @@
-"""AWS identity checks."""
+"""AWS identity checks.
+
+Create authenticated sessions and validate caller identity without mutating AWS.
+"""
 
 from __future__ import annotations
 

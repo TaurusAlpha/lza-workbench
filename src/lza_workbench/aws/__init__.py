@@ -1,1 +1,4 @@
-"""AWS profile and account validation boundaries."""
+"""AWS integration boundaries.
+
+Keep authenticated AWS clients and read/write service operations in this package.
+"""
