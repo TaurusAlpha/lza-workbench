@@ -11,18 +11,11 @@ import sys
 import typer
 
 from lza_workbench import cli_parameters as params
-from lza_workbench.commands.import_workspace import (
-    CONFIG_DIRECTORY_NAME,
-    collect_import_options,
-    resolve_import_workspace,
-    run_import,
-    validate_import_config,
-)
-from lza_workbench.commands.init import (
-    collect_init_options,
-    resolve_init_workspace_dir,
-    run_init,
-)
+from lza_workbench.commands.import_workspace import (CONFIG_DIRECTORY_NAME,
+                                                     collect_import_options,
+                                                     run_import)
+from lza_workbench.commands.init_workspace import (resolve_init_workspace_dir,
+                                                   run_init)
 
 app = typer.Typer(
     help="LZA Workbench CLI",
@@ -47,62 +40,40 @@ def init_command(
     aws_profile: params.AwsProfile = None,
     aws_region: params.AwsRegion = None,
     lza_version: params.LzaVersion = None,
-    template_source: params.TemplateSource = None,
     dry_run: params.DryRun = False,
     force: params.Force = False,
-    skip_aws_check: params.SkipAwsCheck = True,
+    skip_aws_check: params.SkipAwsCheck = False,
 ) -> None:
     """Create a new customer-specific LZA workspace."""
     interactive = _is_interactive()
+
     resolved_workspace_dir = resolve_init_workspace_dir(
         customer_name=customer_name,
         workspace_dir=workspace_dir,
         interactive=interactive,
     )
-    candidate_config = resolved_workspace_dir / CONFIG_DIRECTORY_NAME
-    if not force and (candidate_config.exists() or candidate_config.is_symlink()):
-        _, config_dir = resolve_import_workspace(resolved_workspace_dir)
-        validate_import_config(config_dir)
-        if not interactive:
-            raise typer.BadParameter(
-                "Target directory contains an existing LZA configuration: "
-                f"{resolved_workspace_dir}. "
-                "Run `lza import "
-                f"{customer_name} --workspace-dir {resolved_workspace_dir}` to adopt it."
-            )
-        if not typer.confirm("Existing LZA configuration detected. Import this workspace?"):
-            typer.echo("Import cancelled; no changes were made.")
-            return
-        if template_source is not None:
-            typer.echo(
-                "The selected template source is ignored; import preserves the existing "
-                "customer configuration."
-            )
-        request = collect_import_options(
-            workspace_dir=resolved_workspace_dir,
-            customer_name=customer_name,
-            aws_profile=aws_profile,
-            aws_region=aws_region,
-            lza_version=lza_version,
-            dry_run=dry_run,
-            interactive=interactive,
-        )
-        run_import(request)
-        return
 
-    request = collect_init_options(
+    candidate_config = resolved_workspace_dir / CONFIG_DIRECTORY_NAME
+
+    if not force and (candidate_config.exists() or candidate_config.is_symlink()):
+        raise typer.BadParameter(
+            "Target directory already contains an LZA configuration: "
+            f"{resolved_workspace_dir}. "
+            f"Run `lza import {customer_name} "
+            f"--workspace-dir {resolved_workspace_dir}` to adopt it."
+        )
+
+    run_init(
         customer_name=customer_name,
         workspace_dir=resolved_workspace_dir,
         aws_profile=aws_profile,
         aws_region=aws_region,
         lza_version=lza_version,
-        template_source=template_source,
         dry_run=dry_run,
         force=force,
         skip_aws_check=skip_aws_check,
         interactive=interactive,
     )
-    run_init(request)
 
 
 @app.command("import")
@@ -112,6 +83,8 @@ def import_command(
     aws_profile: params.AwsProfile = None,
     aws_region: params.AwsRegion = None,
     lza_version: params.LzaVersion = None,
+    config_repository_location: params.ConfigRepositoryLocation = "s3",
+    config_repository_path: params.ConfigRepositoryPath = None,
     dry_run: params.DryRun = False,
 ) -> None:
     """Adopt an existing customer-owned LZA configuration."""
@@ -121,6 +94,8 @@ def import_command(
         aws_profile=aws_profile,
         aws_region=aws_region,
         lza_version=lza_version,
+        config_repository_location=config_repository_location,
+        config_repository_path=config_repository_path,
         dry_run=dry_run,
         interactive=_is_interactive(),
     )
