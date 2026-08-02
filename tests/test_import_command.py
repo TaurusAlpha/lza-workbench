@@ -1,3 +1,8 @@
+"""Tests for adopting existing customer workspaces.
+
+Cover metadata creation, safe updates, validation, and customer-file preservation.
+"""
+
 from __future__ import annotations
 
 import json
@@ -7,9 +12,9 @@ import pytest
 import typer
 
 from lza_workbench.cli import main
-from lza_workbench.commands.import_workspace import (collect_import_request,
-                                                     run_import)
+from lza_workbench.commands.import_workspace import collect_import_options, run_import
 from lza_workbench.core.templates import REQUIRED_TEMPLATE_FILES
+from lza_workbench.core.workspace import load_workspace_config
 
 
 def test_import_new_workspace_preserves_config_and_creates_only_metadata(
@@ -22,15 +27,15 @@ def test_import_new_workspace_preserves_config_and_creates_only_metadata(
     run_import(request)
 
     assert _config_snapshot(workspace) == config_before
-    assert (workspace / "lza-project.yaml").is_file()
+    assert (workspace / "lza-workspace.yaml").is_file()
     assert (workspace / ".lza" / "state.json").is_file()
     assert sorted(path.name for path in (workspace / ".lza").iterdir()) == ["state.json"]
     assert not (workspace / "aws-accelerator-installer").exists()
     assert not (workspace / ".lza" / "logs").exists()
 
-    project_text = (workspace / "lza-project.yaml").read_text(encoding="utf-8")
-    assert "template_source_type: local" in project_text
-    assert f"template_source: {workspace}" in project_text
+    config = load_workspace_config(workspace / "lza-workspace.yaml")
+    assert config.lza.template_source_type == "local"
+    assert config.lza.template_source == str(workspace)
 
 
 def test_import_accepts_config_directory_path(tmp_path: Path) -> None:
@@ -38,21 +43,29 @@ def test_import_accepts_config_directory_path(tmp_path: Path) -> None:
 
     request = _collect(workspace / "aws-accelerator-config")
 
-    assert request.project_dir == workspace
+    assert request.workspace_dir == workspace
     assert request.template_config_dir == workspace / "aws-accelerator-config"
 
 
-def test_import_defaults_to_current_directory(
+def test_import_defaults_workspace_to_customer_slug(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace = _make_workspace(tmp_path)
-    monkeypatch.chdir(workspace)
+    monkeypatch.chdir(tmp_path)
 
-    request = _collect(None)
+    request = _collect(None, customer_name="Comm-IT")
 
-    assert request.project_dir == workspace
-    assert request.customer_name == workspace.name
+    assert request.workspace_dir == workspace
+    assert request.customer_name == "Comm-IT"
+
+
+def test_import_workspace_option_overrides_customer_slug_default(tmp_path: Path) -> None:
+    workspace = _make_workspace(tmp_path, "existing-customer")
+
+    request = _collect(workspace, customer_name="Comm-IT")
+
+    assert request.workspace_dir == workspace
 
 
 def test_import_dry_run_does_not_write_metadata(
@@ -64,7 +77,7 @@ def test_import_dry_run_does_not_write_metadata(
 
     run_import(request)
 
-    assert not (workspace / "lza-project.yaml").exists()
+    assert not (workspace / "lza-workspace.yaml").exists()
     assert not (workspace / ".lza").exists()
     output = capsys.readouterr().out
     assert "Dry run: lza import" in output
@@ -113,17 +126,17 @@ def test_import_rejects_symlinked_required_file(tmp_path: Path) -> None:
 
 def test_import_rejects_partial_metadata(tmp_path: Path) -> None:
     workspace = _make_workspace(tmp_path)
-    (workspace / "lza-project.yaml").write_text("customer: {}\n", encoding="utf-8")
+    (workspace / "lza-workspace.yaml").write_text("customer: {}\n", encoding="utf-8")
 
-    with pytest.raises(typer.BadParameter, match="partial Workbench metadata"):
+    with pytest.raises(typer.BadParameter, match="partial metadata"):
         _collect(workspace)
 
 
 def test_import_rejects_malformed_metadata(tmp_path: Path) -> None:
     workspace = _make_imported_workspace(tmp_path)
-    (workspace / "lza-project.yaml").write_text("not: [valid\n", encoding="utf-8")
+    (workspace / "lza-workspace.yaml").write_text("not: [valid\n", encoding="utf-8")
 
-    with pytest.raises(typer.BadParameter, match="Invalid lza-project.yaml"):
+    with pytest.raises(typer.BadParameter, match="Invalid lza-workspace.yaml"):
         _collect(workspace)
 
 
@@ -134,7 +147,7 @@ def test_import_rejects_inconsistent_metadata(tmp_path: Path) -> None:
     state["aws_region"] = "us-east-1"
     state_path.write_text(json.dumps(state), encoding="utf-8")
 
-    with pytest.raises(typer.BadParameter, match="metadata fields disagree"):
+    with pytest.raises(typer.BadParameter, match="configuration and state fields disagree"):
         _collect(workspace)
 
 
@@ -143,10 +156,10 @@ def test_repeat_import_merges_explicit_values_and_preserves_unknown_data(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     workspace = _make_imported_workspace(tmp_path)
-    project_path = workspace / "lza-project.yaml"
-    project_text = project_path.read_text(encoding="utf-8")
-    project_path.write_text(
-        "# customer project\n" + project_text + "custom:\n  retained: true\n",
+    config_path = workspace / "lza-workspace.yaml"
+    config_text = config_path.read_text(encoding="utf-8")
+    config_path.write_text(
+        "# workbench config\n" + config_text + "custom:\n  retained: true\n",
         encoding="utf-8",
     )
     state_path = workspace / ".lza" / "state.json"
@@ -157,11 +170,11 @@ def test_repeat_import_merges_explicit_values_and_preserves_unknown_data(
     request = _collect(workspace, aws_region="us-east-1")
     run_import(request)
 
-    updated_project = project_path.read_text(encoding="utf-8")
+    updated_config = config_path.read_text(encoding="utf-8")
     updated_state = json.loads(state_path.read_text(encoding="utf-8"))
-    assert updated_project.startswith("# customer project\n")
-    assert "custom:" in updated_project
-    assert "region: us-east-1" in updated_project
+    assert updated_config.startswith("# workbench config\n")
+    assert "custom:" in updated_config
+    assert "region: us-east-1" in updated_config
     assert updated_state["aws_region"] == "us-east-1"
     assert updated_state["deployment"] == {"status": "SUCCEEDED"}
     output = capsys.readouterr().out
@@ -173,13 +186,13 @@ def test_repeat_import_with_identical_values_is_noop(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     workspace = _make_imported_workspace(tmp_path)
-    project_path = workspace / "lza-project.yaml"
+    config_path = workspace / "lza-workspace.yaml"
     state_path = workspace / ".lza" / "state.json"
-    before = (project_path.read_bytes(), state_path.read_bytes())
+    before = (config_path.read_bytes(), state_path.read_bytes())
 
     run_import(_collect(workspace))
 
-    assert (project_path.read_bytes(), state_path.read_bytes()) == before
+    assert (config_path.read_bytes(), state_path.read_bytes()) == before
     assert not list(workspace.glob(".*.tmp"))
     assert not list((workspace / ".lza").glob(".*.tmp"))
     assert "already imported; no metadata changes" in capsys.readouterr().out
@@ -191,8 +204,32 @@ def test_cli_import_non_interactive(tmp_path: Path) -> None:
     result = main(
         [
             "import",
+            "Comm-IT",
+            "--workspace-dir",
             str(workspace),
-            "--customer-name",
+            "--aws-profile",
+            "comm-it-root",
+            "--aws-region",
+            "eu-west-1",
+            "--lza-version",
+            "v1.12.1",
+        ]
+    )
+
+    assert result == 0
+    assert (workspace / "lza-workspace.yaml").is_file()
+
+
+def test_cli_import_uses_customer_slug_workspace_by_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = _make_workspace(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    result = main(
+        [
+            "import",
             "Comm-IT",
             "--aws-profile",
             "comm-it-root",
@@ -204,7 +241,7 @@ def test_cli_import_non_interactive(tmp_path: Path) -> None:
     )
 
     assert result == 0
-    assert (workspace / "lza-project.yaml").is_file()
+    assert (workspace / "lza-workspace.yaml").is_file()
 
 
 def test_interactive_init_accepts_import_and_ignores_template(
@@ -234,7 +271,7 @@ def test_interactive_init_accepts_import_and_ignores_template(
     )
 
     assert result == 0
-    assert (workspace / "lza-project.yaml").is_file()
+    assert (workspace / "lza-workspace.yaml").is_file()
     assert "template source is ignored" in capsys.readouterr().out
 
 
@@ -250,7 +287,7 @@ def test_interactive_init_declines_import_cleanly(
     result = main(["init", "Comm-IT", "--workspace-dir", str(workspace)])
 
     assert result == 0
-    assert not (workspace / "lza-project.yaml").exists()
+    assert not (workspace / "lza-workspace.yaml").exists()
     assert "no changes were made" in capsys.readouterr().out
 
 
@@ -267,7 +304,7 @@ def test_interactive_repeat_import_prompts_with_existing_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace = _make_imported_workspace(tmp_path)
-    answers = iter(("Renamed Customer", "comm-it-root", "eu-central-1", "v1.15.5"))
+    answers = iter(("comm-it-root", "eu-central-1", "v1.15.5"))
     defaults: list[str] = []
 
     def prompt(label: str, default: str) -> str:
@@ -275,9 +312,9 @@ def test_interactive_repeat_import_prompts_with_existing_defaults(
         return next(answers)
 
     monkeypatch.setattr("lza_workbench.commands.import_workspace.typer.prompt", prompt)
-    request = collect_import_request(
-        workspace=workspace,
-        customer_name=None,
+    request = collect_import_options(
+        workspace_dir=workspace,
+        customer_name="Renamed Customer",
         aws_profile=None,
         aws_region=None,
         lza_version=None,
@@ -286,11 +323,11 @@ def test_interactive_repeat_import_prompts_with_existing_defaults(
     )
     run_import(request)
 
-    project_text = (workspace / "lza-project.yaml").read_text(encoding="utf-8")
-    assert defaults[0] == "Customer name=comm-it"
-    assert "name: Renamed Customer" in project_text
-    assert "slug: renamed-customer" in project_text
-    assert "region: eu-central-1" in project_text
+    config_text = (workspace / "lza-workspace.yaml").read_text(encoding="utf-8")
+    assert defaults[0] == "AWS profile=comm-it"
+    assert "name: Renamed Customer" in config_text
+    assert "slug: renamed-customer" in config_text
+    assert "region: eu-central-1" in config_text
 
 
 def test_init_force_bypasses_import_offer(
@@ -330,14 +367,15 @@ def test_init_force_bypasses_import_offer(
 
 
 def _collect(
-    workspace: Path | None,
+    workspace_dir: Path | None,
     *,
+    customer_name: str = "Comm-IT",
     aws_region: str | None = None,
     dry_run: bool = False,
 ):
-    return collect_import_request(
-        workspace=workspace,
-        customer_name=None,
+    return collect_import_options(
+        workspace_dir=workspace_dir,
+        customer_name=customer_name,
         aws_profile=None,
         aws_region=aws_region,
         lza_version=None,

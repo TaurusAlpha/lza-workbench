@@ -1,1 +1,4 @@
-"""Project configuration, local state, and schema handling."""
+"""Development configuration workfiles.
+
+Files here are references for development, not generated customer workspace data.
+"""

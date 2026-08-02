@@ -2,9 +2,9 @@
 
 ## Purpose
 
-LZA Workbench is a local, project-based helper tool for AWS Landing Zone Accelerator engineers.
+LZA Workbench is a local, workspace-based helper tool for AWS Landing Zone Accelerator engineers.
 
-Its initial goal is to automate the customer onboarding/init phase for AWS Landing Zone Accelerator projects by creating a clean customer workspace, copying selected LZA configuration templates, generating project metadata, and providing helper commands for common LZA bootstrap operations.
+Its initial goal is to automate the customer onboarding/init phase for AWS Landing Zone Accelerator by creating a clean customer workspace, copying selected LZA configuration templates, generating workspace metadata, and providing helper commands for common LZA bootstrap operations.
 
 The tool starts as a personal productivity helper but should be structured cleanly enough to become usable by coworkers or the wider community later.
 
@@ -17,7 +17,7 @@ In scope:
 - Create customer-specific LZA workspace folders.
 - Copy or initialize `aws-accelerator-config`.
 - Use local or Git-based LZA configuration templates.
-- Generate and store project metadata.
+- Generate and store workspace metadata.
 - Copy or resolve the LZA installer stack template.
 - Generate helper scripts or commands for LZA bootstrap workflows.
 - Validate that the selected AWS profile can access the target account.
@@ -50,9 +50,9 @@ Authentication methods such as AWS SSO, static access keys, AssumeRole chains, b
 
 AWS authentication management may be considered later as a low-priority feature.
 
-## Project Model
+## Workspace Model
 
-The tool is project-based.
+The tool is workspace-based.
 
 Each customer gets an independent local workspace.
 
@@ -61,7 +61,7 @@ Example:
 ```text
 customers/
   comm-it/
-    lza-project.yaml
+    lza-workbench.yaml
     aws-accelerator-config/
     aws-accelerator-installer/
     scripts/
@@ -72,12 +72,12 @@ The tool should be able to manage one customer or many customers without requiri
 
 ## Source of Truth
 
-Each customer workspace should contain a project metadata file.
+Each customer workspace should contain a workspace metadata file.
 
 Recommended name:
 
 ```text
-lza-project.yaml
+lza-workbench.yaml
 ```
 
 This file stores the key decisions used during initialization and later operations.
@@ -107,7 +107,7 @@ installer:
   anonymous_data: false
 ```
 
-The CLI may collect these values interactively, but it should persist them into this file so the project remains repeatable.
+The CLI may collect these values interactively, but it should persist them into this file so the workspace remains repeatable.
 
 ## Template Model
 
@@ -141,13 +141,13 @@ The first supported workflow is customer initialization. The primary entry point
 lza init comm-it
 ```
 
-This workflow creates a new customer workspace, collects the minimum required project metadata, copies the selected LZA configuration template, creates local state, validates the selected AWS profile unless skipped, and leaves the project ready for the next deployment steps. The exact implementation of this workflow is intentionally maintained in TODO.md rather than this document.
+This workflow creates a new customer workspace, collects the minimum required workspace metadata, copies the selected LZA configuration template, creates local state, validates the selected AWS profile unless skipped, and leaves the workspace ready for the next deployment steps. The exact implementation of this workflow is intentionally maintained in TODO.md rather than this document.
 
 ## Workspace Model
 
 ```text
 comm-it/
-  lza-project.yaml
+  lza-workbench.yaml
 
   aws-accelerator-config/
     global-config.yaml
@@ -189,7 +189,7 @@ Example state:
 }
 ```
 
-State should only contain operational metadata. The main declarative source of truth should remain `lza-project.yaml`.
+State should only contain operational metadata. The main declarative source of truth should remain `lza-workbench.yaml`.
 
 ## Current Technical Direction
 

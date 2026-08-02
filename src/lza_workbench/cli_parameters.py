@@ -1,0 +1,80 @@
+"""Typer parameter declarations.
+
+Define CLI names, aliases, help text, callbacks, and parameter types here.
+"""
+
+from pathlib import Path
+from typing import Annotated
+
+import typer
+
+from lza_workbench import __version__
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"lza {__version__}")
+        raise typer.Exit()
+
+
+Version = Annotated[
+    bool,
+    typer.Option(
+        "--version",
+        "-v",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the CLI version and exit.",
+    ),
+]
+
+AwsProfile = Annotated[
+    str | None,
+    typer.Option("--aws-profile", help="AWS profile for the workspace."),
+]
+
+AwsRegion = Annotated[
+    str | None,
+    typer.Option("--aws-region", help="AWS region for the workspace."),
+]
+
+LzaVersion = Annotated[
+    str | None,
+    typer.Option("--lza-version", help="LZA version for the workspace."),
+]
+
+DryRun = Annotated[
+    bool,
+    typer.Option("--dry-run", help="Show planned actions without making changes."),
+]
+
+CustomerName = Annotated[
+    str,
+    typer.Argument(help="Customer name used for the workspace."),
+]
+
+WorkspaceDir = Annotated[
+    Path | None,
+    typer.Option(
+        "--workspace-dir",
+        help="Customer workspace directory.",
+    ),
+]
+
+TemplateSource = Annotated[
+    str | None,
+    typer.Option(
+        "--template-source",
+        help="Template source. Use 'default' or a local path.",
+    ),
+]
+
+Force = Annotated[
+    bool,
+    typer.Option("--force", help="Reinitialize generated files in an existing workspace."),
+]
+
+SkipAwsCheck = Annotated[
+    bool,
+    typer.Option("--skip-aws-check", help="Skip STS caller identity validation."),
+]

@@ -1,4 +1,7 @@
-"""Implementation for adopting an existing LZA customer workspace."""
+"""Adopt an existing LZA customer workspace.
+
+Validate its layout, collect metadata, and preserve customer-owned configuration.
+"""
 
 from __future__ import annotations
 
@@ -11,55 +14,72 @@ from pathlib import Path
 from typing import Any
 
 import typer
+from pydantic import ValidationError
 from rich.console import Console
 from ruamel.yaml import YAML
 
 from lza_workbench.commands import DEFAULT_AWS_REGION, DEFAULT_LZA_VERSION
-from lza_workbench.core.project import (
-    ImportRequest,
-    InstallerSettings,
-    project_metadata,
-    state_metadata,
-)
+from lza_workbench.commands.init import resolve_init_workspace_dir
 from lza_workbench.core.templates import REQUIRED_TEMPLATE_FILES, validate_template
-from lza_workbench.core.workspace import normalize_customer_slug
+from lza_workbench.core.workspace import (
+    WORKSPACE_CONFIG_FILE,
+    WORKSPACE_STATE_FILE,
+    InstallerSettings,
+    WorkspaceConfig,
+    WorkspaceState,
+    normalize_customer_slug,
+)
 
 console = Console()
 CONFIG_DIRECTORY_NAME = "aws-accelerator-config"
-PROJECT_FILE_NAME = "lza-project.yaml"
-STATE_FILE = Path(".lza") / "state.json"
 
 
 @dataclass
 class ExistingMetadata:
-    """Validated Workbench metadata loaded from an imported workspace."""
+    """Validated metadata loaded from an imported workspace."""
 
-    project: Any
+    config: Any
     state: dict[str, Any]
 
 
-def collect_import_request(
+@dataclass(frozen=True)
+class ImportOptions:
+    """Resolved values controlling one import command invocation."""
+
+    customer_name: str
+    customer_slug: str
+    workspace_dir: Path
+    aws_profile: str
+    aws_region: str
+    lza_version: str
+    template_source: str
+    template_source_type: str
+    template_config_dir: Path
+    dry_run: bool = False
+
+
+def collect_import_options(
     *,
-    workspace: Path | None,
-    customer_name: str | None,
+    workspace_dir: Path | None,
+    customer_name: str,
     aws_profile: str | None,
     aws_region: str | None,
     lza_version: str | None,
     dry_run: bool,
     interactive: bool,
-) -> ImportRequest:
+) -> ImportOptions:
     """Resolve import paths and collect new or updated metadata values."""
-    project_dir, config_dir = resolve_import_workspace(workspace or Path.cwd())
-    validate_import_config(config_dir)
-    existing = load_existing_metadata(project_dir)
-
-    existing_customer = _existing_value(existing, "customer", "name")
-    selected_customer = _value_or_prompt(
-        "Customer name",
-        customer_name,
-        default=existing_customer or project_dir.name,
+    requested_workspace_dir = resolve_init_workspace_dir(
+        customer_name=customer_name,
+        workspace_dir=workspace_dir,
         interactive=interactive,
     )
+    workspace_dir, config_dir = resolve_import_workspace(requested_workspace_dir)
+    validate_import_config(config_dir)
+    existing = load_existing_metadata(workspace_dir)
+
+    existing_customer = _existing_value(existing, "customer", "name")
+    selected_customer = customer_name
     existing_slug = _existing_value(existing, "customer", "slug")
     if existing_customer == selected_customer and existing_slug is not None:
         customer_slug = existing_slug
@@ -85,39 +105,39 @@ def collect_import_request(
         interactive=interactive,
     )
 
-    return ImportRequest(
+    return ImportOptions(
         customer_name=selected_customer,
         customer_slug=customer_slug,
-        workspace_dir=project_dir,
-        project_dir=project_dir,
+        workspace_dir=workspace_dir,
         aws_profile=selected_profile,
         aws_region=selected_region,
         lza_version=selected_version,
-        template_source=str(project_dir),
+        template_source=str(workspace_dir),
+        template_source_type="local",
         template_config_dir=config_dir,
         dry_run=dry_run,
-        installer=InstallerSettings(),
     )
 
 
-def run_import(request: ImportRequest) -> None:
-    """Create or update Workbench metadata without modifying customer config."""
+def run_import(request: ImportOptions) -> None:
+    """Create or update workspace metadata without modifying customer config."""
     validate_import_config(request.template_config_dir)
-    existing = load_existing_metadata(request.project_dir)
+    existing = load_existing_metadata(request.workspace_dir)
     if existing is None:
-        desired_project = project_metadata(request)
-        desired_state = state_metadata(request)
+        config = build_workspace_config(request)
+        desired_config = config.model_dump(mode="json")
+        desired_state = WorkspaceState.from_config(config).model_dump(mode="json")
         changes = _initial_changes(request)
     else:
-        desired_project = copy.deepcopy(existing.project)
+        desired_config = copy.deepcopy(existing.config)
         desired_state = copy.deepcopy(existing.state)
-        _merge_request(desired_project, desired_state, request)
-        changes = _metadata_changes(existing.project, desired_project)
+        _merge_request(desired_config, desired_state, request)
+        changes = _metadata_changes(existing.config, desired_config)
 
     changed_paths = _changed_paths(
-        request.project_dir,
+        request.workspace_dir,
         existing,
-        desired_project,
+        desired_config,
         desired_state,
     )
     if request.dry_run:
@@ -125,17 +145,19 @@ def run_import(request: ImportRequest) -> None:
         return
     if not changed_paths:
         console.print("[bold green]Workspace already imported; no metadata changes[/bold green]")
-        console.print(f"Workspace: {request.project_dir}")
+        console.print(f"Workspace: {request.workspace_dir}")
         return
 
     _write_import_metadata(
-        request.project_dir,
-        desired_project,
+        request.workspace_dir,
+        desired_config,
         desired_state,
-        write_project=request.project_dir / PROJECT_FILE_NAME in changed_paths,
-        write_state=request.project_dir / STATE_FILE in changed_paths,
+        write_config=(
+            request.workspace_dir / WORKSPACE_CONFIG_FILE in changed_paths
+        ),
+        write_state=request.workspace_dir / WORKSPACE_STATE_FILE in changed_paths,
     )
-    _print_summary("Imported LZA project workspace", request, changes, changed_paths)
+    _print_summary("Imported LZA workspace", request, changes, changed_paths)
 
 
 def resolve_import_workspace(path: Path) -> tuple[Path, Path]:
@@ -143,19 +165,19 @@ def resolve_import_workspace(path: Path) -> tuple[Path, Path]:
     supplied = path.expanduser().absolute()
     if supplied.name == CONFIG_DIRECTORY_NAME:
         config_dir = supplied
-        project_dir = supplied.parent
+        workspace_dir = supplied.parent
     else:
-        project_dir = supplied
+        workspace_dir = supplied
         config_dir = supplied / CONFIG_DIRECTORY_NAME
 
-    if not project_dir.exists():
-        raise typer.BadParameter(f"Workspace directory does not exist: {project_dir}")
-    if not project_dir.is_dir():
-        raise typer.BadParameter(f"Workspace path is not a directory: {project_dir}")
+    if not workspace_dir.exists():
+        raise typer.BadParameter(f"Workspace directory does not exist: {workspace_dir}")
+    if not workspace_dir.is_dir():
+        raise typer.BadParameter(f"Workspace path is not a directory: {workspace_dir}")
     if config_dir.is_symlink():
         raise typer.BadParameter(f"Configuration directory must not be a symlink: {config_dir}")
 
-    return project_dir.resolve(), config_dir.resolve()
+    return workspace_dir.resolve(), config_dir.resolve()
 
 
 def validate_import_config(config_dir: Path) -> None:
@@ -168,25 +190,25 @@ def validate_import_config(config_dir: Path) -> None:
     validate_template(config_dir)
 
 
-def load_existing_metadata(project_dir: Path) -> ExistingMetadata | None:
-    """Load and validate an existing complete pair of Workbench metadata files."""
-    project_path = project_dir / PROJECT_FILE_NAME
-    state_path = project_dir / STATE_FILE
+def load_existing_metadata(workspace_dir: Path) -> ExistingMetadata | None:
+    """Load and validate an existing complete pair of workspace metadata files."""
+    config_path = workspace_dir / WORKSPACE_CONFIG_FILE
+    state_path = workspace_dir / WORKSPACE_STATE_FILE
     if state_path.parent.is_symlink():
         raise typer.BadParameter(
             f"Metadata directory must not be a symlink: {state_path.parent}"
         )
-    if project_path.is_symlink() or state_path.is_symlink():
-        raise typer.BadParameter("Workbench metadata files must not be symlinks.")
-    project_exists = project_path.exists()
+    if config_path.is_symlink() or state_path.is_symlink():
+        raise typer.BadParameter("Workspace metadata files must not be symlinks.")
+    config_exists = config_path.exists()
     state_exists = state_path.exists()
 
-    if project_exists != state_exists:
+    if config_exists != state_exists:
         raise typer.BadParameter(
-            "Workspace has partial Workbench metadata; both "
-            f"{PROJECT_FILE_NAME} and {STATE_FILE} are required."
+            "Workspace has partial metadata; both "
+            f"{WORKSPACE_CONFIG_FILE} and {WORKSPACE_STATE_FILE} are required."
         )
-    if not project_exists:
+    if not config_exists:
         lza_dir = state_path.parent
         if lza_dir.is_symlink():
             raise typer.BadParameter(f"Metadata directory must not be a symlink: {lza_dir}")
@@ -194,81 +216,35 @@ def load_existing_metadata(project_dir: Path) -> ExistingMetadata | None:
     yaml = YAML()
     yaml.preserve_quotes = True
     try:
-        project = yaml.load(project_path)
+        config = yaml.load(config_path)
     except Exception as exc:
-        raise typer.BadParameter(f"Invalid {PROJECT_FILE_NAME}: {exc}") from exc
+        raise typer.BadParameter(f"Invalid {WORKSPACE_CONFIG_FILE}: {exc}") from exc
     try:
         state = json.loads(state_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise typer.BadParameter(f"Invalid {STATE_FILE}: {exc}") from exc
+        raise typer.BadParameter(f"Invalid {WORKSPACE_STATE_FILE}: {exc}") from exc
 
-    _validate_project_metadata(project)
+    _validate_workspace_config(config)
     _validate_state_metadata(state)
-    _validate_metadata_consistency(project, state)
-    return ExistingMetadata(project=project, state=state)
+    _validate_metadata_consistency(config, state)
+    return ExistingMetadata(config=config, state=state)
 
 
-def _validate_project_metadata(project: Any) -> None:
-    if not isinstance(project, dict):
-        raise typer.BadParameter(f"{PROJECT_FILE_NAME} must contain a YAML mapping.")
-    required_strings = (
-        ("customer", "name"),
-        ("customer", "slug"),
-        ("aws", "profile"),
-        ("aws", "region"),
-        ("lza", "version"),
-        ("lza", "accelerator_prefix"),
-        ("lza", "config_repository_location"),
-        ("lza", "template_source_type"),
-        ("lza", "template_source"),
-    )
-    for path in required_strings:
-        _require_nested_type(project, path, str, PROJECT_FILE_NAME)
-    for name in (
-        "control_tower_enabled",
-        "enable_approval_stage",
-        "enable_diagnostics_pack",
-        "anonymous_data",
-    ):
-        _require_nested_type(project, ("installer", name), bool, PROJECT_FILE_NAME)
+def _validate_workspace_config(config: Any) -> None:
+    try:
+        WorkspaceConfig.model_validate(config)
+    except ValidationError as exc:
+        raise typer.BadParameter(f"Invalid {WORKSPACE_CONFIG_FILE}: {exc}") from exc
 
 
 def _validate_state_metadata(state: Any) -> None:
-    if not isinstance(state, dict):
-        raise typer.BadParameter(f"{STATE_FILE} must contain a JSON object.")
-    for name in (
-        "customer",
-        "lza_version",
-        "aws_profile",
-        "aws_region",
-        "installer_stack_name",
-        "config_location",
-    ):
-        _require_nested_type(state, (name,), str, str(STATE_FILE))
-    if "last_pipeline_execution_id" not in state:
-        raise typer.BadParameter(
-            f"{STATE_FILE} is missing required field: last_pipeline_execution_id"
-        )
+    try:
+        WorkspaceState.model_validate(state)
+    except ValidationError as exc:
+        raise typer.BadParameter(f"Invalid {WORKSPACE_STATE_FILE}: {exc}") from exc
 
 
-def _require_nested_type(
-    data: dict[str, Any],
-    path: tuple[str, ...],
-    expected_type: type,
-    source: str,
-) -> None:
-    value: Any = data
-    for key in path:
-        if not isinstance(value, dict) or key not in value:
-            raise typer.BadParameter(f"{source} is missing required field: {'.'.join(path)}")
-        value = value[key]
-    if not isinstance(value, expected_type):
-        raise typer.BadParameter(
-            f"{source} field {'.'.join(path)} must be {expected_type.__name__}."
-        )
-
-
-def _validate_metadata_consistency(project: Any, state: dict[str, Any]) -> None:
+def _validate_metadata_consistency(config: Any, state: dict[str, Any]) -> None:
     mirrors = (
         (("customer", "slug"), "customer"),
         (("aws", "profile"), "aws_profile"),
@@ -277,23 +253,23 @@ def _validate_metadata_consistency(project: Any, state: dict[str, Any]) -> None:
         (("lza", "config_repository_location"), "config_location"),
     )
     inconsistent = [
-        ".".join(project_path)
-        for project_path, state_key in mirrors
-        if _nested_value(project, *project_path) != state[state_key]
+        ".".join(config_path)
+        for config_path, state_key in mirrors
+        if _nested_value(config, *config_path) != state[state_key]
     ]
     if inconsistent:
         raise typer.BadParameter(
-            "Workbench metadata fields disagree between project and state: "
+            "Workspace configuration and state fields disagree: "
             + ", ".join(inconsistent)
         )
 
 
-def _merge_request(project: Any, state: dict[str, Any], request: ImportRequest) -> None:
-    project["customer"]["name"] = request.customer_name
-    project["customer"]["slug"] = request.customer_slug
-    project["aws"]["profile"] = request.aws_profile
-    project["aws"]["region"] = request.aws_region
-    project["lza"]["version"] = request.lza_version
+def _merge_request(config: Any, state: dict[str, Any], request: ImportOptions) -> None:
+    config["customer"]["name"] = request.customer_name
+    config["customer"]["slug"] = request.customer_slug
+    config["aws"]["profile"] = request.aws_profile
+    config["aws"]["region"] = request.aws_region
+    config["lza"]["version"] = request.lza_version
     state["customer"] = request.customer_slug
     state["aws_profile"] = request.aws_profile
     state["aws_region"] = request.aws_region
@@ -315,7 +291,7 @@ def _metadata_changes(old: Any, new: Any) -> list[tuple[str, Any, Any]]:
     ]
 
 
-def _initial_changes(request: ImportRequest) -> list[tuple[str, Any, Any]]:
+def _initial_changes(request: ImportOptions) -> list[tuple[str, Any, Any]]:
     return [
         ("customer.name", None, request.customer_name),
         ("customer.slug", None, request.customer_slug),
@@ -328,37 +304,37 @@ def _initial_changes(request: ImportRequest) -> list[tuple[str, Any, Any]]:
 
 
 def _changed_paths(
-    project_dir: Path,
+    workspace_dir: Path,
     existing: ExistingMetadata | None,
-    desired_project: Any,
+    desired_config: Any,
     desired_state: dict[str, Any],
 ) -> list[Path]:
     if existing is None:
-        return [project_dir / PROJECT_FILE_NAME, project_dir / STATE_FILE]
+        return [workspace_dir / WORKSPACE_CONFIG_FILE, workspace_dir / WORKSPACE_STATE_FILE]
     paths: list[Path] = []
-    if existing.project != desired_project:
-        paths.append(project_dir / PROJECT_FILE_NAME)
+    if existing.config != desired_config:
+        paths.append(workspace_dir / WORKSPACE_CONFIG_FILE)
     if existing.state != desired_state:
-        paths.append(project_dir / STATE_FILE)
+        paths.append(workspace_dir / WORKSPACE_STATE_FILE)
     return paths
 
 
 def _write_import_metadata(
-    project_dir: Path,
-    project: Any,
+    workspace_dir: Path,
+    config: Any,
     state: dict[str, Any],
     *,
-    write_project: bool,
+    write_config: bool,
     write_state: bool,
 ) -> None:
-    state_dir = project_dir / STATE_FILE.parent
+    state_dir = workspace_dir / WORKSPACE_STATE_FILE.parent
     if state_dir.is_symlink():
         raise typer.BadParameter(f"Metadata directory must not be a symlink: {state_dir}")
     state_dir.mkdir(parents=True, exist_ok=True)
-    if write_project:
-        _atomic_write_yaml(project_dir / PROJECT_FILE_NAME, project)
+    if write_config:
+        _atomic_write_yaml(workspace_dir / WORKSPACE_CONFIG_FILE, config)
     if write_state:
-        _atomic_write_json(project_dir / STATE_FILE, state)
+        _atomic_write_json(workspace_dir / WORKSPACE_STATE_FILE, state)
 
 
 def _atomic_write_yaml(path: Path, data: Any) -> None:
@@ -409,12 +385,12 @@ def _atomic_write(
 
 def _print_summary(
     title: str,
-    request: ImportRequest,
+    request: ImportOptions,
     changes: list[tuple[str, Any, Any]],
     paths: list[Path],
 ) -> None:
     console.print(f"[bold green]{title}[/bold green]")
-    console.print(f"Workspace: {request.project_dir}")
+    console.print(f"Workspace: {request.workspace_dir}")
     console.print(f"Configuration: {request.template_config_dir}")
     if changes:
         console.print("Metadata changes:")
@@ -438,7 +414,7 @@ def _display_value(value: Any) -> str:
 def _existing_value(existing: ExistingMetadata | None, *path: str) -> str | None:
     if existing is None:
         return None
-    value = _nested_value(existing.project, *path)
+    value = _nested_value(existing.config, *path)
     return value if isinstance(value, str) else None
 
 
@@ -461,3 +437,17 @@ def _value_or_prompt(
     if interactive:
         return typer.prompt(label, default=default)
     return default
+
+
+def build_workspace_config(options: ImportOptions) -> WorkspaceConfig:
+    """Build the persisted configuration produced by import."""
+    return WorkspaceConfig.create(
+        customer_name=options.customer_name,
+        customer_slug=options.customer_slug,
+        aws_profile=options.aws_profile,
+        aws_region=options.aws_region,
+        lza_version=options.lza_version,
+        template_source=options.template_source,
+        template_source_type=options.template_source_type,
+        installer=InstallerSettings(),
+    )

@@ -1,3 +1,8 @@
+"""Tests for package-level behavior.
+
+Keep version exposure and other public package metadata checks here.
+"""
+
 def test_smoke() -> None:
     assert True
 

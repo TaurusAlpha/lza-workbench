@@ -1,4 +1,7 @@
-"""Template source resolution and validation."""
+"""Template source handling.
+
+Resolve bundled or local sources and validate required LZA configuration files.
+"""
 
 from __future__ import annotations
 

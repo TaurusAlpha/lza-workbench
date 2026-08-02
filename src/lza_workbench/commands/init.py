@@ -1,7 +1,11 @@
-"""Implementation for the `lza init` command."""
+"""Initialize a customer workspace.
+
+Collect command options, resolve defaults, and orchestrate workspace creation.
+"""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import typer
@@ -9,23 +13,42 @@ from rich.console import Console
 
 from lza_workbench.aws.identity import validate_aws_profile
 from lza_workbench.commands import DEFAULT_AWS_REGION, DEFAULT_LZA_VERSION
-from lza_workbench.core.project import InitRequest
 from lza_workbench.core.templates import (
     DEFAULT_TEMPLATE_SOURCE,
     resolve_template_source,
     validate_template,
 )
 from lza_workbench.core.workspace import (
+    WorkspaceConfig,
+    WorkspaceState,
     create_workspace,
     normalize_customer_slug,
     planned_write_paths,
-    validate_project_target,
+    validate_workspace_target,
 )
 
 console = Console()
 
 
-def collect_init_request(
+@dataclass(frozen=True)
+class InitOptions:
+    """Resolved values controlling one init command invocation."""
+
+    customer_name: str
+    customer_slug: str
+    workspace_dir: Path
+    aws_profile: str
+    aws_region: str
+    lza_version: str
+    template_source: str
+    template_source_type: str
+    template_config_dir: Path
+    dry_run: bool = False
+    force: bool = False
+    skip_aws_check: bool = False
+
+
+def collect_init_options(
     *,
     customer_name: str,
     workspace_dir: Path | None,
@@ -37,10 +60,10 @@ def collect_init_request(
     force: bool,
     skip_aws_check: bool,
     interactive: bool,
-) -> InitRequest:
+) -> InitOptions:
     """Resolve CLI inputs and prompt for required missing values when possible."""
     customer_slug = normalize_customer_slug(customer_name)
-    project_dir = resolve_init_project_dir(
+    workspace_dir = resolve_init_workspace_dir(
         customer_name=customer_name,
         workspace_dir=workspace_dir,
         interactive=interactive,
@@ -71,11 +94,10 @@ def collect_init_request(
     )
     resolved_template = resolve_template_source(selected_template_source)
 
-    return InitRequest(
+    return InitOptions(
         customer_name=customer_name,
         customer_slug=customer_slug,
-        workspace_dir=project_dir,
-        project_dir=project_dir,
+        workspace_dir=workspace_dir,
         aws_profile=selected_aws_profile,
         aws_region=selected_aws_region,
         lza_version=selected_lza_version,
@@ -88,13 +110,13 @@ def collect_init_request(
     )
 
 
-def resolve_init_project_dir(
+def resolve_init_workspace_dir(
     *,
     customer_name: str,
     workspace_dir: Path | None,
     interactive: bool,
 ) -> Path:
-    """Resolve the init target before collecting template and AWS settings."""
+    """Resolve the workspace target before collecting template and AWS settings."""
     customer_slug = normalize_customer_slug(customer_name)
     return _workspace_dir_or_prompt(
         workspace_dir,
@@ -103,51 +125,58 @@ def resolve_init_project_dir(
     ).expanduser().resolve()
 
 
-def run_init(request: InitRequest) -> None:
-    """Create a customer workspace from a resolved init request."""
-    validate_template(request.template_config_dir)
-    validate_project_target(request.project_dir, request.force)
+def run_init(options: InitOptions) -> None:
+    """Create a customer workspace from resolved init options."""
+    validate_template(options.template_config_dir)
+    validate_workspace_target(options.workspace_dir, options.force)
+    config = build_workspace_config(options)
+    state = WorkspaceState.from_config(config)
 
-    if not request.skip_aws_check:
-        identity = validate_aws_profile(request.aws_profile, request.aws_region)
+    if not options.skip_aws_check:
+        identity = validate_aws_profile(options.aws_profile, options.aws_region)
     else:
         identity = None
 
-    if request.dry_run:
-        print_dry_run_summary(request, identity)
+    if options.dry_run:
+        print_dry_run_summary(options, identity)
         return
 
-    create_workspace(request)
-    validate_template(request.project_dir / "aws-accelerator-config")
-    print_success_summary(request, identity)
+    create_workspace(
+        workspace_dir=options.workspace_dir,
+        template_config_dir=options.template_config_dir,
+        config=config,
+        state=state,
+    )
+    validate_template(options.workspace_dir / "aws-accelerator-config")
+    print_success_summary(options, identity)
 
 
-def print_dry_run_summary(request: InitRequest, identity: dict[str, str] | None) -> None:
+def print_dry_run_summary(options: InitOptions, identity: dict[str, str] | None) -> None:
     console.print("[bold]Dry run: lza init[/bold]")
-    console.print(f"Workspace: {request.project_dir}")
-    console.print(f"Template source: {request.template_source}")
-    console.print(f"Template files: {request.template_config_dir}")
+    console.print(f"Workspace: {options.workspace_dir}")
+    console.print(f"Template source: {options.template_source}")
+    console.print(f"Template files: {options.template_config_dir}")
     console.print("Planned writes:")
-    for path in planned_write_paths(request):
+    for path in planned_write_paths(options.workspace_dir):
         console.print(f"  - {path}")
     if identity:
         console.print(f"AWS account: {identity['account']}")
         console.print(f"Caller ARN: {identity['arn']}")
 
 
-def print_success_summary(request: InitRequest, identity: dict[str, str] | None) -> None:
-    console.print("[bold green]Initialized LZA project workspace[/bold green]")
-    console.print(f"Workspace: {request.project_dir}")
-    console.print(f"Customer: {request.customer_name} ({request.customer_slug})")
-    console.print(f"AWS profile: {request.aws_profile}")
-    console.print(f"AWS region: {request.aws_region}")
-    console.print(f"LZA version: {request.lza_version}")
-    console.print(f"Template source: {request.template_source}")
+def print_success_summary(options: InitOptions, identity: dict[str, str] | None) -> None:
+    console.print("[bold green]Initialized LZA workspace[/bold green]")
+    console.print(f"Workspace: {options.workspace_dir}")
+    console.print(f"Customer: {options.customer_name} ({options.customer_slug})")
+    console.print(f"AWS profile: {options.aws_profile}")
+    console.print(f"AWS region: {options.aws_region}")
+    console.print(f"LZA version: {options.lza_version}")
+    console.print(f"Template source: {options.template_source}")
     if identity:
         console.print(f"AWS account: {identity['account']}")
         console.print(f"Caller ARN: {identity['arn']}")
     console.print("Next commands:")
-    console.print(f"  cd {request.project_dir}")
+    console.print(f"  cd {options.workspace_dir}")
     console.print("  lza profile check")
     console.print("  lza installer deploy --dry-run")
 
@@ -178,3 +207,16 @@ def _string_value_or_prompt(
         return default
 
     raise typer.BadParameter(f"{label} is required in non-interactive mode.")
+
+
+def build_workspace_config(options: InitOptions) -> WorkspaceConfig:
+    """Build the persisted configuration produced by init."""
+    return WorkspaceConfig.create(
+        customer_name=options.customer_name,
+        customer_slug=options.customer_slug,
+        aws_profile=options.aws_profile,
+        aws_region=options.aws_region,
+        lza_version=options.lza_version,
+        template_source=options.template_source,
+        template_source_type=options.template_source_type,
+    )
