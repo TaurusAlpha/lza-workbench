@@ -17,7 +17,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
-INSTALLER_STACK_NAME = "AWSAccelerator-InstallerStack"
 WORKSPACE_CONFIG_FILE = Path("lza-workspace.yaml")
 WORKSPACE_STATE_FILE = Path(".lza") / "state.json"
 
@@ -212,6 +211,12 @@ class WorkspaceState(WorkspaceModel):
     config_artifact_etag: str | None = None
     config_artifact_version_id: str | None = None
 
+    @classmethod
+    def from_config(cls, config: WorkspaceConfig) -> WorkspaceState:
+        """Create empty operational state for a newly initialized workspace."""
+        del config
+        return cls()
+
 
 def load_workspace_config(path: Path) -> WorkspaceConfig:
     """Read and validate lza-workspace.yaml."""
@@ -284,22 +289,23 @@ def create_workspace(
     """Create or reinitialize generated workspace files."""
     workspace_dir.mkdir(parents=True, exist_ok=True)
     (workspace_dir / ".lza" / "logs").mkdir(parents=True, exist_ok=True)
-    (workspace_dir / "aws-accelerator-installer").mkdir(parents=True, exist_ok=True)
+    (workspace_dir / config.installer.local_path).mkdir(parents=True, exist_ok=True)
 
     _replace_directory(
         source=template_config_dir,
-        destination=workspace_dir / "aws-accelerator-config",
+        destination=workspace_dir / config.configuration.local_path,
     )
     write_workspace_config(workspace_dir / WORKSPACE_CONFIG_FILE, config)
     write_workspace_state(workspace_dir / WORKSPACE_STATE_FILE, state)
 
 
-def planned_write_paths(workspace_dir: Path) -> list[Path]:
+def planned_write_paths(workspace_dir: Path, config: WorkspaceConfig) -> list[Path]:
+    """Return the paths initialization will create or replace."""
     return [
         workspace_dir,
         workspace_dir / WORKSPACE_CONFIG_FILE,
-        workspace_dir / "aws-accelerator-config",
-        workspace_dir / "aws-accelerator-installer",
+        workspace_dir / config.configuration.local_path,
+        workspace_dir / config.installer.local_path,
         workspace_dir / WORKSPACE_STATE_FILE,
         workspace_dir / ".lza" / "logs",
     ]

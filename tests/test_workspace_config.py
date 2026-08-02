@@ -8,7 +8,6 @@ import pytest
 
 from lza_workbench.core.workspace import load_workspace_config
 
-
 CONFIG_DIR = Path(__file__).parents[1] / "src" / "lza_workbench" / "config" / "examples"
 
 
@@ -29,8 +28,7 @@ def test_minimal_workspace_uses_nested_defaults() -> None:
     assert config.lza.version == "v1.15.5"
     assert config.installer.local_path == "aws-accelerator-installer"
     assert config.configuration.template.source == "packaged"
-    assert config.pipelines.configuration.name == "AWSAccelerator-Pipeline"
-    assert config.cli_defaults.poll_interval_seconds == 30
+    assert config.config_pipeline.name == "AWSAccelerator-Pipeline"
 
 
 def test_full_workspace_preserves_explicit_values() -> None:

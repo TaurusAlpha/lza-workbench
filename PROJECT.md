@@ -77,7 +77,7 @@ Each customer workspace should contain a workspace metadata file.
 Recommended name:
 
 ```text
-lza-workbench.yaml
+lza-workspace.yaml
 ```
 
 This file stores the key decisions used during initialization and later operations.
@@ -86,25 +86,24 @@ Example:
 
 ```yaml
 customer:
-  name: Comm-IT
-  slug: comm-it
+  name: Example Customer
+  slug: example-customer
 
 aws:
-  profile: comm-it-root
+  profile: example-root
   region: eu-west-1
 
-lza:
-  version: v1.12.1
-  accelerator_prefix: AWSAccelerator
-  config_repository_location: s3
-  template_source_type: bundled
-  template_source: default
-
-installer:
-  control_tower_enabled: true
-  enable_approval_stage: true
-  enable_diagnostics_pack: true
-  anonymous_data: false
+configuration:
+  local_path: customer-accelerator-config
+  template:
+    source: git
+    repository: https://github.com/example/lza-config-templates.git
+    ref: main
+    path: templates/default
+  repository:
+    type: git
+    repository: git@github.com:example/customer-lza-config.git
+    branch: main
 ```
 
 The CLI may collect these values interactively, but it should persist them into this file so the workspace remains repeatable.
@@ -147,7 +146,7 @@ This workflow creates a new customer workspace, collects the minimum required wo
 
 ```text
 comm-it/
-  lza-workbench.yaml
+  lza-workspace.yaml
 
   aws-accelerator-config/
     global-config.yaml
@@ -179,13 +178,11 @@ Example state:
 
 ```json
 {
-  "customer": "comm-it",
-  "lza_version": "v1.12.1",
-  "aws_profile": "comm-it-root",
-  "aws_region": "eu-west-1",
-  "installer_stack_name": "AWSAccelerator-InstallerStack",
-  "config_location": "s3",
-  "last_pipeline_execution_id": null
+  "initialized_at": null,
+  "updated_at": null,
+  "management_account_id": null,
+  "caller_arn": null,
+  "installer_stack_id": null
 }
 ```
 
