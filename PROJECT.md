@@ -61,7 +61,7 @@ Example:
 ```text
 customers/
   comm-it/
-    lza-workbench.yaml
+    lza-workspace.yaml
     aws-accelerator-config/
     aws-accelerator-installer/
     scripts/
@@ -80,7 +80,7 @@ Recommended name:
 lza-workspace.yaml
 ```
 
-This file stores the key decisions used during initialization and later operations.
+This file stores the key decisions used during initialization and later operations. `lza-workspace.yaml` is the declarative source of truth. Runtime and execution metadata is stored separately in `.lza/state.json`.
 
 Example:
 
@@ -142,7 +142,7 @@ lza init comm-it
 
 This workflow creates a new customer workspace, collects the minimum required workspace metadata, copies the selected LZA configuration template, creates local state, validates the selected AWS profile unless skipped, and leaves the workspace ready for the next deployment steps. The exact implementation of this workflow is intentionally maintained in TODO.md rather than this document.
 
-## Workspace Model
+## Workspace Layout
 
 ```text
 comm-it/
@@ -186,7 +186,23 @@ Example state:
 }
 ```
 
-State should only contain operational metadata. The main declarative source of truth should remain `lza-workbench.yaml`.
+State should never duplicate configuration already present in `lza-workspace.yaml`.
+It exists only to store information discovered or produced during command execution.
+
+## Installer Model
+
+The installer consists of two independent components:
+
+- The CloudFormation installer stack template.
+- The Landing Zone Accelerator source code consumed by the installer.
+
+The customer configuration (`aws-accelerator-config`) is managed independently and should not be coupled to installer source management.
+
+## Workspace Configuration Model
+
+`lza-workspace.yaml` is represented internally by strongly typed Pydantic models.
+The workspace configuration is loaded, validated, and exposed through typed objects rather than untyped dictionaries.
+Derived values should be calculated at runtime instead of persisted whenever practical.
 
 ## Current Technical Direction
 
@@ -197,7 +213,6 @@ The current implementation is expected to use the following technologies. These 
 - Pydantic for config/schema validation
 - boto3 for AWS API calls
 - ruamel.yaml for YAML read/write while preserving formatting
-- Jinja2 for templates
 - Rich for CLI output
 - pytest for tests
 

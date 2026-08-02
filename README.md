@@ -9,6 +9,7 @@ The repository contains the application source code, bundled LZA templates, and 
 - `src/` — Application source code and all execution logic.
 - `tests/` — Automated tests.
 - `src/lza_workbench/templates/` — Bundled templates shipped with the CLI.
+- `src/lza_workbench/config/examples/` — Typed workspace configuration examples.
 - `PROJECT.md` — Long-term project vision, architecture, and design principles.
 - `TODO.md` — Feature backlog and implementation ideas.
 
@@ -22,13 +23,13 @@ uv run ruff check .
 uv run pytest
 ```
 
-Create a customer workspace from the bundled default template:
+Create a customer workspace from the packaged default template defined by `WorkspaceConfig`:
 
 ```bash
 uv run lza init comm-it --skip-aws-check
 ```
 
-The command prompts for missing values and writes:
+The command prompts for missing customer/AWS values and writes:
 
 ```text
 comm-it/
@@ -55,15 +56,18 @@ derived from the customer name:
 lza import comm-it
 ```
 
-Override the default workspace path, or point directly to the configuration directory:
+Override the default workspace path and, when needed, explicitly identify the existing configuration directory:
 
 ```bash
-lza import comm-it --workspace-dir /path/to/comm-it/aws-accelerator-config
+lza import comm-it \
+  --workspace-dir /path/to/comm-it \
+  --config-dir /path/to/comm-it/aws-accelerator-config
 ```
 
 When `--workspace-dir` is omitted, import uses `<current-directory>/<customer-slug>`,
-matching `lza init`. Missing metadata values are prompted for in an interactive terminal
-and can be supplied explicitly for scripts:
+matching `lza init`. When `--config-dir` is omitted, import uses the configured local
+path (`aws-accelerator-config`) inside the workspace. Missing metadata values are prompted
+for in an interactive terminal and can be supplied explicitly for scripts:
 
 ```bash
 lza import Comm-IT \
@@ -75,8 +79,7 @@ lza import Comm-IT \
 
 Import validates the existing configuration structure but never writes beneath
 `aws-accelerator-config/`. It creates or updates only `lza-workspace.yaml` and
-`.lza/state.json`. It does not contact AWS; use `lza profile check` when that command
-is available to validate the stored profile.
+`.lza/state.json`. It validates the configured AWS profile unless `--skip-aws-check` is used.
 
 Preview metadata changes without writing:
 
@@ -84,9 +87,40 @@ Preview metadata changes without writing:
 lza import comm-it --dry-run
 ```
 
-Interactive `lza init` also offers to import a valid existing configuration when its
-target directory is already populated. `lza init --force` retains its explicit
-reinitialization behavior.
+When `lza init` finds an existing configuration directory, it stops and directs you to use
+`lza import`. `lza init --force` retains its explicit reinitialization behavior.
+
+## Workspace Configuration
+
+`lza-workspace.yaml` is the declarative source of truth for a customer workspace. It is
+loaded with `ruamel.yaml` and validated by nested Pydantic models. The top-level YAML keys
+match `WorkspaceConfig`; nested sections match their corresponding model fields.
+
+```yaml
+customer:
+  name: Example Customer
+  slug: example-customer
+
+aws:
+  profile: example-root
+  region: eu-west-1
+
+lza:
+  version: v1.15.5
+
+configuration:
+  local_path: aws-accelerator-config
+
+pipelines:
+  installer:
+    name: AWSAccelerator-InstallerStack
+  configuration:
+    name: AWSAccelerator-Pipeline
+```
+
+Defaults are defined in `src/lza_workbench/core/workspace.py`; YAML supplies explicit
+overrides. Unknown keys are rejected. See `src/lza_workbench/config/examples/` for minimal,
+full, configuration-only, and installer-only examples.
 
 ## Design Principles
 

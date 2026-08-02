@@ -16,6 +16,7 @@
 ## CLI Commands
 
 - [x] `lza init`
+- [x] `lza import`
 - [ ] `lza profile check`
 - [ ] `lza installer download`
 - [ ] `lza installer deploy`
@@ -43,8 +44,8 @@ Implementation checklist:
 - [x] Ask for or accept AWS profile.
 - [x] Ask for or accept AWS region.
 - [x] Ask for or accept LZA version.
-- [x] Ask for or accept template source.
-- [x] Copy the selected `aws-accelerator-config` template.
+- [x] Copy the packaged `aws-accelerator-config` template.
+- [ ] Support selecting a packaged template when multiple templates exist.
 - [x] Validate the copied template structure.
 - [x] Generate initial `.lza/state.json`.
 - [x] Store all selected initialization values in `lza-workspace.yaml`.
@@ -53,10 +54,14 @@ Implementation checklist:
 - [x] Print the next recommended commands.
 - [x] Support non-interactive execution through CLI options.
 - [x] Support `--dry-run`.
-- [x] Support `--force`.
+- [ ] Support `--force`.
 - [x] Support `--skip-aws-check`.
 - [x] Detect a non-empty target workspace.
-- [x] Offer to import the existing workspace instead of creating a new workspace.
+
+Future enhancements:
+
+- Init local git repository in LZA configuration directory and "init" commit.
+  Check for correlation if configuration repo is already stored in Git or CodeCommit or other supported repository.
 
 ### `lza import`
 
@@ -106,13 +111,20 @@ Implementation checklist:
 
 ### `lza installer download`
 
-Download the LZA installer template for the selected version into the customer workspace.
+Download the LZA installer CloudFormation template for the selected version into the customer workspace.
+
 Implementation checklist:
 
 - [ ] Read selected LZA version from `lza-workspace.yaml`.
-- [ ] Locate the downloaded installer template.
-- [ ] Download it automatically if it is missing.
-- [ ] Update the downloaded template structure with Anonymous Data Sharing disabled by default.
+- [ ] Resolve installer template URL for the selected version.
+- [ ] Download the installer template if missing.
+- [ ] Support re-download with `--force`.
+- [ ] Disable Anonymous Data Sharing by default.
+- [ ] Save the template under the workspace installer directory.
+- [ ] Record downloaded version in `.lza/state.json`.
+
+Implementation notes:
+
 - Template URL Latest: <https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/latest/AWSAccelerator-InstallerStack.template>
 - Template URL Versioned: <https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/{LZA_VERSION}/AWSAccelerator-InstallerStack.template>
 - LZA_VERSION format: `v1.0.0`, `v2.0.0`, etc.
@@ -124,7 +136,7 @@ Implementation checklist:
 
 - [ ] Read installer settings from `lza-workspace.yaml`.
 - [ ] Resolve the installer template for the selected LZA version.
-- [ ] Render CloudFormation parameters from `lza-workspace.yaml`.
+- [ ] Build CloudFormation parameters from workspace configuration.
 - [ ] Validate required installer settings before deployment.
 - [ ] Show the planned stack name, account, and region.
 - [ ] Support `--dry-run`.
@@ -148,8 +160,7 @@ Implementation checklist:
 - [ ] Wait for update completion.
 - [ ] Display stack events when the update fails.
 - [ ] Update `.lza/state.json`.
-- [ ] Read installer settings from `lza-workspace.yaml`.
-- [ ] Render CloudFormation parameters from `lza-workspace.yaml`.
+- [ ] Detect parameter changes before update.
 
 ### `lza config upload`
 
@@ -168,22 +179,39 @@ Implementation checklist:
 
 ### `lza config download`
 
-Download the current aws-accelerator-config from the configured LZA configuration source into the customer workspace.
+Download the current `aws-accelerator-config` from the configured LZA configuration source into the customer workspace.
+
 Implementation checklist:
 
 - [ ] Read configuration source settings from `lza-workspace.yaml`.
+- [ ] Prompt for missing settings interactively.
 - [ ] Detect the configured repository type.
 - [ ] Support S3 configuration repositories.
-- [ ] Support additional repository types later.
-- [ ] Validate the destination workspace.
 - [ ] Prevent accidental overwrite of local changes.
+      Overwrite local changes by default.
+      If overwrite is disabled, ask for confirmation when local changes are detected.
 - [ ] Support `--force`.
+      Ignore overwrite protection and replace local changes without confirmation.
 - [ ] Support `--dry-run`.
-- [ ] Download the complete aws-accelerator-config.
-- [ ] Validate the downloaded template structure.
-- [ ] Preserve file permissions where applicable.
-- [ ] Update `.lza/state.json` with download metadata.
-- [ ] Print a concise summary of downloaded files and source location.
+      Verify remote access and print the files that would be downloaded without changing the workspace.
+- [ ] Verify required S3 list and object-read permissions.
+- [ ] Download the remote configuration.
+- [ ] Add `--extract` for archive-based sources.
+      Extract the archive into the workspace and print updated file paths.
+- [ ] Replace the local configuration atomically.
+- [ ] Preserve excluded local directories such as `.git`.
+- [ ] Record download metadata in `.lza/state.json`.
+- [ ] Print a concise summary of the source and downloaded files.
+
+Future download enhancements:
+
+- [ ] Support additional repository types:
+  - Git repository
+  - Bitbucket repository
+  - Future custom repository providers
+- [ ] Validate the downloaded configuration structure.
+- [ ] Verify download integrity with checksums or signatures.
+- [ ] Detect identical local and remote configurations and skip unnecessary downloads.
 
 ### `lza pipeline start`
 
@@ -241,6 +269,15 @@ Implementation checklist:
 - [ ] Detect unresolved placeholders.
 - [ ] Produce a concise pass, warning, and failure summary.
 
+## Workspace
+
+- [ ] Define `lza-workspace.yaml` schema.
+- [ ] Version the workspace schema.
+- [ ] Support workspace schema migration.
+- [ ] Validate workspace before every command.
+- [ ] Keep `.lza/state.json` operational only.
+- [ ] Generate JSON Schema for editor support.
+
 ## Authentication
 
 Authentication ownership:
@@ -250,31 +287,16 @@ Authentication ownership:
 - [ ] Centralize AWS session/profile resolution for reuse by all commands.
 - [ ] Lowest priority future feature: helper for AWS profile creation or authentication onboarding.
 
-## Installer Components
+## Configuration Templates
 
-- [ ] Define installer settings schema in `lza-workspace.yaml`.
-- [ ] Render CloudFormation parameters in memory for deploy/update.
-- [ ] Support default values.
-- [ ] Disable anonymous data sharing by default.
-- [ ] Support approval stage email list.
-- [ ] Support management account email.
-- [ ] Support audit account email.
-- [ ] Support log archive account email.
-- [ ] Support repository source.
-- [ ] Support repository owner/name/branch.
-- [ ] Support config repository location.
-- [ ] Support existing config repository options.
-- [ ] Support S3 configuration location.
-
-## Templates
-
+- [x] Support packaged template source.
 - [x] Support local template source.
-- [ ] Implement reusable template validation.
 - [x] Copy template into customer workspace.
-- [x] Avoid overwriting existing customer config unless explicitly approved.
+- [x] Avoid overwriting existing customer configuration.
 - [x] Support `--force`.
-- [ ] Support template list command.
-- [ ] Support template validation command.
+- [ ] List available packaged templates.
+- [ ] Validate template structure.
+- [ ] Validate template compatibility with selected LZA version.
 
 ### Future
 
@@ -285,21 +307,19 @@ Authentication ownership:
 
 ## Validation
 
-Shared validation components:
-
 - [ ] Validate `lza-workspace.yaml`.
 - [ ] Validate YAML formatting.
-- [ ] Integrate LZA schema validation.
-- [ ] Validate required installer settings.
-- [ ] Validate selected template structure.
-- [ ] Validate expected workspace files.
-- [ ] Validate configuration upload target.
+- [ ] Integrate official LZA schema validation.
+- [ ] Validate workspace structure.
+- [ ] Validate installer configuration.
+- [ ] Validate upload target.
 - [ ] Detect unresolved placeholders.
 - [ ] Detect common LZA configuration mistakes.
 
 ## Reports
 
-- [ ] Generate `reports/init-report.md`.
+Maybe change entirely to 'lza report' command with subcommands for each report type?
+
 - [ ] Generate `reports/aws-profile-check.md`.
 - [ ] Generate `reports/status.md`.
 - [ ] Generate pipeline execution reports.
@@ -317,6 +337,7 @@ Shared validation components:
 - [ ] Cache installer templates.
 - [ ] Warn on unstable or very old versions.
 - [ ] Support migration helper between LZA versions.
+- [ ] Validate version compatibility with packaged templates.
 
 ## Configuration Generation
 
@@ -346,7 +367,7 @@ Shared validation components:
 
 - [ ] Add installation instructions.
 - [ ] Add example customer workspace.
-- [ ] Add example template.
+- [ ] Ship a default packaged template.
 - [ ] Add safe defaults.
 - [ ] Add clearer error messages.
 - [ ] Add command examples.
