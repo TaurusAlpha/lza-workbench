@@ -1,0 +1,17 @@
+customer:
+  name: Example Customer
+  slug: example-customer
+
+aws:
+  profile: example-root
+  region: eu-west-1
+
+installer:
+  local_path: customer-installer
+  stack_template:
+    source: s3
+    path: s3://example-lza-artifacts/AWSAccelerator-InstallerStack.template
+  source_code:
+    repository_type: s3
+    bucket: example-lza-artifacts
+    key: source/landing-zone-accelerator-on-aws.zip

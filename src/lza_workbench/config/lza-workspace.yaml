@@ -1,41 +1,132 @@
+schema_version: 2
+
 customer:
-  name: comm-it-test
+  name: Comm-IT Test
   slug: comm-it-test
 
 aws:
   profile: comm-it-root
   region: eu-west-1
 
-lza-installer:
+lza:
   version: v1.15.5
-  installer_local_path: aws-accelerator-installer
-  installer_repository_location: s3
-  installer_repository_bucket: s3://aws-accelerator-installer-123456789012-eu-west-1/
-  template_source_location: amazon
-  template_source: https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/v1.15.5/AWSAccelerator-InstallerStack.template
-  template-options:
-    enable_approval_stage: true
-    enable_diagnostics_pack: true
+  accelerator_prefix: AWSAccelerator
+
+installer:
+  local_path: aws-accelerator-installer
+
+  # CloudFormation template used to deploy or update the LZA installer stack.
+  # The official template URL is version-specific.
+  stack_template:
+    source: amazon # amazon | local | git | s3
+    path: https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/v1.15.5/AWSAccelerator-InstallerStack.template
+
+    # Examples for other sources:
+    #
+    # source: local
+    # path: ./templates/AWSAccelerator-InstallerStack.template
+    #
+    # source: s3
+    # path: s3://my-lza-artifacts/v1.15.5/AWSAccelerator-InstallerStack.template
+    #
+    # source: git
+    # repository: https://github.com/example/lza-installer-templates.git
+    # ref: main
+    # path: templates/AWSAccelerator-InstallerStack.template
+
+  # Source code consumed by the installer pipeline.
+  # This is separate from the CloudFormation installer stack template.
+  source_code:
+    repository_type: github # github | codecommit | s3 | codeconnection
+    owner: awslabs
+    repository_name: landing-zone-accelerator-on-aws
+    branch: release/v1.15.5
+
+    # GitHub example:
+    # repository_type: github
+    # owner: awslabs
+    # repository_name: landing-zone-accelerator-on-aws
+    # branch: release/v1.15.5
+    #
+    # CodeCommit example:
+    # repository_type: codecommit
+    # repository_name: landing-zone-accelerator-on-aws
+    # branch: release/v1.15.5
+    #
+    # S3 example:
+    # repository_type: s3
+    # bucket: aws-accelerator-installer-123456789012-eu-west-1
+    # key: source/landing-zone-accelerator-on-aws-v1.15.5.zip
+    #
+    # CodeConnection example:
+    # repository_type: codeconnection
+    # connection_arn: arn:aws:codeconnections:eu-west-1:123456789012:connection/example
+    # owner: example
+    # repository_name: landing-zone-accelerator-on-aws
+    # branch: release/v1.15.5
+
+  options:
+    enable_approval_stage: false
+    enable_diagnostics_pack: false
     anonymous_data: false
 
-lza-config:
-  config_local_path: aws-accelerator-config
-  config_repository_location: s3
-  config_repository_bucket: s3://aws-accelerator-config-123456789012-eu-west-1/zipped/
-  template_source_location: local
-  template_source: /Users/andreyv/Projects/comm-it-test
-  config_options:
-    upload_exclude:
-      dirs:
+    approval_stage_notify_email_list: []
+    management_account_email: null
+    audit_account_email: null
+    log_archive_account_email: null
+    control_tower_enabled: true
+
+configuration:
+  local_path: aws-accelerator-config
+
+  # Starter configuration copied during `lza init`.
+  template:
+    source: packaged # packaged | local | git
+    name: default
+
+    # Local template example:
+    # source: local
+    # path: ../lza-templates/customer-default
+    #
+    # Git template example:
+    # source: git
+    # repository: https://github.com/example/lza-config-templates.git
+    # ref: main
+    # path: templates/default
+
+  # Destination used by the LZA configuration pipeline.
+  repository:
+    type: s3 # s3 | codecommit | git
+
+    bucket: aws-accelerator-config-123456789012-eu-west-1
+    prefix: zipped/
+
+    # CodeCommit example:
+    # type: codecommit
+    # repository_name: aws-accelerator-config
+    # branch: main
+    #
+    # Git example:
+    # type: git
+    # repository: git@github.com:example/customer-lza-config.git
+    # branch: main
+
+  packaging:
+    exclude:
+      directories:
         - .git
         - backup
       files:
         - .DS_Store
 
-debug: false
+pipelines:
+  installer:
+    name: AWSAccelerator-Installer
 
-pipeline:
-  name: AWSAccelerator-Pipeline
-  execute: false
-  watch: true
-  poll_interval: 30
+  configuration:
+    name: AWSAccelerator-Pipeline
+
+cli_defaults:
+  debug: false
+  watch_pipeline: true
+  poll_interval_seconds: 30

@@ -1,0 +1,7 @@
+customer:
+  name: Example Customer
+  slug: example-customer
+
+aws:
+  profile: example-root
+  region: eu-west-1

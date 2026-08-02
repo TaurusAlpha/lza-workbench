@@ -1,0 +1,59 @@
+schema_version: 2
+
+customer:
+  name: Example Customer
+  slug: example-customer
+
+aws:
+  profile: example-root
+  role: null
+  region: eu-west-1
+
+lza:
+  version: v1.15.5
+  accelerator_prefix: AWSAccelerator
+
+installer:
+  local_path: aws-accelerator-installer
+  stack_template:
+    source: amazon
+    path: https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/v1.15.5/AWSAccelerator-InstallerStack.template
+  source_code:
+    repository_type: github
+    owner: awslabs
+    repository_name: landing-zone-accelerator-on-aws
+    branch: release/v1.15.5
+  options:
+    enable_approval_stage: false
+    enable_diagnostics_pack: false
+    anonymous_data: false
+    approval_stage_notify_email_list: []
+    management_account_email: null
+    audit_account_email: null
+    log_archive_account_email: null
+    control_tower_enabled: true
+
+configuration:
+  local_path: aws-accelerator-config
+  template:
+    source: packaged
+    name: default
+  repository:
+    type: s3
+    bucket: aws-accelerator-config-123456789012-eu-west-1
+    prefix: zipped/
+  packaging:
+    exclude:
+      directories: [.git, backup]
+      files: [.DS_Store]
+
+pipelines:
+  installer:
+    name: AWSAccelerator-Installer
+  configuration:
+    name: AWSAccelerator-Pipeline
+
+cli_defaults:
+  debug: false
+  watch_pipeline: true
+  poll_interval_seconds: 30

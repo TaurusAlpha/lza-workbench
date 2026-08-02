@@ -1,0 +1,19 @@
+customer:
+  name: Example Customer
+  slug: example-customer
+
+aws:
+  profile: example-root
+  region: eu-west-1
+
+configuration:
+  local_path: customer-accelerator-config
+  template:
+    source: git
+    repository: https://github.com/example/lza-config-templates.git
+    ref: main
+    path: templates/default
+  repository:
+    type: git
+    repository: git@github.com:example/customer-lza-config.git
+    branch: main
