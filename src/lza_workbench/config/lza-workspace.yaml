@@ -1,0 +1,41 @@
+customer:
+  name: comm-it-test
+  slug: comm-it-test
+
+aws:
+  profile: comm-it-root
+  region: eu-west-1
+
+lza-installer:
+  version: v1.15.5
+  installer_local_path: aws-accelerator-installer
+  installer_repository_location: s3
+  installer_repository_bucket: s3://aws-accelerator-installer-123456789012-eu-west-1/
+  template_source_location: amazon
+  template_source: https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/v1.15.5/AWSAccelerator-InstallerStack.template
+  template-options:
+    enable_approval_stage: true
+    enable_diagnostics_pack: true
+    anonymous_data: false
+
+lza-config:
+  config_local_path: aws-accelerator-config
+  config_repository_location: s3
+  config_repository_bucket: s3://aws-accelerator-config-123456789012-eu-west-1/zipped/
+  template_source_location: local
+  template_source: /Users/andreyv/Projects/comm-it-test
+  config_options:
+    upload_exclude:
+      dirs:
+        - .git
+        - backup
+      files:
+        - .DS_Store
+
+debug: false
+
+pipeline:
+  name: AWSAccelerator-Pipeline
+  execute: false
+  watch: true
+  poll_interval: 30
