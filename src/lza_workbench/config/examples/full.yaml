@@ -32,6 +32,11 @@ installer:
     audit_account_email: null
     log_archive_account_email: null
     control_tower_enabled: true
+    use_existing_config_repo: false
+    existing_config_repository_name: null
+    existing_config_repository_branch_name: null
+    existing_config_repository_owner: null
+    config_code_connection_arn: null
 
 configuration:
   local_path: aws-accelerator-config
