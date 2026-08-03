@@ -10,16 +10,16 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+import boto3
 import typer
+from botocore.exceptions import BotoCoreError, ClientError
 from rich.console import Console
 
-from lza_workbench.core.workspace import (
-    WORKSPACE_CONFIG_FILE,
-    WORKSPACE_STATE_FILE,
-    load_workspace_config,
-    load_workspace_state,
-    write_workspace_state,
-)
+from lza_workbench.core.workspace import (WORKSPACE_CONFIG_FILE,
+                                          WORKSPACE_STATE_FILE,
+                                          load_workspace_config,
+                                          load_workspace_state,
+                                          write_workspace_state)
 
 console = Console()
 
@@ -137,6 +137,26 @@ def run_download_config(
     now = datetime.now(UTC)
     state.updated_at = now
     state.config_downloaded_at = now
+
+    if zip_path.exists():
+        state.config_artifact_sha256 = hashlib.sha256(zip_path.read_bytes()).hexdigest()
+
+    if config_dir.exists():
+        state.config_files_count = len(
+            [
+                p
+                for p in config_dir.rglob("*")
+                if p.is_file()
+                and not any(part in exclude_dirs for part in p.relative_to(config_dir).parts[:-1])
+            ]
+        )
+
+    state.config_last_diff_summary = {
+        "added": len(diff_result.added),
+        "modified": len(diff_result.modified),
+        "removed": len(diff_result.removed),
+    }
+
     write_workspace_state(workspace_dir / WORKSPACE_STATE_FILE, state)
 
     console.print("[bold green]Downloaded and extracted LZA configuration[/bold green]")
@@ -181,9 +201,6 @@ def _download_and_extract_s3_zip(
 ) -> ConfigDiffResult:
     """Download zip archive from S3 into root workspace directory and extract it."""
     try:
-        import boto3
-        from botocore.exceptions import BotoCoreError, ClientError
-
         session_kwargs = {}
         if profile:
             session_kwargs["profile_name"] = profile
@@ -231,23 +248,17 @@ def _download_and_extract_s3_zip(
         error_message = error.get("Message", str(exc))
 
         if error_code in {"404", "NoSuchKey", "NoSuchBucket", "NotFound"}:
-            raise typer.BadParameter(
-                f"S3 path not found: s3://{s3_bucket}/{s3_key}"
-            ) from exc
+            raise typer.BadParameter(f"S3 path not found: s3://{s3_bucket}/{s3_key}") from exc
 
         if error_code in {"403", "AccessDenied"}:
             raise typer.BadParameter(
                 f"Access denied to s3://{s3_bucket}/{s3_key}. Check your AWS permissions."
             ) from exc
 
-        raise typer.BadParameter(
-            f"AWS S3 error [{error_code}]: {error_message}"
-        ) from exc
+        raise typer.BadParameter(f"AWS S3 error [{error_code}]: {error_message}") from exc
 
     except BotoCoreError as exc:
-        raise typer.BadParameter(
-            f"AWS connection/client failure: {exc}"
-        ) from exc
+        raise typer.BadParameter(f"AWS connection/client failure: {exc}") from exc
 
     if not extract:
         return ConfigDiffResult(added=[zip_path.name], modified=[], removed=[])

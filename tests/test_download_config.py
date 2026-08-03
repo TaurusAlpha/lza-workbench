@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -81,6 +82,12 @@ def test_run_download_config_success(workspace_dir: Path) -> None:
     write_workspace_config(config_file, cfg)
 
     config_dir = workspace_dir / "aws-accelerator-config"
+    for item in config_dir.iterdir():
+        if item.is_dir():
+            shutil.rmtree(item)
+        else:
+            item.unlink()
+
     git_dir = config_dir / ".git"
     git_dir.mkdir(parents=True, exist_ok=True)
     (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
@@ -113,6 +120,9 @@ def test_run_download_config_success(workspace_dir: Path) -> None:
 
     state = load_workspace_state(workspace_dir / ".lza" / "state.json")
     assert state.config_downloaded_at is not None
+    assert state.config_artifact_sha256 is not None
+    assert state.config_files_count == 2
+    assert state.config_last_diff_summary == {"added": 1, "modified": 1, "removed": 1}
 
 
 def test_run_download_config_without_extract(workspace_dir: Path) -> None:

@@ -221,6 +221,9 @@ class WorkspaceState(WorkspaceModel):
     config_downloaded_at: datetime | None = None
     config_artifact_etag: str | None = None
     config_artifact_version_id: str | None = None
+    config_artifact_sha256: str | None = None
+    config_files_count: int | None = None
+    config_last_diff_summary: dict[str, int] | None = None
     installer_downloaded_at: datetime | None = None
     installer_template_version: str | None = None
 
