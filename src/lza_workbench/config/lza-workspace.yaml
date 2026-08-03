@@ -115,7 +115,6 @@ configuration:
     exclude:
       directories:
         - .git
-        - backup
       files:
         - .DS_Store
 

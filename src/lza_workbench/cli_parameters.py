@@ -83,3 +83,18 @@ Extract = Annotated[
     bool,
     typer.Option("--extract", help="Extract downloaded configuration archives in workspace."),
 ]
+
+ExecutePipeline = Annotated[
+    bool,
+    typer.Option(
+        "--execute-pipeline",
+        help="Trigger LZA CodePipeline execution after config upload.",
+    ),
+]
+WatchPipeline = Annotated[
+    bool,
+    typer.Option(
+        "--watch-pipeline",
+        help="Monitor LZA CodePipeline execution until completion.",
+    ),
+]

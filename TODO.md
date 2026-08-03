@@ -21,8 +21,8 @@
 - [ ] `lza installer download`
 - [ ] `lza installer deploy`
 - [ ] `lza installer update`
-- [ ] `lza config upload`
-- [ ] `lza config download`
+- [x] `lza config upload`
+- [x] `lza config download`
 - [ ] `lza pipeline start`
 - [ ] `lza pipeline watch`
 - [ ] `lza status`
@@ -167,15 +167,15 @@ Implementation checklist:
 Upload the customer `aws-accelerator-config` to the configured LZA configuration source.
 Implementation checklist:
 
-- [ ] Read configuration source settings from `lza-workspace.yaml`.
-- [ ] Validate required configuration files.
-- [ ] Detect unresolved replacement values.
-- [ ] Package the configuration when required.
-- [ ] Support S3 configuration repositories.
+- [x] Read configuration source settings from `lza-workspace.yaml`.
+- [x] Validate required configuration files.
+- [x] Detect unresolved replacement values.
+- [x] Package the configuration when required.
+- [x] Support S3 configuration repositories.
 - [ ] Support additional repository types later.
-- [ ] Show the target destination before upload.
-- [ ] Support `--dry-run`.
-- [ ] Save upload metadata to `.lza/state.json`.
+- [x] Show the target destination before upload.
+- [x] Support `--dry-run`.
+- [x] Save upload metadata to `.lza/state.json`.
 
 ### `lza config download`
 
@@ -183,25 +183,25 @@ Download the current `aws-accelerator-config` from the configured LZA configurat
 
 Implementation checklist:
 
-- [ ] Read configuration source settings from `lza-workspace.yaml`.
-- [ ] Prompt for missing settings interactively.
-- [ ] Detect the configured repository type.
-- [ ] Support S3 configuration repositories.
-- [ ] Prevent accidental overwrite of local changes.
+- [x] Read configuration source settings from `lza-workspace.yaml`.
+- [x] Prompt for missing settings interactively.
+- [x] Detect the configured repository type.
+- [x] Support S3 configuration repositories.
+- [x] Prevent accidental overwrite of local changes.
       Overwrite local changes by default.
       If overwrite is disabled, ask for confirmation when local changes are detected.
-- [ ] Support `--force`.
+- [x] Support `--force`.
       Ignore overwrite protection and replace local changes without confirmation.
-- [ ] Support `--dry-run`.
+- [x] Support `--dry-run`.
       Verify remote access and print the files that would be downloaded without changing the workspace.
-- [ ] Verify required S3 list and object-read permissions.
-- [ ] Download the remote configuration.
-- [ ] Add `--extract` for archive-based sources.
+- [x] Verify required S3 list and object-read permissions.
+- [x] Download the remote configuration.
+- [x] Add `--extract` for archive-based sources.
       Extract the archive into the workspace and print updated file paths.
-- [ ] Replace the local configuration atomically.
-- [ ] Preserve excluded local directories such as `.git`.
-- [ ] Record download metadata in `.lza/state.json`.
-- [ ] Print a concise summary of the source and downloaded files.
+- [x] Replace the local configuration atomically.
+- [x] Preserve excluded local directories such as `.git`.
+- [x] Record download metadata in `.lza/state.json`.
+- [x] Print a concise summary of the source and downloaded files.
 
 Future download enhancements:
 
