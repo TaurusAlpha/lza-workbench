@@ -19,6 +19,8 @@ from lza_workbench.core.workspace import (
     WORKSPACE_CONFIG_FILE,
     WORKSPACE_STATE_FILE,
     ConfigDiffResult,
+    count_config_files,
+    is_path_excluded,
     load_workspace_config,
     load_workspace_state,
     resolve_workspace_dir,
@@ -120,14 +122,7 @@ def run_download_config(
         state.config_artifact_sha256 = hashlib.sha256(zip_path.read_bytes()).hexdigest()
 
     if config_dir.exists():
-        state.config_files_count = len(
-            [
-                p
-                for p in config_dir.rglob("*")
-                if p.is_file()
-                and not any(part in exclude_dirs for part in p.relative_to(config_dir).parts[:-1])
-            ]
-        )
+        state.config_files_count = count_config_files(config_dir, exclude_dirs)
 
     state.config_last_diff_summary = {
         "added": len(diff_result.added),
@@ -261,9 +256,10 @@ def _extract_zip_to_workspace(
 
         added = sorted(list(incoming_keys - before_keys))
         removed = sorted(list(before_keys - incoming_keys))
-        modified = sorted(
-            [k for k in (before_keys & incoming_keys) if before_files[k] != incoming_files[k]]
-        )
+        modified = [
+            k for k in sorted(before_keys & incoming_keys)
+            if before_files[k] != incoming_files[k]
+        ]
 
         config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -295,7 +291,7 @@ def _scan_directory_files(directory: Path, exclude_dirs: set[str]) -> dict[str, 
         if not path.is_file():
             continue
         rel = path.relative_to(directory)
-        if any(part in exclude_dirs for part in rel.parts[:-1]):
+        if is_path_excluded(rel, exclude_dirs):
             continue
         files_map[str(rel)] = hashlib.sha256(path.read_bytes()).hexdigest()
 

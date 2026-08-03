@@ -59,3 +59,21 @@ cli_defaults:
 
     with pytest.raises(ValueError, match="watch_pipline"):
         load_workspace_config(config_path)
+
+
+def test_is_path_excluded_and_count_config_files(tmp_path: Path) -> None:
+    from lza_workbench.core.workspace import count_config_files, is_path_excluded
+
+    assert is_path_excluded(Path(".git/config"), exclude_dirs={".git"})
+    assert is_path_excluded(Path("sub/.git/HEAD"), exclude_dirs={".git"})
+    assert not is_path_excluded(Path("accounts/accounts.yaml"), exclude_dirs={".git"})
+
+    config_dir = tmp_path / "config"
+    (config_dir / "dir1").mkdir(parents=True)
+    (config_dir / ".git").mkdir(parents=True)
+
+    (config_dir / "dir1" / "file1.txt").write_text("hello")
+    (config_dir / ".git" / "HEAD").write_text("ref")
+
+    assert count_config_files(config_dir, exclude_dirs={".git"}) == 1
+

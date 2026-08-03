@@ -18,6 +18,7 @@ from lza_workbench.core.workspace import (
     WORKSPACE_CONFIG_FILE,
     WORKSPACE_STATE_FILE,
     ConfigDiffResult,
+    is_path_excluded,
     load_workspace_config,
     load_workspace_state,
     resolve_workspace_dir,
@@ -148,9 +149,7 @@ def _create_zip_archive(
                 continue
 
             rel_path = path.relative_to(config_dir)
-            if any(part in exclude_dirs for part in rel_path.parts[:-1]):
-                continue
-            if path.name in exclude_files:
+            if is_path_excluded(rel_path, exclude_dirs, exclude_files):
                 continue
 
             arcname = str(rel_path)
@@ -163,7 +162,10 @@ def _create_zip_archive(
 
     added = sorted(list(new_keys - old_keys))
     removed = sorted(list(old_keys - new_keys))
-    modified = sorted([k for k in (old_keys & new_keys) if old_manifest[k] != new_manifest[k]])
+    modified = [
+        k for k in sorted(old_keys & new_keys)
+        if old_manifest[k] != new_manifest[k]
+    ]
 
     diff_result = ConfigDiffResult(added=added, modified=modified, removed=removed)
     return diff_result, new_manifest
