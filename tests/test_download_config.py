@@ -87,14 +87,12 @@ def test_run_download_config_success(workspace_dir: Path) -> None:
     def fake_download(bucket: str, key: str, filename: str) -> None:
         p = Path(filename)
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text("downloaded content", encoding="utf-8")
+        with zipfile.ZipFile(str(p), "w") as zf:
+            zf.writestr("aws-accelerator-config/global-config.yaml", "downloaded content")
 
     mock_boto3 = MagicMock()
     mock_s3 = MagicMock()
     mock_boto3.Session.return_value.client.return_value = mock_s3
-    mock_paginator = MagicMock()
-    mock_s3.get_paginator.return_value = mock_paginator
-    mock_paginator.paginate.return_value = [{"Contents": [{"Key": "global-config.yaml"}]}]
     mock_s3.download_file.side_effect = fake_download
 
     with patch.dict("sys.modules", {"boto3": mock_boto3, "botocore.exceptions": MagicMock()}):
@@ -103,12 +101,13 @@ def test_run_download_config_success(workspace_dir: Path) -> None:
     assert path == workspace_dir / "aws-accelerator-config"
     assert (path / "global-config.yaml").read_text(encoding="utf-8") == "downloaded content"
     assert (git_dir / "HEAD").is_file()
+    assert (workspace_dir / "aws-accelerator-config.zip").is_file()
 
     state = load_workspace_state(workspace_dir / ".lza" / "state.json")
     assert state.config_downloaded_at is not None
 
 
-def test_run_download_config_with_extract(workspace_dir: Path) -> None:
+def test_run_download_config_without_extract(workspace_dir: Path) -> None:
     config_file = workspace_dir / "lza-workspace.yaml"
     cfg = load_workspace_config(config_file)
     cfg.configuration.repository.bucket = "my-test-bucket"
@@ -117,22 +116,17 @@ def test_run_download_config_with_extract(workspace_dir: Path) -> None:
     def fake_download(bucket: str, key: str, filename: str) -> None:
         p = Path(filename)
         p.parent.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(str(p), "w") as zf:
-            zf.writestr("global-config.yaml", "extracted config content")
+        p.write_bytes(b"zip binary bytes")
 
     mock_boto3 = MagicMock()
     mock_s3 = MagicMock()
     mock_boto3.Session.return_value.client.return_value = mock_s3
-    mock_paginator = MagicMock()
-    mock_s3.get_paginator.return_value = mock_paginator
-    mock_paginator.paginate.return_value = [{"Contents": [{"Key": "config.zip"}]}]
     mock_s3.download_file.side_effect = fake_download
 
     with patch.dict("sys.modules", {"boto3": mock_boto3, "botocore.exceptions": MagicMock()}):
-        path = run_download_config(target_dir=workspace_dir, force=True, extract=True)
+        run_download_config(target_dir=workspace_dir, force=True, extract=False)
 
-    assert (path / "global-config.yaml").read_text(encoding="utf-8") == "extracted config content"
-    assert not (path / "config.zip").exists()
+    assert (workspace_dir / "aws-accelerator-config.zip").is_file()
 
 
 def test_cli_config_download_command(workspace_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
