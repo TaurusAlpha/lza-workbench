@@ -12,10 +12,9 @@ import typer
 from lza_workbench import cli_parameters as params
 from lza_workbench.commands.download_config import run_download_config
 from lza_workbench.commands.import_workspace import run_import
-from lza_workbench.commands.init_workspace import (
-    resolve_init_workspace_dir,
-    run_init,
-)
+from lza_workbench.commands.init_workspace import (resolve_init_workspace_dir,
+                                                   run_init)
+from lza_workbench.commands.upload_config import run_upload_config
 from lza_workbench.core.workspace import ConfigurationConfig
 
 app = typer.Typer(
@@ -116,8 +115,8 @@ def config_download_command(
     aws_profile: params.AwsProfile = "",
     aws_region: params.AwsRegion = "",
     dry_run: params.DryRun = False,
-    force: params.Force = False,
-    extract: params.Extract = False,
+    force: params.Force = True,
+    extract: params.Extract = True,
 ) -> None:
     """Download LZA configuration from configured repository source."""
     run_download_config(
@@ -128,6 +127,22 @@ def config_download_command(
         extract=extract,
         interactive=_is_interactive(),
     )
+
+
+@config_app.command("upload")
+def config_upload_command(
+    aws_profile: params.AwsProfile = "",
+    aws_region: params.AwsRegion = "",
+    dry_run: params.DryRun = False,
+) -> None:
+    """Upload LZA configuration to configured repository destination."""
+    run_upload_config(
+        aws_profile=aws_profile,
+        aws_region=aws_region,
+        dry_run=dry_run,
+        interactive=_is_interactive(),
+    )
+
 
 
 def main(argv: list[str] | None = None) -> int:

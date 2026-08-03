@@ -103,12 +103,11 @@ def test_run_download_config_success(workspace_dir: Path) -> None:
             zf.writestr("aws-accelerator-config/global-config.yaml", "new content")
             zf.writestr("aws-accelerator-config/new-file.yaml", "added file")
 
-    mock_boto3 = MagicMock()
     mock_s3 = MagicMock()
-    mock_boto3.Session.return_value.client.return_value = mock_s3
     mock_s3.download_file.side_effect = fake_download
 
-    with patch.dict("sys.modules", {"boto3": mock_boto3, "botocore.exceptions": MagicMock()}):
+    with patch("boto3.Session") as mock_session_cls:
+        mock_session_cls.return_value.client.return_value = mock_s3
         path = run_download_config(target_dir=workspace_dir, force=True)
 
     assert path == workspace_dir / "aws-accelerator-config"
@@ -136,12 +135,11 @@ def test_run_download_config_without_extract(workspace_dir: Path) -> None:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(b"zip binary bytes")
 
-    mock_boto3 = MagicMock()
     mock_s3 = MagicMock()
-    mock_boto3.Session.return_value.client.return_value = mock_s3
     mock_s3.download_file.side_effect = fake_download
 
-    with patch.dict("sys.modules", {"boto3": mock_boto3, "botocore.exceptions": MagicMock()}):
+    with patch("boto3.Session") as mock_session_cls:
+        mock_session_cls.return_value.client.return_value = mock_s3
         run_download_config(target_dir=workspace_dir, force=True, extract=False)
 
     assert (workspace_dir / "aws-accelerator-config.zip").is_file()
