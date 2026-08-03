@@ -2,26 +2,41 @@
 
 from __future__ import annotations
 
+import hashlib
 import shutil
 import tempfile
 import zipfile
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-import boto3
 import typer
-from botocore.exceptions import BotoCoreError, ClientError
 from rich.console import Console
 
-from lza_workbench.core.workspace import (WORKSPACE_CONFIG_FILE,
-                                          WORKSPACE_STATE_FILE,
-                                          load_workspace_config,
-                                          load_workspace_state,
-                                          write_workspace_state)
+from lza_workbench.core.workspace import (
+    WORKSPACE_CONFIG_FILE,
+    WORKSPACE_STATE_FILE,
+    load_workspace_config,
+    load_workspace_state,
+    write_workspace_state,
+)
 
 console = Console()
 
 DEFAULT_ZIP_FILENAME = "aws-accelerator-config.zip"
+
+
+@dataclass(frozen=True)
+class ConfigDiffResult:
+    """Summary of changes between existing and downloaded configuration files."""
+
+    added: list[str]
+    modified: list[str]
+    removed: list[str]
+
+    @property
+    def has_changes(self) -> bool:
+        return bool(self.added or self.modified or self.removed)
 
 
 def resolve_workspace_dir(target_dir: Path | None = None) -> Path:
@@ -59,7 +74,6 @@ def run_download_config(
             "Only 's3' is supported."
         )
 
-    # 1. Read required parameters from config first, prompt for missing parameters if interactive
     bucket = (repo_config.bucket or "").strip()
     if not bucket:
         if interactive:
@@ -79,7 +93,6 @@ def run_download_config(
 
     region = aws_region.strip() or (config.aws.region or "").strip() or "us-east-1"
 
-    # Resolve S3 object key and local zip path in root workspace
     s3_bucket, s3_key, zip_name = _resolve_s3_archive_uri(bucket, prefix)
     zip_path = workspace_dir / zip_name
 
@@ -108,7 +121,7 @@ def run_download_config(
 
     exclude_dirs = set(config.configuration.packaging.exclude.directories)
 
-    downloaded_files = _download_and_extract_s3_zip(
+    diff_result = _download_and_extract_s3_zip(
         s3_bucket=s3_bucket,
         s3_key=s3_key,
         prefix=prefix,
@@ -131,10 +144,8 @@ def run_download_config(
     console.print(f"Source: s3://{s3_bucket}/{s3_key}")
     console.print(f"Zip archive: {zip_path}")
     console.print(f"Extracted to: {config_dir}")
-    if downloaded_files:
-        console.print("Downloaded files:")
-        for fname in downloaded_files:
-            console.print(f"  - {fname}")
+
+    _print_diff_summary(diff_result)
 
     return config_dir
 
@@ -167,9 +178,12 @@ def _download_and_extract_s3_zip(
     region: str,
     extract: bool,
     exclude_dirs: set[str],
-) -> list[str]:
+) -> ConfigDiffResult:
     """Download zip archive from S3 into root workspace directory and extract it."""
     try:
+        import boto3
+        from botocore.exceptions import BotoCoreError, ClientError
+
         session_kwargs = {}
         if profile:
             session_kwargs["profile_name"] = profile
@@ -179,7 +193,6 @@ def _download_and_extract_s3_zip(
         session = boto3.Session(**session_kwargs)
         s3 = session.client("s3")
 
-        # Try downloading single zip file directly
         single_zip_success = False
         try:
             s3.download_file(s3_bucket, s3_key, str(zip_path))
@@ -189,7 +202,6 @@ def _download_and_extract_s3_zip(
             if error_code not in {"404", "NoSuchKey", "NotFound"}:
                 raise
 
-        # If single zip key was not found, search objects under prefix for a .zip file
         if not single_zip_success:
             paginator = s3.get_paginator("list_objects_v2")
             found_zip_key = None
@@ -238,9 +250,8 @@ def _download_and_extract_s3_zip(
         ) from exc
 
     if not extract:
-        return [zip_path.name]
+        return ConfigDiffResult(added=[zip_path.name], modified=[], removed=[])
 
-    # Extract zip archive into root workspace directory / config_dir
     return _extract_zip_to_workspace(
         zip_path=zip_path,
         workspace_dir=workspace_dir,
@@ -255,24 +266,34 @@ def _extract_zip_to_workspace(
     workspace_dir: Path,
     config_dir: Path,
     exclude_dirs: set[str],
-) -> list[str]:
-    """Extract zip into workspace root, updating config_dir while preserving excluded dirs."""
+) -> ConfigDiffResult:
+    """Extract zip into workspace root, computing added/modified/removed file diffs."""
     with tempfile.TemporaryDirectory() as tmp_str:
         staging_dir = Path(tmp_str)
 
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(staging_dir)
 
-        # Check if zip contains top-level folder matching config_dir name (aws-accelerator-config)
         top_level_folder = staging_dir / config_dir.name
         if top_level_folder.is_dir():
             source_content_dir = top_level_folder
         else:
             source_content_dir = staging_dir
 
+        before_files = _scan_directory_files(config_dir, exclude_dirs)
+        incoming_files = _scan_directory_files(source_content_dir, exclude_dirs)
+
+        before_keys = set(before_files.keys())
+        incoming_keys = set(incoming_files.keys())
+
+        added = sorted(list(incoming_keys - before_keys))
+        removed = sorted(list(before_keys - incoming_keys))
+        modified = sorted(
+            [k for k in (before_keys & incoming_keys) if before_files[k] != incoming_files[k]]
+        )
+
         config_dir.mkdir(parents=True, exist_ok=True)
 
-        # Remove old files in config_dir while preserving excluded directories (e.g., .git)
         for item in config_dir.iterdir():
             if item.name in exclude_dirs:
                 continue
@@ -281,13 +302,46 @@ def _extract_zip_to_workspace(
             else:
                 item.unlink()
 
-        extracted_files: list[str] = []
         for item in source_content_dir.rglob("*"):
             if item.is_file():
                 rel_path = item.relative_to(source_content_dir)
                 dest = config_dir / rel_path
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(item, dest)
-                extracted_files.append(str(rel_path))
 
-        return sorted(extracted_files)
+        return ConfigDiffResult(added=added, modified=modified, removed=removed)
+
+
+def _scan_directory_files(directory: Path, exclude_dirs: set[str]) -> dict[str, str]:
+    """Scan directory files and return relative path to sha256 checksum map."""
+    files_map: dict[str, str] = {}
+    if not directory.is_dir():
+        return files_map
+
+    for path in directory.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(directory)
+        if any(part in exclude_dirs for part in rel.parts[:-1]):
+            continue
+        files_map[str(rel)] = hashlib.sha256(path.read_bytes()).hexdigest()
+
+    return files_map
+
+
+def _print_diff_summary(diff: ConfigDiffResult) -> None:
+    """Print clean summary of added, modified, and removed files."""
+    if not diff.has_changes:
+        console.print("[dim]No file changes detected (configuration up to date).[/dim]")
+        return
+
+    console.print(
+        f"[bold]Changes: {len(diff.added)} added, "
+        f"{len(diff.modified)} modified, {len(diff.removed)} removed[/bold]"
+    )
+    for fname in diff.added:
+        console.print(f"  [green]+ {fname}[/green]")
+    for fname in diff.modified:
+        console.print(f"  [yellow]~ {fname}[/yellow]")
+    for fname in diff.removed:
+        console.print(f"  [red]- {fname}[/red]")

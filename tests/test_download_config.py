@@ -80,15 +80,21 @@ def test_run_download_config_success(workspace_dir: Path) -> None:
     cfg.configuration.repository.bucket = "my-test-bucket"
     write_workspace_config(config_file, cfg)
 
-    git_dir = workspace_dir / "aws-accelerator-config" / ".git"
+    config_dir = workspace_dir / "aws-accelerator-config"
+    git_dir = config_dir / ".git"
     git_dir.mkdir(parents=True, exist_ok=True)
     (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+
+    # Write initial file to test modification diff
+    (config_dir / "global-config.yaml").write_text("old content", encoding="utf-8")
+    (config_dir / "old-file.yaml").write_text("old file", encoding="utf-8")
 
     def fake_download(bucket: str, key: str, filename: str) -> None:
         p = Path(filename)
         p.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(str(p), "w") as zf:
-            zf.writestr("aws-accelerator-config/global-config.yaml", "downloaded content")
+            zf.writestr("aws-accelerator-config/global-config.yaml", "new content")
+            zf.writestr("aws-accelerator-config/new-file.yaml", "added file")
 
     mock_boto3 = MagicMock()
     mock_s3 = MagicMock()
@@ -99,7 +105,9 @@ def test_run_download_config_success(workspace_dir: Path) -> None:
         path = run_download_config(target_dir=workspace_dir, force=True)
 
     assert path == workspace_dir / "aws-accelerator-config"
-    assert (path / "global-config.yaml").read_text(encoding="utf-8") == "downloaded content"
+    assert (path / "global-config.yaml").read_text(encoding="utf-8") == "new content"
+    assert (path / "new-file.yaml").read_text(encoding="utf-8") == "added file"
+    assert not (path / "old-file.yaml").exists()
     assert (git_dir / "HEAD").is_file()
     assert (workspace_dir / "aws-accelerator-config.zip").is_file()
 
