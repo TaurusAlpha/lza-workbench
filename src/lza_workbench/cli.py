@@ -11,6 +11,7 @@ import typer
 
 from lza_workbench import cli_parameters as params
 from lza_workbench.commands.download_config import run_download_config
+from lza_workbench.commands.download_installer import run_download_installer
 from lza_workbench.commands.import_workspace import run_import
 from lza_workbench.commands.init_workspace import run_init
 from lza_workbench.commands.upload_config import run_upload_config
@@ -27,7 +28,13 @@ config_app = typer.Typer(
     no_args_is_help=True,
 )
 
+installer_app = typer.Typer(
+    help="Manage LZA installer stack.",
+    no_args_is_help=True,
+)
+
 app.add_typer(config_app, name="config")
+app.add_typer(installer_app, name="installer")
 
 
 def _is_interactive() -> bool:
@@ -139,6 +146,21 @@ def config_upload_command(
         aws_profile=aws_profile,
         aws_region=aws_region,
         dry_run=dry_run,
+        interactive=_is_interactive(),
+    )
+
+
+@installer_app.command("download")
+def installer_download_command(
+    lza_version: params.LzaVersion = None,
+    dry_run: params.DryRun = False,
+    force: params.Force = False,
+) -> None:
+    """Download LZA installer CloudFormation template into customer workspace."""
+    run_download_installer(
+        lza_version=lza_version,
+        dry_run=dry_run,
+        force=force,
         interactive=_is_interactive(),
     )
 

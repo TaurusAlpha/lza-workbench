@@ -18,7 +18,7 @@
 - [x] `lza init`
 - [x] `lza import`
 - [ ] `lza profile check`
-- [ ] `lza installer download`
+- [x] `lza installer download`
 - [ ] `lza installer deploy`
 - [ ] `lza installer update`
 - [x] `lza config upload`
@@ -115,13 +115,13 @@ Download the LZA installer CloudFormation template for the selected version into
 
 Implementation checklist:
 
-- [ ] Read selected LZA version from `lza-workspace.yaml`.
-- [ ] Resolve installer template URL for the selected version.
-- [ ] Download the installer template if missing.
-- [ ] Support re-download with `--force`.
-- [ ] Disable Anonymous Data Sharing by default.
-- [ ] Save the template under the workspace installer directory.
-- [ ] Record downloaded version in `.lza/state.json`.
+- [x] Read selected LZA version from `lza-workspace.yaml`.
+- [x] Resolve installer template URL for the selected version.
+- [x] Download the installer template if missing.
+- [x] Support re-download with `--force`.
+- [x] Disable Anonymous Data Sharing by default.
+- [x] Save the template under the workspace installer directory.
+- [x] Record downloaded version in `.lza/state.json`.
 
 Implementation notes:
 
