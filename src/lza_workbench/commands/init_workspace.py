@@ -35,7 +35,9 @@ def resolve_init_workspace_dir(
     if workspace_dir is not None:
         return workspace_dir.expanduser().resolve()
     if interactive:
-        return Path(typer.prompt("Workspace directory", default=str(default))).expanduser().resolve()
+        return (
+            Path(typer.prompt("Workspace directory", default=str(default))).expanduser().resolve()
+        )
     return default.resolve()
 
 
@@ -56,15 +58,9 @@ def run_init(
     config = build_workspace_config(
         customer_name=customer_name,
         customer_slug=customer_slug,
-        aws_profile=_value_or_prompt(
-            "AWS profile", aws_profile, customer_slug, interactive
-        ),
-        aws_region=_value_or_prompt(
-            "AWS region", aws_region, AwsConfig().region, interactive
-        ),
-        lza_version=_value_or_prompt(
-            "LZA version", lza_version, LzaConfig().version, interactive
-        ),
+        aws_profile=_value_or_prompt("AWS profile", aws_profile, customer_slug, interactive),
+        aws_region=_value_or_prompt("AWS region", aws_region, AwsConfig().region, interactive),
+        lza_version=_value_or_prompt("LZA version", lza_version, LzaConfig().version, interactive),
     )
     template_dir = resolve_packaged_template(config)
 

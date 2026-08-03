@@ -64,13 +64,22 @@ def run_import(
         customer_name=customer_name,
         customer_slug=customer_slug,
         aws_profile=_value_or_prompt(
-            "AWS profile", aws_profile, existing.config.aws.profile if existing else customer_slug, interactive
+            "AWS profile",
+            aws_profile,
+            existing.config.aws.profile if existing else customer_slug,
+            interactive,
         ),
         aws_region=_value_or_prompt(
-            "AWS region", aws_region, existing.config.aws.region if existing else AwsConfig().region, interactive
+            "AWS region",
+            aws_region,
+            existing.config.aws.region if existing else AwsConfig().region,
+            interactive,
         ),
         lza_version=_value_or_prompt(
-            "LZA version", lza_version, existing.config.lza.version if existing else LzaConfig().version, interactive
+            "LZA version",
+            lza_version,
+            existing.config.lza.version if existing else LzaConfig().version,
+            interactive,
         ),
         workspace_dir=workspace_dir,
         config_dir=config_dir,
@@ -78,7 +87,11 @@ def run_import(
     )
     state = existing.state if existing else WorkspaceState.from_config(config)
 
-    identity = None if skip_aws_check else validate_aws_profile(config.aws.profile or "", config.aws.region)
+    identity = (
+        None
+        if skip_aws_check
+        else validate_aws_profile(config.aws.profile or "", config.aws.region)
+    )
     paths = _metadata_paths(workspace_dir, existing, config, state)
     if dry_run:
         _print_summary("Dry run: lza import", workspace_dir, config_dir, paths, identity)
@@ -105,7 +118,9 @@ def resolve_import_paths(
     """Resolve the workspace and its existing LZA configuration directory."""
     if config_dir is not None:
         resolved_config_dir = config_dir.expanduser().resolve()
-        resolved_workspace_dir = workspace_dir.expanduser().resolve() if workspace_dir else resolved_config_dir.parent
+        resolved_workspace_dir = (
+            workspace_dir.expanduser().resolve() if workspace_dir else resolved_config_dir.parent
+        )
     else:
         resolved_workspace_dir = resolve_init_workspace_dir(
             customer_name=customer_name,
@@ -119,7 +134,9 @@ def resolve_import_paths(
     if not resolved_config_dir.is_dir():
         raise typer.BadParameter(f"Configuration directory does not exist: {resolved_config_dir}")
     if resolved_config_dir.is_symlink():
-        raise typer.BadParameter(f"Configuration directory must not be a symlink: {resolved_config_dir}")
+        raise typer.BadParameter(
+            f"Configuration directory must not be a symlink: {resolved_config_dir}"
+        )
     try:
         resolved_config_dir.relative_to(resolved_workspace_dir)
     except ValueError as exc:
@@ -132,11 +149,16 @@ def load_existing_metadata(workspace_dir: Path) -> ExistingMetadata | None:
     config_path = workspace_dir / "lza-workspace.yaml"
     state_path = workspace_dir / ".lza" / "state.json"
     if config_path.exists() != state_path.exists():
-        raise typer.BadParameter("Workspace has partial metadata; both metadata files are required.")
+        raise typer.BadParameter(
+            "Workspace has partial metadata; both metadata files are required."
+        )
     if not config_path.exists():
         return None
     try:
-        return ExistingMetadata(load_workspace_config(config_path), load_workspace_state(state_path))
+        return ExistingMetadata(
+            config=load_workspace_config(config_path),
+            state=load_workspace_state(state_path),
+        )
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
 
@@ -180,7 +202,10 @@ def _metadata_paths(
         return [config_path, state_path]
     return [
         path
-        for path, changed in ((config_path, existing.config != config), (state_path, existing.state != state))
+        for path, changed in (
+            (config_path, existing.config != config),
+            (state_path, existing.state != state),
+        )
         if changed
     ]
 

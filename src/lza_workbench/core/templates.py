@@ -10,6 +10,9 @@ from importlib.resources import files
 from pathlib import Path
 
 import typer
+from rich.console import Console
+
+console = Console()
 
 DEFAULT_TEMPLATE_SOURCE = "default"
 REQUIRED_TEMPLATE_FILES = (
@@ -18,7 +21,11 @@ REQUIRED_TEMPLATE_FILES = (
     "accounts-config.yaml",
     "network-config.yaml",
     "security-config.yaml",
+)
+
+OPTIONAL_TEMPLATE_FILES = (
     "replacements-config.yaml",
+    "customizations-config.yaml",
 )
 
 
@@ -56,12 +63,22 @@ def validate_template(template_config_dir: Path) -> None:
     if not template_config_dir.is_dir():
         raise typer.BadParameter(f"Template directory does not exist: {template_config_dir}")
 
-    missing = [
+    missing_required = [
         name for name in REQUIRED_TEMPLATE_FILES if not (template_config_dir / name).is_file()
     ]
-    if missing:
-        missing_list = ", ".join(missing)
-        raise typer.BadParameter(f"Template is missing required files: {missing_list}")
+    missing_optional = [
+        name for name in OPTIONAL_TEMPLATE_FILES if not (template_config_dir / name).is_file()
+    ]
+
+    if missing_required:
+        missing_list = ", ".join(missing_required)
+        # raise typer.BadParameter(f"Template is missing required files: {missing_list}")
+        console.print(f"[bold red]Template is missing required files: {missing_list}[/bold red]")
+    if missing_optional:
+        missing_list = ", ".join(missing_optional)
+        console.print(
+            f"[bold yellow]Template is missing optional files: {missing_list}[/bold yellow]"
+        )
 
 
 def _bundled_default_template_dir() -> Path:
