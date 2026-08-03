@@ -373,4 +373,3 @@ def resolve_init_workspace_dir(
             Path(typer.prompt("Workspace directory", default=str(default))).expanduser().resolve()
         )
     return default.resolve()
-

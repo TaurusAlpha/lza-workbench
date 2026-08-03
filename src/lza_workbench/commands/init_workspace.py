@@ -41,7 +41,9 @@ def run_init(
     config = build_workspace_config(
         customer_name=customer_name,
         customer_slug=customer_slug,
-        aws_profile=_value_or_prompt("AWS profile", aws_profile, customer_slug, interactive),
+        aws_profile=_value_or_prompt(
+            "AWS profile", aws_profile, f"{customer_slug}-root", interactive
+        ),
         aws_region=_value_or_prompt("AWS region", aws_region, AwsConfig().region, interactive),
         lza_version=_value_or_prompt("LZA version", lza_version, LzaConfig().version, interactive),
     )
