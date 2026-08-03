@@ -12,12 +12,12 @@ import typer
 from lza_workbench.cli import main
 from lza_workbench.commands.init_workspace import run_init
 from lza_workbench.commands.upload_config import (
-    resolve_workspace_dir,
     run_upload_config,
 )
 from lza_workbench.core.workspace import (
     load_workspace_config,
     load_workspace_state,
+    resolve_workspace_dir,
     write_workspace_config,
 )
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -331,3 +332,45 @@ def _replace_directory(*, source: Path, destination: Path) -> None:
     if destination.exists():
         shutil.rmtree(destination)
     shutil.copytree(source, destination)
+
+
+@dataclass(frozen=True)
+class ConfigDiffResult:
+    """Summary of changes between existing and new configuration files."""
+
+    added: list[str]
+    modified: list[str]
+    removed: list[str]
+
+    @property
+    def has_changes(self) -> bool:
+        return bool(self.added or self.modified or self.removed)
+
+
+def resolve_workspace_dir(target_dir: Path | None = None) -> Path:
+    """Resolve workspace directory containing lza-workspace.yaml starting from cwd or target_dir."""
+    current = (target_dir or Path.cwd()).expanduser().resolve()
+    for directory in [current, *current.parents]:
+        if (directory / WORKSPACE_CONFIG_FILE).is_file():
+            return directory
+    raise typer.BadParameter(
+        f"Command must be run inside an LZA workspace directory (missing {WORKSPACE_CONFIG_FILE})."
+    )
+
+
+def resolve_init_workspace_dir(
+    *,
+    customer_name: str,
+    workspace_dir: Path | None,
+    interactive: bool,
+) -> Path:
+    """Resolve the target workspace directory for init or import operations."""
+    default = Path.cwd() / normalize_customer_slug(customer_name)
+    if workspace_dir is not None:
+        return workspace_dir.expanduser().resolve()
+    if interactive:
+        return (
+            Path(typer.prompt("Workspace directory", default=str(default))).expanduser().resolve()
+        )
+    return default.resolve()
+

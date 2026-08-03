@@ -12,10 +12,9 @@ import typer
 from lza_workbench import cli_parameters as params
 from lza_workbench.commands.download_config import run_download_config
 from lza_workbench.commands.import_workspace import run_import
-from lza_workbench.commands.init_workspace import (resolve_init_workspace_dir,
-                                                   run_init)
+from lza_workbench.commands.init_workspace import run_init
 from lza_workbench.commands.upload_config import run_upload_config
-from lza_workbench.core.workspace import ConfigurationConfig
+from lza_workbench.core.workspace import ConfigurationConfig, resolve_init_workspace_dir
 
 app = typer.Typer(
     help="LZA Workbench CLI",

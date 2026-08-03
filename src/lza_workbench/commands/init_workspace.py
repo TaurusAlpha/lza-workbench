@@ -24,23 +24,6 @@ from lza_workbench.core.workspace import (
 console = Console()
 
 
-def resolve_init_workspace_dir(
-    *,
-    customer_name: str,
-    workspace_dir: Path | None,
-    interactive: bool,
-) -> Path:
-    """Resolve the target workspace directory."""
-    default = Path.cwd() / normalize_customer_slug(customer_name)
-    if workspace_dir is not None:
-        return workspace_dir.expanduser().resolve()
-    if interactive:
-        return (
-            Path(typer.prompt("Workspace directory", default=str(default))).expanduser().resolve()
-        )
-    return default.resolve()
-
-
 def run_init(
     *,
     customer_name: str,

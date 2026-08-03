@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import zipfile
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -13,40 +12,19 @@ import typer
 from botocore.exceptions import BotoCoreError, ClientError
 from rich.console import Console
 
+from lza_workbench.aws.s3 import resolve_s3_archive_uri
 from lza_workbench.core.templates import validate_template
-from lza_workbench.core.workspace import (WORKSPACE_CONFIG_FILE,
-                                          WORKSPACE_STATE_FILE,
-                                          load_workspace_config,
-                                          load_workspace_state,
-                                          write_workspace_state)
+from lza_workbench.core.workspace import (
+    WORKSPACE_CONFIG_FILE,
+    WORKSPACE_STATE_FILE,
+    ConfigDiffResult,
+    load_workspace_config,
+    load_workspace_state,
+    resolve_workspace_dir,
+    write_workspace_state,
+)
 
 console = Console()
-
-DEFAULT_ZIP_FILENAME = "aws-accelerator-config.zip"
-
-
-@dataclass(frozen=True)
-class ZipDiffResult:
-    """Summary of file additions, modifications, and removals in the configuration zip."""
-
-    added: list[str]
-    modified: list[str]
-    removed: list[str]
-
-    @property
-    def has_changes(self) -> bool:
-        return bool(self.added or self.modified or self.removed)
-
-
-def resolve_workspace_dir(target_dir: Path | None = None) -> Path:
-    """Resolve workspace directory containing lza-workspace.yaml starting from target_dir or cwd."""
-    current = (target_dir or Path.cwd()).expanduser().resolve()
-    for directory in [current, *current.parents]:
-        if (directory / WORKSPACE_CONFIG_FILE).is_file():
-            return directory
-    raise typer.BadParameter(
-        f"Command must be run inside an LZA workspace directory (missing {WORKSPACE_CONFIG_FILE})."
-    )
 
 
 def run_upload_config(
@@ -97,7 +75,7 @@ def run_upload_config(
 
     region = aws_region.strip() or (config.aws.region or "").strip() or "us-east-1"
 
-    s3_bucket, s3_key, zip_name = _resolve_s3_archive_uri(bucket, prefix)
+    s3_bucket, s3_key, zip_name = resolve_s3_archive_uri(bucket, prefix)
     zip_path = workspace_dir / zip_name
 
     if dry_run:
@@ -153,29 +131,13 @@ def run_upload_config(
     return zip_path
 
 
-def _resolve_s3_archive_uri(bucket: str, prefix: str) -> tuple[str, str, str]:
-    """Resolve bucket name, object key, and local zip file name."""
-    clean_bucket = bucket.rstrip("/")
-    if clean_bucket.endswith(".zip"):
-        parts = clean_bucket.split("/", 1)
-        s3_bucket = parts[0]
-        s3_key = parts[1] if len(parts) > 1 else DEFAULT_ZIP_FILENAME
-        zip_name = Path(s3_key).name
-        return s3_bucket, s3_key, zip_name
-
-    s3_bucket = clean_bucket
-    zip_name = DEFAULT_ZIP_FILENAME
-    s3_key = f"{prefix}/{zip_name}".lstrip("/") if prefix else zip_name
-    return s3_bucket, s3_key, zip_name
-
-
 def _create_zip_archive(
     *,
     config_dir: Path,
     zip_path: Path,
     exclude_dirs: set[str],
     exclude_files: set[str],
-) -> tuple[ZipDiffResult, dict[str, tuple[int, int]]]:
+) -> tuple[ConfigDiffResult, dict[str, tuple[int, int]]]:
     """Create zip archive from config_dir and compute diff against previous zip if present."""
     old_manifest = _read_zip_manifest(zip_path)
 
@@ -203,7 +165,7 @@ def _create_zip_archive(
     removed = sorted(list(old_keys - new_keys))
     modified = sorted([k for k in (old_keys & new_keys) if old_manifest[k] != new_manifest[k]])
 
-    diff_result = ZipDiffResult(added=added, modified=modified, removed=removed)
+    diff_result = ConfigDiffResult(added=added, modified=modified, removed=removed)
     return diff_result, new_manifest
 
 
@@ -275,7 +237,7 @@ def _upload_zip_to_s3(
         raise typer.BadParameter(f"AWS connection/client failure: {exc}") from exc
 
 
-def _print_diff_summary(diff: ZipDiffResult) -> None:
+def _print_diff_summary(diff: ConfigDiffResult) -> None:
     """Print clean summary of added, modified, and removed files."""
     if not diff.has_changes:
         console.print("[dim]No file changes detected in zip archive.[/dim]")

@@ -6,11 +6,14 @@ from pathlib import Path
 
 from lza_workbench.commands.init_workspace import (
     build_workspace_config,
-    resolve_init_workspace_dir,
     resolve_packaged_template,
     run_init,
 )
-from lza_workbench.core.workspace import load_workspace_config, load_workspace_state
+from lza_workbench.core.workspace import (
+    load_workspace_config,
+    load_workspace_state,
+    resolve_init_workspace_dir,
+)
 
 
 def test_resolve_init_workspace_dir_uses_customer_slug(tmp_path: Path, monkeypatch) -> None:

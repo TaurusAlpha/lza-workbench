@@ -9,7 +9,6 @@ import typer
 from rich.console import Console
 
 from lza_workbench.aws.identity import validate_aws_profile
-from lza_workbench.commands.init_workspace import resolve_init_workspace_dir
 from lza_workbench.core.templates import validate_template
 from lza_workbench.core.workspace import (
     AwsConfig,
@@ -22,6 +21,7 @@ from lza_workbench.core.workspace import (
     load_workspace_config,
     load_workspace_state,
     normalize_customer_slug,
+    resolve_init_workspace_dir,
     write_workspace_config,
     write_workspace_state,
 )

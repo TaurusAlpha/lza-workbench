@@ -6,7 +6,6 @@ import hashlib
 import shutil
 import tempfile
 import zipfile
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -15,39 +14,18 @@ import typer
 from botocore.exceptions import BotoCoreError, ClientError
 from rich.console import Console
 
-from lza_workbench.core.workspace import (WORKSPACE_CONFIG_FILE,
-                                          WORKSPACE_STATE_FILE,
-                                          load_workspace_config,
-                                          load_workspace_state,
-                                          write_workspace_state)
+from lza_workbench.aws.s3 import resolve_s3_archive_uri
+from lza_workbench.core.workspace import (
+    WORKSPACE_CONFIG_FILE,
+    WORKSPACE_STATE_FILE,
+    ConfigDiffResult,
+    load_workspace_config,
+    load_workspace_state,
+    resolve_workspace_dir,
+    write_workspace_state,
+)
 
 console = Console()
-
-DEFAULT_ZIP_FILENAME = "aws-accelerator-config.zip"
-
-
-@dataclass(frozen=True)
-class ConfigDiffResult:
-    """Summary of changes between existing and downloaded configuration files."""
-
-    added: list[str]
-    modified: list[str]
-    removed: list[str]
-
-    @property
-    def has_changes(self) -> bool:
-        return bool(self.added or self.modified or self.removed)
-
-
-def resolve_workspace_dir(target_dir: Path | None = None) -> Path:
-    """Resolve workspace directory containing lza-workspace.yaml starting from cwd or target_dir."""
-    current = (target_dir or Path.cwd()).expanduser().resolve()
-    for directory in [current, *current.parents]:
-        if (directory / WORKSPACE_CONFIG_FILE).is_file():
-            return directory
-    raise typer.BadParameter(
-        f"Command must be run inside an LZA workspace directory (missing {WORKSPACE_CONFIG_FILE})."
-    )
 
 
 def run_download_config(
@@ -93,7 +71,7 @@ def run_download_config(
 
     region = aws_region.strip() or (config.aws.region or "").strip() or "us-east-1"
 
-    s3_bucket, s3_key, zip_name = _resolve_s3_archive_uri(bucket, prefix)
+    s3_bucket, s3_key, zip_name = resolve_s3_archive_uri(bucket, prefix)
     zip_path = workspace_dir / zip_name
 
     if dry_run:
@@ -168,22 +146,6 @@ def run_download_config(
     _print_diff_summary(diff_result)
 
     return config_dir
-
-
-def _resolve_s3_archive_uri(bucket: str, prefix: str) -> tuple[str, str, str]:
-    """Resolve bucket name, object key, and local zip file name."""
-    clean_bucket = bucket.rstrip("/")
-    if clean_bucket.endswith(".zip"):
-        parts = clean_bucket.split("/", 1)
-        s3_bucket = parts[0]
-        s3_key = parts[1] if len(parts) > 1 else DEFAULT_ZIP_FILENAME
-        zip_name = Path(s3_key).name
-        return s3_bucket, s3_key, zip_name
-
-    s3_bucket = clean_bucket
-    zip_name = DEFAULT_ZIP_FILENAME
-    s3_key = f"{prefix}/{zip_name}".lstrip("/") if prefix else zip_name
-    return s3_bucket, s3_key, zip_name
 
 
 def _download_and_extract_s3_zip(
