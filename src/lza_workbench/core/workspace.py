@@ -161,7 +161,7 @@ class PipelinesConfig(WorkspaceModel):
 
     installer: PipelineInstaller = Field(default_factory=PipelineInstaller)
     configuration: PipelineConfig = Field(default_factory=PipelineConfig)
-    
+
 
 class CliConfig(WorkspaceModel):
     """Default behavior for interactive and pipeline CLI operations."""
@@ -193,7 +193,6 @@ class WorkspaceConfig(WorkspaceModel):
         aws_region: str,
         lza_config: LzaConfig,
         lza_installer: LzaInstaller | None = None,
-
     ) -> WorkspaceConfig:
         """Build workspace configuration from resolved command values."""
         return cls(
@@ -207,6 +206,8 @@ class WorkspaceConfig(WorkspaceModel):
 class WorkspaceState(WorkspaceModel):
     """Mutable operational metadata stored in .lza/state.json."""
 
+    model_config = ConfigDict(extra="forbid", strict=False)
+
     initialized_at: datetime | None = None
     updated_at: datetime | None = None
     management_account_id: str | None = None
@@ -217,8 +218,11 @@ class WorkspaceState(WorkspaceModel):
     installer_pipeline_execution_id: str | None = None
     config_pipeline_execution_id: str | None = None
     config_uploaded_at: datetime | None = None
+    config_downloaded_at: datetime | None = None
     config_artifact_etag: str | None = None
     config_artifact_version_id: str | None = None
+    installer_downloaded_at: datetime | None = None
+    installer_template_version: str | None = None
 
     @classmethod
     def from_config(cls, config: WorkspaceConfig) -> WorkspaceState:

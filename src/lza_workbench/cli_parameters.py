@@ -29,12 +29,12 @@ Version = Annotated[
 ]
 
 AwsProfile = Annotated[
-    str | None,
+    str,
     typer.Option("--aws-profile", help="AWS profile for the workspace."),
 ]
 
 AwsRegion = Annotated[
-    str | None,
+    str,
     typer.Option("--aws-region", help="AWS region for the workspace."),
 ]
 
@@ -77,4 +77,9 @@ LzaConfigDir = Annotated[
         "--lza-config-dir",
         help="Path to the existing LZA configuration directory (aws-accelerator-config).",
     ),
+]
+
+Extract = Annotated[
+    bool,
+    typer.Option("--extract", help="Extract downloaded configuration archives in workspace."),
 ]

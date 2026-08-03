@@ -1,7 +1,6 @@
 """LZA Workbench command-line interface.
 
-Define the CLI entrypoint and command workflows for workspace initialization and import.
-Define CLI commands here
+Define the CLI entrypoint and command workflows for workspace management.
 """
 
 from __future__ import annotations
@@ -11,9 +10,12 @@ import sys
 import typer
 
 from lza_workbench import cli_parameters as params
+from lza_workbench.commands.download_config import run_download_config
 from lza_workbench.commands.import_workspace import run_import
-from lza_workbench.commands.init_workspace import (resolve_init_workspace_dir,
-                                                   run_init)
+from lza_workbench.commands.init_workspace import (
+    resolve_init_workspace_dir,
+    run_init,
+)
 from lza_workbench.core.workspace import ConfigurationConfig
 
 app = typer.Typer(
@@ -21,6 +23,13 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+
+config_app = typer.Typer(
+    help="Manage LZA configuration.",
+    no_args_is_help=True,
+)
+
+app.add_typer(config_app, name="config")
 
 
 def _is_interactive() -> bool:
@@ -36,8 +45,8 @@ def root(version: params.Version = False) -> None:
 def init_command(
     customer_name: params.CustomerName,
     workspace_dir: params.WorkspaceDir = None,
-    aws_profile: params.AwsProfile = None,
-    aws_region: params.AwsRegion = None,
+    aws_profile: params.AwsProfile = "",
+    aws_region: params.AwsRegion = "",
     lza_version: params.LzaVersion = None,
     dry_run: params.DryRun = False,
     force: params.Force = False,
@@ -65,8 +74,8 @@ def init_command(
     run_init(
         customer_name=customer_name,
         workspace_dir=resolved_workspace_dir,
-        aws_profile=aws_profile,
-        aws_region=aws_region,
+        aws_profile=aws_profile or None,
+        aws_region=aws_region or None,
         lza_version=lza_version,
         dry_run=dry_run,
         force=force,
@@ -80,8 +89,8 @@ def import_command(
     customer_name: params.CustomerName,
     workspace_dir: params.WorkspaceDir = None,
     config_dir: params.LzaConfigDir = None,
-    aws_profile: params.AwsProfile = None,
-    aws_region: params.AwsRegion = None,
+    aws_profile: params.AwsProfile = "",
+    aws_region: params.AwsRegion = "",
     lza_version: params.LzaVersion = None,
     dry_run: params.DryRun = False,
     force: params.Force = False,
@@ -92,8 +101,8 @@ def import_command(
         customer_name=customer_name,
         workspace_dir=workspace_dir,
         config_dir=config_dir,
-        aws_profile=aws_profile,
-        aws_region=aws_region,
+        aws_profile=aws_profile or None,
+        aws_region=aws_region or None,
         lza_version=lza_version,
         dry_run=dry_run,
         force=force,
@@ -101,7 +110,26 @@ def import_command(
         interactive=_is_interactive(),
     )
 
-    
+
+@config_app.command("download")
+def config_download_command(
+    aws_profile: params.AwsProfile = "",
+    aws_region: params.AwsRegion = "",
+    dry_run: params.DryRun = False,
+    force: params.Force = False,
+    extract: params.Extract = False,
+) -> None:
+    """Download LZA configuration from configured repository source."""
+    run_download_config(
+        aws_profile=aws_profile,
+        aws_region=aws_region,
+        dry_run=dry_run,
+        force=force,
+        extract=extract,
+        interactive=_is_interactive(),
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI and return a process-style exit code."""
     try:
