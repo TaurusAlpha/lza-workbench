@@ -27,8 +27,6 @@ console = Console()
 
 def run_download_config(
     *,
-    aws_profile: str = "",
-    aws_region: str = "",
     dry_run: bool = False,
     force: bool = False,
     extract: bool = True,
@@ -60,13 +58,13 @@ def run_download_config(
             )
 
     prefix = (repo_config.prefix or "").strip()
-    profile = aws_profile.strip() or (config.aws.profile or "").strip()
+    profile = (config.aws.profile or "").strip()
     if not profile and interactive:
         profile = typer.prompt("AWS profile", default=config.customer.slug).strip()
     if not profile:
         raise typer.BadParameter("AWS profile is required but not configured.")
 
-    region = aws_region.strip() or (config.aws.region or "").strip() or "us-east-1"
+    region = (config.aws.region or "").strip() or "us-east-1"
 
     s3_bucket, s3_key, zip_name = resolve_s3_archive_uri(bucket, prefix)
     zip_path = workspace_dir / zip_name

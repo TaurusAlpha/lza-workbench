@@ -27,8 +27,6 @@ console = Console()
 
 def run_upload_config(
     *,
-    aws_profile: str = "",
-    aws_region: str = "",
     dry_run: bool = False,
     interactive: bool = False,
     target_dir: Path | None = None,
@@ -48,9 +46,7 @@ def run_upload_config(
         )
 
     if not config_dir.exists() or not config_dir.is_dir():
-        raise typer.BadParameter(
-            f"Configuration directory does not exist: {config_dir}"
-        )
+        raise typer.BadParameter(f"Configuration directory does not exist: {config_dir}")
 
     validate_template(config_dir)
 
@@ -65,13 +61,13 @@ def run_upload_config(
             )
 
     prefix = (repo_config.prefix or "").strip()
-    profile = aws_profile.strip() or (config.aws.profile or "").strip()
+    profile = (config.aws.profile or "").strip()
     if not profile and interactive:
         profile = typer.prompt("AWS profile", default=config.customer.slug).strip()
     if not profile:
         raise typer.BadParameter("AWS profile is required but not configured.")
 
-    region = aws_region.strip() or (config.aws.region or "").strip() or "us-east-1"
+    region = (config.aws.region or "").strip() or "us-east-1"
 
     s3_bucket, s3_key, zip_name = resolve_s3_archive_uri(bucket, prefix)
     zip_path = workspace_dir / zip_name
