@@ -19,8 +19,11 @@
 - [x] `lza import`
 - [ ] `lza profile check`
 - [x] `lza installer download`
+- [ ] `lza installer plan`
 - [ ] `lza installer deploy`
+- [ ] `lza installer status`
 - [ ] `lza installer update`
+- [ ] `lza installer delete`
 - [x] `lza config upload`
 - [x] `lza config download`
 - [ ] `lza pipeline start`
@@ -109,6 +112,25 @@ Implementation checklist:
 - [ ] Return a non-zero exit code when validation fails.
 - [ ] Provide clear errors for expired SSO sessions or invalid credentials.
 
+
+### `lza installer plan`
+
+Resolve the installer configuration and show the planned actions without making any changes.
+Implementation checklist:
+
+- [ ] Read installer settings from `lza-workspace.yaml`.
+- [ ] Resolve the selected LZA installer template.
+- [ ] Resolve the installer source configuration.
+- [ ] Validate required installer settings.
+- [ ] Detect missing interactive values.
+- [ ] Inspect the installer source.
+- [ ] Build CloudFormation parameters.
+- [ ] Validate parameters against the installer template.
+- [ ] Show planned source preparation actions.
+- [ ] Show planned CloudFormation changes.
+- [ ] Show parameter provenance.
+- [ ] Return a non-zero exit code when validation fails.
+
 ### `lza installer download`
 
 Download the LZA installer CloudFormation template for the selected version into the customer workspace.
@@ -134,16 +156,17 @@ Implementation notes:
 Deploy the LZA installer stack for the current workspace.
 Implementation checklist:
 
-- [ ] Read installer settings from `lza-workspace.yaml`.
-- [ ] Resolve the installer template for the selected LZA version.
-- [ ] Build CloudFormation parameters from workspace configuration.
-- [ ] Validate required installer settings before deployment.
-- [ ] Show the planned stack name, account, and region.
-- [ ] Support `--dry-run`.
+- [ ] Execute the installer planning workflow.
+- [ ] Prompt for missing required values.
+- [ ] Prepare the configured installer source when required.
+- [ ] Create or validate required AWS resources.
 - [ ] Create the installer stack.
 - [ ] Wait for stack completion.
 - [ ] Display stack events when deployment fails.
-- [ ] Save deployment metadata to `.lza/state.json`.
+- [ ] Record deployment metadata in `.lza/state.json`.
+- [ ] Print deployment outputs and next recommended commands.
+- [ ] Support `--dry-run`.
+- [ ] Support `--force`.
 
 ### `lza installer update`
 
@@ -161,6 +184,54 @@ Implementation checklist:
 - [ ] Display stack events when the update fails.
 - [ ] Update `.lza/state.json`.
 - [ ] Detect parameter changes before update.
+
+### `lza installer status`
+
+Show the current installer deployment state.
+Implementation checklist:
+
+- [ ] Detect the installer stack.
+- [ ] Show stack status.
+- [ ] Show deployed LZA version.
+- [ ] Show installer source type.
+- [ ] Show source repository details.
+- [ ] Show stack outputs.
+- [ ] Compare deployed and configured versions.
+- [ ] Detect configuration drift.
+- [ ] Read deployment metadata from `.lza/state.json`.
+
+### lza installer update
+
+Update an existing installer deployment.
+Implementation checklist:
+
+- [ ] Detect the existing installer stack.
+- [ ] Resolve the requested installer configuration.
+- [ ] Compare deployed and requested parameters.
+- [ ] Compare installer template versions.
+- [ ] Compare installer source configuration.
+- [ ] Show planned changes.
+- [ ] Prepare updated installer source when required.
+- [ ] Update the CloudFormation stack.
+- [ ] Handle no-change updates cleanly.
+- [ ] Wait for update completion.
+- [ ] Display stack events when update fails.
+- [ ] Update `.lza/state.json`.
+- [ ] Support `--dry-run`.
+
+### `lza installer delete`
+
+Remove the installer deployment.
+Implementation checklist:
+
+- [ ] Detect the installer stack.
+- [ ] Show the resources that will be removed.
+- [ ] Require confirmation unless `--force` is specified.
+- [ ] Delete the installer stack.
+- [ ] Wait for stack deletion.
+- [ ] Preserve installer source repositories by default.
+- [ ] Optionally remove installer source resources.
+- [ ] Remove installer deployment metadata from `.lza/state.json`.
 
 ### `lza config upload`
 

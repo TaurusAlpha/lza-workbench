@@ -19,6 +19,7 @@ In scope:
 - Use local or Git-based LZA configuration templates.
 - Generate and store workspace metadata.
 - Copy or resolve the LZA installer stack template.
+- Deploy and manage the LZA installer lifecycle.
 - Generate helper scripts or commands for LZA bootstrap workflows.
 - Validate that the selected AWS profile can access the target account.
 - Support multiple LZA versions.
@@ -197,6 +198,14 @@ The installer consists of two independent components:
 - The Landing Zone Accelerator source code consumed by the installer.
 
 The customer configuration (`aws-accelerator-config`) is managed independently and should not be coupled to installer source management.
+
+Installer deployment capabilities are being introduced incrementally based on practical customer workflows rather than a predefined end-state.
+
+The initial implementation focuses on deploying the LZA installer using AWS CodeCommit as the installer source. Future versions may support additional installer source types, such as the official AWS GitHub repository or an Amazon S3 source package.
+
+The workspace model should describe the desired installer source independently of its implementation so new source providers can be added without changing the overall workspace configuration model.
+
+Detailed command behavior, implementation phases, and provider-specific functionality are intentionally maintained in `TODO.md` rather than this document.
 
 ## Workspace Configuration Model
 
