@@ -10,10 +10,10 @@ import pytest
 import typer
 
 from lza_workbench.cli import main
-from lza_workbench.commands.init_workspace import run_init
-from lza_workbench.commands.upload_config import (
+from lza_workbench.commands.config_upload import (
     run_upload_config,
 )
+from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.core.workspace import (
     load_workspace_config,
     load_workspace_state,
@@ -148,9 +148,7 @@ def test_run_upload_config_diff_calculation(workspace_dir: Path) -> None:
     assert state.config_last_diff_summary["removed"] >= 1
 
 
-def test_cli_config_upload_command(
-    workspace_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_cli_config_upload_command(workspace_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_file = workspace_dir / "lza-workspace.yaml"
     cfg = load_workspace_config(config_file)
     cfg.configuration.repository.bucket = "my-test-bucket"

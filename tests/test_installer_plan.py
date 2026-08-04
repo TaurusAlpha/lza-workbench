@@ -1,0 +1,205 @@
+"""Tests for lza installer plan command."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+import typer
+from botocore.exceptions import ClientError
+
+from lza_workbench.commands.installer_plan import run_installer_plan
+from lza_workbench.core.workspace import (
+    AwsConfig,
+    CustomerConfig,
+    LzaConfig,
+    WorkspaceConfig,
+    WorkspaceState,
+    load_workspace_config,
+    write_workspace_config,
+    write_workspace_state,
+)
+
+
+@pytest.fixture
+def sample_workspace(tmp_path: Path) -> Path:
+    """Create a sample workspace directory with valid lza-workspace.yaml."""
+    ws_dir = tmp_path / "comm-it"
+    ws_dir.mkdir(parents=True, exist_ok=True)
+    (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-installer").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Comm IT", slug="comm-it"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0", accelerator_prefix="AWSAccelerator"),
+    )
+    config.installer.source_code.repository_type = "codecommit"
+    config.installer.source_code.repository_name = "aws-accelerator-codecommit"
+    config.installer.source_code.branch = "release/v1.16.0"
+
+    # Set mandatory emails
+    config.installer.options.management_account_email = "root@example.com"
+    config.installer.options.log_archive_account_email = "log@example.com"
+    config.installer.options.audit_account_email = "audit@example.com"
+
+    write_workspace_config(ws_dir / "lza-workspace.yaml", config)
+    write_workspace_state(ws_dir / ".lza" / "state.json", WorkspaceState.from_config(config))
+
+    # Create dummy template file
+    template_file = ws_dir / "aws-accelerator-installer" / "AWSAccelerator-InstallerStack.template"
+    template_file.write_text(
+        '{"Description": "Installer", "Parameters": {'
+        '"ManagementAccountEmail": {"Type": "String", "Description": "Email"},'
+        '"RepositorySource": {"Type": "String", "AllowedValues": ["github", "codecommit"]}'
+        "}}",
+        encoding="utf-8",
+    )
+
+    return ws_dir
+
+
+def test_missing_parameters_graceful_failure(tmp_path: Path) -> None:
+    """Test that missing required parameters fail gracefully with a clear error."""
+    ws_dir = tmp_path / "incomplete-ws"
+    ws_dir.mkdir(parents=True, exist_ok=True)
+    (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-installer").mkdir(parents=True, exist_ok=True)
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Incomplete", slug="incomplete"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+    write_workspace_config(ws_dir / "lza-workspace.yaml", config)
+    write_workspace_state(ws_dir / ".lza" / "state.json", WorkspaceState.from_config(config))
+
+    template_file = ws_dir / "aws-accelerator-installer" / "AWSAccelerator-InstallerStack.template"
+    template_file.write_text('{"Description": "Installer", "Parameters": {}}', encoding="utf-8")
+
+    with pytest.raises(typer.BadParameter) as exc_info:
+        run_installer_plan(
+            aws_profile="test-profile",
+            aws_region="us-east-1",
+            dry_run=False,
+            no_save=False,
+            interactive=False,
+            target_dir=ws_dir,
+        )
+
+    assert "missing" in str(exc_info.value).lower()
+
+
+def test_installer_plan_no_save(sample_workspace: Path) -> None:
+    """Test that --no-save executes plan successfully without errors."""
+    with patch("lza_workbench.commands.installer_plan.validate_aws_profile") as mock_val:
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        run_installer_plan(
+            aws_profile="test-profile",
+            aws_region="us-east-1",
+            dry_run=False,
+            no_save=True,
+            interactive=False,
+            target_dir=sample_workspace,
+        )
+
+    config = load_workspace_config(sample_workspace / "lza-workspace.yaml")
+    assert config.installer.options.management_account_email == "root@example.com"
+
+
+def test_installer_plan_codecommit_missing(sample_workspace: Path) -> None:
+    """Test CodeCommit planning when repository is missing in AWS."""
+    with patch("lza_workbench.commands.installer_plan.validate_aws_profile") as mock_val:
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+
+        mock_session = MagicMock()
+        mock_cc = MagicMock()
+        mock_cfn = MagicMock()
+
+        err_response = {"Error": {"Code": "RepositoryDoesNotExistException"}}
+        mock_cc.get_repository.side_effect = ClientError(err_response, "GetRepository")
+
+        err_cfn = {"Error": {"Code": "ValidationError", "Message": "Stack does not exist"}}
+        mock_cfn.describe_stacks.side_effect = ClientError(err_cfn, "DescribeStacks")
+
+        def client_side_effect(service_name: str) -> MagicMock:
+            if service_name == "codecommit":
+                return mock_cc
+            if service_name == "cloudformation":
+                return mock_cfn
+            return MagicMock()
+
+        mock_session.client.side_effect = client_side_effect
+
+        with patch("boto3.Session", return_value=mock_session):
+            run_installer_plan(
+                aws_profile="test-profile",
+                aws_region="us-east-1",
+                dry_run=False,
+                no_save=False,
+                interactive=False,
+                target_dir=sample_workspace,
+            )
+
+        mock_cc.get_repository.assert_called_once_with(
+            repositoryName="aws-accelerator-codecommit"
+        )
+        mock_cfn.describe_stacks.assert_called_once_with(
+            StackName="AWSAccelerator-InstallerStack"
+        )
+
+
+def test_installer_plan_cfn_update_detected(sample_workspace: Path) -> None:
+    """Test CloudFormation planning when stack exists with differing parameters (UPDATE)."""
+    with patch("lza_workbench.commands.installer_plan.validate_aws_profile") as mock_val:
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+
+        mock_session = MagicMock()
+        mock_cc = MagicMock()
+        mock_cfn = MagicMock()
+
+        mock_cc.get_repository.return_value = {
+            "repositoryMetadata": {"repositoryName": "aws-accelerator-codecommit"}
+        }
+        mock_cc.get_branch.return_value = {"branch": {"branchName": "release/v1.16.0"}}
+
+        mock_cfn.describe_stacks.return_value = {
+            "Stacks": [
+                {
+                    "StackName": "AWSAccelerator-InstallerStack",
+                    "StackStatus": "CREATE_COMPLETE",
+                    "Parameters": [
+                        {
+                            "ParameterKey": "ManagementAccountEmail",
+                            "ParameterValue": "old-root@example.com",
+                        },
+                        {"ParameterKey": "RepositorySource", "ParameterValue": "codecommit"},
+                    ],
+                }
+            ]
+        }
+
+        def client_side_effect(service_name: str) -> MagicMock:
+            if service_name == "codecommit":
+                return mock_cc
+            if service_name == "cloudformation":
+                return mock_cfn
+            return MagicMock()
+
+        mock_session.client.side_effect = client_side_effect
+
+        with patch("boto3.Session", return_value=mock_session):
+            run_installer_plan(
+                aws_profile="test-profile",
+                aws_region="us-east-1",
+                dry_run=False,
+                no_save=False,
+                interactive=False,
+                target_dir=sample_workspace,
+            )
+
+        mock_cfn.describe_stacks.assert_called_once_with(
+            StackName="AWSAccelerator-InstallerStack"
+        )

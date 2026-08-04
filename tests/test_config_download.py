@@ -11,10 +11,10 @@ import pytest
 import typer
 
 from lza_workbench.cli import main
-from lza_workbench.commands.download_config import (
+from lza_workbench.commands.config_download import (
     run_download_config,
 )
-from lza_workbench.commands.init_workspace import run_init
+from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.core.workspace import (
     load_workspace_config,
     load_workspace_state,

@@ -37,7 +37,7 @@ installer:
   # Source code consumed by the installer pipeline.
   # This is separate from the CloudFormation installer stack template.
   source_code:
-    repository_type: github # github | codecommit | s3 | codeconnection
+    repository_type: github # github | codecommit | s3
     owner: awslabs
     repository_name: landing-zone-accelerator-on-aws
     branch: release/v1.15.5
