@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import boto3
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -21,7 +20,7 @@ from lza_workbench.aws.codecommit import (
     CodeCommitPlanResult,
     inspect_codecommit_repository,
 )
-from lza_workbench.aws.identity import validate_aws_profile
+from lza_workbench.aws.identity import get_aws_session, validate_aws_profile
 from lza_workbench.commands.installer_download import (
     TEMPLATE_FILENAME,
     run_download_installer,
@@ -98,7 +97,7 @@ def run_installer_plan(
     if profile:
         try:
             aws_identity = validate_aws_profile(profile, region)
-            session = boto3.Session(profile_name=profile, region_name=region)
+            session = get_aws_session(profile, region)
         except Exception as exc:  # noqa: BLE001
             aws_error = str(exc)
 
