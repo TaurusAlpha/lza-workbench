@@ -41,10 +41,7 @@ def create_zip_archive(
 
     added = sorted(list(new_keys - old_keys))
     removed = sorted(list(old_keys - new_keys))
-    modified = [
-        k for k in sorted(old_keys & new_keys)
-        if old_manifest[k] != new_manifest[k]
-    ]
+    modified = [k for k in sorted(old_keys & new_keys) if old_manifest[k] != new_manifest[k]]
 
     diff_result = ConfigDiffResult(added=added, modified=modified, removed=removed)
     return diff_result, new_manifest
@@ -79,8 +76,7 @@ def extract_zip_to_workspace(
         added = sorted(list(incoming_keys - before_keys))
         removed = sorted(list(before_keys - incoming_keys))
         modified = [
-            k for k in sorted(before_keys & incoming_keys)
-            if before_files[k] != incoming_files[k]
+            k for k in sorted(before_keys & incoming_keys) if before_files[k] != incoming_files[k]
         ]
 
         config_dir.mkdir(parents=True, exist_ok=True)

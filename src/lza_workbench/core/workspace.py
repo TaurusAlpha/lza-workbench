@@ -304,8 +304,7 @@ def validate_workspace_target(
     candidate_config = workspace_dir / config_local_path
     if candidate_config.exists() or candidate_config.is_symlink():
         raise typer.BadParameter(
-            "Target directory already contains an LZA configuration: "
-            f"{workspace_dir}."
+            f"Target directory already contains an LZA configuration: {workspace_dir}."
         )
     if any(workspace_dir.iterdir()):
         raise typer.BadParameter(f"Target directory is not empty: {workspace_dir}")
@@ -462,4 +461,3 @@ def build_installer_cfn_parameters(config: WorkspaceConfig) -> dict[str, str]:
         ),
         "EnableDiagnosticsPack": "Yes" if options.enable_diagnostics_pack else "No",
     }
-

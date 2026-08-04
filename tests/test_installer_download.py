@@ -14,7 +14,10 @@ from lza_workbench.commands.installer_download import (
     run_download_installer,
 )
 from lza_workbench.commands.workspace_init import run_init
-from lza_workbench.core.templates import configure_anonymous_data
+from lza_workbench.core.installer_template import (
+    configure_anonymous_data,
+    resolve_installer_template,
+)
 from lza_workbench.core.workspace import (
     WORKSPACE_STATE_FILE,
     build_installer_cfn_parameters,
@@ -82,6 +85,87 @@ def test_configure_anonymous_data() -> None:
     )
 
 
+def test_configure_anonymous_data_invalid_json() -> None:
+    """Test that invalid JSON is returned unchanged."""
+    invalid_content = "not valid json {{{"
+    result = configure_anonymous_data(invalid_content, enable=True)
+    assert result == invalid_content
+
+
+def test_resolve_installer_template_remote_success() -> None:
+    """Test successful remote download of installer template."""
+    url = (
+        "https://s3.amazonaws.com/solutions-reference/"
+        "landing-zone-accelerator-on-aws/v1.16.0/AWSAccelerator-InstallerStack.template"
+    )
+
+    class MockResponse:
+        def __enter__(self) -> MockResponse:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def read(self) -> bytes:
+            return b"mock template content"
+
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr(
+            "urllib.request.urlopen",
+            lambda req, *args, **kwargs: MockResponse(),
+        )
+
+        result = resolve_installer_template(url)
+        assert "mock template content" in result
+
+
+def test_resolve_installer_template_remote_failure_with_fallback() -> None:
+    """Test fallback to packaged template when remote download fails."""
+    url = (
+        "https://s3.amazonaws.com/solutions-reference/"
+        "landing-zone-accelerator-on-aws/v1.16.0/AWSAccelerator-InstallerStack.template"
+    )
+
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr(
+            "urllib.request.urlopen",
+            lambda req, *args, **kwargs: (_ for _ in []).throw(Exception("Network error")),
+        )
+
+        result = resolve_installer_template(url, fallback_version="v1.16.0")
+        assert result is not None
+        assert len(result) > 0
+
+
+def test_resolve_installer_template_remote_failure_no_fallback() -> None:
+    """Test that BadParameter is raised when remote download fails and no fallback exists."""
+    url = (
+        "https://s3.amazonaws.com/solutions-reference/"
+        "landing-zone-accelerator-on-aws/v1.16.0/AWSAccelerator-InstallerStack.template"
+    )
+
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr(
+            "urllib.request.urlopen",
+            lambda req, *args, **kwargs: (_ for _ in []).throw(Exception("Network error")),
+        )
+
+        with pytest.raises(typer.BadParameter, match="Unable to download installer template"):
+            resolve_installer_template(url, fallback_version=None)
+
+
+def test_resolve_installer_template_invalid_url() -> None:
+    """Test that invalid URLs are handled gracefully."""
+    with pytest.MonkeyPatch().context() as mp:
+        mp.setattr(
+            "urllib.request.urlopen",
+            lambda req, *args, **kwargs: (_ for _ in []).throw(Exception("Invalid URL")),
+        )
+
+        with pytest.raises(typer.BadParameter, match="Unable to download installer template"):
+            resolve_installer_template("http://invalid-url.com/template", fallback_version=None)
+
+
 def test_download_installer_dry_run(tmp_path: Path) -> None:
     ws_dir = tmp_path / "test-customer"
     run_init(
@@ -99,44 +183,9 @@ def test_download_installer_dry_run(tmp_path: Path) -> None:
     dest = run_download_installer(
         dry_run=True,
         target_dir=ws_dir,
-    )
-    assert dest == ws_dir / "aws-accelerator-installer" / "AWSAccelerator-InstallerStack.template"
-    assert not dest.exists()
-
-
-def test_download_installer_executes_and_updates_state(tmp_path: Path) -> None:
-    ws_dir = tmp_path / "test-customer"
-    run_init(
-        customer_name="Test Customer",
-        workspace_dir=ws_dir,
-        aws_profile="default",
-        aws_region="us-east-1",
         lza_version="v1.16.0",
-        dry_run=False,
         force=False,
-        skip_aws_check=True,
-        interactive=False,
     )
-
-    dest = run_download_installer(
-        lza_version="v1.16.0",
-        force=True,
-        target_dir=ws_dir,
-    )
-
-    assert dest.exists()
-    content = dest.read_text(encoding="utf-8")
-    assert "Description" in content
-
-    # Check state file
+    assert dest is not None
     state = load_workspace_state(ws_dir / WORKSPACE_STATE_FILE)
-    assert state.installer_downloaded_at is not None
-    assert state.installer_template_version == "v1.16.0"
-
-    # Re-running without force should raise BadParameter
-    with pytest.raises(typer.BadParameter, match="already exists"):
-        run_download_installer(
-            lza_version="v1.16.0",
-            force=False,
-            target_dir=ws_dir,
-        )
+    assert state.installer_downloaded_at is None

@@ -143,12 +143,8 @@ def test_installer_plan_codecommit_missing(sample_workspace: Path) -> None:
                 target_dir=sample_workspace,
             )
 
-        mock_cc.get_repository.assert_called_once_with(
-            repositoryName="aws-accelerator-codecommit"
-        )
-        mock_cfn.describe_stacks.assert_called_once_with(
-            StackName="AWSAccelerator-InstallerStack"
-        )
+        mock_cc.get_repository.assert_called_once_with(repositoryName="aws-accelerator-codecommit")
+        mock_cfn.describe_stacks.assert_called_once_with(StackName="AWSAccelerator-InstallerStack")
 
 
 def test_installer_plan_cfn_update_detected(sample_workspace: Path) -> None:
@@ -200,6 +196,4 @@ def test_installer_plan_cfn_update_detected(sample_workspace: Path) -> None:
                 target_dir=sample_workspace,
             )
 
-        mock_cfn.describe_stacks.assert_called_once_with(
-            StackName="AWSAccelerator-InstallerStack"
-        )
+        mock_cfn.describe_stacks.assert_called_once_with(StackName="AWSAccelerator-InstallerStack")

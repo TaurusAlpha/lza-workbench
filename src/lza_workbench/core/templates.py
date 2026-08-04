@@ -1,7 +1,4 @@
-"""Template source handling.
-
-Resolve bundled or local sources and validate required LZA configuration files.
-"""
+"""Resolve and validate LZA configuration templates."""
 
 from __future__ import annotations
 
@@ -72,7 +69,6 @@ def validate_template(template_config_dir: Path) -> None:
 
     if missing_required:
         missing_list = ", ".join(missing_required)
-        # raise typer.BadParameter(f"Template is missing required files: {missing_list}")
         console.print(f"[bold red]Template is missing required files: {missing_list}[/bold red]")
     if missing_optional:
         missing_list = ", ".join(missing_optional)
@@ -93,40 +89,3 @@ def _local_template_config_dir(source_path: Path) -> Path:
 
 def _looks_like_future_remote_source(template_source: str) -> bool:
     return template_source.startswith(("git:", "github:", "bitbucket:")) or "://" in template_source
-
-
-INSTALLER_TEMPLATE_FILENAME = "AWSAccelerator-InstallerStack.template"
-LOCAL_PACKAGED_INSTALLER_TEMPLATE = Path(__file__).parent.parent / "config" / INSTALLER_TEMPLATE_FILENAME
-
-
-def fetch_installer_template(url: str) -> str:
-    """Fetch CloudFormation installer template content with fallback to local packaged template."""
-    import urllib.request
-
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "LZA-Workbench/0.6.0"})
-        with urllib.request.urlopen(req, timeout=15) as response:
-            return response.read().decode("utf-8")
-    except Exception as exc:
-        if LOCAL_PACKAGED_INSTALLER_TEMPLATE.exists():
-            return LOCAL_PACKAGED_INSTALLER_TEMPLATE.read_text(encoding="utf-8")
-        raise typer.BadParameter(
-            f"Unable to download installer template from {url} and no local template was found."
-        ) from exc
-
-
-def configure_anonymous_data(content: str, enable: bool) -> str:
-    """Parse JSON template and update anonymous data sharing setting in Mappings."""
-    import json
-    from typing import Any
-
-    try:
-        data: dict[str, Any] = json.loads(content)
-        mappings = data.get("Mappings", {})
-        for map_val in mappings.values():
-            if isinstance(map_val, dict) and "SendAnonymizedData" in map_val:
-                map_val["SendAnonymizedData"]["Data"] = "Yes" if enable else "No"
-        return json.dumps(data, indent=2) + "\n"
-    except json.JSONDecodeError:
-        return content
-

@@ -76,4 +76,3 @@ def test_is_path_excluded_and_count_config_files(tmp_path: Path) -> None:
     (config_dir / ".git" / "HEAD").write_text("ref")
 
     assert count_config_files(config_dir, exclude_dirs={".git"}) == 1
-

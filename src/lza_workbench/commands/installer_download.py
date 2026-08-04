@@ -8,10 +8,11 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
-from lza_workbench.core.templates import (
+from lza_workbench.core.installer_template import (
     INSTALLER_TEMPLATE_FILENAME,
+    INSTALLER_TEMPLATE_URL_TEMPLATE,
     configure_anonymous_data,
-    fetch_installer_template,
+    resolve_installer_template,
 )
 from lza_workbench.core.workspace import (
     WORKSPACE_CONFIG_FILE,
@@ -25,7 +26,6 @@ from lza_workbench.core.workspace import (
 console = Console()
 
 TEMPLATE_FILENAME = INSTALLER_TEMPLATE_FILENAME
-BASE_URL = "https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws"
 
 
 def normalize_lza_version(version: str) -> str:
@@ -41,7 +41,9 @@ def normalize_lza_version(version: str) -> str:
 def resolve_template_url(version: str) -> str:
     """Build S3 solution template URL for the given LZA version."""
     norm_version = normalize_lza_version(version)
-    return f"{BASE_URL}/{norm_version}/{TEMPLATE_FILENAME}"
+    return INSTALLER_TEMPLATE_URL_TEMPLATE.format(
+        version=norm_version, filename=INSTALLER_TEMPLATE_FILENAME
+    )
 
 
 def run_download_installer(
@@ -95,10 +97,8 @@ def run_download_installer(
 
     installer_dir.mkdir(parents=True, exist_ok=True)
 
-    template_content = fetch_installer_template(template_url)
-    modified_content = configure_anonymous_data(
-        template_content, enable=anonymous_data_enabled
-    )
+    template_content = resolve_installer_template(template_url, fallback_version=norm_version)
+    modified_content = configure_anonymous_data(template_content, enable=anonymous_data_enabled)
 
     template_path.write_text(modified_content, encoding="utf-8")
 
@@ -112,8 +112,6 @@ def run_download_installer(
     console.print(f"[bold green]Downloaded LZA installer template ({norm_version})[/bold green]")
     console.print(f"Workspace: {workspace_dir}")
     console.print(f"Saved to: {template_path}")
-    console.print(
-        f"Anonymous Data Sharing: {'Enabled' if anonymous_data_enabled else 'Disabled'}"
-    )
+    console.print(f"Anonymous Data Sharing: {'Enabled' if anonymous_data_enabled else 'Disabled'}")
 
     return template_path

@@ -144,4 +144,3 @@ def upload_s3_archive(
 
     except BotoCoreError as exc:
         raise typer.BadParameter(f"AWS connection/client failure: {exc}") from exc
-
