@@ -112,24 +112,58 @@ Implementation checklist:
 - [ ] Return a non-zero exit code when validation fails.
 - [ ] Provide clear errors for expired SSO sessions or invalid credentials.
 
-
 ### `lza installer plan`
 
-Resolve the installer configuration and show the planned actions without making any changes.
+Resolve and persist installer configuration, then show the actions required to deploy the LZA installer without modifying AWS resources.
+
 Implementation checklist:
 
-- [ ] Read installer settings from `lza-workspace.yaml`.
-- [ ] Resolve the selected LZA installer template.
-- [ ] Resolve the installer source configuration.
-- [ ] Validate required installer settings.
-- [ ] Detect missing interactive values.
-- [ ] Inspect the installer source.
-- [ ] Build CloudFormation parameters.
-- [ ] Validate parameters against the installer template.
-- [ ] Show planned source preparation actions.
-- [ ] Show planned CloudFormation changes.
-- [ ] Show parameter provenance.
-- [ ] Return a non-zero exit code when validation fails.
+#### Configuration ingestion
+
+- [ ] Load the current workspace from `lza-workspace.yaml`.
+- [ ] Read the configured LZA version.
+- [ ] Read existing installer configuration.
+- [ ] Resolve the configured installer source type.
+- [ ] Support `codecommit` as the initial installer source type.
+- [ ] Determine required common installer parameters.
+- [ ] Determine required CodeCommit-specific parameters.
+- [ ] Prompt interactively for missing required values.
+- [ ] Reuse existing values without prompting.
+- [ ] Validate all collected values.
+- [ ] Show all missing values together in non-interactive mode.
+- [ ] Save accepted installer settings to `lza-workspace.yaml`.
+- [ ] Preserve unrelated YAML content and formatting.
+- [ ] Support `--no-save`.
+
+#### Template resolution
+
+- [ ] Resolve the installer template for the configured LZA version.
+- [ ] Download the template when it is not available locally.
+- [ ] Reuse a compatible local template when available.
+- [ ] Validate that the template matches the configured LZA version.
+- [ ] Inspect template parameter definitions and defaults.
+
+#### CodeCommit planning
+
+- [ ] Validate AWS access using the configured profile and region.
+- [ ] Inspect whether the configured CodeCommit repository exists.
+- [ ] Detect missing, empty, initialized, outdated, and inaccessible repositories.
+- [ ] Determine whether repository creation is required.
+- [ ] Determine whether source synchronization is required.
+- [ ] Resolve the official AWS source repository and version ref.
+- [ ] Produce source preparation actions without modifying the repository.
+
+#### Deployment planning
+
+- [ ] Map workspace installer settings to CloudFormation parameters.
+- [ ] Validate resolved parameters against the installer template.
+- [ ] Detect whether the installer stack exists.
+- [ ] Determine whether the deployment operation would be create, update, or no change.
+- [ ] Show the resolved installer configuration.
+- [ ] Show CodeCommit preparation actions.
+- [ ] Show the CloudFormation deployment operation.
+- [ ] Show parameter provenance when useful.
+- [ ] Guarantee that the command does not mutate AWS resources.
 
 ### `lza installer download`
 
