@@ -14,6 +14,7 @@ from lza_workbench.commands.download_config import run_download_config
 from lza_workbench.commands.download_installer import run_download_installer
 from lza_workbench.commands.import_workspace import run_import
 from lza_workbench.commands.init_workspace import run_init
+from lza_workbench.commands.installer_plan import run_installer_plan
 from lza_workbench.commands.upload_config import run_upload_config
 from lza_workbench.core.workspace import ConfigurationConfig, resolve_init_workspace_dir
 
@@ -32,6 +33,22 @@ installer_app = typer.Typer(
     help="Manage LZA installer stack.",
     no_args_is_help=True,
 )
+
+@installer_app.command("plan")
+def installer_plan_command(
+    aws_profile: params.AwsProfile = "",
+    aws_region: params.AwsRegion = "",
+    dry_run: params.DryRun = False,
+    no_save: bool = False,
+) -> None:
+    """Resolve and persist installer configuration, then show the actions required to deploy."""
+    run_installer_plan(
+        aws_profile=aws_profile,
+        aws_region=aws_region,
+        dry_run=dry_run,
+        no_save=no_save,
+        interactive=_is_interactive(),
+    )
 
 app.add_typer(config_app, name="config")
 app.add_typer(installer_app, name="installer")
