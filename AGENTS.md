@@ -2,29 +2,29 @@
 
 ## Context
 
-- Read only the files required for the current task.
-- Read `PROJECT.md` only for architecture or design decisions.
-- Read `TODO.md` only if the task references it or requires feature planning.
-- Ask before performing repository-wide investigation or reading many unrelated files.
+- Read the minimum number of files required for the current task.
+- Read `PROJECT.md` only when architectural decisions, repository conventions, or feature design are relevant.
+- Read `TODO.md` only when implementing, planning, or discussing a feature described there.
+- Ask before scanning large parts of the repository or reading unrelated files.
 
 ## Rules
 
 - Implement only the requested task.
 - Do not change unrelated code or expand scope unless requested.
 - Prefer modifying existing code over creating new modules.
-- Keep solutions simple and modular.
 - Do not create placeholder or speculative code.
 - Prefer Python over shell when practical.
-- Keep AWS authentication external.
 - Customer projects are created outside this repository.
+- Do not introduce new dependencies unless explicitly requested or clearly justified.
 
 ## Validation
 
-Before finishing ask if you should validate the implementation:
+Before finishing, ask whether validation should be performed.
+Only If requested, run:
 
-- Run Ruff.
-- Run pytest.
-- Ensure new changes do not break the project.
+- Ruff
+- pytest
+- Verify new changes do not introduce regressions.
 
 ## Responses
 
@@ -32,3 +32,28 @@ Before finishing ask if you should validate the implementation:
 - Minimize token usage.
 - Do not provide long explanations unless requested.
 - Suggest follow-up work only when directly relevant.
+- State assumptions instead of silently making them.
+
+## Code Quality & Readability
+
+Before presenting code, review it against these principles.
+
+### Simplicity
+
+- Prefer the simplest solution that satisfies the requirements.
+- Prioritize readability over brevity.
+- Avoid unnecessary abstractions or indirection.
+
+### Maintainability
+
+- Write small, focused functions with a single responsibility.
+- Place new logic in the appropriate package (`core/`, `aws/`, `config/`, `utils/`) rather than in command handlers.
+- Extend existing modules when appropriate; create new modules when they improve organization.
+- Follow existing project structure and coding patterns.
+
+### Readability
+
+- Use descriptive names for variables, functions, and classes.
+- Avoid deeply nested control flow.
+- Keep comprehensions and generator expressions simple and readable.
+- Avoid nested or difficult-to-read expressions within function calls.
