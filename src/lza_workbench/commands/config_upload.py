@@ -3,27 +3,24 @@
 from __future__ import annotations
 
 import hashlib
-import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-import boto3
 import typer
-from botocore.exceptions import BotoCoreError, ClientError
 from rich.console import Console
 
-from lza_workbench.aws.s3 import resolve_s3_archive_uri
+from lza_workbench.aws.s3 import resolve_s3_archive_uri, upload_s3_archive
 from lza_workbench.core.templates import validate_template
 from lza_workbench.core.workspace import (
     WORKSPACE_CONFIG_FILE,
     WORKSPACE_STATE_FILE,
     ConfigDiffResult,
-    is_path_excluded,
     load_workspace_config,
     load_workspace_state,
     resolve_workspace_dir,
     write_workspace_state,
 )
+from lza_workbench.utils.archive import create_zip_archive
 
 console = Console()
 
@@ -92,14 +89,14 @@ def run_upload_config(
     exclude_dirs = set(config.configuration.packaging.exclude.directories)
     exclude_files = set(config.configuration.packaging.exclude.files)
 
-    diff_result, zip_manifest = _create_zip_archive(
+    diff_result, zip_manifest = create_zip_archive(
         config_dir=config_dir,
         zip_path=zip_path,
         exclude_dirs=exclude_dirs,
         exclude_files=exclude_files,
     )
 
-    etag, version_id = _upload_zip_to_s3(
+    etag, version_id = upload_s3_archive(
         zip_path=zip_path,
         s3_bucket=s3_bucket,
         s3_key=s3_key,
@@ -130,113 +127,6 @@ def run_upload_config(
     _print_diff_summary(diff_result)
 
     return zip_path
-
-
-def _create_zip_archive(
-    *,
-    config_dir: Path,
-    zip_path: Path,
-    exclude_dirs: set[str],
-    exclude_files: set[str],
-) -> tuple[ConfigDiffResult, dict[str, tuple[int, int]]]:
-    """Create zip archive from config_dir and compute diff against previous zip if present."""
-    old_manifest = _read_zip_manifest(zip_path)
-
-    new_manifest: dict[str, tuple[int, int]] = {}
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for path in sorted(config_dir.rglob("*")):
-            if not path.is_file():
-                continue
-
-            rel_path = path.relative_to(config_dir)
-            if is_path_excluded(rel_path, exclude_dirs, exclude_files):
-                continue
-
-            arcname = str(rel_path)
-            zipf.write(path, arcname)
-            info = zipf.getinfo(arcname)
-            new_manifest[arcname] = (info.file_size, info.CRC)
-
-    old_keys = set(old_manifest.keys())
-    new_keys = set(new_manifest.keys())
-
-    added = sorted(list(new_keys - old_keys))
-    removed = sorted(list(old_keys - new_keys))
-    modified = [
-        k for k in sorted(old_keys & new_keys)
-        if old_manifest[k] != new_manifest[k]
-    ]
-
-    diff_result = ConfigDiffResult(added=added, modified=modified, removed=removed)
-    return diff_result, new_manifest
-
-
-def _read_zip_manifest(path: Path) -> dict[str, tuple[int, int]]:
-    """Read file size and CRC manifest of an existing zip file."""
-    manifest: dict[str, tuple[int, int]] = {}
-    if not path.is_file():
-        return manifest
-
-    try:
-        with zipfile.ZipFile(path, "r") as z:
-            for info in z.infolist():
-                manifest[info.filename] = (info.file_size, info.CRC)
-    except zipfile.BadZipFile:
-        pass
-
-    return manifest
-
-
-def _upload_zip_to_s3(
-    *,
-    zip_path: Path,
-    s3_bucket: str,
-    s3_key: str,
-    profile: str,
-    region: str,
-) -> tuple[str | None, str | None]:
-    """Upload local zip archive to S3 bucket and return object (etag, version_id)."""
-
-    session_kwargs = {}
-    if profile:
-        session_kwargs["profile_name"] = profile
-    if region:
-        session_kwargs["region_name"] = region
-
-    try:
-        session = boto3.Session(**session_kwargs)
-        s3 = session.client("s3")
-
-        s3.upload_file(str(zip_path), s3_bucket, s3_key)
-
-        etag: str | None = None
-        version_id: str | None = None
-        try:
-            head = s3.head_object(Bucket=s3_bucket, Key=s3_key)
-            etag = head.get("ETag", "").strip('"') or None
-            version_id = head.get("VersionId") or None
-        except Exception:
-            pass
-
-        return etag, version_id
-
-    except ClientError as exc:
-        error = exc.response.get("Error", {})
-        error_code = error.get("Code", "Unknown")
-        error_message = error.get("Message", str(exc))
-
-        if error_code in {"404", "NoSuchBucket"}:
-            raise typer.BadParameter(f"Target S3 bucket does not exist: s3://{s3_bucket}") from exc
-
-        if error_code in {"403", "AccessDenied"}:
-            raise typer.BadParameter(
-                f"Access denied to s3://{s3_bucket}/{s3_key}. Check AWS permissions."
-            ) from exc
-
-        raise typer.BadParameter(f"AWS S3 upload error [{error_code}]: {error_message}") from exc
-
-    except BotoCoreError as exc:
-        raise typer.BadParameter(f"AWS connection/client failure: {exc}") from exc
 
 
 def _print_diff_summary(diff: ConfigDiffResult) -> None:
