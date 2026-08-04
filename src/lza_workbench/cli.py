@@ -123,16 +123,12 @@ def import_command(
 
 @config_app.command("download")
 def config_download_command(
-    aws_profile: params.AwsProfile = "",
-    aws_region: params.AwsRegion = "",
     dry_run: params.DryRun = False,
     force: params.Force = True,
     extract: params.Extract = True,
 ) -> None:
     """Download LZA configuration from configured repository source."""
     run_download_config(
-        aws_profile=aws_profile,
-        aws_region=aws_region,
         dry_run=dry_run,
         force=force,
         extract=extract,
@@ -142,14 +138,10 @@ def config_download_command(
 
 @config_app.command("upload")
 def config_upload_command(
-    aws_profile: params.AwsProfile = "",
-    aws_region: params.AwsRegion = "",
     dry_run: params.DryRun = False,
 ) -> None:
     """Upload LZA configuration to configured repository destination."""
     run_upload_config(
-        aws_profile=aws_profile,
-        aws_region=aws_region,
         dry_run=dry_run,
         interactive=_is_interactive(),
     )
