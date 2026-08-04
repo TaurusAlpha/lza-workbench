@@ -344,9 +344,7 @@ def planned_write_paths(workspace_dir: Path, config: WorkspaceConfig) -> list[Pa
 
 
 def _replace_directory(*, source: Path, destination: Path) -> None:
-    if destination.exists():
-        shutil.rmtree(destination)
-    shutil.copytree(source, destination)
+    shutil.copytree(source, destination, dirs_exist_ok=True)
 
 
 @dataclass(frozen=True)
