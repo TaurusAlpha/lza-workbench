@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-import json
-import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import typer
 from rich.console import Console
 
+from lza_workbench.core.templates import (
+    INSTALLER_TEMPLATE_FILENAME,
+    configure_anonymous_data,
+    fetch_installer_template,
+)
 from lza_workbench.core.workspace import (
     WORKSPACE_CONFIG_FILE,
     WORKSPACE_STATE_FILE,
@@ -22,9 +24,8 @@ from lza_workbench.core.workspace import (
 
 console = Console()
 
-TEMPLATE_FILENAME = "AWSAccelerator-InstallerStack.template"
+TEMPLATE_FILENAME = INSTALLER_TEMPLATE_FILENAME
 BASE_URL = "https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws"
-LOCAL_PACKAGED_TEMPLATE = Path(__file__).parent.parent / "config" / TEMPLATE_FILENAME
 
 
 def normalize_lza_version(version: str) -> str:
@@ -94,8 +95,8 @@ def run_download_installer(
 
     installer_dir.mkdir(parents=True, exist_ok=True)
 
-    template_content = _fetch_template_content(template_url)
-    modified_content = _configure_anonymous_data(
+    template_content = fetch_installer_template(template_url)
+    modified_content = configure_anonymous_data(
         template_content, enable=anonymous_data_enabled
     )
 
@@ -116,30 +117,3 @@ def run_download_installer(
     )
 
     return template_path
-
-
-def _fetch_template_content(url: str) -> str:
-    """Fetch CloudFormation template content from URL with fallback to local packaged template."""
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "LZA-Workbench/0.6.0"})
-        with urllib.request.urlopen(req, timeout=15) as response:
-            return response.read().decode("utf-8")
-    except Exception as exc:
-        if LOCAL_PACKAGED_TEMPLATE.exists():
-            return LOCAL_PACKAGED_TEMPLATE.read_text(encoding="utf-8")
-        raise typer.BadParameter(
-            f"Unable to download installer template from {url} and no local template was found."
-        ) from exc
-
-
-def _configure_anonymous_data(content: str, enable: bool) -> str:
-    """Parse JSON template and update anonymous data sharing setting in Mappings."""
-    try:
-        data: dict[str, Any] = json.loads(content)
-        mappings = data.get("Mappings", {})
-        for map_val in mappings.values():
-            if isinstance(map_val, dict) and "SendAnonymizedData" in map_val:
-                map_val["SendAnonymizedData"]["Data"] = "Yes" if enable else "No"
-        return json.dumps(data, indent=2) + "\n"
-    except json.JSONDecodeError:
-        return content

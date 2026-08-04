@@ -287,8 +287,12 @@ def normalize_customer_slug(customer_name: str) -> str:
     return slug
 
 
-def validate_workspace_target(workspace_dir: Path, force: bool) -> None:
-    """Prevent accidental overwrite of an existing workspace directory."""
+def validate_workspace_target(
+    workspace_dir: Path,
+    force: bool,
+    config_local_path: str = "aws-accelerator-config",
+) -> None:
+    """Prevent accidental overwrite of an existing workspace directory or configuration."""
     if not workspace_dir.exists():
         return
     if not workspace_dir.is_dir():
@@ -297,6 +301,12 @@ def validate_workspace_target(workspace_dir: Path, force: bool) -> None:
         return
     if (workspace_dir / WORKSPACE_CONFIG_FILE).exists():
         raise typer.BadParameter(f"LZA workspace already exists: {workspace_dir}")
+    candidate_config = workspace_dir / config_local_path
+    if candidate_config.exists() or candidate_config.is_symlink():
+        raise typer.BadParameter(
+            "Target directory already contains an LZA configuration: "
+            f"{workspace_dir}."
+        )
     if any(workspace_dir.iterdir()):
         raise typer.BadParameter(f"Target directory is not empty: {workspace_dir}")
 

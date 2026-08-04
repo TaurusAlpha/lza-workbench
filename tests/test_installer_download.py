@@ -9,12 +9,12 @@ import pytest
 import typer
 
 from lza_workbench.commands.installer_download import (
-    _configure_anonymous_data,
     normalize_lza_version,
     resolve_template_url,
     run_download_installer,
 )
 from lza_workbench.commands.workspace_init import run_init
+from lza_workbench.core.templates import configure_anonymous_data
 from lza_workbench.core.workspace import (
     WORKSPACE_STATE_FILE,
     build_installer_cfn_parameters,
@@ -63,7 +63,7 @@ def test_configure_anonymous_data() -> None:
         }
     )
 
-    disabled = _configure_anonymous_data(sample_json, enable=False)
+    disabled = configure_anonymous_data(sample_json, enable=False)
     data_disabled = json.loads(disabled)
     assert (
         data_disabled["Mappings"]["SolutionHelperAnonymousData14B64A81"]["SendAnonymizedData"][
@@ -72,7 +72,7 @@ def test_configure_anonymous_data() -> None:
         == "No"
     )
 
-    enabled = _configure_anonymous_data(sample_json, enable=True)
+    enabled = configure_anonymous_data(sample_json, enable=True)
     data_enabled = json.loads(enabled)
     assert (
         data_enabled["Mappings"]["SolutionHelperAnonymousData14B64A81"]["SendAnonymizedData"][

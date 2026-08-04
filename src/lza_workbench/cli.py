@@ -16,7 +16,7 @@ from lza_workbench.commands.installer_download import run_download_installer
 from lza_workbench.commands.installer_plan import run_installer_plan
 from lza_workbench.commands.workspace_import import run_import
 from lza_workbench.commands.workspace_init import run_init
-from lza_workbench.core.workspace import ConfigurationConfig, resolve_init_workspace_dir
+from lza_workbench.core.workspace import resolve_init_workspace_dir
 
 app = typer.Typer(
     help="LZA Workbench CLI",
@@ -80,16 +80,6 @@ def init_command(
         workspace_dir=workspace_dir,
         interactive=interactive,
     )
-
-    candidate_config = resolved_workspace_dir / ConfigurationConfig().local_path
-
-    if not force and (candidate_config.exists() or candidate_config.is_symlink()):
-        raise typer.BadParameter(
-            "Target directory already contains an LZA configuration: "
-            f"{resolved_workspace_dir}. "
-            f"Run `lza import {customer_name} "
-            f"--workspace-dir {resolved_workspace_dir}` to adopt it."
-        )
 
     run_init(
         customer_name=customer_name,
