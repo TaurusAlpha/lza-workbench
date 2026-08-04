@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
-from lza_workbench.commands.download_installer import normalize_lza_version
+from lza_workbench.commands.installer_download import normalize_lza_version
 
 
 @dataclass

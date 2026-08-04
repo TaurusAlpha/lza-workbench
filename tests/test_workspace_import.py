@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lza_workbench.commands.import_workspace import resolve_import_paths, run_import
+from lza_workbench.commands.workspace_import import resolve_import_paths, run_import
 from lza_workbench.core.templates import REQUIRED_TEMPLATE_FILES
 from lza_workbench.core.workspace import load_workspace_config, load_workspace_state
 

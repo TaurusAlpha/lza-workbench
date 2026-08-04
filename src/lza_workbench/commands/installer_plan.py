@@ -22,7 +22,7 @@ from lza_workbench.aws.codecommit import (
     inspect_codecommit_repository,
 )
 from lza_workbench.aws.identity import validate_aws_profile
-from lza_workbench.commands.download_installer import (
+from lza_workbench.commands.installer_download import (
     TEMPLATE_FILENAME,
     run_download_installer,
 )

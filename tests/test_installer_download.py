@@ -8,13 +8,13 @@ from pathlib import Path
 import pytest
 import typer
 
-from lza_workbench.commands.download_installer import (
+from lza_workbench.commands.installer_download import (
     _configure_anonymous_data,
     normalize_lza_version,
     resolve_template_url,
     run_download_installer,
 )
-from lza_workbench.commands.init_workspace import run_init
+from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.core.workspace import (
     WORKSPACE_STATE_FILE,
     build_installer_cfn_parameters,
@@ -40,12 +40,7 @@ def test_resolve_template_url() -> None:
 
 def test_build_installer_cfn_parameters() -> None:
     config_path = (
-        Path(__file__).parents[1]
-        / "src"
-        / "lza_workbench"
-        / "config"
-        / "examples"
-        / "full.yaml"
+        Path(__file__).parents[1] / "src" / "lza_workbench" / "config" / "examples" / "full.yaml"
     )
     config = load_workspace_config(config_path)
     cfn_params = build_installer_cfn_parameters(config)
@@ -63,9 +58,7 @@ def test_configure_anonymous_data() -> None:
     sample_json = json.dumps(
         {
             "Mappings": {
-                "SolutionHelperAnonymousData14B64A81": {
-                    "SendAnonymizedData": {"Data": "Yes"}
-                }
+                "SolutionHelperAnonymousData14B64A81": {"SendAnonymizedData": {"Data": "Yes"}}
             }
         }
     )
