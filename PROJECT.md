@@ -51,6 +51,16 @@ Authentication methods such as AWS SSO, static access keys, AssumeRole chains, b
 
 AWS authentication management may be considered later as a low-priority feature.
 
+### AWS Client Management
+
+The application should have a single, centralized mechanism for creating AWS sessions and service clients.
+
+- All boto3 `Session` and service client creation must go through `AwsClientFactory`.
+- Commands should create one factory instance per execution and reuse it for all AWS interactions.
+- AWS service modules (CloudFormation, S3, CodeCommit, STS, etc.) should not create their own sessions or clients.
+- Service modules should operate on injected boto3 clients rather than managing authentication themselves.
+- Authentication, credential resolution, retry behavior, and future client configuration should be implemented only in `AwsClientFactory`.
+
 ## Workspace Model
 
 The tool is workspace-based.
@@ -237,6 +247,7 @@ The tech stack is not final and may be changed later.
 - Do not mutate AWS resources without clear command intent.
 - Keep complex LZA config generation out of the MVP.
 - Structure code so modules can be extended later.
+- Centralize AWS SDK initialization and authentication logic in a single component.
 
 ## Future Direction
 

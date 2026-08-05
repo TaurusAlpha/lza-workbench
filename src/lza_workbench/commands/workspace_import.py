@@ -57,8 +57,14 @@ def run_import(
         config_dir=config_dir,
         interactive=interactive,
     )
-    validate_template(config_dir)
     existing = load_existing_metadata(workspace_dir)
+    if existing and not force:
+        console.print(
+            "[bold yellow]Workspace already exists; use --force to overwrite metadata.[/bold yellow]"
+        )
+        return
+    validate_template(config_dir)
+
     customer_slug = _customer_slug(customer_name, existing)
     config = build_workspace_config(
         customer_name=customer_name,

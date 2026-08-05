@@ -102,8 +102,9 @@ def run_installer_plan(
             aws_error = str(exc)
 
     # Step 4: CodeCommit Source Planning
+    codecommit_client = factory.get_client("codecommit") if factory else None
     codecommit_plan = inspect_codecommit_repository(
-        factory=factory,
+        client=codecommit_client,
         repository_type=config.installer.source_code.repository_type,
         repository_name=config.installer.source_code.repository_name,
         branch_name=config.installer.source_code.branch,
@@ -113,8 +114,9 @@ def run_installer_plan(
 
     # Step 5: CloudFormation Deployment Planning
     stack_name = config.pipelines.installer.name or "AWSAccelerator-InstallerStack"
+    cfn_client = factory.get_client("cloudformation") if factory else None
     cfn_plan = inspect_cloudformation_stack(
-        factory=factory,
+        client=cfn_client,
         stack_name=stack_name,
         resolved_parameters=resolved_params,
     )

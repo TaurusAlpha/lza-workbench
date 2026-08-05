@@ -93,7 +93,8 @@ def run_installer_status(
             aws_error = str(exc)
 
     cfn_stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
-    cfn_status = get_cloudformation_stack_status(factory=factory, stack_name=cfn_stack_name)
+    cfn_client = factory.get_client("cloudformation") if factory else None
+    cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=cfn_stack_name)
 
     branch = (
         cfn_status.deployed_parameters.get("RepositoryBranchName", "") if cfn_status.exists else ""
@@ -138,7 +139,8 @@ def sync_installer_state(
     """Synchronize .lza/state.json deployment metadata with current deployed AWS installer state."""
     if not cfn_status.exists:
         raise typer.BadParameter(
-            "Cannot synchronize state: CloudFormation installer stack is not deployed or inaccessible."
+            "Cannot synchronize state: CloudFormation installer stack is not deployed "
+            "or inaccessible."
         )
 
     now = datetime.now(UTC)
@@ -163,7 +165,8 @@ def sync_installer_config(
     """Synchronize lza-workspace.yaml with deployed CloudFormation installer parameters."""
     if not cfn_status.exists or not cfn_status.deployed_parameters:
         raise typer.BadParameter(
-            "Cannot synchronize config: CloudFormation installer stack is not deployed or has no parameters."
+            "Cannot synchronize config: CloudFormation installer stack is not deployed "
+            "or has no parameters."
         )
 
     params = cfn_status.deployed_parameters
@@ -208,9 +211,8 @@ def sync_installer_config(
         config.installer.options.use_existing_config_repo = params["UseExistingConfigRepo"] == "Yes"
 
     write_workspace_config(workspace_dir / WORKSPACE_CONFIG_FILE, config)
-    console.print(
-        "[bold green]Synchronized lza-workspace.yaml with deployed AWS installer configuration.[/bold green]"
-    )
+    msg = "Synchronized lza-workspace.yaml with deployed AWS installer configuration."
+    console.print(f"[bold green]{msg}[/bold green]")
     return config
 
 
@@ -322,9 +324,8 @@ def _render_status_report(
         if norm_cfg == norm_dep:
             console.print("Version Match: [green]Match (Configured matches Deployed)[/green]")
         else:
-            console.print(
-                f"Version Match: [yellow]Mismatch (Configured: {config.lza.version}, Deployed: {deployed_version})[/yellow]"
-            )
+            msg = f"Mismatch (Configured: {config.lza.version}, Deployed: {deployed_version})"
+            console.print(f"Version Match: [yellow]{msg}[/yellow]")
     else:
         console.print()
         console.print("[bold underline]2. Deployed Installer Details[/bold underline]")
@@ -399,9 +400,8 @@ def _render_status_report(
             ) == normalize_version(deployed_version)
 
             if state_id_match and state_status_match and state_ver_match:
-                console.print(
-                    "State Alignment: [green]In Sync (.lza/state.json matches live AWS state)[/green]"
-                )
+                align_msg = "In Sync (.lza/state.json matches live AWS state)"
+                console.print(f"State Alignment: [green]{align_msg}[/green]")
             else:
                 state_out_of_sync = True
                 console.print("State Alignment: [yellow]Out of Sync[/yellow]")
@@ -413,9 +413,10 @@ def _render_status_report(
         console.print()
         console.print("[bold cyan]Recommended Next Command:[/bold cyan]")
         if has_drift:
+            desc = "(Synchronizes lza-workspace.yaml and .lza/state.json with live AWS settings)"
             console.print(
                 "  [bold green]lza installer status --sync-config[/bold green]  "
-                "[dim](Synchronizes lza-workspace.yaml and .lza/state.json with live AWS installer settings)[/dim]"
+                f"[dim]{desc}[/dim]"
             )
 
             console.print(

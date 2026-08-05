@@ -9,6 +9,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.s3 import resolve_s3_archive_uri, upload_s3_archive
 from lza_workbench.core.templates import validate_template
 from lza_workbench.core.workspace import (
@@ -92,12 +93,12 @@ def run_upload_config(
         exclude_files=exclude_files,
     )
 
+    factory = AwsClientFactory(profile, region)
     etag, version_id = upload_s3_archive(
         zip_path=zip_path,
         s3_bucket=s3_bucket,
         s3_key=s3_key,
-        profile=profile,
-        region=region,
+        factory=factory,
     )
 
     now = datetime.now(UTC)

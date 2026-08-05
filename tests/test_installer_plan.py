@@ -94,16 +94,18 @@ def test_missing_parameters_graceful_failure(tmp_path: Path) -> None:
 
 def test_installer_plan_no_save(sample_workspace: Path) -> None:
     """Test that --no-save executes plan successfully without errors."""
-    with patch("lza_workbench.commands.installer_plan.validate_aws_profile") as mock_val:
+    with patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val:
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
-        run_installer_plan(
-            aws_profile="test-profile",
-            aws_region="us-east-1",
-            dry_run=False,
-            no_save=True,
-            interactive=False,
-            target_dir=sample_workspace,
-        )
+        with patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client:
+            mock_client.return_value = MagicMock()
+            run_installer_plan(
+                aws_profile="test-profile",
+                aws_region="us-east-1",
+                dry_run=False,
+                no_save=True,
+                interactive=False,
+                target_dir=sample_workspace,
+            )
 
     config = load_workspace_config(sample_workspace / "lza-workspace.yaml")
     assert config.installer.options.management_account_email == "root@example.com"
@@ -111,10 +113,9 @@ def test_installer_plan_no_save(sample_workspace: Path) -> None:
 
 def test_installer_plan_codecommit_missing(sample_workspace: Path) -> None:
     """Test CodeCommit planning when repository is missing in AWS."""
-    with patch("lza_workbench.commands.installer_plan.validate_aws_profile") as mock_val:
+    with patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val:
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
 
-        mock_session = MagicMock()
         mock_cc = MagicMock()
         mock_cfn = MagicMock()
 
@@ -131,9 +132,10 @@ def test_installer_plan_codecommit_missing(sample_workspace: Path) -> None:
                 return mock_cfn
             return MagicMock()
 
-        mock_session.client.side_effect = client_side_effect
-
-        with patch("boto3.Session", return_value=mock_session):
+        with patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            side_effect=client_side_effect,
+        ):
             run_installer_plan(
                 aws_profile="test-profile",
                 aws_region="us-east-1",
@@ -144,15 +146,14 @@ def test_installer_plan_codecommit_missing(sample_workspace: Path) -> None:
             )
 
         mock_cc.get_repository.assert_called_once_with(repositoryName="aws-accelerator-codecommit")
-        mock_cfn.describe_stacks.assert_called_once_with(StackName="AWSAccelerator-InstallerStack")
+        mock_cfn.describe_stacks.assert_called_once_with(StackName="AWSAccelerator-Installer")
 
 
 def test_installer_plan_cfn_update_detected(sample_workspace: Path) -> None:
     """Test CloudFormation planning when stack exists with differing parameters (UPDATE)."""
-    with patch("lza_workbench.commands.installer_plan.validate_aws_profile") as mock_val:
+    with patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val:
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
 
-        mock_session = MagicMock()
         mock_cc = MagicMock()
         mock_cfn = MagicMock()
 
@@ -164,7 +165,7 @@ def test_installer_plan_cfn_update_detected(sample_workspace: Path) -> None:
         mock_cfn.describe_stacks.return_value = {
             "Stacks": [
                 {
-                    "StackName": "AWSAccelerator-InstallerStack",
+                    "StackName": "AWSAccelerator-Installer",
                     "StackStatus": "CREATE_COMPLETE",
                     "Parameters": [
                         {
@@ -184,9 +185,10 @@ def test_installer_plan_cfn_update_detected(sample_workspace: Path) -> None:
                 return mock_cfn
             return MagicMock()
 
-        mock_session.client.side_effect = client_side_effect
-
-        with patch("boto3.Session", return_value=mock_session):
+        with patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            side_effect=client_side_effect,
+        ):
             run_installer_plan(
                 aws_profile="test-profile",
                 aws_region="us-east-1",
@@ -196,4 +198,4 @@ def test_installer_plan_cfn_update_detected(sample_workspace: Path) -> None:
                 target_dir=sample_workspace,
             )
 
-        mock_cfn.describe_stacks.assert_called_once_with(StackName="AWSAccelerator-InstallerStack")
+        mock_cfn.describe_stacks.assert_called_once_with(StackName="AWSAccelerator-Installer")

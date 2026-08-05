@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import typer
 from botocore.exceptions import BotoCoreError, ClientError
@@ -37,13 +38,20 @@ def download_s3_archive(
     s3_key: str,
     prefix: str,
     zip_path: Path,
-    profile: str,
-    region: str,
+    profile: str | None = None,
+    region: str | None = None,
+    factory: AwsClientFactory | None = None,
+    client: Any | None = None,
 ) -> None:
     """Fetch zip archive file from S3 using AwsClientFactory."""
     try:
-        factory = AwsClientFactory(profile, region)
-        s3 = factory.get_client("s3")
+        if client is not None:
+            s3 = client
+        elif factory is not None:
+            s3 = factory.get_client("s3")
+        else:
+            factory = AwsClientFactory(profile, region)
+            s3 = factory.get_client("s3")
 
         single_zip_success = False
         try:
@@ -97,13 +105,20 @@ def upload_s3_archive(
     zip_path: Path,
     s3_bucket: str,
     s3_key: str,
-    profile: str,
-    region: str,
+    profile: str | None = None,
+    region: str | None = None,
+    factory: AwsClientFactory | None = None,
+    client: Any | None = None,
 ) -> tuple[str | None, str | None]:
     """Upload local zip archive to S3 bucket and return object (etag, version_id)."""
     try:
-        factory = AwsClientFactory(profile, region)
-        s3 = factory.get_client("s3")
+        if client is not None:
+            s3 = client
+        elif factory is not None:
+            s3 = factory.get_client("s3")
+        else:
+            factory = AwsClientFactory(profile, region)
+            s3 = factory.get_client("s3")
 
         s3.upload_file(str(zip_path), s3_bucket, s3_key)
 

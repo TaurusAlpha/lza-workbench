@@ -9,6 +9,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.s3 import download_s3_archive, resolve_s3_archive_uri
 from lza_workbench.core.workspace import (
     WORKSPACE_CONFIG_FILE,
@@ -94,13 +95,13 @@ def run_download_config(
 
     exclude_dirs = set(config.configuration.packaging.exclude.directories)
 
+    factory = AwsClientFactory(profile, region)
     download_s3_archive(
         s3_bucket=s3_bucket,
         s3_key=s3_key,
         prefix=prefix,
         zip_path=zip_path,
-        profile=profile,
-        region=region,
+        factory=factory,
     )
 
     if extract:
@@ -131,9 +132,8 @@ def run_download_config(
 
     write_workspace_state(workspace_dir / WORKSPACE_STATE_FILE, state)
 
-    console.print(
-        f"[bold green]Downloaded {'and extracted ' if extract else ''}LZA configuration[/bold green]"
-    )
+    action_str = "Downloaded and extracted " if extract else "Downloaded "
+    console.print(f"[bold green]{action_str}LZA configuration[/bold green]")
     console.print(f"Workspace: {workspace_dir}")
     console.print(f"Source: s3://{s3_bucket}/{s3_key}")
     console.print(f"Zip archive: {zip_path}")

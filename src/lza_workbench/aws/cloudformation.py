@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
@@ -38,18 +37,21 @@ class CfnStackStatusResult:
     error: str | None = None
 
 
-def _get_cfn_client(factory: AwsClientFactory | None, session: boto3.Session | None) -> Any | None:
+def _get_cfn_client(
+    factory: AwsClientFactory | None = None,
+    client: Any | None = None,
+) -> Any | None:
+    if client is not None:
+        return client
     if factory is not None:
         return factory.get_client("cloudformation")
-    if session is not None:
-        return session.client("cloudformation")
     return None
 
 
 def inspect_cloudformation_stack(
     *,
     factory: AwsClientFactory | None = None,
-    session: boto3.Session | None = None,
+    client: Any | None = None,
     stack_name: str,
     resolved_parameters: dict[str, str],
 ) -> CfnDeploymentPlanResult:
@@ -68,7 +70,7 @@ def inspect_cloudformation_stack(
         "ConfigurationRepositoryLocation": "configuration.repository.type",
     }
 
-    cfn = _get_cfn_client(factory, session)
+    cfn = _get_cfn_client(factory=factory, client=client)
     if cfn is None:
         return CfnDeploymentPlanResult(
             stack_name=clean_stack_name,
@@ -143,14 +145,14 @@ def inspect_cloudformation_stack(
 
 def get_cloudformation_stack_status(
     *,
+    client: Any | None = None,
     factory: AwsClientFactory | None = None,
-    session: boto3.Session | None = None,
     stack_name: str,
 ) -> CfnStackStatusResult:
     """Get CloudFormation stack status, parameters, and outputs without mutating AWS."""
     clean_stack_name = (stack_name or "AWSAccelerator-InstallerStack").strip()
 
-    cfn = _get_cfn_client(factory, session)
+    cfn = _get_cfn_client(factory=factory, client=client)
     if cfn is None:
         return CfnStackStatusResult(
             stack_name=clean_stack_name,

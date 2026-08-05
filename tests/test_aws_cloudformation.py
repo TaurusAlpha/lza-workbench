@@ -11,9 +11,7 @@ from lza_workbench.aws.cloudformation import inspect_cloudformation_stack
 
 def test_inspect_cloudformation_stack_create() -> None:
     """Test CloudFormation stack inspection when stack does not exist."""
-    session = MagicMock()
     client = MagicMock()
-    session.client.return_value = client
 
     client.describe_stacks.side_effect = ClientError(
         {"Error": {"Code": "ValidationError", "Message": "Stack does not exist"}},
@@ -21,7 +19,7 @@ def test_inspect_cloudformation_stack_create() -> None:
     )
 
     res = inspect_cloudformation_stack(
-        session=session,
+        client=client,
         stack_name="MyStack",
         resolved_parameters={"Param1": "Val1"},
     )

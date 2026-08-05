@@ -105,7 +105,7 @@ def import_command(
     lza_version: params.LzaVersion = None,
     dry_run: params.DryRun = False,
     force: params.Force = False,
-    skip_aws_check: params.SkipAwsCheck = True,
+    skip_aws_check: params.SkipAwsCheck = False,
 ) -> None:
     """Adopt an existing customer-owned LZA configuration."""
     run_import(

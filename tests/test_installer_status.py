@@ -21,6 +21,8 @@ from lza_workbench.core.workspace import (
     LzaConfig,
     WorkspaceConfig,
     WorkspaceState,
+    load_workspace_config,
+    load_workspace_state,
     write_workspace_config,
     write_workspace_state,
 )
@@ -101,12 +103,16 @@ def test_installer_status_deployed_no_drift(status_workspace: Path) -> None:
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
 
         mock_cfn = MagicMock()
+        stack_id = (
+            "arn:aws:cloudformation:us-east-1:123456789012:stack/"
+            "AWSAccelerator-InstallerStack/uuid"
+        )
         mock_cfn.describe_stacks.return_value = {
             "Stacks": [
                 {
                     "StackName": "AWSAccelerator-InstallerStack",
                     "StackStatus": "CREATE_COMPLETE",
-                    "StackId": "arn:aws:cloudformation:us-east-1:123456789012:stack/AWSAccelerator-InstallerStack/uuid",
+                    "StackId": stack_id,
                     "CreationTime": "2026-08-04T10:00:00Z",
                     "Parameters": [
                         {"ParameterKey": "RepositorySource", "ParameterValue": "codecommit"},
@@ -157,30 +163,38 @@ def test_installer_status_deployed_no_drift(status_workspace: Path) -> None:
         mock_cfn.describe_stacks.assert_called_once_with(StackName="AWSAccelerator-InstallerStack")
 
 
-def test_installer_status_deployed_with_drift(status_workspace: Path) -> None:
-    """Test installer status when parameter drift and version mismatch exist."""
+def test_installer_status_sync_config_implies_sync_state(status_workspace: Path) -> None:
+    """Test that --sync-config automatically synchronizes state as well."""
     with patch(
         "lza_workbench.aws.client_factory.AwsClientFactory.validate_identity"
     ) as mock_val:
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
 
+        new_stack_id = (
+            "arn:aws:cloudformation:us-east-1:123456789012:stack/"
+            "AWSAccelerator-InstallerStack/new-uuid"
+        )
         mock_cfn = MagicMock()
         mock_cfn.describe_stacks.return_value = {
             "Stacks": [
                 {
                     "StackName": "AWSAccelerator-InstallerStack",
                     "StackStatus": "UPDATE_COMPLETE",
-                    "StackId": "arn:aws:cloudformation:us-east-1:123456789012:stack/AWSAccelerator-InstallerStack/uuid",
+                    "StackId": new_stack_id,
                     "Parameters": [
                         {"ParameterKey": "RepositorySource", "ParameterValue": "github"},
-                        {"ParameterKey": "RepositoryOwner", "ParameterValue": "awslabs"},
+                        {"ParameterKey": "RepositoryOwner", "ParameterValue": "custom-owner"},
                         {
                             "ParameterKey": "RepositoryName",
-                            "ParameterValue": "landing-zone-accelerator-on-aws",
+                            "ParameterValue": "custom-repo",
                         },
                         {
                             "ParameterKey": "RepositoryBranchName",
-                            "ParameterValue": "release/v1.15.0",
+                            "ParameterValue": "release/v1.17.0",
+                        },
+                        {
+                            "ParameterKey": "ManagementAccountEmail",
+                            "ParameterValue": "synced-root@example.com",
                         },
                     ],
                     "Outputs": [],
@@ -192,9 +206,23 @@ def test_installer_status_deployed_with_drift(status_workspace: Path) -> None:
             "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
             return_value=mock_cfn,
         ):
-            run_installer_status(target_dir=status_workspace)
+            run_installer_status(
+                sync_config=True,
+                target_dir=status_workspace,
+            )
 
-        mock_cfn.describe_stacks.assert_called_once_with(StackName="AWSAccelerator-InstallerStack")
+    updated_state = load_workspace_state(status_workspace / ".lza" / "state.json")
+    assert updated_state.installer_stack_id == new_stack_id
+    assert updated_state.installer_stack_status == "UPDATE_COMPLETE"
+    assert updated_state.installer_template_version == "v1.17.0"
+
+    updated_config = load_workspace_config(status_workspace / "lza-workspace.yaml")
+    assert updated_config.installer.source_code.repository_type == "github"
+    assert updated_config.installer.source_code.owner == "custom-owner"
+    assert updated_config.installer.source_code.repository_name == "custom-repo"
+    assert updated_config.installer.source_code.branch == "release/v1.17.0"
+    assert updated_config.lza.version == "v1.17.0"
+    assert updated_config.installer.options.management_account_email == "synced-root@example.com"
 
 
 def test_cli_installer_status_command(

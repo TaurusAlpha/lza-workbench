@@ -1,0 +1,84 @@
+"""Tests verifying AwsClientFactory centralization and session reuse."""
+
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from lza_workbench.aws.client_factory import AwsClientFactory
+
+
+def test_no_direct_boto3_session_or_client_outside_factory() -> None:
+    """Verify no file in src/lza_workbench/aws/ except client_factory calls boto3.Session/client."""
+    aws_dir = Path(__file__).parent.parent / "src" / "lza_workbench" / "aws"
+    forbidden_calls = []
+
+    for path in aws_dir.glob("*.py"):
+        if path.name == "client_factory.py":
+            continue
+
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                # Check for boto3.Session() or boto3.client()
+                if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+                    if node.func.value.id == "boto3" and node.func.attr in ("Session", "client"):
+                        forbidden_calls.append((path.name, node.lineno, f"boto3.{node.func.attr}"))
+                # Check for session.client()
+                if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+                    if node.func.value.id == "session" and node.func.attr == "client":
+                        forbidden_calls.append((path.name, node.lineno, "session.client"))
+
+    msg = f"Found direct boto3 session/client calls outside client_factory.py: {forbidden_calls}"
+    assert not forbidden_calls, msg
+
+
+def test_aws_client_factory_reuses_session_across_sts_and_services() -> None:
+    """Verify AwsClientFactory creates one boto3.Session and reuses it for STS and services."""
+    with patch("boto3.Session") as mock_session_cls:
+        mock_session_instance = MagicMock()
+        mock_session_cls.return_value = mock_session_instance
+
+        factory = AwsClientFactory(profile="test-profile", region="eu-west-1")
+
+        # Session should not be instantiated until requested
+        mock_session_cls.assert_not_called()
+
+        # Validate identity (uses STS)
+        mock_sts = MagicMock()
+        mock_session_instance.client.return_value = mock_sts
+        mock_sts.get_caller_identity.return_value = {
+            "Account": "123456789012",
+            "Arn": "arn:aws:iam::123456789012:user/test",
+            "UserId": "AKIAEXAMPLE",
+        }
+
+        identity = factory.validate_identity()
+        assert identity["account"] == "123456789012"
+
+        # Check boto3.Session was created exactly once
+        mock_session_cls.assert_called_once_with(
+            profile_name="test-profile", region_name="eu-west-1"
+        )
+
+        # Now request regional clients from the same factory
+        cfn_client = factory.get_client("cloudformation")
+        s3_client = factory.get_client("s3")
+        cc_client = factory.get_client("codecommit")
+
+        assert cfn_client is not None
+        assert s3_client is not None
+        assert cc_client is not None
+
+        # boto3.Session constructor must STILL have been called only ONCE
+        mock_session_cls.assert_called_once()
+
+        # Check that session.client(...) was used for STS and regional services
+        client_calls = [call.args for call in mock_session_instance.client.call_args_list]
+        services_called = [call[0] for call in client_calls]
+
+        assert "sts" in services_called
+        assert "cloudformation" in services_called
+        assert "s3" in services_called
+        assert "codecommit" in services_called
