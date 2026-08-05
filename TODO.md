@@ -17,19 +17,19 @@
 
 - [x] `lza init`
 - [x] `lza import`
-- [ ] `lza profile check`
+- [] `lza profile check`
 - [x] `lza installer download`
 - [x] `lza installer plan`
-- [ ] `lza installer deploy`
+- [] `lza installer deploy`
 - [x] `lza installer status`
-- [ ] `lza installer update`
-- [ ] `lza installer delete`
+- [] `lza installer update`
+- [] `lza installer delete`
 - [x] `lza config upload`
 - [x] `lza config download`
-- [ ] `lza pipeline start`
-- [ ] `lza pipeline watch`
-- [ ] `lza status`
-- [ ] `lza doctor`
+- [] `lza pipeline start`
+- [] `lza pipeline watch`
+- [] `lza status`
+- [] `lza doctor`
 
 ### `lza init`
 
@@ -48,7 +48,7 @@ Implementation checklist:
 - [x] Ask for or accept AWS region.
 - [x] Ask for or accept LZA version.
 - [x] Copy the packaged `aws-accelerator-config` template.
-- [ ] Support selecting a packaged template when multiple templates exist.
+- [] Support selecting a packaged template when multiple templates exist.
 - [x] Validate the copied template structure.
 - [x] Generate initial `.lza/state.json`.
 - [x] Store all selected initialization values in `lza-workspace.yaml`.
@@ -57,7 +57,7 @@ Implementation checklist:
 - [x] Print the next recommended commands.
 - [x] Support non-interactive execution through CLI options.
 - [x] Support `--dry-run`.
-- [ ] Support `--force`.
+- [] Support `--force`.
 - [x] Support `--skip-aws-check`.
 - [x] Detect a non-empty target workspace.
 
@@ -89,28 +89,28 @@ Adopt an existing local LZA configuration without modifying customer-owned files
 
 Future import enhancements:
 
-- [ ] Repair missing or invalid workspace metadata.
-- [ ] Support forced metadata replacement.
-- [ ] Parse and validate imported YAML content.
-- [ ] Integrate version-aware official LZA schema validation.
-- [ ] Record or resolve remote/Git template provenance.
-- [ ] Generate installer parameters as part of the installer workflow, not import.
+- [] Repair missing or invalid workspace metadata.
+- [] Support forced metadata replacement.
+- [] Parse and validate imported YAML content.
+- [] Integrate version-aware official LZA schema validation.
+- [] Record or resolve remote/Git template provenance.
+- [] Generate installer parameters as part of the installer workflow, not import.
 
 ### `lza profile check`
 
 Validate AWS access for the profile configured in the current workspace or provided explicitly.
 Implementation checklist:
 
-- [ ] Read profile and region from `lza-workspace.yaml`.
-- [ ] Support explicit `--profile`.
-- [ ] Support explicit `--region`.
-- [ ] Run `sts:GetCallerIdentity`.
-- [ ] Show AWS account ID.
-- [ ] Show caller ARN.
-- [ ] Show detected user or role identity.
-- [ ] Compare the detected account with the expected management account.
-- [ ] Return a non-zero exit code when validation fails.
-- [ ] Provide clear errors for expired SSO sessions or invalid credentials.
+- [] Read profile and region from `lza-workspace.yaml`.
+- [] Support explicit `--profile`.
+- [] Support explicit `--region`.
+- [] Run `sts:GetCallerIdentity`.
+- [] Show AWS account ID.
+- [] Show caller ARN.
+- [] Show detected user or role identity.
+- [] Compare the detected account with the expected management account.
+- [] Return a non-zero exit code when validation fails.
+- [] Provide clear errors for expired SSO sessions or invalid credentials.
 
 ### `lza installer plan`
 
@@ -190,34 +190,39 @@ Implementation notes:
 Deploy the LZA installer stack for the current workspace.
 Implementation checklist:
 
-- [ ] Execute the installer planning workflow.
-- [ ] Check for missing required values, stop if missing and suggest running `lza installer plan`.
-- [ ] Prepare the configured installer source when required.
-- [ ] Create or validate required AWS resources.
-- [ ] Create the installer stack.
-- [ ] Wait for stack completion.
-- [ ] Display stack events when deployment fails.
-- [ ] Record deployment metadata in `.lza/state.json`.
-- [ ] Print deployment outputs and next recommended commands.
-- [ ] Support `--dry-run`.
-- [ ] Support `--force`.
+- [] Execute the installer planning workflow.
+- [] Check for missing required values, stop if missing and suggest running `lza installer plan`.
+- [] Check if there is an existing installer stack and determine whether to create or update.
+  - How to handle this check?
+- [] Prepare the configured installer source when required.
+- [] Create or validate required AWS resources.
+- [] Create the installer stack.
+- [] Wait for stack completion.
+- [] Display stack events when deployment fails.
+- [] Record deployment metadata in `.lza/state.json`.
+- [] Print deployment outputs and next recommended commands.
+- [] Support `--dry-run`.
+- [] Support `--force`.
 
 ### `lza installer update`
 
-Update an existing LZA installer stack.
+Update an existing installer deployment.
 
 Implementation checklist:
 
 - [ ] Detect the existing installer stack.
-- [ ] Compare current and requested parameters.
+- [ ] Resolve the requested installer configuration.
+- [ ] Compare deployed and requested parameters.
+- [ ] Compare installer template versions.
+- [ ] Compare installer source configuration.
 - [ ] Show planned changes before execution.
+- [ ] Prepare updated installer source when required.
 - [ ] Support `--dry-run`.
-- [ ] Update the stack.
-- [ ] Handle no-change responses cleanly.
+- [ ] Update the CloudFormation stack.
+- [ ] Handle no-change updates cleanly.
 - [ ] Wait for update completion.
-- [ ] Display stack events when the update fails.
+- [ ] Display stack events when update fails.
 - [ ] Update `.lza/state.json`.
-- [ ] Detect parameter changes before update.
 
 ### `lza installer status`
 
@@ -234,38 +239,43 @@ Implementation checklist:
 - [x] Detect configuration drift.
 - [x] Read deployment metadata from `.lza/state.json`.
 
-### lza installer update
+Future enhancements:
 
-Update an existing installer deployment.
-Implementation checklist:
+- [x] Compare `.lza/state.json` deployment metadata with the current deployed installer state.
+- [x] Allow synchronizing `.lza/state.json` with the deployed installer state.
+- [x] Allow synchronizing the workspace configuration with the deployed installer configuration.
 
-- [ ] Detect the existing installer stack.
-- [ ] Resolve the requested installer configuration.
-- [ ] Compare deployed and requested parameters.
-- [ ] Compare installer template versions.
-- [ ] Compare installer source configuration.
-- [ ] Show planned changes.
-- [ ] Prepare updated installer source when required.
-- [ ] Update the CloudFormation stack.
-- [ ] Handle no-change updates cleanly.
-- [ ] Wait for update completion.
-- [ ] Display stack events when update fails.
-- [ ] Update `.lza/state.json`.
-- [ ] Support `--dry-run`.
+```yaml
+  repository:
+    type: s3 # s3 | codecommit | git
+
+    bucket: aws-accelerator-config-123456789012-eu-west-1
+    prefix: zipped/
+
+    # CodeCommit example:
+    # type: codecommit
+    # repository_name: aws-accelerator-config
+    # branch: main
+    #
+    # Git example:
+    # type: git
+    # repository: git@github.com:example/customer-lza-config.git
+    # branch: main
+```
 
 ### `lza installer delete`
 
 Remove the installer deployment.
 Implementation checklist:
 
-- [ ] Detect the installer stack.
-- [ ] Show the resources that will be removed.
-- [ ] Require confirmation unless `--force` is specified.
-- [ ] Delete the installer stack.
-- [ ] Wait for stack deletion.
-- [ ] Preserve installer source repositories by default.
-- [ ] Optionally remove installer source resources.
-- [ ] Remove installer deployment metadata from `.lza/state.json`.
+- [] Detect the installer stack.
+- [] Show the resources that will be removed.
+- [] Require confirmation unless `--force` is specified.
+- [] Delete the installer stack.
+- [] Wait for stack deletion.
+- [] Preserve installer source repositories by default.
+- [] Optionally remove installer source resources.
+- [] Remove installer deployment metadata from `.lza/state.json`.
 
 ### `lza config upload`
 
@@ -277,7 +287,7 @@ Implementation checklist:
 - [x] Detect unresolved replacement values.
 - [x] Package the configuration when required.
 - [x] Support S3 configuration repositories.
-- [ ] Support additional repository types later.
+- [] Support additional repository types later.
 - [x] Show the target destination before upload.
 - [x] Support `--dry-run`.
 - [x] Save upload metadata to `.lza/state.json`.
@@ -310,87 +320,87 @@ Implementation checklist:
 
 Future download enhancements:
 
-- [ ] Support additional repository types:
+- [] Support additional repository types:
   - Git repository
   - Bitbucket repository
   - Future custom repository providers
-- [ ] Validate the downloaded configuration structure.
-- [ ] Verify download integrity with checksums or signatures.
-- [ ] Detect identical local and remote configurations and skip unnecessary downloads.
+- [] Validate the downloaded configuration structure.
+- [] Verify download integrity with checksums or signatures.
+- [] Detect identical local and remote configurations and skip unnecessary downloads.
 
 ### `lza pipeline start`
 
 Start the configured LZA pipeline.
 Implementation checklist:
 
-- [ ] Detect the pipeline name from workspace configuration or AWS.
-- [ ] Show the target account, region, and pipeline.
-- [ ] Start a new pipeline execution.
-- [ ] Return the pipeline execution ID.
-- [ ] Save execution metadata to `.lza/state.json`.
-- [ ] Prevent accidental duplicate execution when appropriate.
+- [] Detect the pipeline name from workspace configuration or AWS.
+- [] Show the target account, region, and pipeline.
+- [] Start a new pipeline execution.
+- [] Return the pipeline execution ID.
+- [] Save execution metadata to `.lza/state.json`.
+- [] Prevent accidental duplicate execution when appropriate.
 
 ### `lza pipeline watch`
 
 Monitor an LZA pipeline execution.
 Implementation checklist:
 
-- [ ] Watch the latest execution by default.
-- [ ] Support a specific execution ID.
-- [ ] Show stage and action status.
-- [ ] Refresh output without excessive API calls.
-- [ ] Detect failed CodeBuild actions.
-- [ ] Show relevant failure details.
-- [ ] Exit successfully when the pipeline succeeds.
-- [ ] Return a non-zero exit code when the pipeline fails.
+- [] Watch the latest execution by default.
+- [] Support a specific execution ID.
+- [] Show stage and action status.
+- [] Refresh output without excessive API calls.
+- [] Detect failed CodeBuild actions.
+- [] Show relevant failure details.
+- [] Exit successfully when the pipeline succeeds.
+- [] Return a non-zero exit code when the pipeline fails.
 
 ### `lza status`
 
 Show the current state of the customer LZA workspace.
 Implementation checklist:
 
-- [ ] Read `lza-workspace.yaml`.
-- [ ] Read `.lza/state.json`.
-- [ ] Show customer name and workspace path.
-- [ ] Show configured AWS profile and region.
-- [ ] Show selected LZA version.
-- [ ] Show installer stack status.
-- [ ] Show configuration source.
-- [ ] Show latest pipeline execution status.
-- [ ] Clearly distinguish configured, detected, and unknown values.
+- [] Read `lza-workspace.yaml`.
+- [] Read `.lza/state.json`.
+- [] Show customer name and workspace path.
+- [] Show configured AWS profile and region.
+- [] Show selected LZA version.
+- [] Show installer stack status.
+- [] Show configuration source.
+- [] Show latest pipeline execution status.
+- [] Clearly distinguish configured, detected, and unknown values.
 
 ### `lza doctor`
 
 Run local and AWS checks for the current workspace.
 Implementation checklist:
 
-- [ ] Validate `lza-workspace.yaml`.
-- [ ] Validate required workspace files and directories.
-- [ ] Validate template structure.
-- [ ] Validate AWS profile access.
-- [ ] Validate expected AWS account.
-- [ ] Validate installer settings completeness.
-- [ ] Validate configuration upload target.
-- [ ] Detect unresolved placeholders.
-- [ ] Produce a concise pass, warning, and failure summary.
+- [] Validate `lza-workspace.yaml`.
+- [] Validate required workspace files and directories.
+- [] Validate template structure.
+- [] Validate AWS profile access.
+- [] Validate expected AWS account.
+- [] Validate installer settings completeness.
+- [] Validate configuration upload target.
+- [] Detect unresolved placeholders.
+- [] Produce a concise pass, warning, and failure summary.
 
 ## Workspace
 
-- [ ] Define `lza-workspace.yaml` schema.
-- [ ] Version the workspace schema.
-- [ ] Support workspace schema migration.
-- [ ] Validate workspace before every command.
-- [ ] Keep `.lza/state.json` operational only.
-- [ ] Generate JSON Schema for editor support.
+- [] Define `lza-workspace.yaml` schema.
+- [] Version the workspace schema.
+- [] Support workspace schema migration.
+- [] Validate workspace before every command.
+- [] Keep `.lza/state.json` operational only.
+- [] Generate JSON Schema for editor support.
 
 ## Authentication
 
 Authentication ownership:
 
-- [ ] Keep AWS authentication external to the tool.
-- [ ] Document that AWS SSO/static keys/assume-role/proxy/bastion setup is user-managed.
-- [ ] Centralize AWS session/profile resolution for reuse by all commands.
-- [ ] Lowest priority future feature: helper for AWS profile creation or authentication onboarding.
+- [] Keep AWS authentication external to the tool.
+- [] Document that AWS SSO/static keys/assume-role/proxy/bastion setup is user-managed.
+- [] Centralize AWS session/profile resolution for reuse by all commands.
+- [] Lowest priority future feature: helper for AWS profile creation or authentication onboarding.
 
 ## Configuration Templates
 
@@ -399,94 +409,94 @@ Authentication ownership:
 - [x] Copy template into customer workspace.
 - [x] Avoid overwriting existing customer configuration.
 - [x] Support `--force`.
-- [ ] List available packaged templates.
-- [ ] Validate template structure.
-- [ ] Validate template compatibility with selected LZA version.
+- [] List available packaged templates.
+- [] Validate template structure.
+- [] Validate template compatibility with selected LZA version.
 
 ### Future
 
-- [ ] Support Git template source.
-- [ ] Support Bitbucket template source.
-- [ ] Support template version/ref.
-- [ ] Support cached templates.
+- [] Support Git template source.
+- [] Support Bitbucket template source.
+- [] Support template version/ref.
+- [] Support cached templates.
 
 ## Validation
 
-- [ ] Validate `lza-workspace.yaml`.
-- [ ] Validate YAML formatting.
-- [ ] Integrate official LZA schema validation.
-- [ ] Validate workspace structure.
-- [ ] Validate installer configuration.
-- [ ] Validate upload target.
-- [ ] Detect unresolved placeholders.
-- [ ] Detect common LZA configuration mistakes.
+- [] Validate `lza-workspace.yaml`.
+- [] Validate YAML formatting.
+- [] Integrate official LZA schema validation.
+- [] Validate workspace structure.
+- [] Validate installer configuration.
+- [] Validate upload target.
+- [] Detect unresolved placeholders.
+- [] Detect common LZA configuration mistakes.
 
 ## Reports
 
 Maybe change entirely to 'lza report' command with subcommands for each report type?
 
-- [ ] Generate `reports/aws-profile-check.md`.
-- [ ] Generate `reports/status.md`.
-- [ ] Generate pipeline execution reports.
-- [ ] Generate CodeBuild failure summaries.
-- [ ] Generate config diff reports.
+- [] Generate `reports/aws-profile-check.md`.
+- [] Generate `reports/status.md`.
+- [] Generate pipeline execution reports.
+- [] Generate CodeBuild failure summaries.
+- [] Generate config diff reports.
 
 ## LZA Versions
 
 - [x] Store selected LZA version in `lza-workspace.yaml`.
 - [x] Support manual version input.
-- [ ] Support version-specific installer template URL.
-- [ ] Support version-specific default branch.
-- [ ] Support blocked/unsupported versions list.
-- [ ] Auto-discover latest LZA versions.
-- [ ] Cache installer templates.
-- [ ] Warn on unstable or very old versions.
-- [ ] Support migration helper between LZA versions.
-- [ ] Validate version compatibility with packaged templates.
+- [] Support version-specific installer template URL.
+- [] Support version-specific default branch.
+- [] Support blocked/unsupported versions list.
+- [] Auto-discover latest LZA versions.
+- [] Cache installer templates.
+- [] Warn on unstable or very old versions.
+- [] Support migration helper between LZA versions.
+- [] Validate version compatibility with packaged templates.
 
 ## Configuration Generation
 
-- [ ] Organization/OU generator.
-- [ ] Account generator.
-- [ ] Enabled regions generator.
-- [ ] Basic naming replacement generator.
-- [ ] Basic network pattern generator.
-- [ ] SCP pack side-loading.
-- [ ] RCP pack side-loading.
-- [ ] Config rule pack side-loading.
-- [ ] Security service defaults.
-- [ ] Backup defaults.
+- [] Organization/OU generator.
+- [] Account generator.
+- [] Enabled regions generator.
+- [] Basic naming replacement generator.
+- [] Basic network pattern generator.
+- [] SCP pack side-loading.
+- [] RCP pack side-loading.
+- [] Config rule pack side-loading.
+- [] Security service defaults.
+- [] Backup defaults.
 
 ## AI & MCP
 
-- [ ] Use AI to suggest replacements.
-- [ ] Use AI to explain LZA config files.
-- [ ] Use AI to compare customer requirements with current config.
-- [ ] Use AI to summarize CodeBuild failures.
-- [ ] Use AI to troubleshoot failed CloudFormation stacks.
-- [ ] Evaluate AWS-provided LZA MCP server.
-- [ ] Add local MCP server exposing workspace files, templates, validation, and pipeline status.
-- [ ] Keep AI advisory first, execution second.
+- [] Use AI to suggest replacements.
+- [] Use AI to explain LZA config files.
+- [] Use AI to compare customer requirements with current config.
+- [] Use AI to summarize CodeBuild failures.
+- [] Use AI to troubleshoot failed CloudFormation stacks.
+- [] Evaluate AWS-provided LZA MCP server.
+- [] Add local MCP server exposing workspace files, templates, validation, and pipeline status.
+- [] Keep AI advisory first, execution second.
 
 ## Distribution
 
-- [ ] Add installation instructions.
-- [ ] Add example customer workspace.
-- [ ] Ship a default packaged template.
-- [ ] Add safe defaults.
-- [ ] Add clearer error messages.
-- [ ] Add command examples.
-- [ ] Add contribution guidelines.
-- [ ] Remove personal/company-specific hardcoding.
-- [ ] Add tests for core workflows.
+- [] Add installation instructions.
+- [] Add example customer workspace.
+- [] Ship a default packaged template.
+- [] Add safe defaults.
+- [] Add clearer error messages.
+- [] Add command examples.
+- [] Add contribution guidelines.
+- [] Remove personal/company-specific hardcoding.
+- [] Add tests for core workflows.
 
 ## Backlog
 
-- [ ] AWS profile creation helper.
-- [ ] AWS SSO profile bootstrap.
-- [ ] Static key profile bootstrap.
-- [ ] AssumeRole profile helper.
-- [ ] Bastion/proxy helper documentation.
-- [ ] GUI or TUI.
-- [ ] Web interface.
-- [ ] Multi-user/server mode.
+- [] AWS profile creation helper.
+- [] AWS SSO profile bootstrap.
+- [] Static key profile bootstrap.
+- [] AssumeRole profile helper.
+- [] Bastion/proxy helper documentation.
+- [] GUI or TUI.
+- [] Web interface.
+- [] Multi-user/server mode.

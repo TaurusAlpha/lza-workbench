@@ -164,9 +164,19 @@ def installer_download_command(
 
 
 @installer_app.command("status")
-def installer_status_command() -> None:
+def installer_status_command(
+    aws_profile: params.AwsProfile = "",
+    aws_region: params.AwsRegion = "",
+    sync_state: params.SyncState = False,
+    sync_config: params.SyncConfig = False,
+) -> None:
     """Show the current installer deployment state."""
-    run_installer_status()
+    run_installer_status(
+        aws_profile=aws_profile or None,
+        aws_region=aws_region or None,
+        sync_state=sync_state,
+        sync_config=sync_config,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

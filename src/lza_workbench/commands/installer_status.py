@@ -1,9 +1,11 @@
-"""Show the current LZA installer deployment state."""
+"""Show the current LZA installer deployment state and synchronize state/config."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
+import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -22,6 +24,8 @@ from lza_workbench.core.workspace import (
     load_workspace_config,
     load_workspace_state,
     resolve_workspace_dir,
+    write_workspace_config,
+    write_workspace_state,
 )
 
 console = Console()
@@ -55,9 +59,15 @@ def run_installer_status(
     *,
     aws_profile: str | None = None,
     aws_region: str | None = None,
+    sync_state: bool = False,
+    sync_config: bool = False,
     target_dir: Path | None = None,
 ) -> None:
     """Query AWS CloudFormation and state file to display installer status."""
+    # --sync-config automatically enables --sync-state by default
+    if sync_config:
+        sync_state = True
+
     workspace_dir = resolve_workspace_dir(target_dir)
     config = load_workspace_config(workspace_dir / WORKSPACE_CONFIG_FILE)
 
@@ -85,6 +95,27 @@ def run_installer_status(
     cfn_stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
     cfn_status = get_cloudformation_stack_status(factory=factory, stack_name=cfn_stack_name)
 
+    branch = (
+        cfn_status.deployed_parameters.get("RepositoryBranchName", "") if cfn_status.exists else ""
+    )
+    deployed_version = extract_version_from_branch(branch)
+
+    # Sync state and/or config
+    if sync_state:
+        state = sync_installer_state(
+            workspace_dir=workspace_dir,
+            state=state or WorkspaceState.from_config(config),
+            cfn_status=cfn_status,
+            deployed_version=deployed_version,
+        )
+
+    if sync_config:
+        config = sync_installer_config(
+            workspace_dir=workspace_dir,
+            config=config,
+            cfn_status=cfn_status,
+        )
+
     _render_status_report(
         workspace_dir=workspace_dir,
         config=config,
@@ -95,6 +126,92 @@ def run_installer_status(
         aws_error=aws_error,
         cfn_status=cfn_status,
     )
+
+
+def sync_installer_state(
+    *,
+    workspace_dir: Path,
+    state: WorkspaceState,
+    cfn_status: CfnStackStatusResult,
+    deployed_version: str,
+) -> WorkspaceState:
+    """Synchronize .lza/state.json deployment metadata with current deployed AWS installer state."""
+    if not cfn_status.exists:
+        raise typer.BadParameter(
+            "Cannot synchronize state: CloudFormation installer stack is not deployed or inaccessible."
+        )
+
+    now = datetime.now(UTC)
+    state.installer_stack_id = cfn_status.stack_id
+    state.installer_stack_status = cfn_status.stack_status
+    state.installer_template_version = deployed_version
+    state.updated_at = now
+
+    write_workspace_state(workspace_dir / WORKSPACE_STATE_FILE, state)
+    console.print(
+        "[bold green]Synchronized .lza/state.json with live AWS installer state.[/bold green]"
+    )
+    return state
+
+
+def sync_installer_config(
+    *,
+    workspace_dir: Path,
+    config: WorkspaceConfig,
+    cfn_status: CfnStackStatusResult,
+) -> WorkspaceConfig:
+    """Synchronize lza-workspace.yaml with deployed CloudFormation installer parameters."""
+    if not cfn_status.exists or not cfn_status.deployed_parameters:
+        raise typer.BadParameter(
+            "Cannot synchronize config: CloudFormation installer stack is not deployed or has no parameters."
+        )
+
+    params = cfn_status.deployed_parameters
+
+    if "RepositorySource" in params:
+        source_type = params["RepositorySource"]
+        if source_type in {"github", "codecommit", "s3", "codeconnection"}:
+            config.installer.source_code.repository_type = source_type  # type: ignore[assignment]
+
+    if "RepositoryOwner" in params:
+        config.installer.source_code.owner = params["RepositoryOwner"]
+    if "RepositoryName" in params:
+        config.installer.source_code.repository_name = params["RepositoryName"]
+    if "RepositoryBranchName" in params:
+        branch = params["RepositoryBranchName"]
+        config.installer.source_code.branch = branch
+        extracted_ver = extract_version_from_branch(branch)
+        if extracted_ver and extracted_ver != "Unknown":
+            config.lza.version = extracted_ver
+
+    if "ManagementAccountEmail" in params and params["ManagementAccountEmail"]:
+        config.installer.options.management_account_email = params["ManagementAccountEmail"]
+    if "LogArchiveAccountEmail" in params and params["LogArchiveAccountEmail"]:
+        config.installer.options.log_archive_account_email = params["LogArchiveAccountEmail"]
+    if "AuditAccountEmail" in params and params["AuditAccountEmail"]:
+        config.installer.options.audit_account_email = params["AuditAccountEmail"]
+    if "AcceleratorPrefix" in params and params["AcceleratorPrefix"]:
+        config.lza.accelerator_prefix = params["AcceleratorPrefix"]
+
+    if "ConfigurationRepositoryLocation" in params:
+        repo_loc = params["ConfigurationRepositoryLocation"]
+        if repo_loc in {"s3", "codecommit", "git"}:
+            config.configuration.repository.type = repo_loc  # type: ignore[assignment]
+
+    if "EnableApprovalStage" in params:
+        config.installer.options.enable_approval_stage = params["EnableApprovalStage"] == "Yes"
+    if "ControlTowerEnabled" in params:
+        config.installer.options.control_tower_enabled = params["ControlTowerEnabled"] == "Yes"
+    if "EnableDiagnosticsPack" in params:
+        config.installer.options.enable_diagnostics_pack = params["EnableDiagnosticsPack"] == "Yes"
+    if "UseExistingConfigRepo" in params:
+        config.installer.options.use_existing_config_repo = params["UseExistingConfigRepo"] == "Yes"
+
+    write_workspace_config(workspace_dir / WORKSPACE_CONFIG_FILE, config)
+    console.print(
+        "[bold green]Synchronized lza-workspace.yaml with deployed AWS installer configuration.[/bold green]"
+    )
+    return config
 
 
 def _render_status_report(
@@ -177,9 +294,12 @@ def _render_status_report(
         console.print(f"[yellow]CloudFormation Query Notice: {cfn_status.error}[/yellow]")
 
     # Section 2: Deployed Installer Details
+    branch = (
+        cfn_status.deployed_parameters.get("RepositoryBranchName", "") if cfn_status.exists else ""
+    )
+    deployed_version = extract_version_from_branch(branch) if branch else "Unknown"
+
     if cfn_status.exists and cfn_status.deployed_parameters:
-        branch = cfn_status.deployed_parameters.get("RepositoryBranchName", "")
-        deployed_version = extract_version_from_branch(branch)
         source_type = cfn_status.deployed_parameters.get(
             "RepositorySource", config.installer.source_code.repository_type
         )
@@ -218,6 +338,7 @@ def _render_status_report(
     # Section 3: Configuration Drift
     console.print()
     console.print("[bold underline]3. Configuration Drift[/bold underline]")
+    has_drift = False
     if cfn_status.exists and cfn_status.deployed_parameters:
         configured_params = build_installer_cfn_parameters(config)
         drift: dict[str, tuple[str, str]] = {}
@@ -227,6 +348,7 @@ def _render_status_report(
                 drift[key] = (dep_val, cfg_val)
 
         if drift:
+            has_drift = True
             drift_table = Table(title="Detected Parameter Drift", show_header=True)
             drift_table.add_column("Parameter Key", style="cyan")
             drift_table.add_column("Deployed Value", style="red")
@@ -252,9 +374,10 @@ def _render_status_report(
     else:
         console.print("[dim]No stack outputs available.[/dim]")
 
-    # Section 5: State File Metadata (.lza/state.json)
+    # Section 5: Local State Metadata (.lza/state.json) & State Alignment
     console.print()
     console.print("[bold underline]5. Local State Metadata (.lza/state.json)[/bold underline]")
+    state_out_of_sync = False
     if state:
         console.print(f"State Stack ID: {state.installer_stack_id or 'Not recorded'}")
         console.print(f"State Stack Status: {state.installer_stack_status or 'Not recorded'}")
@@ -265,5 +388,42 @@ def _render_status_report(
         console.print(
             f"Installer Template Version: {state.installer_template_version or 'Not recorded'}"
         )
+
+        if cfn_status.exists:
+            state_id_match = (
+                state.installer_stack_id is None or state.installer_stack_id == cfn_status.stack_id
+            )
+            state_status_match = state.installer_stack_status == cfn_status.stack_status
+            state_ver_match = normalize_version(
+                state.installer_template_version or ""
+            ) == normalize_version(deployed_version)
+
+            if state_id_match and state_status_match and state_ver_match:
+                console.print(
+                    "State Alignment: [green]In Sync (.lza/state.json matches live AWS state)[/green]"
+                )
+            else:
+                state_out_of_sync = True
+                console.print("State Alignment: [yellow]Out of Sync[/yellow]")
     else:
         console.print("[dim]No local state file found.[/dim]")
+
+    # Recommended Next Commands at the very end of status report
+    if cfn_status.exists and (has_drift or state_out_of_sync):
+        console.print()
+        console.print("[bold cyan]Recommended Next Command:[/bold cyan]")
+        if has_drift:
+            console.print(
+                "  [bold green]lza installer status --sync-config[/bold green]  "
+                "[dim](Synchronizes lza-workspace.yaml and .lza/state.json with live AWS installer settings)[/dim]"
+            )
+
+            console.print(
+                "  [bold green]lza installer update --force[/bold green]  "
+                "[dim](Update deployed installer stack with local configuration values)[/dim]"
+            )
+        elif state_out_of_sync:
+            console.print(
+                "  [bold green]lza installer status --sync-state[/bold green]   "
+                "[dim](Synchronizes .lza/state.json with live AWS installer deployment state)[/dim]"
+            )

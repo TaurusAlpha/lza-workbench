@@ -99,3 +99,20 @@ WatchPipeline = Annotated[
     ),
 ]
 
+SyncState = Annotated[
+    bool,
+    typer.Option(
+        "--sync-state",
+        help="Synchronize .lza/state.json with live AWS installer state.",
+    ),
+]
+
+SyncConfig = Annotated[
+    bool,
+    typer.Option(
+        "--sync-config",
+        help="Synchronize lza-workspace.yaml with deployed CloudFormation installer configuration.",
+    ),
+]
+
+

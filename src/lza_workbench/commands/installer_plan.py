@@ -21,7 +21,6 @@ from lza_workbench.aws.codecommit import (
     CodeCommitPlanResult,
     inspect_codecommit_repository,
 )
-from lza_workbench.aws.identity import get_aws_session, validate_aws_profile
 from lza_workbench.commands.installer_download import (
     TEMPLATE_FILENAME,
     run_download_installer,
