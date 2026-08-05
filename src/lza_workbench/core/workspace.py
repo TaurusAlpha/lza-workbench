@@ -96,6 +96,7 @@ class LzaInstaller(WorkspaceModel):
     """Installer defaults persisted for later commands."""
 
     local_path: str = "aws-accelerator-installer"
+    stack_name: str = "AWSAccelerator-InstallerStack"
     stack_template: InstallerStackTemplateConfig = Field(
         default_factory=InstallerStackTemplateConfig
     )
@@ -159,7 +160,7 @@ class PipelineConfig(WorkspaceModel):
 class PipelineInstaller(WorkspaceModel):
     """A named installer LZA pipeline."""
 
-    name: str = "AWSAccelerator-InstallerStack"
+    name: str = "AWSAccelerator-Installer"
 
 
 class PipelinesConfig(WorkspaceModel):

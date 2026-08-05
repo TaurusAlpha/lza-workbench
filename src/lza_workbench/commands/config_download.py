@@ -131,7 +131,9 @@ def run_download_config(
 
     write_workspace_state(workspace_dir / WORKSPACE_STATE_FILE, state)
 
-    console.print("[bold green]Downloaded and extracted LZA configuration[/bold green]")
+    console.print(
+        f"[bold green]Downloaded {'and extracted ' if extract else ''}LZA configuration[/bold green]"
+    )
     console.print(f"Workspace: {workspace_dir}")
     console.print(f"Source: s3://{s3_bucket}/{s3_key}")
     console.print(f"Zip archive: {zip_path}")

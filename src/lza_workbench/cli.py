@@ -14,6 +14,7 @@ from lza_workbench.commands.config_download import run_download_config
 from lza_workbench.commands.config_upload import run_upload_config
 from lza_workbench.commands.installer_download import run_download_installer
 from lza_workbench.commands.installer_plan import run_installer_plan
+from lza_workbench.commands.installer_status import run_installer_status
 from lza_workbench.commands.workspace_import import run_import
 from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.core.workspace import resolve_init_workspace_dir
@@ -160,6 +161,12 @@ def installer_download_command(
         force=force,
         interactive=_is_interactive(),
     )
+
+
+@installer_app.command("status")
+def installer_status_command() -> None:
+    """Show the current installer deployment state."""
+    run_installer_status()
 
 
 def main(argv: list[str] | None = None) -> int:

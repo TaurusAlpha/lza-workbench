@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
+from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.commands.installer_download import normalize_lza_version
 
 
@@ -26,7 +27,8 @@ class CodeCommitPlanResult:
 
 def inspect_codecommit_repository(
     *,
-    session: boto3.Session | None,
+    factory: AwsClientFactory | None = None,
+    session: boto3.Session | None = None,
     repository_type: str,
     repository_name: str | None,
     branch_name: str | None,
@@ -59,7 +61,7 @@ def inspect_codecommit_repository(
             actions=[f"Installer source repository type is '{repository_type}'"],
         )
 
-    if not session:
+    if not factory and not session:
         return CodeCommitPlanResult(
             repository_name=repo_name,
             branch_name=resolved_branch,
@@ -76,7 +78,11 @@ def inspect_codecommit_repository(
         )
 
     try:
-        client = session.client("codecommit")
+        client = (
+            factory.get_client("codecommit")
+            if factory is not None
+            else session.client("codecommit")  # type: ignore[union-attr]
+        )
         repo_res = client.get_repository(repositoryName=repo_name)
         _ = repo_res.get("repositoryMetadata", {})
 

@@ -21,7 +21,7 @@
 - [x] `lza installer download`
 - [x] `lza installer plan`
 - [ ] `lza installer deploy`
-- [ ] `lza installer status`
+- [x] `lza installer status`
 - [ ] `lza installer update`
 - [ ] `lza installer delete`
 - [x] `lza config upload`
@@ -191,7 +191,7 @@ Deploy the LZA installer stack for the current workspace.
 Implementation checklist:
 
 - [ ] Execute the installer planning workflow.
-- [ ] Prompt for missing required values.
+- [ ] Check for missing required values, stop if missing and suggest running `lza installer plan`.
 - [ ] Prepare the configured installer source when required.
 - [ ] Create or validate required AWS resources.
 - [ ] Create the installer stack.
@@ -224,15 +224,15 @@ Implementation checklist:
 Show the current installer deployment state.
 Implementation checklist:
 
-- [ ] Detect the installer stack.
-- [ ] Show stack status.
-- [ ] Show deployed LZA version.
-- [ ] Show installer source type.
-- [ ] Show source repository details.
-- [ ] Show stack outputs.
-- [ ] Compare deployed and configured versions.
-- [ ] Detect configuration drift.
-- [ ] Read deployment metadata from `.lza/state.json`.
+- [x] Detect the installer stack.
+- [x] Show stack status.
+- [x] Show deployed LZA version.
+- [x] Show installer source type.
+- [x] Show source repository details.
+- [x] Show stack outputs.
+- [x] Compare deployed and configured versions.
+- [x] Detect configuration drift.
+- [x] Read deployment metadata from `.lza/state.json`.
 
 ### lza installer update
 

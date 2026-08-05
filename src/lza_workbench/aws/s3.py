@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import typer
+from botocore.exceptions import BotoCoreError, ClientError
+
+from lza_workbench.aws.client_factory import AwsClientFactory
+
 DEFAULT_ZIP_FILENAME = "aws-accelerator-config.zip"
 
 
@@ -35,15 +40,10 @@ def download_s3_archive(
     profile: str,
     region: str,
 ) -> None:
-    """Fetch zip archive file from S3 using Boto3 session."""
-    import typer
-    from botocore.exceptions import BotoCoreError, ClientError
-
-    from lza_workbench.aws.identity import get_aws_session
-
+    """Fetch zip archive file from S3 using AwsClientFactory."""
     try:
-        session = get_aws_session(profile, region)
-        s3 = session.client("s3")
+        factory = AwsClientFactory(profile, region)
+        s3 = factory.get_client("s3")
 
         single_zip_success = False
         try:
@@ -73,10 +73,6 @@ def download_s3_archive(
                     f"S3 archive object not found at s3://{s3_bucket}/{s3_key}"
                 )
 
-    except ImportError as err:
-        raise typer.BadParameter(
-            "boto3 is required for S3 downloads but is not installed."
-        ) from err
     except ClientError as exc:
         error = exc.response.get("Error", {})
         error_code = error.get("Code", "Unknown")
@@ -105,14 +101,9 @@ def upload_s3_archive(
     region: str,
 ) -> tuple[str | None, str | None]:
     """Upload local zip archive to S3 bucket and return object (etag, version_id)."""
-    import typer
-    from botocore.exceptions import BotoCoreError, ClientError
-
-    from lza_workbench.aws.identity import get_aws_session
-
     try:
-        session = get_aws_session(profile, region)
-        s3 = session.client("s3")
+        factory = AwsClientFactory(profile, region)
+        s3 = factory.get_client("s3")
 
         s3.upload_file(str(zip_path), s3_bucket, s3_key)
 

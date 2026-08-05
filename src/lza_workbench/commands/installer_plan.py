@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.cloudformation import (
     CfnDeploymentPlanResult,
     inspect_cloudformation_stack,
@@ -90,20 +91,20 @@ def run_installer_plan(
     resolved_params = build_installer_cfn_parameters(config)
     _validate_parameters_against_schema(resolved_params, params_schema)
 
-    # Step 3: Create AWS Session & Validate Profile Identity
-    session = None
+    # Step 3: Create AWS Factory & Validate Profile Identity
+    factory = None
     aws_identity = None
     aws_error = None
     if profile:
         try:
-            aws_identity = validate_aws_profile(profile, region)
-            session = get_aws_session(profile, region)
+            factory = AwsClientFactory(profile, region)
+            aws_identity = factory.validate_identity()
         except Exception as exc:  # noqa: BLE001
             aws_error = str(exc)
 
     # Step 4: CodeCommit Source Planning
     codecommit_plan = inspect_codecommit_repository(
-        session=session,
+        factory=factory,
         repository_type=config.installer.source_code.repository_type,
         repository_name=config.installer.source_code.repository_name,
         branch_name=config.installer.source_code.branch,
@@ -114,7 +115,7 @@ def run_installer_plan(
     # Step 5: CloudFormation Deployment Planning
     stack_name = config.pipelines.installer.name or "AWSAccelerator-InstallerStack"
     cfn_plan = inspect_cloudformation_stack(
-        session=session,
+        factory=factory,
         stack_name=stack_name,
         resolved_parameters=resolved_params,
     )
