@@ -12,6 +12,7 @@ import typer
 from lza_workbench import cli_parameters as params
 from lza_workbench.commands.config_download import run_download_config
 from lza_workbench.commands.config_upload import run_upload_config
+from lza_workbench.commands.installer_deploy import run_installer_deploy
 from lza_workbench.commands.installer_download import run_download_installer
 from lza_workbench.commands.installer_plan import run_installer_plan
 from lza_workbench.commands.installer_status import run_installer_status
@@ -47,6 +48,19 @@ def installer_plan_command(
         no_save=no_save,
         interactive=_is_interactive(),
     )
+
+
+@installer_app.command("deploy")
+def installer_deploy_command(
+    dry_run: params.DryRun = False,
+    force: params.Force = False,
+) -> None:
+    """Deploy the LZA installer CloudFormation stack for the current workspace."""
+    run_installer_deploy(
+        dry_run=dry_run,
+        force=force,
+    )
+
 
 
 app.add_typer(config_app, name="config")

@@ -20,12 +20,13 @@
 - [] `lza profile check`
 - [x] `lza installer download`
 - [x] `lza installer plan`
-- [] `lza installer deploy`
+- [x] `lza installer deploy`
 - [x] `lza installer status`
 - [] `lza installer update`
 - [] `lza installer delete`
 - [x] `lza config upload`
 - [x] `lza config download`
+- [] `lza config deploy`
 - [] `lza pipeline start`
 - [] `lza pipeline watch`
 - [] `lza status`
@@ -190,19 +191,17 @@ Implementation notes:
 Deploy the LZA installer stack for the current workspace.
 Implementation checklist:
 
-- [] Execute the installer planning workflow.
-- [] Check for missing required values, stop if missing and suggest running `lza installer plan`.
-- [] Check if there is an existing installer stack and determine whether to create or update.
-  - How to handle this check?
-- [] Prepare the configured installer source when required.
-- [] Create or validate required AWS resources.
-- [] Create the installer stack.
-- [] Wait for stack completion.
-- [] Display stack events when deployment fails.
-- [] Record deployment metadata in `.lza/state.json`.
-- [] Print deployment outputs and next recommended commands.
-- [] Support `--dry-run`.
-- [] Support `--force`.
+- [x] Check for missing required values, stop if missing and suggest running `lza installer plan`.
+- [x] Check if there is an existing installer stack and determine whether to create or update.
+- [x] Prepare the configured installer source when required.
+- [x] Create or validate required AWS resources.
+- [x] Create the installer stack.
+- [x] Wait for stack completion.
+- [x] Display stack events when deployment fails.
+- [x] Record deployment metadata in `.lza/state.json`.
+- [x] Print deployment outputs and next recommended commands.
+- [x] Support `--dry-run`.
+- [x] Support `--force`.
 
 ### `lza installer update`
 

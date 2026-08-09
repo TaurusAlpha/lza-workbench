@@ -143,3 +143,36 @@ def inspect_codecommit_repository(
         official_version_ref=version_ref,
         actions=actions,
     )
+
+
+def ensure_codecommit_repository(
+    *,
+    factory: AwsClientFactory | None = None,
+    client: Any | None = None,
+    repository_name: str,
+    branch_name: str = "main",
+    description: str = "LZA Installer Repository",
+) -> None:
+    """Ensure CodeCommit repository exists, creating it if required."""
+    cc_client = (
+        client
+        if client is not None
+        else (factory.get_client("codecommit") if factory else None)
+    )
+    if cc_client is None:
+        raise ValueError("AWS CodeCommit client is not available")
+
+    repo_name = (repository_name or "aws-accelerator-installer").strip()
+
+    try:
+        cc_client.get_repository(repositoryName=repo_name)
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        if code in {"RepositoryDoesNotExistException", "404"}:
+            cc_client.create_repository(
+                repositoryName=repo_name,
+                repositoryDescription=description,
+            )
+        else:
+            raise
+

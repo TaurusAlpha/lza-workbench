@@ -413,12 +413,11 @@ def _render_status_report(
         if has_drift:
             desc = "(Synchronizes lza-workspace.yaml and .lza/state.json with live AWS settings)"
             console.print(
-                "  [bold green]lza installer status --sync-config[/bold green]  "
-                f"[dim]{desc}[/dim]"
+                f"  [bold green]lza installer status --sync-config[/bold green]  [dim]{desc}[/dim]"
             )
 
             console.print(
-                "  [bold green]lza installer update --force[/bold green]  "
+                "  [bold green]lza installer update[/bold green]  "
                 "[dim](Update deployed installer stack with local configuration values)[/dim]"
             )
         elif state_out_of_sync:

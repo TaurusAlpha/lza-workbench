@@ -220,3 +220,110 @@ def get_cloudformation_stack_status(
             stack_status="UNKNOWN",
             error=f"Connection failure: {exc}",
         )
+
+
+def deploy_cloudformation_stack(
+    *,
+    factory: AwsClientFactory | None = None,
+    client: Any | None = None,
+    stack_name: str,
+    template_body: str,
+    parameters: dict[str, str],
+    operation: str,
+) -> str:
+    """Trigger CloudFormation stack creation or update.
+
+    Returns the stack ID returned by CloudFormation.
+    """
+    clean_stack_name = (stack_name or "AWSAccelerator-InstallerStack").strip()
+    cfn = _get_cfn_client(factory=factory, client=client)
+    if cfn is None:
+        raise ValueError("AWS CloudFormation client is not available")
+
+    cfn_params = [{"ParameterKey": k, "ParameterValue": v} for k, v in parameters.items()]
+    capabilities = ["CAPABILITY_NAMED_IAM", "CAPABILITY_AUTO_EXPAND"]
+
+    if operation == "CREATE":
+        response = cfn.create_stack(
+            StackName=clean_stack_name,
+            TemplateBody=template_body,
+            Parameters=cfn_params,
+            Capabilities=capabilities,
+        )
+        return str(response.get("StackId", clean_stack_name))
+    elif operation == "UPDATE":
+        response = cfn.update_stack(
+            StackName=clean_stack_name,
+            TemplateBody=template_body,
+            Parameters=cfn_params,
+            Capabilities=capabilities,
+        )
+        return str(response.get("StackId", clean_stack_name))
+    else:
+        raise ValueError(f"Unsupported deployment operation: {operation}")
+
+
+def stream_cloudformation_stack_events(
+    *,
+    factory: AwsClientFactory | None = None,
+    client: Any | None = None,
+    stack_name: str,
+    poll_interval: float = 3.0,
+    on_event: Any | None = None,
+) -> CfnStackStatusResult:
+    """Stream CloudFormation stack events in real-time until stack reaches terminal status."""
+    import time
+
+    clean_stack_name = (stack_name or "AWSAccelerator-InstallerStack").strip()
+    cfn = _get_cfn_client(factory=factory, client=client)
+    if cfn is None:
+        return CfnStackStatusResult(
+            stack_name=clean_stack_name,
+            exists=False,
+            stack_status="NOT_CHECKED",
+            error="No AWS session available",
+        )
+
+    seen_event_ids: set[str] = set()
+
+    terminal_success = {"CREATE_COMPLETE", "UPDATE_COMPLETE"}
+    terminal_failure = {
+        "CREATE_FAILED",
+        "ROLLBACK_COMPLETE",
+        "UPDATE_ROLLBACK_COMPLETE",
+        "ROLLBACK_FAILED",
+        "UPDATE_ROLLBACK_FAILED",
+        "DELETE_COMPLETE",
+        "DELETE_FAILED",
+    }
+
+    while True:
+        try:
+            events_resp = cfn.describe_stack_events(StackName=clean_stack_name)
+            events = events_resp.get("StackEvents", [])
+            # Sort events chronologically (oldest first)
+            events.reverse()
+
+            for evt in events:
+                evt_id = evt.get("EventId")
+                if evt_id and evt_id not in seen_event_ids:
+                    seen_event_ids.add(evt_id)
+                    if on_event:
+                        on_event(evt)
+
+            status_res = get_cloudformation_stack_status(client=cfn, stack_name=clean_stack_name)
+            curr_status = status_res.stack_status or ""
+
+            if curr_status in terminal_success or curr_status in terminal_failure:
+                return status_res
+
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code", "")
+            if code in {"ValidationError", "404"} or "does not exist" in str(exc):
+                # Stack might have finished deleting or not exist
+                return get_cloudformation_stack_status(client=cfn, stack_name=clean_stack_name)
+        except BotoCoreError:
+            pass
+
+        time.sleep(poll_interval)
+

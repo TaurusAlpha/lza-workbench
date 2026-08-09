@@ -150,3 +150,34 @@ def upload_s3_archive(
 
     except BotoCoreError as exc:
         raise typer.BadParameter(f"AWS connection/client failure: {exc}") from exc
+
+
+def ensure_s3_installer_source(
+    *,
+    factory: AwsClientFactory | None = None,
+    client: Any | None = None,
+    bucket_name: str,
+    region: str | None = None,
+) -> None:
+    """Ensure S3 bucket for installer source exists, creating it if required."""
+    s3_client = (
+        client
+        if client is not None
+        else (factory.get_client("s3") if factory else None)
+    )
+    if s3_client is None:
+        raise ValueError("AWS S3 client is not available")
+
+    clean_bucket = bucket_name.strip()
+    try:
+        s3_client.head_bucket(Bucket=clean_bucket)
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        if code in {"404", "NoSuchBucket", "NotFound"}:
+            kwargs: dict[str, Any] = {"Bucket": clean_bucket}
+            if region and region != "us-east-1":
+                kwargs["CreateBucketConfiguration"] = {"LocationConstraint": region}
+            s3_client.create_bucket(**kwargs)
+        else:
+            raise
+
