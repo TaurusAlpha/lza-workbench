@@ -223,6 +223,41 @@ Detailed command behavior, implementation phases, and provider-specific function
 The workspace configuration is loaded, validated, and exposed through typed objects rather than untyped dictionaries.
 Derived values should be calculated at runtime instead of persisted whenever practical.
 
+### Workspace Readiness
+
+Workspace commands operate against explicit readiness levels rather than independently checking individual configuration values.
+
+#### Core Workspace Configuration
+
+A workspace is core-configured when the minimum values required for normal command execution are present.
+
+Core values currently include:
+
+- AWS profile
+- AWS region
+
+`lza init` and `lza import` are responsible for establishing or completing core workspace configuration. They may accept these values through CLI options or interactive prompts.
+
+Commands other than `lza init` and `lza import` must not interactively collect or repair missing core workspace configuration.
+
+If a required core value is missing, the command must fail before command-specific logic or AWS operations and clearly report the missing values.
+
+#### Workspace Readiness Levels
+
+The workspace progresses through increasingly complete states:
+
+- **Uninitialized** — no valid LZA Workbench workspace exists.
+- **Core configured** — required core workspace configuration is present.
+- **Imported** — a valid customer `aws-accelerator-config` and required LZA Workbench metadata are present.
+- **Configured** — command-specific configuration required for installer planning or deployment is present.
+- **Deployed** — the installer has been deployed and deployment state has been recorded.
+
+Commands should validate the minimum readiness level they require before executing command-specific logic.
+
+Readiness levels describe workspace state, not AWS authentication validity or deployed-resource health. Those should be validated separately by commands that require them.
+
+Command-specific optional values may still be accepted through CLI options when appropriate.
+
 ## Current Technical Direction
 
 The current implementation is expected to use the following technologies. These are implementation preferences rather than permanent architectural decisions:

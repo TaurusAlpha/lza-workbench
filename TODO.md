@@ -22,7 +22,7 @@
 - [x] `lza installer plan`
 - [x] `lza installer deploy`
 - [x] `lza installer status`
-- [] `lza installer update`
+- [x] `lza installer update`
 - [] `lza installer delete`
 - [x] `lza config upload`
 - [x] `lza config download`
@@ -209,19 +209,22 @@ Update an existing installer deployment.
 
 Implementation checklist:
 
-- [ ] Detect the existing installer stack.
-- [ ] Resolve the requested installer configuration.
-- [ ] Compare deployed and requested parameters.
-- [ ] Compare installer template versions.
-- [ ] Compare installer source configuration.
-- [ ] Show planned changes before execution.
-- [ ] Prepare updated installer source when required.
-- [ ] Support `--dry-run`.
-- [ ] Update the CloudFormation stack.
-- [ ] Handle no-change updates cleanly.
-- [ ] Wait for update completion.
-- [ ] Display stack events when update fails.
-- [ ] Update `.lza/state.json`.
+- [x] Detect the existing installer stack.
+- [x] Resolve the requested installer configuration.
+- [x] Compare deployed and requested parameters.
+- [x] Compare installer template versions.
+- [x] Compare installer source configuration.
+- [x] Show planned changes before execution.
+- [x] Support `--dry-run`.
+- [x] Update the CloudFormation stack.
+- [x] Handle no-change updates cleanly.
+- [x] Wait for update completion.
+- [x] Display stack events when update fails.
+- [x] Update `.lza/state.json`.
+
+Future enhancements:
+
+- [] Prepare updated installer source (CodeCommit / S3 sync) when required during update.
 
 ### `lza installer status`
 
@@ -391,6 +394,11 @@ Implementation checklist:
 - [] Validate workspace before every command.
 - [] Keep `.lza/state.json` operational only.
 - [] Generate JSON Schema for editor support.
+- [] Introduce centralized workspace readiness validation.
+- [] Define core workspace configuration requirements.
+- [] Allow `lza init` and `lza import` to establish missing core configuration.
+- [] Require other commands to validate their minimum workspace readiness before execution.
+- [] Fail early with clear errors when required workspace configuration is missing.
 
 ## Authentication
 

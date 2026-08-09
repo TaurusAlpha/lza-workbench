@@ -16,6 +16,7 @@ from lza_workbench.commands.installer_deploy import run_installer_deploy
 from lza_workbench.commands.installer_download import run_download_installer
 from lza_workbench.commands.installer_plan import run_installer_plan
 from lza_workbench.commands.installer_status import run_installer_status
+from lza_workbench.commands.installer_update import run_installer_update
 from lza_workbench.commands.workspace_import import run_import
 from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.core.workspace import resolve_init_workspace_dir
@@ -60,6 +61,19 @@ def installer_deploy_command(
         dry_run=dry_run,
         force=force,
     )
+
+
+@installer_app.command("update")
+def installer_update_command(
+    dry_run: params.DryRun = False,
+    force: params.Force = False,
+) -> None:
+    """Update the existing LZA installer CloudFormation stack for the current workspace."""
+    run_installer_update(
+        dry_run=dry_run,
+        force=force,
+    )
+
 
 
 
