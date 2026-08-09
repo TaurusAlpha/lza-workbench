@@ -171,6 +171,29 @@ def run_installer_deploy(
     if cfn_plan.stack_status:
         print_kv("Current Stack Status", cfn_plan.stack_status)
 
+    console.print()
+    if cfn_plan.parameter_diffs:
+        diff_table = Table(title="Parameter Changes to be Applied", show_header=True)
+        diff_table.add_column("Parameter Key", style="cyan")
+        diff_table.add_column("Current Deployed Value", style="red")
+        diff_table.add_column("Planned New Value", style="green")
+
+        for k, (old_v, new_v) in sorted(cfn_plan.parameter_diffs.items()):
+            diff_table.add_row(k, str(old_v), str(new_v))
+
+        console.print(diff_table)
+    else:
+        param_table = Table(title="CloudFormation Parameters to be Deployed", show_header=True)
+        param_table.add_column("Parameter Key", style="cyan")
+        param_table.add_column("Value", style="white")
+
+        for k, v in sorted(resolved_params.items()):
+            param_table.add_row(k, str(v))
+
+        console.print(param_table)
+
+    console.print()
+
     if operation == "NO_CHANGE" and not force:
         print_info("No CloudFormation stack parameter changes detected. Stack is up to date.")
         confirm_redeploy = typer.confirm("Force re-deployment of stack?", default=False)
