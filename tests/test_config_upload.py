@@ -61,7 +61,9 @@ def test_run_upload_config_requires_profile(workspace_dir: Path) -> None:
     cfg.aws.profile = None
     write_workspace_config(config_file, cfg)
 
-    with pytest.raises(typer.BadParameter, match="AWS profile is required"):
+    with pytest.raises(
+        typer.BadParameter, match="missing required core configuration|AWS profile"
+    ):
         run_upload_config(target_dir=workspace_dir, interactive=False)
 
 

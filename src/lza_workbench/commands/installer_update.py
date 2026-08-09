@@ -24,13 +24,12 @@ from lza_workbench.commands.installer_plan import (
 )
 from lza_workbench.commands.installer_status import extract_version_from_branch
 from lza_workbench.core.workspace import (
-    WORKSPACE_CONFIG_FILE,
     WORKSPACE_STATE_FILE,
+    WorkspaceReadinessLevel,
     WorkspaceState,
     build_installer_cfn_parameters,
-    load_workspace_config,
+    load_workspace_context,
     load_workspace_state,
-    resolve_workspace_dir,
     write_workspace_state,
 )
 from lza_workbench.utils.output import (
@@ -49,25 +48,12 @@ def run_installer_update(
     target_dir: Path | None = None,
 ) -> None:
     """Update an existing LZA installer CloudFormation stack for the current workspace."""
-    workspace_dir = resolve_workspace_dir(target_dir)
-    config_path = workspace_dir / WORKSPACE_CONFIG_FILE
-    if not config_path.exists():
-        raise typer.BadParameter(
-            f"Workspace configuration file not found at {config_path}. "
-            "Run 'lza init' or 'lza import' first."
-        )
-
-    config = load_workspace_config(config_path)
+    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.DEPLOYED)
+    workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
     # 1. Check AWS profile & region in configuration
-    profile = (config.aws.profile or "").strip()
-    region = (config.aws.region or "").strip() or "us-east-1"
-
-    if not profile:
-        raise typer.BadParameter(
-            "AWS profile is missing in lza-workspace.yaml. "
-            "Run 'lza init' or 'lza import' to configure AWS credentials."
-        )
+    profile = config.aws.profile or ""
+    region = config.aws.region or "us-east-1"
 
     # 2. Check required installer parameters in configuration
     missing_specs = _gather_required_parameters(config)

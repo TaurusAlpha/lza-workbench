@@ -27,9 +27,9 @@ from lza_workbench.commands.installer_download import (
 from lza_workbench.core.workspace import (
     WORKSPACE_CONFIG_FILE,
     WorkspaceConfig,
+    WorkspaceReadinessLevel,
     build_installer_cfn_parameters,
-    load_workspace_config,
-    resolve_workspace_dir,
+    load_workspace_context,
     write_workspace_config,
 )
 from lza_workbench.utils.output import (
@@ -62,8 +62,8 @@ def run_installer_plan(
     target_dir: Path | None = None,
 ) -> None:
     """Resolve installer config from workspace and show planned deployment actions."""
-    workspace_dir = resolve_workspace_dir(target_dir)
-    config = load_workspace_config(workspace_dir / WORKSPACE_CONFIG_FILE)
+    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CONFIGURED)
+    workspace_dir, config = ctx.workspace_dir, ctx.config
 
     profile = (aws_profile or "").strip() or (config.aws.profile or "").strip()
     region = (aws_region or "").strip() or (config.aws.region or "").strip() or "us-east-1"

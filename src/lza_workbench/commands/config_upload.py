@@ -12,11 +12,9 @@ from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.s3 import resolve_s3_archive_uri, upload_s3_archive
 from lza_workbench.core.templates import validate_template
 from lza_workbench.core.workspace import (
-    WORKSPACE_CONFIG_FILE,
     WORKSPACE_STATE_FILE,
-    load_workspace_config,
-    load_workspace_state,
-    resolve_workspace_dir,
+    WorkspaceReadinessLevel,
+    load_workspace_context,
     write_workspace_state,
 )
 from lza_workbench.utils.archive import create_zip_archive
@@ -35,9 +33,8 @@ def run_upload_config(
     target_dir: Path | None = None,
 ) -> Path:
     """Package aws-accelerator-config into zip, display change visibility, and upload to S3."""
-    workspace_dir = resolve_workspace_dir(target_dir)
-    config = load_workspace_config(workspace_dir / WORKSPACE_CONFIG_FILE)
-    state = load_workspace_state(workspace_dir / WORKSPACE_STATE_FILE)
+    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
+    workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
     repo_config = config.configuration.repository
     config_dir = workspace_dir / config.configuration.local_path
@@ -64,13 +61,8 @@ def run_upload_config(
             )
 
     prefix = (repo_config.prefix or "").strip()
-    profile = (config.aws.profile or "").strip()
-    if not profile and interactive:
-        profile = typer.prompt("AWS profile", default=config.customer.slug).strip()
-    if not profile:
-        raise typer.BadParameter("AWS profile is required but not configured.")
-
-    region = (config.aws.region or "").strip() or "us-east-1"
+    profile = config.aws.profile or ""
+    region = config.aws.region or "us-east-1"
 
     s3_bucket, s3_key, zip_name = resolve_s3_archive_uri(bucket, prefix)
     zip_path = workspace_dir / zip_name

@@ -14,11 +14,9 @@ from lza_workbench.core.installer_template import (
     resolve_installer_template,
 )
 from lza_workbench.core.workspace import (
-    WORKSPACE_CONFIG_FILE,
     WORKSPACE_STATE_FILE,
-    load_workspace_config,
-    load_workspace_state,
-    resolve_workspace_dir,
+    WorkspaceReadinessLevel,
+    load_workspace_context,
     write_workspace_state,
 )
 from lza_workbench.utils.output import (
@@ -57,9 +55,8 @@ def run_download_installer(
     target_dir: Path | None = None,
 ) -> Path:
     """Download LZA installer CloudFormation template into workspace installer directory."""
-    workspace_dir = resolve_workspace_dir(target_dir)
-    config = load_workspace_config(workspace_dir / WORKSPACE_CONFIG_FILE)
-    state = load_workspace_state(workspace_dir / WORKSPACE_STATE_FILE)
+    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
+    workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
     raw_version = (lza_version or "").strip() or (config.lza.version or "").strip()
     if not raw_version and interactive:

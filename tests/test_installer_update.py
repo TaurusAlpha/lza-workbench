@@ -24,11 +24,12 @@ from lza_workbench.core.workspace import (
 
 @pytest.fixture
 def sample_workspace(tmp_path: Path) -> Path:
-    """Create a sample workspace directory with valid lza-workspace.yaml."""
+    """Create a sample workspace directory with valid lza-workspace.yaml and deployed state."""
     ws_dir = tmp_path / "comm-it"
     ws_dir.mkdir(parents=True, exist_ok=True)
     (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
     (ws_dir / "aws-accelerator-installer").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
 
     config = WorkspaceConfig(
         customer=CustomerConfig(name="Comm IT", slug="comm-it"),
@@ -44,7 +45,9 @@ def sample_workspace(tmp_path: Path) -> Path:
     config.installer.options.audit_account_email = "audit@example.com"
 
     write_workspace_config(ws_dir / "lza-workspace.yaml", config)
-    write_workspace_state(ws_dir / ".lza" / "state.json", WorkspaceState.from_config(config))
+    state = WorkspaceState.from_config(config)
+    state.installer_stack_id = "arn:aws:cloudformation:us-east-1:123456789012:stack/AWSAccelerator-InstallerStack/uuid"
+    write_workspace_state(ws_dir / ".lza" / "state.json", state)
 
     template_file = ws_dir / "aws-accelerator-installer" / "AWSAccelerator-InstallerStack.template"
     template_file.write_text(
@@ -78,7 +81,9 @@ def test_missing_aws_profile_failure(tmp_path: Path) -> None:
     )
     write_workspace_config(ws_dir / "lza-workspace.yaml", config)
 
-    with pytest.raises(typer.BadParameter, match="AWS profile is missing"):
+    with pytest.raises(
+        typer.BadParameter, match="missing required core configuration|AWS profile is missing"
+    ):
         run_installer_update(target_dir=ws_dir)
 
 
@@ -86,6 +91,7 @@ def test_missing_required_params_failure(tmp_path: Path) -> None:
     """Test that missing required installer parameters stops update."""
     ws_dir = tmp_path / "incomplete"
     ws_dir.mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
     config = WorkspaceConfig(
         customer=CustomerConfig(name="Incomplete", slug="incomplete"),
         aws=AwsConfig(profile="test-profile", region="us-east-1"),
@@ -93,7 +99,10 @@ def test_missing_required_params_failure(tmp_path: Path) -> None:
     )
     write_workspace_config(ws_dir / "lza-workspace.yaml", config)
 
-    with pytest.raises(typer.BadParameter, match="missing from lza-workspace.yaml"):
+    with pytest.raises(
+        typer.BadParameter,
+        match="missing required installer configuration parameters|missing from lza-workspace.yaml",
+    ):
         run_installer_update(target_dir=ws_dir)
 
 
@@ -178,7 +187,7 @@ def test_installer_update_dry_run(
     run_installer_update(dry_run=True, force=True, target_dir=sample_workspace)
 
     state = load_workspace_state(sample_workspace / ".lza" / "state.json")
-    assert state.installer_stack_id is None
+    assert state.installer_stack_id == "arn:aws:cloudformation:us-east-1:123456789012:stack/AWSAccelerator-InstallerStack/uuid"
 
 
 @patch("lza_workbench.commands.installer_update.stream_cloudformation_stack_events")

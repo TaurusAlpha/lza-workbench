@@ -30,6 +30,7 @@ def sample_workspace(tmp_path: Path) -> Path:
     ws_dir.mkdir(parents=True, exist_ok=True)
     (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
     (ws_dir / "aws-accelerator-installer").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
 
     config = WorkspaceConfig(
         customer=CustomerConfig(name="Comm IT", slug="comm-it"),
@@ -70,7 +71,9 @@ def test_missing_aws_profile_failure(tmp_path: Path) -> None:
     )
     write_workspace_config(ws_dir / "lza-workspace.yaml", config)
 
-    with pytest.raises(typer.BadParameter, match="AWS profile is missing"):
+    with pytest.raises(
+        typer.BadParameter, match="missing required core configuration|AWS profile is missing"
+    ):
         run_installer_deploy(target_dir=ws_dir)
 
 
@@ -78,6 +81,7 @@ def test_missing_required_params_failure(tmp_path: Path) -> None:
     """Test that missing required installer parameters stops deployment."""
     ws_dir = tmp_path / "incomplete"
     ws_dir.mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
     config = WorkspaceConfig(
         customer=CustomerConfig(name="Incomplete", slug="incomplete"),
         aws=AwsConfig(profile="test-profile", region="us-east-1"),
@@ -85,7 +89,10 @@ def test_missing_required_params_failure(tmp_path: Path) -> None:
     )
     write_workspace_config(ws_dir / "lza-workspace.yaml", config)
 
-    with pytest.raises(typer.BadParameter, match="missing from lza-workspace.yaml"):
+    with pytest.raises(
+        typer.BadParameter,
+        match="missing required installer configuration parameters|missing from lza-workspace.yaml",
+    ):
         run_installer_deploy(target_dir=ws_dir)
 
 

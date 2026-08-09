@@ -18,11 +18,10 @@ from lza_workbench.core.workspace import (
     WORKSPACE_CONFIG_FILE,
     WORKSPACE_STATE_FILE,
     WorkspaceConfig,
+    WorkspaceReadinessLevel,
     WorkspaceState,
     build_installer_cfn_parameters,
-    load_workspace_config,
-    load_workspace_state,
-    resolve_workspace_dir,
+    load_workspace_context,
     write_workspace_config,
     write_workspace_state,
 )
@@ -73,16 +72,8 @@ def run_installer_status(
     if sync_config:
         sync_state = True
 
-    workspace_dir = resolve_workspace_dir(target_dir)
-    config = load_workspace_config(workspace_dir / WORKSPACE_CONFIG_FILE)
-
-    state: WorkspaceState | None = None
-    state_file = workspace_dir / WORKSPACE_STATE_FILE
-    if state_file.exists():
-        try:
-            state = load_workspace_state(state_file)
-        except Exception:  # noqa: BLE001
-            state = None
+    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
+    workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
     profile = (aws_profile or "").strip() or (config.aws.profile or "").strip()
     region = (aws_region or "").strip() or (config.aws.region or "").strip() or "us-east-1"
