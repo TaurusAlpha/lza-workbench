@@ -1,4 +1,4 @@
-# Review the provided code against the project’s coding principles.
+# Review the provided code against the project’s coding principles
 
 Output findings first. Do not modify code until all findings are listed.
 
@@ -63,7 +63,8 @@ No significant findings.
 
 Suggested changes
 
-After all findings, provide a concise implementation approach for resolving them.
+After all findings, provide a concise list of findings and severity.
+Do not explain the implementation unless explicitly asked.
 
 Do not rewrite the code unless explicitly asked.
 Do not suggest unrelated refactoring or future features.
