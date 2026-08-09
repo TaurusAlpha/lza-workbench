@@ -8,9 +8,6 @@ from pathlib import Path
 from typing import Any
 
 import typer
-from rich.console import Console
-
-console = Console()
 
 PACKAGED_INSTALLER_VERSION = "v1.16.0"
 INSTALLER_TEMPLATE_FILENAME = "AWSAccelerator-InstallerStack.template"

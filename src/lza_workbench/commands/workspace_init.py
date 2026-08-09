@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from rich.console import Console
 
 from lza_workbench.aws.identity import validate_aws_profile
 from lza_workbench.core.templates import resolve_template_source, validate_template
@@ -20,8 +19,12 @@ from lza_workbench.core.workspace import (
     planned_write_paths,
     validate_workspace_target,
 )
-
-console = Console()
+from lza_workbench.utils.output import (
+    console,
+    print_dry_run_header,
+    print_kv,
+    print_success,
+)
 
 
 def run_init(
@@ -100,15 +103,15 @@ def print_dry_run_summary(
     config: WorkspaceConfig,
     identity: dict[str, str] | None,
 ) -> None:
-    console.print("[bold]Dry run: lza init[/bold]")
-    console.print(f"Workspace: {workspace_dir}")
-    console.print(f"Template: {config.configuration.template.name}")
+    print_dry_run_header("lza init")
+    print_kv("Workspace", workspace_dir)
+    print_kv("Template", config.configuration.template.name)
     console.print("Planned writes:")
     for path in planned_write_paths(workspace_dir, config):
         console.print(f"  - {path}")
     if identity:
-        console.print(f"AWS account: {identity['account']}")
-        console.print(f"Caller ARN: {identity['arn']}")
+        print_kv("AWS account", identity["account"])
+        print_kv("Caller ARN", identity["arn"])
 
 
 def print_success_summary(
@@ -116,15 +119,15 @@ def print_success_summary(
     config: WorkspaceConfig,
     identity: dict[str, str] | None,
 ) -> None:
-    console.print("[bold green]Initialized LZA workspace[/bold green]")
-    console.print(f"Workspace: {workspace_dir}")
-    console.print(f"Customer: {config.customer.name} ({config.customer.slug})")
-    console.print(f"AWS profile: {config.aws.profile}")
-    console.print(f"AWS region: {config.aws.region}")
-    console.print(f"LZA version: {config.lza.version}")
+    print_success("Initialized LZA workspace")
+    print_kv("Workspace", workspace_dir)
+    print_kv("Customer", f"{config.customer.name} ({config.customer.slug})")
+    print_kv("AWS profile", config.aws.profile)
+    print_kv("AWS region", config.aws.region)
+    print_kv("LZA version", config.lza.version)
     if identity:
-        console.print(f"AWS account: {identity['account']}")
-        console.print(f"Caller ARN: {identity['arn']}")
+        print_kv("AWS account", identity["account"])
+        print_kv("Caller ARN", identity["arn"])
 
 
 def _value_or_prompt(label: str, value: str | None, default: str, interactive: bool) -> str:

@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
-from rich.console import Console
 
 from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.s3 import resolve_s3_archive_uri, upload_s3_archive
@@ -15,15 +14,18 @@ from lza_workbench.core.templates import validate_template
 from lza_workbench.core.workspace import (
     WORKSPACE_CONFIG_FILE,
     WORKSPACE_STATE_FILE,
-    ConfigDiffResult,
     load_workspace_config,
     load_workspace_state,
     resolve_workspace_dir,
     write_workspace_state,
 )
 from lza_workbench.utils.archive import create_zip_archive
-
-console = Console()
+from lza_workbench.utils.output import (
+    print_diff_summary,
+    print_dry_run_header,
+    print_kv,
+    print_success,
+)
 
 
 def run_upload_config(
@@ -74,13 +76,13 @@ def run_upload_config(
     zip_path = workspace_dir / zip_name
 
     if dry_run:
-        console.print("[bold]Dry run: lza config upload[/bold]")
-        console.print(f"Workspace: {workspace_dir}")
-        console.print(f"Source Directory: {config_dir}")
-        console.print(f"Local Zip Path: {zip_path}")
-        console.print(f"S3 Target: s3://{s3_bucket}/{s3_key}")
-        console.print(f"AWS Profile: {profile}")
-        console.print(f"AWS Region: {region}")
+        print_dry_run_header("lza config upload")
+        print_kv("Workspace", workspace_dir)
+        print_kv("Source Directory", config_dir)
+        print_kv("Local Zip Path", zip_path)
+        print_kv("S3 Target", f"s3://{s3_bucket}/{s3_key}")
+        print_kv("AWS Profile", profile)
+        print_kv("AWS Region", region)
         return zip_path
 
     exclude_dirs = set(config.configuration.packaging.exclude.directories)
@@ -116,29 +118,11 @@ def run_upload_config(
 
     write_workspace_state(workspace_dir / WORKSPACE_STATE_FILE, state)
 
-    console.print("[bold green]Packaged and uploaded LZA configuration[/bold green]")
-    console.print(f"Workspace: {workspace_dir}")
-    console.print(f"Zip archive: {zip_path}")
-    console.print(f"Destination: s3://{s3_bucket}/{s3_key}")
+    print_success("Packaged and uploaded LZA configuration")
+    print_kv("Workspace", workspace_dir)
+    print_kv("Zip archive", zip_path)
+    print_kv("Destination", f"s3://{s3_bucket}/{s3_key}")
 
-    _print_diff_summary(diff_result)
+    print_diff_summary(diff_result.added, diff_result.modified, diff_result.removed)
 
     return zip_path
-
-
-def _print_diff_summary(diff: ConfigDiffResult) -> None:
-    """Print clean summary of added, modified, and removed files."""
-    if not diff.has_changes:
-        console.print("[dim]No file changes detected in zip archive.[/dim]")
-        return
-
-    console.print(
-        f"[bold]Archive Changes: {len(diff.added)} added, "
-        f"{len(diff.modified)} modified, {len(diff.removed)} removed[/bold]"
-    )
-    for fname in diff.added:
-        console.print(f"  [green]+ {fname}[/green]")
-    for fname in diff.modified:
-        console.print(f"  [yellow]~ {fname}[/yellow]")
-    for fname in diff.removed:
-        console.print(f"  [red]- {fname}[/red]")

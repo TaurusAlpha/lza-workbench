@@ -38,6 +38,19 @@ Only If requested, run:
 
 Before presenting code, review it against these principles.
 
+### Release & Project Metadata
+
+Every implementation must leave the project in a releasable state.
+
+- Review `pyproject.toml` after every implementation.
+- Update the project version according to the project's versioning scheme.
+  - Feature → minor version bump.
+  - Bug fix or improvement → patch version bump.
+  - Breaking change → major version bump.
+- Update dependencies, dependency constraints, optional dependencies, entry points, scripts, or other project metadata whenever required by the implementation.
+- Remove obsolete dependencies and metadata introduced by previous implementations.
+- Do not leave `pyproject.toml` inconsistent with the current codebase.
+
 ### Simplicity
 
 - Prefer the simplest solution that satisfies the requirements.

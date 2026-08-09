@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
@@ -33,8 +32,14 @@ from lza_workbench.core.workspace import (
     resolve_workspace_dir,
     write_workspace_config,
 )
-
-console = Console()
+from lza_workbench.utils.output import (
+    console,
+    print_info,
+    print_kv,
+    print_notice,
+    print_section,
+    print_warning,
+)
 
 
 @dataclass
@@ -80,7 +85,7 @@ def run_installer_plan(
     # Save accepted installer settings if requested and not dry run
     if not no_save and not dry_run:
         write_workspace_config(workspace_dir / WORKSPACE_CONFIG_FILE, config)
-        console.print("[dim]Installer configuration verified in lza-workspace.yaml[/dim]")
+        print_info("Installer configuration verified in lza-workspace.yaml", dim=True)
 
     # Step 1: Template Resolution & Parameter Schema Inspection
     template_path = _resolve_installer_template(workspace_dir, config, dry_run=dry_run)
@@ -244,9 +249,10 @@ def _resolve_installer_template(
 
     if not template_path.exists():
         if dry_run:
-            console.print(
-                f"[dim]Template {TEMPLATE_FILENAME} not found locally. "
-                "Would download during execution.[/dim]"
+            print_info(
+                f"Template {TEMPLATE_FILENAME} not found locally. "
+                "Would download during execution.",
+                dim=True,
             )
             packaged = Path(__file__).parent.parent / "config" / TEMPLATE_FILENAME
             if packaged.exists():
@@ -254,7 +260,7 @@ def _resolve_installer_template(
             return template_path
 
         ver = config.lza.version
-        console.print(f"[yellow]Downloading LZA installer template ({ver})...[/yellow]")
+        print_notice(f"Downloading LZA installer template ({ver})...")
         template_path = run_download_installer(
             lza_version=config.lza.version,
             dry_run=False,
@@ -318,25 +324,25 @@ def _render_plan_report(
     console.print(Panel(title, expand=False))
 
     # General info
-    console.print(f"Workspace: [bold]{workspace_dir}[/bold]")
-    console.print(f"LZA Version: [bold]{config.lza.version}[/bold]")
-    console.print(f"AWS Profile: [bold]{profile or 'Not specified'}[/bold]")
-    console.print(f"AWS Region: [bold]{region}[/bold]")
+    print_kv("Workspace", workspace_dir, bold_value=True)
+    print_kv("LZA Version", config.lza.version, bold_value=True)
+    print_kv("AWS Profile", profile or "Not specified", bold_value=True)
+    print_kv("AWS Region", region, bold_value=True)
 
     if aws_identity:
-        console.print(f"AWS Account ID: [green]{aws_identity['account']}[/green]")
-        console.print(f"Caller Identity: [dim]{aws_identity['arn']}[/dim]")
+        print_kv("AWS Account ID", aws_identity["account"], style="green")
+        print_kv("Caller Identity", aws_identity["arn"], style="dim")
     elif aws_error:
-        console.print(f"[yellow]AWS Access Notice: {aws_error}[/yellow]")
+        print_notice(f"AWS Access Notice: {aws_error}")
 
     console.print()
 
     # CodeCommit Section
-    console.print("[bold underline]1. Source Code Repository Planning[/bold underline]")
-    console.print(f"Source Type: [bold]{config.installer.source_code.repository_type}[/bold]")
-    console.print(f"Repository Name: {codecommit_plan.repository_name}")
-    console.print(f"Target Branch: {codecommit_plan.branch_name}")
-    console.print(f"Repository Status: [bold]{codecommit_plan.status}[/bold]")
+    print_section(1, "Source Code Repository Planning")
+    print_kv("Source Type", config.installer.source_code.repository_type, bold_value=True)
+    print_kv("Repository Name", codecommit_plan.repository_name)
+    print_kv("Target Branch", codecommit_plan.branch_name)
+    print_kv("Repository Status", codecommit_plan.status, bold_value=True)
     console.print("Planned Repository Actions:")
     for action in codecommit_plan.actions:
         console.print(f"  • {action}")
@@ -344,8 +350,8 @@ def _render_plan_report(
     console.print()
 
     # CloudFormation Section
-    console.print("[bold underline]2. CloudFormation Deployment Planning[/bold underline]")
-    console.print(f"Stack Name: [bold]{cfn_plan.stack_name}[/bold]")
+    print_section(2, "CloudFormation Deployment Planning")
+    print_kv("Stack Name", cfn_plan.stack_name, bold_value=True)
     op_color = (
         "green"
         if cfn_plan.operation == "CREATE"
@@ -355,7 +361,7 @@ def _render_plan_report(
         f"Planned Stack Operation: [{op_color}][bold]{cfn_plan.operation}[/bold][/{op_color}]"
     )
     if cfn_plan.stack_status:
-        console.print(f"Current Stack Status: {cfn_plan.stack_status}")
+        print_kv("Current Stack Status", cfn_plan.stack_status)
 
     console.print()
     table = Table(title="Resolved CloudFormation Parameters", show_header=True)
@@ -379,7 +385,6 @@ def _render_plan_report(
         console.print(diff_table)
 
     console.print()
-    console.print(
-        "[bold yellow]Plan Complete. Guarantee: "
-        "No AWS resources were modified or deployed.[/bold yellow]"
+    print_warning(
+        "Plan Complete. Guarantee: No AWS resources were modified or deployed."
     )

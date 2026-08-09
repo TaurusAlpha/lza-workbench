@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
@@ -27,8 +26,14 @@ from lza_workbench.core.workspace import (
     write_workspace_config,
     write_workspace_state,
 )
-
-console = Console()
+from lza_workbench.utils.output import (
+    console,
+    print_info,
+    print_kv,
+    print_notice,
+    print_section,
+    print_success,
+)
 
 
 def extract_version_from_branch(branch: str) -> str:
@@ -211,8 +216,7 @@ def sync_installer_config(
         config.installer.options.use_existing_config_repo = params["UseExistingConfigRepo"] == "Yes"
 
     write_workspace_config(workspace_dir / WORKSPACE_CONFIG_FILE, config)
-    msg = "Synchronized lza-workspace.yaml with deployed AWS installer configuration."
-    console.print(f"[bold green]{msg}[/bold green]")
+    print_success("Synchronized lza-workspace.yaml with deployed AWS installer configuration.")
     return config
 
 
@@ -232,24 +236,24 @@ def _render_status_report(
         Panel(f"[bold cyan]LZA Installer Status - {config.customer.name}[/bold cyan]", expand=False)
     )
 
-    console.print(f"Workspace: [bold]{workspace_dir}[/bold]")
-    console.print(f"Configured LZA Version: [bold]{config.lza.version}[/bold]")
-    console.print(f"AWS Profile: [bold]{profile or 'Not specified'}[/bold]")
-    console.print(f"AWS Region: [bold]{region}[/bold]")
+    print_kv("Workspace", workspace_dir, bold_value=True)
+    print_kv("Configured LZA Version", config.lza.version, bold_value=True)
+    print_kv("AWS Profile", profile or "Not specified", bold_value=True)
+    print_kv("AWS Region", region, bold_value=True)
 
     account_id = aws_identity["account"] if aws_identity else "UNKNOWN_ACCOUNT"
 
     if aws_identity:
-        console.print(f"AWS Account ID: [green]{account_id}[/green]")
-        console.print(f"Caller Identity: [dim]{aws_identity['arn']}[/dim]")
+        print_kv("AWS Account ID", account_id, style="green")
+        print_kv("Caller Identity", aws_identity["arn"], style="dim")
     elif aws_error:
-        console.print(f"[yellow]AWS Access Notice: {aws_error}[/yellow]")
+        print_notice(f"AWS Access Notice: {aws_error}")
 
     console.print()
 
     # Section 1: Stack & Pipeline Names / ARNs
-    console.print("[bold underline]1. CloudFormation Stack & Pipeline Resources[/bold underline]")
-    console.print(f"Target Region: [bold]{region}[/bold]")
+    print_section(1, "CloudFormation Stack & Pipeline Resources")
+    print_kv("Target Region", region, bold_value=True)
 
     # CloudFormation Stack
     cfn_stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
@@ -257,8 +261,8 @@ def _render_status_report(
         cfn_status.stack_id
         or f"arn:aws:cloudformation:{region}:{account_id}:stack/{cfn_stack_name}/*"
     )
-    console.print(f"Installer CloudFormation Stack: [bold]{cfn_stack_name}[/bold]")
-    console.print(f"Installer Stack ARN: [dim]{expected_stack_arn}[/dim]")
+    print_kv("Installer CloudFormation Stack", cfn_stack_name, bold_value=True)
+    print_kv("Installer Stack ARN", expected_stack_arn, style="dim")
 
     status_str = cfn_status.stack_status or "UNKNOWN"
     if cfn_status.exists:
@@ -278,22 +282,22 @@ def _render_status_report(
         else f"{prefix}-Installer"
     )
     installer_pipeline_arn = f"arn:aws:codepipeline:{region}:{account_id}:{installer_pipeline_name}"
-    console.print(f"Installer Pipeline Name: [bold]{installer_pipeline_name}[/bold]")
-    console.print(f"Installer Pipeline ARN: [dim]{installer_pipeline_arn}[/dim]")
+    print_kv("Installer Pipeline Name", installer_pipeline_name, bold_value=True)
+    print_kv("Installer Pipeline ARN", installer_pipeline_arn, style="dim")
 
     # Configuration Pipeline (CodePipeline)
     config_pipeline_name = config.pipelines.configuration.name or f"{prefix}-Pipeline"
     config_pipeline_arn = f"arn:aws:codepipeline:{region}:{account_id}:{config_pipeline_name}"
-    console.print(f"Config Pipeline Name: [bold]{config_pipeline_name}[/bold]")
-    console.print(f"Config Pipeline ARN: [dim]{config_pipeline_arn}[/dim]")
+    print_kv("Config Pipeline Name", config_pipeline_name, bold_value=True)
+    print_kv("Config Pipeline ARN", config_pipeline_arn, style="dim")
 
     if cfn_status.creation_time:
-        console.print(f"Stack Creation Time: {cfn_status.creation_time}")
+        print_kv("Stack Creation Time", cfn_status.creation_time)
     if cfn_status.last_updated_time:
-        console.print(f"Stack Last Updated: {cfn_status.last_updated_time}")
+        print_kv("Stack Last Updated", cfn_status.last_updated_time)
 
     if cfn_status.error:
-        console.print(f"[yellow]CloudFormation Query Notice: {cfn_status.error}[/yellow]")
+        print_notice(f"CloudFormation Query Notice: {cfn_status.error}")
 
     # Section 2: Deployed Installer Details
     branch = (
@@ -313,32 +317,30 @@ def _render_status_report(
         )
 
         console.print()
-        console.print("[bold underline]2. Deployed Installer Details[/bold underline]")
-        console.print(f"Deployed LZA Version: [bold]{deployed_version}[/bold]")
-        console.print(f"Source Type: [bold]{source_type}[/bold]")
-        console.print(f"Repository: {owner}/{repo_name}")
-        console.print(f"Branch: {branch}")
+        print_section(2, "Deployed Installer Details")
+        print_kv("Deployed LZA Version", deployed_version, bold_value=True)
+        print_kv("Source Type", source_type, bold_value=True)
+        print_kv("Repository", f"{owner}/{repo_name}")
+        print_kv("Branch", branch)
 
         norm_cfg = normalize_version(config.lza.version)
         norm_dep = normalize_version(deployed_version)
         if norm_cfg == norm_dep:
-            console.print("Version Match: [green]Match (Configured matches Deployed)[/green]")
+            print_kv("Version Match", "Match (Configured matches Deployed)", style="green")
         else:
             msg = f"Mismatch (Configured: {config.lza.version}, Deployed: {deployed_version})"
-            console.print(f"Version Match: [yellow]{msg}[/yellow]")
+            print_kv("Version Match", msg, style="yellow")
     else:
         console.print()
-        console.print("[bold underline]2. Deployed Installer Details[/bold underline]")
-        console.print(
-            "Source Type: [bold]" + config.installer.source_code.repository_type + "[/bold]"
-        )
+        print_section(2, "Deployed Installer Details")
+        print_kv("Source Type", config.installer.source_code.repository_type, bold_value=True)
         repo_name = config.installer.source_code.repository_name or "N/A"
-        console.print(f"Repository: {repo_name}")
-        console.print("[dim]Deployed details unavailable (stack not deployed or unreadable).[/dim]")
+        print_kv("Repository", repo_name)
+        print_info("Deployed details unavailable (stack not deployed or unreadable).", dim=True)
 
     # Section 3: Configuration Drift
     console.print()
-    console.print("[bold underline]3. Configuration Drift[/bold underline]")
+    print_section(3, "Configuration Drift")
     has_drift = False
     if cfn_status.exists and cfn_status.deployed_parameters:
         configured_params = build_installer_cfn_parameters(config)
@@ -358,13 +360,13 @@ def _render_status_report(
                 drift_table.add_row(k, str(d_val), str(c_val))
             console.print(drift_table)
         else:
-            console.print("[green]No configuration drift detected.[/green]")
+            print_info("No configuration drift detected.", style="green")
     else:
-        console.print("[dim]Drift check skipped (stack is not deployed).[/dim]")
+        print_info("Drift check skipped (stack is not deployed).", dim=True)
 
     # Section 4: Stack Outputs
     console.print()
-    console.print("[bold underline]4. Stack Outputs[/bold underline]")
+    print_section(4, "Stack Outputs")
     if cfn_status.outputs:
         out_table = Table(title="CloudFormation Outputs", show_header=True)
         out_table.add_column("Output Key", style="cyan")
@@ -373,22 +375,18 @@ def _render_status_report(
             out_table.add_row(k, str(v))
         console.print(out_table)
     else:
-        console.print("[dim]No stack outputs available.[/dim]")
+        print_info("No stack outputs available.", dim=True)
 
     # Section 5: Local State Metadata (.lza/state.json) & State Alignment
     console.print()
-    console.print("[bold underline]5. Local State Metadata (.lza/state.json)[/bold underline]")
+    print_section(5, "Local State Metadata (.lza/state.json)")
     state_out_of_sync = False
     if state:
-        console.print(f"State Stack ID: {state.installer_stack_id or 'Not recorded'}")
-        console.print(f"State Stack Status: {state.installer_stack_status or 'Not recorded'}")
-        console.print(
-            f"State Stack Last Updated: {state.installer_stack_updated_at or 'Not recorded'}"
-        )
-        console.print(f"Installer Downloaded At: {state.installer_downloaded_at or 'Not recorded'}")
-        console.print(
-            f"Installer Template Version: {state.installer_template_version or 'Not recorded'}"
-        )
+        print_kv("State Stack ID", state.installer_stack_id or "Not recorded")
+        print_kv("State Stack Status", state.installer_stack_status or "Not recorded")
+        print_kv("State Stack Last Updated", state.installer_stack_updated_at or "Not recorded")
+        print_kv("Installer Downloaded At", state.installer_downloaded_at or "Not recorded")
+        print_kv("Installer Template Version", state.installer_template_version or "Not recorded")
 
         if cfn_status.exists:
             state_id_match = (
@@ -401,12 +399,12 @@ def _render_status_report(
 
             if state_id_match and state_status_match and state_ver_match:
                 align_msg = "In Sync (.lza/state.json matches live AWS state)"
-                console.print(f"State Alignment: [green]{align_msg}[/green]")
+                print_kv("State Alignment", align_msg, style="green")
             else:
                 state_out_of_sync = True
-                console.print("State Alignment: [yellow]Out of Sync[/yellow]")
+                print_kv("State Alignment", "Out of Sync", style="yellow")
     else:
-        console.print("[dim]No local state file found.[/dim]")
+        print_info("No local state file found.", dim=True)
 
     # Recommended Next Commands at the very end of status report
     if cfn_status.exists and (has_drift or state_out_of_sync):

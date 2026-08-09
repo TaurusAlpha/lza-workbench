@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
-from rich.console import Console
 
 from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.s3 import download_s3_archive, resolve_s3_archive_uri
@@ -22,8 +21,12 @@ from lza_workbench.core.workspace import (
     write_workspace_state,
 )
 from lza_workbench.utils.archive import extract_zip_to_workspace
-
-console = Console()
+from lza_workbench.utils.output import (
+    print_diff_summary,
+    print_dry_run_header,
+    print_kv,
+    print_success,
+)
 
 
 def run_download_config(
@@ -71,13 +74,13 @@ def run_download_config(
     zip_path = workspace_dir / zip_name
 
     if dry_run:
-        console.print("[bold]Dry run: lza config download[/bold]")
-        console.print(f"Workspace: {workspace_dir}")
-        console.print(f"S3 Source: s3://{s3_bucket}/{s3_key}")
-        console.print(f"AWS Profile: {profile}")
-        console.print(f"AWS Region: {region}")
-        console.print(f"Local Zip Path: {zip_path}")
-        console.print(f"Extraction Target: {workspace_dir}")
+        print_dry_run_header("lza config download")
+        print_kv("Workspace", workspace_dir)
+        print_kv("S3 Source", f"s3://{s3_bucket}/{s3_key}")
+        print_kv("AWS Profile", profile)
+        print_kv("AWS Region", region)
+        print_kv("Local Zip Path", zip_path)
+        print_kv("Extraction Target", workspace_dir)
         return config_dir
 
     if config_dir.exists() and any(config_dir.iterdir()) and not force:
@@ -133,30 +136,12 @@ def run_download_config(
     write_workspace_state(workspace_dir / WORKSPACE_STATE_FILE, state)
 
     action_str = "Downloaded and extracted " if extract else "Downloaded "
-    console.print(f"[bold green]{action_str}LZA configuration[/bold green]")
-    console.print(f"Workspace: {workspace_dir}")
-    console.print(f"Source: s3://{s3_bucket}/{s3_key}")
-    console.print(f"Zip archive: {zip_path}")
-    console.print(f"Extracted to: {config_dir}")
+    print_success(f"{action_str}LZA configuration")
+    print_kv("Workspace", workspace_dir)
+    print_kv("Source", f"s3://{s3_bucket}/{s3_key}")
+    print_kv("Zip archive", zip_path)
+    print_kv("Extracted to", config_dir)
 
-    _print_diff_summary(diff_result)
+    print_diff_summary(diff_result.added, diff_result.modified, diff_result.removed)
 
     return config_dir
-
-
-def _print_diff_summary(diff: ConfigDiffResult) -> None:
-    """Print clean summary of added, modified, and removed files."""
-    if not diff.has_changes:
-        console.print("[dim]No file changes detected (configuration up to date).[/dim]")
-        return
-
-    console.print(
-        f"[bold]Changes: {len(diff.added)} added, "
-        f"{len(diff.modified)} modified, {len(diff.removed)} removed[/bold]"
-    )
-    for fname in diff.added:
-        console.print(f"  [green]+ {fname}[/green]")
-    for fname in diff.modified:
-        console.print(f"  [yellow]~ {fname}[/yellow]")
-    for fname in diff.removed:
-        console.print(f"  [red]- {fname}[/red]")

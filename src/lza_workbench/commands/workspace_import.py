@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import typer
-from rich.console import Console
 
 from lza_workbench.aws.identity import validate_aws_profile
 from lza_workbench.core.templates import validate_template
@@ -25,8 +24,13 @@ from lza_workbench.core.workspace import (
     write_workspace_config,
     write_workspace_state,
 )
-
-console = Console()
+from lza_workbench.utils.output import (
+    console,
+    print_dry_run_header,
+    print_kv,
+    print_success,
+    print_warning,
+)
 
 
 @dataclass(frozen=True)
@@ -59,9 +63,7 @@ def run_import(
     )
     existing = load_existing_metadata(workspace_dir)
     if existing and not force:
-        console.print(
-            "[bold yellow]Workspace already exists; use --force to overwrite metadata.[/bold yellow]"
-        )
+        print_warning("Workspace already exists; use --force to overwrite metadata.")
         return
     validate_template(config_dir)
 
@@ -103,7 +105,7 @@ def run_import(
         _print_summary("Dry run: lza import", workspace_dir, config_dir, paths, identity)
         return
     if not paths:
-        console.print("[bold green]Workspace already imported; no metadata changes[/bold green]")
+        print_success("Workspace already imported; no metadata changes")
         return
 
     (workspace_dir / ".lza").mkdir(parents=True, exist_ok=True)
@@ -229,15 +231,19 @@ def _print_summary(
     paths: list[Path],
     identity: dict[str, str] | None,
 ) -> None:
-    console.print(f"[bold green]{title}[/bold green]")
-    console.print(f"Workspace: {workspace_dir}")
-    console.print(f"Configuration: {config_dir}")
+    if title.startswith("Dry run:"):
+        command_name = title.split(":", 1)[1].strip()
+        print_dry_run_header(command_name)
+    else:
+        print_success(title)
+    print_kv("Workspace", workspace_dir)
+    print_kv("Configuration", config_dir)
     console.print("Affected paths:")
     for path in paths:
         console.print(f"  - {path}")
     if identity:
-        console.print(f"AWS account: {identity['account']}")
-        console.print(f"Caller ARN: {identity['arn']}")
+        print_kv("AWS account", identity["account"])
+        print_kv("Caller ARN", identity["arn"])
     console.print("Customer configuration files were preserved.")
 
 

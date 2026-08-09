@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
-from rich.console import Console
 
 from lza_workbench.core.installer_template import (
     INSTALLER_TEMPLATE_FILENAME,
@@ -22,8 +21,11 @@ from lza_workbench.core.workspace import (
     resolve_workspace_dir,
     write_workspace_state,
 )
-
-console = Console()
+from lza_workbench.utils.output import (
+    print_dry_run_header,
+    print_kv,
+    print_success,
+)
 
 TEMPLATE_FILENAME = INSTALLER_TEMPLATE_FILENAME
 
@@ -73,13 +75,14 @@ def run_download_installer(
     anonymous_data_enabled = config.installer.options.anonymous_data
 
     if dry_run:
-        console.print("[bold]Dry run: lza installer download[/bold]")
-        console.print(f"Workspace: {workspace_dir}")
-        console.print(f"LZA Version: {norm_version}")
-        console.print(f"Template URL: {template_url}")
-        console.print(f"Destination: {template_path}")
-        console.print(
-            f"Anonymous Data Sharing: {'Enabled' if anonymous_data_enabled else 'Disabled'}"
+        print_dry_run_header("lza installer download")
+        print_kv("Workspace", workspace_dir)
+        print_kv("LZA Version", norm_version)
+        print_kv("Template URL", template_url)
+        print_kv("Destination", template_path)
+        print_kv(
+            "Anonymous Data Sharing",
+            "Enabled" if anonymous_data_enabled else "Disabled",
         )
         return template_path
 
@@ -109,9 +112,12 @@ def run_download_installer(
 
     write_workspace_state(workspace_dir / WORKSPACE_STATE_FILE, state)
 
-    console.print(f"[bold green]Downloaded LZA installer template ({norm_version})[/bold green]")
-    console.print(f"Workspace: {workspace_dir}")
-    console.print(f"Saved to: {template_path}")
-    console.print(f"Anonymous Data Sharing: {'Enabled' if anonymous_data_enabled else 'Disabled'}")
+    print_success(f"Downloaded LZA installer template ({norm_version})")
+    print_kv("Workspace", workspace_dir)
+    print_kv("Saved to", template_path)
+    print_kv(
+        "Anonymous Data Sharing",
+        "Enabled" if anonymous_data_enabled else "Disabled",
+    )
 
     return template_path

@@ -7,9 +7,8 @@ from importlib.resources import files
 from pathlib import Path
 
 import typer
-from rich.console import Console
 
-console = Console()
+from lza_workbench.utils.output import console, print_warning
 
 DEFAULT_TEMPLATE_SOURCE = "default"
 REQUIRED_TEMPLATE_FILES = (
@@ -72,9 +71,7 @@ def validate_template(template_config_dir: Path) -> None:
         console.print(f"[bold red]Template is missing required files: {missing_list}[/bold red]")
     if missing_optional:
         missing_list = ", ".join(missing_optional)
-        console.print(
-            f"[bold yellow]Template is missing optional files: {missing_list}[/bold yellow]"
-        )
+        print_warning(f"Template is missing optional files: {missing_list}")
 
 
 def _bundled_default_template_dir() -> Path:
