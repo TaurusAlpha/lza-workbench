@@ -20,9 +20,9 @@ from lza_workbench.aws.codecommit import (
     CodeCommitPlanResult,
     inspect_codecommit_repository,
 )
-from lza_workbench.commands.installer_download import (
-    TEMPLATE_FILENAME,
-    run_download_installer,
+from lza_workbench.core.installer_template import (
+    INSTALLER_TEMPLATE_FILENAME,
+    download_installer_template,
 )
 from lza_workbench.core.workspace import (
     WORKSPACE_CONFIG_FILE,
@@ -118,7 +118,7 @@ def run_installer_plan(
     )
 
     # Step 5: CloudFormation Deployment Planning
-    stack_name = config.pipelines.installer.name or "AWSAccelerator-InstallerStack"
+    stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
     cfn_client = factory.get_client("cloudformation") if factory else None
     cfn_plan = inspect_cloudformation_stack(
         client=cfn_client,
@@ -245,28 +245,25 @@ def _resolve_installer_template(
 ) -> Path:
     """Locate local template or download it into installer local directory."""
     installer_dir = workspace_dir / config.installer.local_path
-    template_path = installer_dir / TEMPLATE_FILENAME
+    template_path = installer_dir / INSTALLER_TEMPLATE_FILENAME
 
     if not template_path.exists():
         if dry_run:
             print_info(
-                f"Template {TEMPLATE_FILENAME} not found locally. "
+                f"Template {INSTALLER_TEMPLATE_FILENAME} not found locally. "
                 "Would download during execution.",
                 dim=True,
             )
-            packaged = Path(__file__).parent.parent / "config" / TEMPLATE_FILENAME
+            packaged = Path(__file__).parent.parent / "config" / INSTALLER_TEMPLATE_FILENAME
             if packaged.exists():
                 return packaged
             return template_path
 
         ver = config.lza.version
         print_notice(f"Downloading LZA installer template ({ver})...")
-        template_path = run_download_installer(
-            lza_version=config.lza.version,
-            dry_run=False,
-            force=False,
-            interactive=False,
-            target_dir=workspace_dir,
+        template_path = download_installer_template(
+            version=config.lza.version,
+            local_path=template_path,
         )
 
     return template_path
@@ -385,6 +382,4 @@ def _render_plan_report(
         console.print(diff_table)
 
     console.print()
-    print_warning(
-        "Plan Complete. Guarantee: No AWS resources were modified or deployed."
-    )
+    print_warning("Plan Complete. Guarantee: No AWS resources were modified or deployed.")

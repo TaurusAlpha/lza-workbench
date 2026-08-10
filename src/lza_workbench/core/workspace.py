@@ -121,6 +121,7 @@ class ConfigurationRepositoryConfig(WorkspaceModel):
     type: Literal["s3", "codecommit", "git"] = "s3"
     bucket: str | None = None
     prefix: str | None = None
+    key: str | None = None
     repository_name: str | None = None
     repository: str | None = None
     branch: str | None = None
@@ -274,6 +275,7 @@ def load_workspace_state(path: Path) -> WorkspaceState:
 
 def write_workspace_state(path: Path, state: WorkspaceState) -> None:
     """Write operational state as JSON."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(state.model_dump(mode="json"), indent=2, sort_keys=False) + "\n",
         encoding="utf-8",
@@ -526,7 +528,7 @@ def evaluate_workspace_readiness(
     config: WorkspaceConfig,
     state: WorkspaceState,
 ) -> WorkspaceReadinessLevel:
-    """Evaluate current workspace readiness level based on config, directory structure, and state."""
+    """Evaluate current workspace readiness level based on config, directory, and state."""
     if (
         not (config.customer.slug or "").strip()
         or not (config.aws.profile or "").strip()
@@ -585,20 +587,23 @@ def _raise_readiness_error(
     if current == WorkspaceReadinessLevel.CORE_CONFIGURED:
         config_dir = workspace_dir / config.configuration.local_path
         raise typer.BadParameter(
-            f"Configuration directory '{config_dir}' does not exist or is missing required LZA templates. "
-            "Run 'lza init' or 'lza import' first."
+            f"Configuration directory '{config_dir}' does not exist or "
+            "is missing required LZA templates. Run 'lza init' or 'lza import' first."
         )
     if current == WorkspaceReadinessLevel.IMPORTED:
         raise typer.BadParameter(
-            "Workspace is missing required installer configuration parameters in lza-workspace.yaml. "
-            "Run 'lza installer plan' or update lza-workspace.yaml with required values."
+            "Workspace is missing required installer configuration parameters in "
+            "lza-workspace.yaml. Run 'lza installer plan' or update lza-workspace.yaml."
         )
-    if current == WorkspaceReadinessLevel.CONFIGURED and required == WorkspaceReadinessLevel.DEPLOYED:
+    if (
+        current == WorkspaceReadinessLevel.CONFIGURED
+        and required == WorkspaceReadinessLevel.DEPLOYED
+    ):
         raise typer.BadParameter(
             "Installer CloudFormation stack has not been deployed for this workspace "
             "(missing installer_stack_id in .lza/state.json). Run 'lza installer deploy' first."
         )
     raise typer.BadParameter(
-        f"Workspace readiness level '{current.name}' does not meet required level '{required.name}'."
+        f"Workspace readiness level '{current.name}' does not meet "
+        f"required level '{required.name}'."
     )
-

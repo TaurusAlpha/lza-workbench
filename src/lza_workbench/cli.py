@@ -13,10 +13,13 @@ from lza_workbench import cli_parameters as params
 from lza_workbench.commands.config_download import run_download_config
 from lza_workbench.commands.config_upload import run_upload_config
 from lza_workbench.commands.installer_deploy import run_installer_deploy
-from lza_workbench.commands.installer_download import run_download_installer
 from lza_workbench.commands.installer_plan import run_installer_plan
-from lza_workbench.commands.installer_status import run_installer_status
-from lza_workbench.commands.installer_update import run_installer_update
+from lza_workbench.commands.status import (
+    run_config_status,
+    run_installer_status,
+    run_pipeline_status,
+    run_root_status,
+)
 from lza_workbench.commands.workspace_import import run_import
 from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.core.workspace import resolve_init_workspace_dir
@@ -35,6 +38,12 @@ config_app = typer.Typer(
 installer_app = typer.Typer(
     help="Manage LZA installer stack.",
     no_args_is_help=True,
+)
+
+status_app = typer.Typer(
+    help="Show status of workspace components.",
+    no_args_is_help=False,
+    invoke_without_command=True,
 )
 
 
@@ -63,22 +72,73 @@ def installer_deploy_command(
     )
 
 
-@installer_app.command("update")
-def installer_update_command(
-    dry_run: params.DryRun = False,
-    force: params.Force = False,
+@installer_app.command("status")
+def installer_status_command(
+    aws_profile: params.AwsProfile = "",
+    aws_region: params.AwsRegion = "",
+    sync_state: params.SyncState = False,
+    sync_config: params.SyncConfig = False,
 ) -> None:
-    """Update the existing LZA installer CloudFormation stack for the current workspace."""
-    run_installer_update(
-        dry_run=dry_run,
-        force=force,
+    """Show the current installer deployment state (alias for `lza status installer`)."""
+    run_installer_status(
+        aws_profile=aws_profile or None,
+        aws_region=aws_region or None,
+        sync_state=sync_state,
+        sync_config=sync_config,
     )
 
 
+@status_app.callback(invoke_without_command=True)
+def status_root_callback(
+    ctx: typer.Context,
+    aws_profile: params.AwsProfile = "",
+    aws_region: params.AwsRegion = "",
+) -> None:
+    """Show overall workspace status overview."""
+    if ctx.invoked_subcommand is None:
+        run_root_status(
+            aws_profile=aws_profile or None,
+            aws_region=aws_region or None,
+        )
+
+
+@status_app.command("installer")
+def status_installer_command(
+    aws_profile: params.AwsProfile = "",
+    aws_region: params.AwsRegion = "",
+    sync_state: params.SyncState = False,
+    sync_config: params.SyncConfig = False,
+) -> None:
+    """Show the current installer stack status details."""
+    run_installer_status(
+        aws_profile=aws_profile or None,
+        aws_region=aws_region or None,
+        sync_state=sync_state,
+        sync_config=sync_config,
+    )
+
+
+@status_app.command("config")
+def status_config_command() -> None:
+    """Show configuration repository status details."""
+    run_config_status()
+
+
+@status_app.command("pipeline")
+def status_pipeline_command(
+    aws_profile: params.AwsProfile = "",
+    aws_region: params.AwsRegion = "",
+) -> None:
+    """Show CodePipeline status details."""
+    run_pipeline_status(
+        aws_profile=aws_profile or None,
+        aws_region=aws_region or None,
+    )
 
 
 app.add_typer(config_app, name="config")
 app.add_typer(installer_app, name="installer")
+app.add_typer(status_app, name="status")
 
 
 def _is_interactive() -> bool:
@@ -176,35 +236,6 @@ def config_upload_command(
     )
 
 
-@installer_app.command("download")
-def installer_download_command(
-    lza_version: params.LzaVersion = None,
-    dry_run: params.DryRun = False,
-    force: params.Force = False,
-) -> None:
-    """Download LZA installer CloudFormation template into customer workspace."""
-    run_download_installer(
-        lza_version=lza_version,
-        dry_run=dry_run,
-        force=force,
-        interactive=_is_interactive(),
-    )
-
-
-@installer_app.command("status")
-def installer_status_command(
-    aws_profile: params.AwsProfile = "",
-    aws_region: params.AwsRegion = "",
-    sync_state: params.SyncState = False,
-    sync_config: params.SyncConfig = False,
-) -> None:
-    """Show the current installer deployment state."""
-    run_installer_status(
-        aws_profile=aws_profile or None,
-        aws_region=aws_region or None,
-        sync_state=sync_state,
-        sync_config=sync_config,
-    )
 
 
 def main(argv: list[str] | None = None) -> int:

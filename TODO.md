@@ -17,19 +17,15 @@
 
 - [x] `lza init`
 - [x] `lza import`
-- [] `lza profile check`
-- [x] `lza installer download`
 - [x] `lza installer plan`
 - [x] `lza installer deploy`
-- [x] `lza installer status`
-- [x] `lza installer update`
-- [] `lza installer delete`
+- [] `lza uninstall`
 - [x] `lza config upload`
 - [x] `lza config download`
 - [] `lza config deploy`
 - [] `lza pipeline start`
 - [] `lza pipeline watch`
-- [] `lza status`
+- [x] `lza status`
 - [] `lza doctor`
 
 ### `lza init`
@@ -97,22 +93,6 @@ Future import enhancements:
 - [] Record or resolve remote/Git template provenance.
 - [] Generate installer parameters as part of the installer workflow, not import.
 
-### `lza profile check`
-
-Validate AWS access for the profile configured in the current workspace or provided explicitly.
-Implementation checklist:
-
-- [] Read profile and region from `lza-workspace.yaml`.
-- [] Support explicit `--profile`.
-- [] Support explicit `--region`.
-- [] Run `sts:GetCallerIdentity`.
-- [] Show AWS account ID.
-- [] Show caller ARN.
-- [] Show detected user or role identity.
-- [] Compare the detected account with the expected management account.
-- [] Return a non-zero exit code when validation fails.
-- [] Provide clear errors for expired SSO sessions or invalid credentials.
-
 ### `lza installer plan`
 
 Resolve and persist installer configuration, then show the actions required to deploy the LZA installer without modifying AWS resources.
@@ -128,6 +108,9 @@ Implementation checklist:
 - [x] Support `codecommit` as the initial installer source type.
 - [x] Determine required common installer parameters.
 - [x] Determine required CodeCommit-specific parameters.
+- [] Collect every parameter exposed by the selected installer template.
+- [] Apply documented template defaults and explicit workspace defaults where appropriate.
+- [] Preserve a user's existing accepted values when defaults change.
 - [x] Prompt interactively for missing required values.
 - [x] Reuse existing values without prompting.
 - [x] Validate all collected values.
@@ -139,10 +122,12 @@ Implementation checklist:
 #### Template resolution
 
 - [x] Resolve the installer template for the configured LZA version.
-- [x] Download the template when it is not available locally.
+- [x] Download a local template internally when it is required and not available.
 - [x] Reuse a compatible local template when available.
 - [x] Validate that the template matches the configured LZA version.
 - [x] Inspect template parameter definitions and defaults.
+- [] Require a local template when the template must be modified, including when anonymous data sharing is disabled.
+- [] Determine whether to support both the official remote template for unmodified deployments and a local template for modified deployments, or always standardize on a local template.
 
 #### CodeCommit planning
 
@@ -166,36 +151,25 @@ Implementation checklist:
 - [x] Show parameter provenance when useful.
 - [x] Guarantee that the command does not mutate AWS resources.
 
-### `lza installer download`
-
-Download the LZA installer CloudFormation template for the selected version into the customer workspace.
-
-Implementation checklist:
-
-- [x] Read selected LZA version from `lza-workspace.yaml`.
-- [x] Resolve installer template URL for the selected version.
-- [x] Download the installer template if missing.
-- [x] Support re-download with `--force`.
-- [x] Disable Anonymous Data Sharing by default.
-- [x] Save the template under the workspace installer directory.
-- [x] Record downloaded version in `.lza/state.json`.
-
-Implementation notes:
-
-- Template URL Latest: <https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/latest/AWSAccelerator-InstallerStack.template>
-- Template URL Versioned: <https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/{LZA_VERSION}/AWSAccelerator-InstallerStack.template>
-- LZA_VERSION format: `v1.0.0`, `v2.0.0`, etc.
-
 ### `lza installer deploy`
 
-Deploy the LZA installer stack for the current workspace.
+Reconcile the locally configured installer desired state with AWS for both initial deployment and later updates.
+
 Implementation checklist:
 
-- [x] Check for missing required values, stop if missing and suggest running `lza installer plan`.
-- [x] Check if there is an existing installer stack and determine whether to create or update.
-- [x] Prepare the configured installer source when required.
+- [x] Check for missing required values, stop if missing, and suggest running `lza installer plan`.
+- [x] Resolve the requested installer configuration from `lza-workspace.yaml`.
+- [x] Resolve or download the configured installer template version when required.
+- [x] Detect the existing installer stack and determine whether the operation is create, update, or no change.
+- [x] Compare deployed and requested parameters.
+- [x] Compare installer template versions.
+- [x] Compare installer source configuration.
+- [x] Show planned changes before execution.
+- [] Ask for confirmation before applying changes unless confirmation is explicitly bypassed.
+- [x] Prepare the configured installer source when supported and required.
 - [x] Create or validate required AWS resources.
-- [x] Create the installer stack.
+- [x] Create or update the CloudFormation stack.
+- [x] Handle no-change deployments cleanly.
 - [x] Wait for stack completion.
 - [x] Display stack events when deployment fails.
 - [x] Record deployment metadata in `.lza/state.json`.
@@ -203,85 +177,43 @@ Implementation checklist:
 - [x] Support `--dry-run`.
 - [x] Support `--force`.
 
-### `lza installer update`
-
-Update an existing installer deployment.
-
-Implementation checklist:
-
-- [x] Detect the existing installer stack.
-- [x] Resolve the requested installer configuration.
-- [x] Compare deployed and requested parameters.
-- [x] Compare installer template versions.
-- [x] Compare installer source configuration.
-- [x] Show planned changes before execution.
-- [x] Support `--dry-run`.
-- [x] Update the CloudFormation stack.
-- [x] Handle no-change updates cleanly.
-- [x] Wait for update completion.
-- [x] Display stack events when update fails.
-- [x] Update `.lza/state.json`.
-
 Future enhancements:
 
-- [] Prepare updated installer source (CodeCommit / S3 sync) when required during update.
+- [] Prepare and synchronize installer source code across Amazon S3, AWS CodeCommit, and the official AWS GitHub repository when the configured LZA version or source settings require it.
+- [] Define provider-specific prerequisites, version/ref resolution, packaging, upload, and drift detection.
+- [] Keep source preparation separate from customer `aws-accelerator-config` management.
+- [] Follow the AWS source-location requirements for S3 packaging and synthesized installer parameters: <https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/source-code-location.html>.
 
-### `lza installer status`
+### `lza uninstall`
 
-Show the current installer deployment state.
+Uninstall the LZA solution rather than deleting only the installer stack.
+
 Implementation checklist:
 
-- [x] Detect the installer stack.
-- [x] Show stack status.
-- [x] Show deployed LZA version.
-- [x] Show installer source type.
-- [x] Show source repository details.
-- [x] Show stack outputs.
-- [x] Compare deployed and configured versions.
-- [x] Detect configuration drift.
-- [x] Read deployment metadata from `.lza/state.json`.
-
-Future enhancements:
-
-- [x] Compare `.lza/state.json` deployment metadata with the current deployed installer state.
-- [x] Allow synchronizing `.lza/state.json` with the deployed installer state.
-- [x] Allow synchronizing the workspace configuration with the deployed installer configuration.
-
-```yaml
-  repository:
-    type: s3 # s3 | codecommit | git
-
-    bucket: aws-accelerator-config-123456789012-eu-west-1
-    prefix: zipped/
-
-    # CodeCommit example:
-    # type: codecommit
-    # repository_name: aws-accelerator-config
-    # branch: main
-    #
-    # Git example:
-    # type: git
-    # repository: git@github.com:example/customer-lza-config.git
-    # branch: main
-```
-
-### `lza installer delete`
-
-Remove the installer deployment.
-Implementation checklist:
-
-- [] Detect the installer stack.
-- [] Show the resources that will be removed.
+- [] Inventory the Installer and Core pipeline stacks and additional LZA stacks across managed accounts and Regions.
+- [] Detect and explain termination protection before deletion.
+- [] Show the resources that would be removed and those retained by AWS deletion policies.
+- [] Offer explicit preservation modes for customer data and other retained resources.
 - [] Require confirmation unless `--force` is specified.
-- [] Delete the installer stack.
-- [] Wait for stack deletion.
-- [] Preserve installer source repositories by default.
-- [] Optionally remove installer source resources.
-- [] Remove installer deployment metadata from `.lza/state.json`.
+- [] Delete stacks in dependency-safe reverse deployment order.
+- [] Optionally remove retained S3 buckets and other explicitly selected resources.
+- [] Preserve source repositories and customer configuration by default.
+- [] Record progress so an interrupted uninstall can be inspected or resumed safely.
+- [] Remove deployment metadata from `.lza/state.json` only after the corresponding resources are removed.
+- [] Support `--dry-run`.
+
+Implementation notes:
+
+- Treat this as a destructive, solution-wide workflow, not a renamed installer stack deletion.
+- AWS retains some data-bearing resources to avoid accidental data loss, so preservation and cleanup choices must be explicit.
+- Reference: <https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/uninstall-the-solution.html>.
 
 ### `lza config upload`
 
-Upload the customer `aws-accelerator-config` to the configured LZA configuration source.
+Upload the customer `aws-accelerator-config` to an S3-backed LZA configuration source without starting the LZA pipeline.
+
+This command is the explicit S3 transfer utility. Other configuration repository types require their own synchronization behavior and are future work.
+
 Implementation checklist:
 
 - [x] Read configuration source settings from `lza-workspace.yaml`.
@@ -289,7 +221,7 @@ Implementation checklist:
 - [x] Detect unresolved replacement values.
 - [x] Package the configuration when required.
 - [x] Support S3 configuration repositories.
-- [] Support additional repository types later.
+- [] Keep non-S3 repository synchronization out of this command unless its semantics are explicitly redesigned.
 - [x] Show the target destination before upload.
 - [x] Support `--dry-run`.
 - [x] Save upload metadata to `.lza/state.json`.
@@ -330,6 +262,24 @@ Future download enhancements:
 - [] Verify download integrity with checksums or signatures.
 - [] Detect identical local and remote configurations and skip unnecessary downloads.
 
+### `lza config deploy`
+
+Synchronize the local customer configuration to its configured deployment destination.
+
+By default, the command uploads or synchronizes configuration and then stops. It does not implicitly start or watch the LZA pipeline.
+
+Implementation checklist:
+
+- [] Validate the local configuration and configured destination.
+- [] Show the target and planned synchronization changes.
+- [] Upload or synchronize the configuration using provider-specific behavior.
+- [] Stop after synchronization when no execution flags are supplied.
+- [] Support `--execute` to start the relevant configuration pipeline after successful synchronization.
+- [] Support `--watch` to watch the started execution; imply `--execute` when necessary.
+- [] Record the upload/synchronization result and started pipeline execution ID in `.lza/state.json`.
+- [] Reuse the same start/watch services as the separate pipeline commands.
+- [] Support `--dry-run`.
+
 ### `lza pipeline start`
 
 Start the configured LZA pipeline.
@@ -344,10 +294,11 @@ Implementation checklist:
 
 ### `lza pipeline watch`
 
-Monitor an LZA pipeline execution.
+Monitor an LZA pipeline execution. This remains available independently of `lza config deploy --watch`.
 Implementation checklist:
 
-- [] Watch the latest execution by default.
+- [] Use the latest execution ID recorded in `.lza/state.json` by default when available.
+- [] Fall back to discovering the latest execution when no recorded execution ID is available.
 - [] Support a specific execution ID.
 - [] Show stage and action status.
 - [] Refresh output without excessive API calls.
@@ -358,22 +309,28 @@ Implementation checklist:
 
 ### `lza status`
 
-Show the current state of the customer LZA workspace.
+Provide the single status entry point for the customer LZA workspace.
+
+`lza status` shows the overall summary. Filtered views or subcommands such as `lza status installer`, `lza status config`, and `lza status pipeline` show component detail without separate top-level status commands.
+
 Implementation checklist:
 
-- [] Read `lza-workspace.yaml`.
-- [] Read `.lza/state.json`.
-- [] Show customer name and workspace path.
-- [] Show configured AWS profile and region.
-- [] Show selected LZA version.
-- [] Show installer stack status.
-- [] Show configuration source.
-- [] Show latest pipeline execution status.
-- [] Clearly distinguish configured, detected, and unknown values.
+- [x] Read `lza-workspace.yaml`.
+- [x] Read `.lza/state.json`.
+- [x] Show customer name and workspace path.
+- [x] Show configured AWS profile and region.
+- [x] Show selected LZA version.
+- [x] Show an overall installer, configuration, and pipeline summary.
+- [x] Support an installer view with stack status, deployed version, source details, outputs, drift, and configured-versus-deployed differences.
+- [x] Support a configuration view with local and remote source status and last upload/download metadata.
+- [x] Support a pipeline view with the latest known execution and its status.
+- [x] Allow synchronizing local operational state only through an explicit option; status remains read-only by default.
+- [x] Clearly distinguish configured, detected, and unknown values.
 
 ### `lza doctor`
 
-Run local and AWS checks for the current workspace.
+Run advisory local and AWS checks for the current workspace. The command reports problems and suggested remediation without modifying local files or AWS resources.
+
 Implementation checklist:
 
 - [] Validate `lza-workspace.yaml`.
@@ -385,6 +342,11 @@ Implementation checklist:
 - [] Validate configuration upload target.
 - [] Detect unresolved placeholders.
 - [] Produce a concise pass, warning, and failure summary.
+- [] Suggest a remediation plan for failed or incomplete checks.
+
+Future design decision:
+
+- [] Decide whether to add an explicit `--fix` mode. Do not implement mutation as part of the current diagnostic command.
 
 ## Workspace
 

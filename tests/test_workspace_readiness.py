@@ -79,7 +79,10 @@ def test_evaluate_uninitialized(tmp_path: Path):
         aws=AwsConfig(profile="", region="us-east-1"),
     )
     state = WorkspaceState()
-    assert evaluate_workspace_readiness(ws_dir, config, state) == WorkspaceReadinessLevel.UNINITIALIZED
+    assert (
+        evaluate_workspace_readiness(ws_dir, config, state)
+        == WorkspaceReadinessLevel.UNINITIALIZED
+    )
 
 
 def test_evaluate_core_configured(tmp_path: Path):
@@ -87,7 +90,10 @@ def test_evaluate_core_configured(tmp_path: Path):
     config = load_workspace_config(ws_dir / WORKSPACE_CONFIG_FILE)
     state = load_workspace_state(ws_dir / WORKSPACE_STATE_FILE)
 
-    assert evaluate_workspace_readiness(ws_dir, config, state) == WorkspaceReadinessLevel.CORE_CONFIGURED
+    assert (
+        evaluate_workspace_readiness(ws_dir, config, state)
+        == WorkspaceReadinessLevel.CORE_CONFIGURED
+    )
 
 
 def test_evaluate_imported(tmp_path: Path):

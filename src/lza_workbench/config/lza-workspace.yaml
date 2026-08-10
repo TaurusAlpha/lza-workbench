@@ -106,6 +106,7 @@ configuration:
 
     bucket: aws-accelerator-config-123456789012-eu-west-1
     prefix: zipped/
+    key: aws-accelerator-config.zip
 
     # CodeCommit example:
     # type: codecommit

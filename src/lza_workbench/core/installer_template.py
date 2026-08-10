@@ -20,6 +20,16 @@ LOCAL_PACKAGED_INSTALLER_TEMPLATE = (
 )
 
 
+def normalize_lza_version(version: str) -> str:
+    """Normalize version string for comparison (e.g. 1.16.0 -> v1.16.0)."""
+    cleaned = (version or "").strip()
+    if not cleaned or cleaned.lower() in ("latest", "main", "master"):
+        return "latest"
+    if not cleaned.lower().startswith("v"):
+        return f"v{cleaned}"
+    return cleaned
+
+
 def resolve_installer_template(
     url: str,
     fallback_version: str | None = None,
@@ -49,6 +59,23 @@ def resolve_installer_template(
         raise typer.BadParameter(
             f"Unable to download installer template from {url} and no local template was found."
         ) from exc
+
+
+def download_installer_template(version: str, local_path: Path | None = None) -> Path:
+    """Download the installer CloudFormation template for a specific LZA version.
+
+    Args:
+        version: The LZA version to download the installer template for.
+    """
+    url = INSTALLER_TEMPLATE_URL_TEMPLATE.format(
+        version=version, filename=INSTALLER_TEMPLATE_FILENAME
+    )
+    template_content = resolve_installer_template(url, fallback_version=version)
+    if local_path is None:
+        local_path = Path.cwd() / INSTALLER_TEMPLATE_FILENAME
+    local_path.write_text(template_content, encoding="utf-8")
+    typer.echo(f"Downloaded installer template for version {version} to {local_path}")
+    return local_path
 
 
 def configure_anonymous_data(content: str, enable: bool) -> str:

@@ -8,7 +8,7 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
-from lza_workbench.commands.installer_download import normalize_lza_version
+from lza_workbench.core.installer_template import normalize_lza_version
 
 
 @dataclass
@@ -155,9 +155,7 @@ def ensure_codecommit_repository(
 ) -> None:
     """Ensure CodeCommit repository exists, creating it if required."""
     cc_client = (
-        client
-        if client is not None
-        else (factory.get_client("codecommit") if factory else None)
+        client if client is not None else (factory.get_client("codecommit") if factory else None)
     )
     if cc_client is None:
         raise ValueError("AWS CodeCommit client is not available")
@@ -175,4 +173,3 @@ def ensure_codecommit_repository(
             )
         else:
             raise
-

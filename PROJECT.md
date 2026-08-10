@@ -18,10 +18,10 @@ In scope:
 - Copy or initialize `aws-accelerator-config`.
 - Use local or Git-based LZA configuration templates.
 - Generate and store workspace metadata.
-- Copy or resolve the LZA installer stack template.
-- Deploy and manage the LZA installer lifecycle.
+- Resolve the LZA installer stack template from the official remote template or a local workspace copy, as required.
+- Plan installer configuration and reconcile the deployed installer with that desired state.
 - Generate helper scripts or commands for LZA bootstrap workflows.
-- Validate that the selected AWS profile can access the target account.
+- Validate that the selected AWS profile can access the target account as shared command preflight behavior and through diagnostics.
 - Support multiple LZA versions.
 - Support different configuration repository locations such as S3, CodeCommit, or GitHub where applicable.
 - Keep the code expandable for future config generation, validation, and AI/MCP assistance.
@@ -211,11 +211,34 @@ The customer configuration (`aws-accelerator-config`) is managed independently a
 
 Installer deployment capabilities are being introduced incrementally based on practical customer workflows rather than a predefined end-state.
 
-The initial implementation focuses on deploying the LZA installer using AWS CodeCommit as the installer source. Future versions may support additional installer source types, such as the official AWS GitHub repository or an Amazon S3 source package.
+The workspace model should describe the desired installer source independently of its implementation so source preparation and synchronization can be added for Amazon S3, AWS CodeCommit, and the official AWS GitHub repository without changing the overall configuration model. Provider-specific source preparation is future work.
 
-The workspace model should describe the desired installer source independently of its implementation so new source providers can be added without changing the overall workspace configuration model.
+`lza installer plan` is the configuration collection step. It should collect every available installer template parameter, apply explicit defaults where appropriate, validate the result, and persist the accepted desired state in `lza-workspace.yaml`. Later installer commands should rely on that persisted state rather than recollecting configuration.
+
+`lza installer deploy` reconciles the locally configured desired state with AWS for both initial installation and later updates. It should preview create, update, or no-change behavior and ask for confirmation before applying changes unless explicitly bypassed. A separate `lza installer update` command is not part of the command model.
+
+Installer template handling depends on whether the template must be modified. A local template is required when a change such as disabling anonymous data sharing must be applied. When no template modification is needed, the official remote template may be usable. Whether to retain both paths or standardize on local templates remains a design decision.
+
+AWS context:
+
+- [Installer pipeline](https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/awsaccelerator-installer.html)
+- [Source code location](https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/source-code-location.html)
 
 Detailed command behavior, implementation phases, and provider-specific functionality are intentionally maintained in `TODO.md` rather than this document.
+
+## Command Model
+
+- `lza installer plan` resolves and persists installer configuration without changing AWS.
+- `lza installer deploy` handles both initial deployment and updates by reconciling local desired state with AWS.
+- Installer template download is internal to planning and deployment rather than a standalone command.
+- `lza config upload` transfers configuration to an S3-backed configuration source without starting the pipeline.
+- `lza config deploy` synchronizes configuration and stops by default; optional flags may start and/or watch the configuration pipeline.
+- `lza pipeline start` and `lza pipeline watch` remain separate commands for explicit pipeline control.
+- `lza status` is the single status entry point, with an overall summary and installer, configuration, and pipeline filtered views.
+- `lza doctor` runs diagnostic checks and reports advice without modifying local files or AWS resources. A future `--fix` mode is an undecided enhancement, not current behavior.
+- `lza uninstall` is a top-level, destructive solution lifecycle command rather than an installer-stack delete command. It must make preservation choices explicit because a complete LZA uninstall spans the Installer and Core pipelines, retained data, and additional regional/account stacks.
+
+The standalone commands `lza profile check`, `lza installer download`, `lza installer update`, `lza installer status`, and `lza installer delete` are not part of the command model.
 
 ## Workspace Configuration Model
 

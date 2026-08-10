@@ -57,7 +57,7 @@ def run_import(
     """Create or update generated metadata without changing LZA configuration files."""
     workspace_dir, config_dir = resolve_import_paths(
         customer_name=customer_name,
-        workspace_dir=workspace_dir,
+        workspace_dir=workspace_dir if workspace_dir is not None else Path("."),
         config_dir=config_dir,
         interactive=interactive,
     )

@@ -1,4 +1,4 @@
-"""Show the current LZA installer deployment state and synchronize state/config."""
+"""Show installer stack status and synchronize state/config."""
 
 from __future__ import annotations
 
@@ -68,7 +68,6 @@ def run_installer_status(
     target_dir: Path | None = None,
 ) -> None:
     """Query AWS CloudFormation and state file to display installer status."""
-    # --sync-config automatically enables --sync-state by default
     if sync_config:
         sync_state = True
 
@@ -97,7 +96,6 @@ def run_installer_status(
     )
     deployed_version = extract_version_from_branch(branch)
 
-    # Sync state and/or config
     if sync_state:
         state = sync_installer_state(
             workspace_dir=workspace_dir,
@@ -246,7 +244,6 @@ def _render_status_report(
     print_section(1, "CloudFormation Stack & Pipeline Resources")
     print_kv("Target Region", region, bold_value=True)
 
-    # CloudFormation Stack
     cfn_stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
     expected_stack_arn = (
         cfn_status.stack_id
@@ -265,7 +262,6 @@ def _render_status_report(
         f"Installer Stack Status: [{status_color}][bold]{status_str}[/bold][/{status_color}]"
     )
 
-    # Installer Pipeline (CodePipeline)
     prefix = config.lza.accelerator_prefix or "AWSAccelerator"
     installer_pipeline_name = (
         config.pipelines.installer.name
@@ -276,7 +272,6 @@ def _render_status_report(
     print_kv("Installer Pipeline Name", installer_pipeline_name, bold_value=True)
     print_kv("Installer Pipeline ARN", installer_pipeline_arn, style="dim")
 
-    # Configuration Pipeline (CodePipeline)
     config_pipeline_name = config.pipelines.configuration.name or f"{prefix}-Pipeline"
     config_pipeline_arn = f"arn:aws:codepipeline:{region}:{account_id}:{config_pipeline_name}"
     print_kv("Config Pipeline Name", config_pipeline_name, bold_value=True)
@@ -404,15 +399,15 @@ def _render_status_report(
         if has_drift:
             desc = "(Synchronizes lza-workspace.yaml and .lza/state.json with live AWS settings)"
             console.print(
-                f"  [bold green]lza installer status --sync-config[/bold green]  [dim]{desc}[/dim]"
+                f"  [bold green]lza status installer --sync-config[/bold green]  [dim]{desc}[/dim]"
             )
 
             console.print(
-                "  [bold green]lza installer update[/bold green]  "
-                "[dim](Update deployed installer stack with local configuration values)[/dim]"
+                "  [bold green]lza installer deploy[/bold green]  "
+                "[dim](Reconcile deployed installer stack with local configuration values)[/dim]"
             )
         elif state_out_of_sync:
             console.print(
-                "  [bold green]lza installer status --sync-state[/bold green]   "
+                "  [bold green]lza status installer --sync-state[/bold green]   "
                 "[dim](Synchronizes .lza/state.json with live AWS installer deployment state)[/dim]"
             )
