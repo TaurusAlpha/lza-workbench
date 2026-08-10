@@ -197,6 +197,11 @@ def sync_installer_config(
 
     if "EnableApprovalStage" in params:
         config.installer.options.enable_approval_stage = params["EnableApprovalStage"] == "Yes"
+        config.installer.options.approval_stage_notify_email_list = (
+            params["ApprovalStageNotifyEmailList"].split(",")
+            if "ApprovalStageNotifyEmailList" in params and params["ApprovalStageNotifyEmailList"]
+            else []
+        )
     if "ControlTowerEnabled" in params:
         config.installer.options.control_tower_enabled = params["ControlTowerEnabled"] == "Yes"
     if "EnableDiagnosticsPack" in params:

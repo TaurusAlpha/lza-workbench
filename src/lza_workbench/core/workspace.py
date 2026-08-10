@@ -121,7 +121,7 @@ class ConfigurationRepositoryConfig(WorkspaceModel):
     type: Literal["s3", "codecommit", "git"] = "s3"
     bucket: str | None = None
     prefix: str | None = None
-    key: str | None = None
+    key: str = "aws-accelerator-config.zip"
     repository_name: str | None = None
     repository: str | None = None
     branch: str | None = None
