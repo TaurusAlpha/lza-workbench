@@ -2,70 +2,95 @@
 
 Output findings first. Do not modify code until all findings are listed.
 
-Review priorities
+Prioritize concrete defects over preferences.
+Report a finding only when it is supported by the provided code or explicit project constraints.
+Do not invent issues, speculate about missing requirements, or report code merely because you would implement it differently.
+
+If the code is solid, output only: `No significant findings.`
+
+## Review Priorities
 
 Evaluate the code for:
 
-Scope
+### Scope
 
-* Changes must address only the requested task.
-* Identify unrelated changes or unnecessary scope expansion.
-* Identify new dependencies that are not clearly justified.
+- Changes must address only the requested task.
+- Identify unrelated changes or unnecessary scope expansion.
+- Identify new dependencies that are not clearly justified.
+- If the original task or diff is not provided, do not make scope findings that require knowing the intended change.
 
-Simplicity
+### Correctness & Security
 
-* Prefer the simplest solution that satisfies the requirements.
-* Prioritize readability over brevity.
-* Identify unnecessary abstractions, indirection, or overengineering.
+- Identify logic bugs, realistic edge cases, missing error handling, race conditions, or incorrect assumptions.
+- Flag security risks, unsafe handling of sensitive data, or improper resource management.
+- Do not report purely hypothetical edge cases unless they are realistically reachable or violate an explicit requirement.
 
-Maintainability
+### Simplicity
 
-* Prefer small, focused functions with a clear responsibility.
-* Check whether logic is placed in the appropriate package, such as core/, aws/, config/, or utils/, instead of being embedded in command handlers.
-* Check whether existing modules should be extended or whether a new module genuinely improves organization.
-* Verify consistency with existing project structure and coding patterns.
-* Identify duplicated logic or helpers.
+- Prefer the simplest solution that satisfies the requirements.
+- Prioritize readability over brevity.
+- Identify unnecessary abstractions, indirection, or overengineering.
+- Do not recommend redesign solely based on personal preference.
 
-Readability
+### Maintainability
 
-* Check naming of variables, functions, and classes.
-* Identify deeply nested control flow.
-* Identify comprehensions or generator expressions that are difficult to read.
-* Identify nested or complex expressions inside function calls.
-* Flag code that is concise but harder to understand.
+- Prefer focused functions with clear responsibilities.
+- Flag large or mixed-responsibility functions only when they materially reduce clarity, correctness, or testability.
+- Check whether logic is placed in the appropriate packages/modules.
+- Verify consistency with existing project structure and coding patterns when those patterns are visible.
+- Identify meaningful duplicated logic or unnecessary helpers.
 
-Project constraints
+### Readability
 
-* Prefer Python over shell when practical.
-* Keep AWS authentication external.
-* Assume customer projects are created outside this repository.
-* Do not recommend speculative or placeholder functionality.
+- Check naming of variables, functions, classes, and modules.
+- Identify deeply nested control flow or unnecessarily complex expressions.
+- Flag clever or overly concise code when it materially reduces understandability.
+- Ignore cosmetic style issues unless they obscure behavior or increase maintenance risk.
 
-Output format
+### Project Constraints
 
-Findings
+- Prefer Python over shell when practical.
+- Keep AWS authentication external.
+- Assume customer projects are created outside this repository.
+- Do not recommend speculative, placeholder, or future functionality.
+- Do not introduce new dependencies unless clearly justified.
 
-List findings from highest to lowest impact.
+## Severity Guidelines
 
-For each finding include:
+Use severity conservatively.
 
-* Severity: critical, high, medium, or low
-* File and line, when available
-* Problem
-* Why it matters
-* Specific recommended change
+- **Critical:** Likely security compromise, data loss, or production-wide outage.
+- **High:** Likely functional failure, serious security issue, or major operational impact.
+- **Medium:** Meaningful correctness, reliability, maintainability, or operational problem.
+- **Low:** Minor but actionable issue with limited impact.
 
-Do not include style-only findings unless they improve correctness, readability, consistency, or maintainability.
+Do not report cosmetic or preference-only Low findings.
 
-If no meaningful issues are found, state:
+## Output Format
 
-No significant findings.
+### Findings
 
-Suggested changes
+List findings ordered from highest to lowest impact.
 
-After all findings, provide a concise list of findings and severity.
-Do not explain the implementation unless explicitly asked.
+For each finding:
 
-Do not rewrite the code unless explicitly asked.
-Do not suggest unrelated refactoring or future features.
-State any assumptions clearly.
+- **Severity:** Critical | High | Medium | Low
+- **Location:** File and line number if reliably available; otherwise function, class, or symbol name.
+- **Problem:** Brief description of the concrete issue.
+- **Impact:** Why it matters in practice.
+- **Recommendation:** Specific corrective action.
+
+### Summary
+
+Provide a concise bulleted list containing each finding name and severity.
+
+## Output Rules
+
+- Be direct and brief.
+- Do not add conversational commentary or filler.
+- Do not explain implementation details unless explicitly requested.
+- Do not rewrite the codebase unless explicitly requested.
+- Do not suggest unrelated refactoring or future features.
+- State assumptions only when they materially affect a finding.
+- Do not fabricate line numbers, requirements, architecture, or runtime behavior.
+- Prefer fewer high-confidence findings over many weak findings.
