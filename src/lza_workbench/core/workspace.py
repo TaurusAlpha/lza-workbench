@@ -12,12 +12,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import typer
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
+
+from lza_workbench.core.errors import LzaError
 
 WORKSPACE_CONFIG_FILE = Path("lza-workspace.yaml")
 WORKSPACE_STATE_FILE = Path(".lza") / "state.json"
@@ -45,6 +47,13 @@ class AwsConfig(WorkspaceModel):
     role: str | None = None
     access_key: str | None = None
     secret_access_key: str | None = None
+
+    @field_validator("account_id", mode="before")
+    @classmethod
+    def coerce_account_id_to_str(cls, v: Any) -> str | None:
+        if v is None:
+            return None
+        return str(v)
 
 
 class LzaConfig(WorkspaceModel):
@@ -302,18 +311,18 @@ def validate_workspace_target(
     if not workspace_dir.exists():
         return
     if not workspace_dir.is_dir():
-        raise typer.BadParameter(f"Target path exists and is not a directory: {workspace_dir}")
+        raise LzaError(f"Target path exists and is not a directory: {workspace_dir}")
     if force:
         return
     if (workspace_dir / WORKSPACE_CONFIG_FILE).exists():
-        raise typer.BadParameter(f"LZA workspace already exists: {workspace_dir}")
+        raise LzaError(f"LZA workspace already exists: {workspace_dir}")
     candidate_config = workspace_dir / config_local_path
     if candidate_config.exists() or candidate_config.is_symlink():
-        raise typer.BadParameter(
+        raise LzaError(
             f"Target directory already contains an LZA configuration: {workspace_dir}."
         )
     if any(workspace_dir.iterdir()):
-        raise typer.BadParameter(f"Target directory is not empty: {workspace_dir}")
+        raise LzaError(f"Target directory is not empty: {workspace_dir}")
 
 
 def create_workspace(
@@ -371,7 +380,7 @@ def resolve_workspace_dir(target_dir: Path | None = None) -> Path:
     for directory in [current, *current.parents]:
         if (directory / WORKSPACE_CONFIG_FILE).is_file():
             return directory
-    raise typer.BadParameter(
+    raise LzaError(
         f"Command must be run inside an LZA workspace directory (missing {WORKSPACE_CONFIG_FILE})."
     )
 
@@ -579,19 +588,19 @@ def _raise_readiness_error(
 ) -> None:
     """Format and raise user-friendly error when minimum readiness level is not satisfied."""
     if current == WorkspaceReadinessLevel.UNINITIALIZED:
-        raise typer.BadParameter(
+        raise LzaError(
             f"Workspace at '{workspace_dir}' is missing required core configuration "
             "(AWS profile/region or customer details in lza-workspace.yaml). "
             "Initialize the workspace with 'lza init' or update lza-workspace.yaml."
         )
     if current == WorkspaceReadinessLevel.CORE_CONFIGURED:
         config_dir = workspace_dir / config.configuration.local_path
-        raise typer.BadParameter(
+        raise LzaError(
             f"Configuration directory '{config_dir}' does not exist or "
             "is missing required LZA templates. Run 'lza init' or 'lza import' first."
         )
     if current == WorkspaceReadinessLevel.IMPORTED:
-        raise typer.BadParameter(
+        raise LzaError(
             "Workspace is missing required installer configuration parameters in "
             "lza-workspace.yaml. Run 'lza installer plan' or update lza-workspace.yaml."
         )
@@ -599,11 +608,11 @@ def _raise_readiness_error(
         current == WorkspaceReadinessLevel.CONFIGURED
         and required == WorkspaceReadinessLevel.DEPLOYED
     ):
-        raise typer.BadParameter(
+        raise LzaError(
             "Installer CloudFormation stack has not been deployed for this workspace "
             "(missing installer_stack_id in .lza/state.json). Run 'lza installer deploy' first."
         )
-    raise typer.BadParameter(
+    raise LzaError(
         f"Workspace readiness level '{current.name}' does not meet "
         f"required level '{required.name}'."
     )

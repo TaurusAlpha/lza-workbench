@@ -6,8 +6,7 @@ from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 
-import typer
-
+from lza_workbench.core.errors import LzaError
 from lza_workbench.utils.output import console, print_warning
 
 DEFAULT_TEMPLATE_SOURCE = "default"
@@ -44,7 +43,7 @@ def resolve_template_source(template_source: str) -> ResolvedTemplateSource:
         )
 
     if _looks_like_future_remote_source(template_source):
-        raise typer.BadParameter("Remote template sources are not supported yet.")
+        raise LzaError("Remote template sources are not supported yet.")
 
     source_path = Path(template_source).expanduser().resolve()
     return ResolvedTemplateSource(
@@ -57,7 +56,7 @@ def resolve_template_source(template_source: str) -> ResolvedTemplateSource:
 def validate_template(template_config_dir: Path) -> None:
     """Validate that an aws-accelerator-config template has required files."""
     if not template_config_dir.is_dir():
-        raise typer.BadParameter(f"Template directory does not exist: {template_config_dir}")
+        raise LzaError(f"Template directory does not exist: {template_config_dir}")
 
     missing_required = [
         name for name in REQUIRED_TEMPLATE_FILES if not (template_config_dir / name).is_file()

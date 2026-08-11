@@ -27,6 +27,7 @@ from lza_workbench.commands.installer_plan import (
     _resolve_installer_template,
     _validate_parameters_against_schema,
 )
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.workspace import (
     WORKSPACE_STATE_FILE,
     WorkspaceReadinessLevel,
@@ -69,7 +70,7 @@ def run_installer_deploy(
         )
         for spec in missing_specs:
             console.print(f"  - [bold]{spec.label}[/bold] ({spec.section}.{spec.attribute})")
-        raise typer.BadParameter(
+        raise LzaError(
             f"{len(missing_specs)} required parameter(s) missing from lza-workspace.yaml. "
             "Run 'lza installer plan' to resolve and configure missing values."
         )
@@ -79,7 +80,7 @@ def run_installer_deploy(
         factory = AwsClientFactory(profile=profile, region=region)
         aws_identity = factory.validate_identity()
     except Exception as exc:
-        raise typer.BadParameter(
+        raise LzaError(
             f"AWS authentication check failed for profile '{profile}': {exc}"
         ) from exc
 
@@ -294,4 +295,4 @@ def run_installer_deploy(
         )
         if final_status.error:
             console.print(f"[red]Error detail: {final_status.error}[/red]")
-        raise typer.Exit(code=1)
+        raise LzaError(f"Deployment failed with stack status ({final_status.stack_status}).")

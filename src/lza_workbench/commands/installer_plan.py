@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import typer
 from rich.panel import Panel
 from rich.table import Table
 
@@ -20,6 +19,7 @@ from lza_workbench.aws.codecommit import (
     CodeCommitPlanResult,
     inspect_codecommit_repository,
 )
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.installer_template import (
     INSTALLER_TEMPLATE_FILENAME,
     download_installer_template,
@@ -77,7 +77,7 @@ def run_installer_plan(
         )
         for spec in missing_specs:
             console.print(f"  - [bold]{spec.label}[/bold] ({spec.section}.{spec.attribute})")
-        raise typer.BadParameter(
+        raise LzaError(
             f"{len(missing_specs)} required parameter(s) missing from lza-workspace.yaml. "
             "Update lza-workspace.yaml with required values."
         )
@@ -295,7 +295,7 @@ def _validate_parameters_against_schema(
         param_def = schema[key]
         allowed = param_def.get("AllowedValues")
         if allowed and value not in allowed:
-            raise typer.BadParameter(
+            raise LzaError(
                 f"Invalid parameter value '{value}' for {key}. "
                 f"Allowed values are: {', '.join(allowed)}"
             )

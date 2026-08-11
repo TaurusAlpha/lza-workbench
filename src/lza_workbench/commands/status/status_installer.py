@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-import typer
 from rich.panel import Panel
 from rich.table import Table
 
@@ -14,6 +13,7 @@ from lza_workbench.aws.cloudformation import (
     CfnStackStatusResult,
     get_cloudformation_stack_status,
 )
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.workspace import (
     WORKSPACE_CONFIG_FILE,
     WORKSPACE_STATE_FILE,
@@ -132,7 +132,7 @@ def sync_installer_state(
 ) -> WorkspaceState:
     """Synchronize .lza/state.json deployment metadata with current deployed AWS installer state."""
     if not cfn_status.exists:
-        raise typer.BadParameter(
+        raise LzaError(
             "Cannot synchronize state: CloudFormation installer stack is not deployed "
             "or inaccessible."
         )
@@ -158,7 +158,7 @@ def sync_installer_config(
 ) -> WorkspaceConfig:
     """Synchronize lza-workspace.yaml with deployed CloudFormation installer parameters."""
     if not cfn_status.exists or not cfn_status.deployed_parameters:
-        raise typer.BadParameter(
+        raise LzaError(
             "Cannot synchronize config: CloudFormation installer stack is not deployed "
             "or has no parameters."
         )

@@ -10,6 +10,7 @@ import typer
 
 from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.s3 import resolve_s3_archive_uri, upload_s3_archive
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import validate_template
 from lza_workbench.core.workspace import (
     WORKSPACE_STATE_FILE,
@@ -40,13 +41,13 @@ def run_upload_config(
     config_dir = workspace_dir / config.configuration.local_path
 
     if repo_config.type != "s3":
-        raise typer.BadParameter(
+        raise LzaError(
             f"Unsupported configuration repository type: '{repo_config.type}'. "
             "Only 's3' is supported."
         )
 
     if not config_dir.exists() or not config_dir.is_dir():
-        raise typer.BadParameter(f"Configuration directory does not exist: {config_dir}")
+        raise LzaError(f"Configuration directory does not exist: {config_dir}")
 
     validate_template(config_dir)
 
@@ -55,7 +56,7 @@ def run_upload_config(
         if interactive:
             bucket = typer.prompt("S3 bucket name for configuration").strip()
         if not bucket:
-            raise typer.BadParameter(
+            raise LzaError(
                 "No S3 bucket configured in lza-workspace.yaml under "
                 "configuration.repository.bucket."
             )

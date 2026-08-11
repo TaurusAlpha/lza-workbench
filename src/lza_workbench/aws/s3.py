@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import typer
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
+from lza_workbench.core.errors import LzaError
 
 DEFAULT_ZIP_FILENAME = "aws-accelerator-config.zip"
 
@@ -77,7 +77,7 @@ def download_s3_archive(
             if found_zip_key:
                 s3.download_file(s3_bucket, found_zip_key, str(zip_path))
             else:
-                raise typer.BadParameter(
+                raise LzaError(
                     f"S3 archive object not found at s3://{s3_bucket}/{s3_key}"
                 )
 
@@ -87,17 +87,17 @@ def download_s3_archive(
         error_message = error.get("Message", str(exc))
 
         if error_code in {"404", "NoSuchKey", "NoSuchBucket", "NotFound"}:
-            raise typer.BadParameter(f"S3 path not found: s3://{s3_bucket}/{s3_key}") from exc
+            raise LzaError(f"S3 path not found: s3://{s3_bucket}/{s3_key}") from exc
 
         if error_code in {"403", "AccessDenied"}:
-            raise typer.BadParameter(
+            raise LzaError(
                 f"Access denied to s3://{s3_bucket}/{s3_key}. Check your AWS permissions."
             ) from exc
 
-        raise typer.BadParameter(f"AWS S3 error [{error_code}]: {error_message}") from exc
+        raise LzaError(f"AWS S3 error [{error_code}]: {error_message}") from exc
 
     except BotoCoreError as exc:
-        raise typer.BadParameter(f"AWS connection/client failure: {exc}") from exc
+        raise LzaError(f"AWS connection/client failure: {exc}") from exc
 
 
 def upload_s3_archive(
@@ -139,17 +139,17 @@ def upload_s3_archive(
         error_message = error.get("Message", str(exc))
 
         if error_code in {"404", "NoSuchBucket"}:
-            raise typer.BadParameter(f"Target S3 bucket does not exist: s3://{s3_bucket}") from exc
+            raise LzaError(f"Target S3 bucket does not exist: s3://{s3_bucket}") from exc
 
         if error_code in {"403", "AccessDenied"}:
-            raise typer.BadParameter(
+            raise LzaError(
                 f"Access denied to s3://{s3_bucket}/{s3_key}. Check AWS permissions."
             ) from exc
 
-        raise typer.BadParameter(f"AWS S3 upload error [{error_code}]: {error_message}") from exc
+        raise LzaError(f"AWS S3 upload error [{error_code}]: {error_message}") from exc
 
     except BotoCoreError as exc:
-        raise typer.BadParameter(f"AWS connection/client failure: {exc}") from exc
+        raise LzaError(f"AWS connection/client failure: {exc}") from exc
 
 
 def ensure_s3_installer_source(

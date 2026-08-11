@@ -7,10 +7,10 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-import typer
 from botocore.exceptions import ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
+from lza_workbench.core.errors import LzaError
 
 
 def test_no_direct_boto3_session_or_client_outside_factory() -> None:
@@ -113,7 +113,7 @@ def test_validate_identity_success() -> None:
 
 
 def test_validate_identity_failure_prints_warning_and_command() -> None:
-    """Verify that identity check failure prints warning, command, and raises BadParameter."""
+    """Verify that identity check failure prints warning, command, and raises LzaError."""
     with (
         patch("boto3.Session") as mock_session_cls,
         patch("lza_workbench.aws.client_factory.AwsClientFactory._prime_session_credentials"),
@@ -130,7 +130,7 @@ def test_validate_identity_failure_prints_warning_and_command() -> None:
 
         factory = AwsClientFactory(profile="test-profile", region="eu-west-1")
 
-        with pytest.raises(typer.BadParameter) as excinfo:
+        with pytest.raises(LzaError) as excinfo:
             factory.validate_identity()
 
         assert "test-profile" in str(excinfo.value)

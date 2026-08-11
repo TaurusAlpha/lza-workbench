@@ -10,6 +10,7 @@ import typer
 
 from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.s3 import download_s3_archive, resolve_s3_archive_uri
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.workspace import (
     WORKSPACE_STATE_FILE,
     ConfigDiffResult,
@@ -43,7 +44,7 @@ def run_download_config(
     config_dir = workspace_dir / config.configuration.local_path
 
     if repo_config.type != "s3":
-        raise typer.BadParameter(
+        raise LzaError(
             f"Unsupported configuration repository type: '{repo_config.type}'. "
             "Only 's3' is supported."
         )
@@ -53,7 +54,7 @@ def run_download_config(
         if interactive:
             bucket = typer.prompt("S3 bucket name for configuration").strip()
         if not bucket:
-            raise typer.BadParameter(
+            raise LzaError(
                 "No S3 bucket configured in lza-workspace.yaml under "
                 "configuration.repository.bucket."
             )
@@ -83,7 +84,7 @@ def run_download_config(
             if not confirm:
                 raise typer.Abort()
         else:
-            raise typer.BadParameter(
+            raise LzaError(
                 f"Local configuration directory is not empty: {config_dir}. "
                 "Use --force to overwrite."
             )

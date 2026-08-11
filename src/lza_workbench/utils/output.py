@@ -29,6 +29,11 @@ def print_notice(message: str) -> None:
     console.print(f"[yellow]{message}[/yellow]")
 
 
+def print_error(message: str) -> None:
+    """Print a bold red error message."""
+    console.print(f"[bold red]{message}[/bold red]")
+
+
 def print_info(message: str, dim: bool = False, style: str | None = None) -> None:
     """Print an informational message, optionally dimmed or styled."""
     if dim:

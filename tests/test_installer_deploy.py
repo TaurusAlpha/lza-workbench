@@ -6,11 +6,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-import typer
 
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackStatusResult
 from lza_workbench.aws.codecommit import CodeCommitPlanResult
 from lza_workbench.commands.installer_deploy import run_installer_deploy
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.workspace import (
     AwsConfig,
     CustomerConfig,
@@ -61,7 +61,7 @@ def sample_workspace(tmp_path: Path) -> Path:
 
 
 def test_missing_aws_profile_failure(tmp_path: Path) -> None:
-    """Test that missing AWS profile in lza-workspace.yaml raises a BadParameter exception."""
+    """Test that missing AWS profile in lza-workspace.yaml raises an LzaError exception."""
     ws_dir = tmp_path / "no-aws"
     ws_dir.mkdir(parents=True, exist_ok=True)
     config = WorkspaceConfig(
@@ -72,7 +72,7 @@ def test_missing_aws_profile_failure(tmp_path: Path) -> None:
     write_workspace_config(ws_dir / "lza-workspace.yaml", config)
 
     with pytest.raises(
-        typer.BadParameter, match="missing required core configuration|AWS profile is missing"
+        LzaError, match="missing required core configuration|AWS profile is missing"
     ):
         run_installer_deploy(target_dir=ws_dir)
 
@@ -90,7 +90,7 @@ def test_missing_required_params_failure(tmp_path: Path) -> None:
     write_workspace_config(ws_dir / "lza-workspace.yaml", config)
 
     with pytest.raises(
-        typer.BadParameter,
+        LzaError,
         match="missing required installer configuration parameters|missing from lza-workspace.yaml",
     ):
         run_installer_deploy(target_dir=ws_dir)

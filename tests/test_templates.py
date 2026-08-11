@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import typer
 
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import (
     DEFAULT_TEMPLATE_SOURCE,
     REQUIRED_TEMPLATE_FILES,
@@ -35,13 +35,13 @@ def test_resolve_template_source_local(tmp_path: Path) -> None:
 
 
 def test_resolve_template_source_remote_raises() -> None:
-    with pytest.raises(typer.BadParameter, match="Remote template sources are not supported yet"):
+    with pytest.raises(LzaError, match="Remote template sources are not supported yet"):
         resolve_template_source("https://github.com/example/lza-template.git")
 
 
 def test_validate_template_non_existent_directory(tmp_path: Path) -> None:
     non_existent = tmp_path / "does-not-exist"
-    with pytest.raises(typer.BadParameter, match="Template directory does not exist"):
+    with pytest.raises(LzaError, match="Template directory does not exist"):
         validate_template(non_existent)
 
 

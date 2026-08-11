@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-import typer
 from typer.testing import CliRunner
 
 from lza_workbench.aws.cloudformation import CfnStackStatusResult
@@ -19,6 +18,7 @@ from lza_workbench.commands.status.status_installer import (
     sync_installer_config,
     sync_installer_state,
 )
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.workspace import (
     AwsConfig,
     CustomerConfig,
@@ -45,7 +45,7 @@ def test_extract_and_normalize_version():
 def test_sync_installer_state_raises_when_not_exists(tmp_path):
     state = WorkspaceState()
     cfn_status = CfnStackStatusResult(stack_name="AWSAccelerator-InstallerStack", exists=False)
-    with pytest.raises(typer.BadParameter, match="Cannot synchronize state"):
+    with pytest.raises(LzaError, match="Cannot synchronize state"):
         sync_installer_state(
             workspace_dir=tmp_path,
             state=state,

@@ -8,6 +8,7 @@ from pathlib import Path
 import typer
 
 from lza_workbench.aws.client_factory import validate_aws_profile
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import validate_template
 from lza_workbench.core.workspace import (
     AwsConfig,
@@ -141,17 +142,15 @@ def resolve_import_paths(
         resolved_config_dir = resolved_workspace_dir / ConfigurationConfig().local_path
 
     if not resolved_workspace_dir.is_dir():
-        raise typer.BadParameter(f"Workspace directory does not exist: {resolved_workspace_dir}")
+        raise LzaError(f"Workspace directory does not exist: {resolved_workspace_dir}")
     if not resolved_config_dir.is_dir():
-        raise typer.BadParameter(f"Configuration directory does not exist: {resolved_config_dir}")
+        raise LzaError(f"Configuration directory does not exist: {resolved_config_dir}")
     if resolved_config_dir.is_symlink():
-        raise typer.BadParameter(
-            f"Configuration directory must not be a symlink: {resolved_config_dir}"
-        )
+        raise LzaError(f"Configuration directory must not be a symlink: {resolved_config_dir}")
     try:
         resolved_config_dir.relative_to(resolved_workspace_dir)
     except ValueError as exc:
-        raise typer.BadParameter("Configuration directory must be inside the workspace.") from exc
+        raise LzaError("Configuration directory must be inside the workspace.") from exc
     return resolved_workspace_dir, resolved_config_dir
 
 
@@ -160,9 +159,7 @@ def load_existing_metadata(workspace_dir: Path) -> ExistingMetadata | None:
     config_path = workspace_dir / "lza-workspace.yaml"
     state_path = workspace_dir / ".lza" / "state.json"
     if config_path.exists() != state_path.exists():
-        raise typer.BadParameter(
-            "Workspace has partial metadata; both metadata files are required."
-        )
+        raise LzaError("Workspace has partial metadata; both metadata files are required.")
     if not config_path.exists():
         return None
     try:
@@ -171,7 +168,7 @@ def load_existing_metadata(workspace_dir: Path) -> ExistingMetadata | None:
             state=load_workspace_state(state_path),
         )
     except ValueError as exc:
-        raise typer.BadParameter(str(exc)) from exc
+        raise LzaError(str(exc)) from exc
 
 
 def build_workspace_config(
@@ -255,4 +252,4 @@ def _value_or_prompt(label: str, value: str | None, default: str | None, interac
         return value
     if default:
         return typer.prompt(label, default=default) if interactive else default
-    raise typer.BadParameter(f"{label} is required.")
+    raise LzaError(f"{label} is required.")

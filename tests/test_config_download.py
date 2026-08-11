@@ -8,13 +8,13 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-import typer
 
 from lza_workbench.cli import main
 from lza_workbench.commands.config_download import (
     run_download_config,
 )
 from lza_workbench.commands.workspace_init import run_init
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.workspace import (
     load_workspace_config,
     load_workspace_state,
@@ -41,7 +41,7 @@ def workspace_dir(tmp_path: Path) -> Path:
 
 
 def test_resolve_workspace_dir_fails_outside_workspace(tmp_path: Path) -> None:
-    with pytest.raises(typer.BadParameter, match="must be run inside an LZA workspace directory"):
+    with pytest.raises(LzaError, match="must be run inside an LZA workspace directory"):
         resolve_workspace_dir(tmp_path)
 
 
@@ -51,7 +51,7 @@ def test_resolve_workspace_dir_finds_workspace_from_subdir(workspace_dir: Path) 
 
 
 def test_run_download_config_requires_bucket(workspace_dir: Path) -> None:
-    with pytest.raises(typer.BadParameter, match="No S3 bucket configured"):
+    with pytest.raises(LzaError, match="No S3 bucket configured"):
         run_download_config(target_dir=workspace_dir, interactive=False)
 
 
@@ -71,7 +71,7 @@ def test_run_download_config_force_required(workspace_dir: Path) -> None:
     cfg.configuration.repository.bucket = "my-test-bucket"
     write_workspace_config(config_file, cfg)
 
-    with pytest.raises(typer.BadParameter, match="not empty"):
+    with pytest.raises(LzaError, match="not empty"):
         run_download_config(target_dir=workspace_dir, force=False, interactive=False)
 
 

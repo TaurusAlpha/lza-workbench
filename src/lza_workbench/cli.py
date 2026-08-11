@@ -22,7 +22,9 @@ from lza_workbench.commands.status import (
 )
 from lza_workbench.commands.workspace_import import run_import
 from lza_workbench.commands.workspace_init import run_init
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.workspace import resolve_init_workspace_dir
+from lza_workbench.utils.output import print_error
 
 app = typer.Typer(
     help="LZA Workbench CLI",
@@ -236,14 +238,15 @@ def config_upload_command(
     )
 
 
-
-
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI and return a process-style exit code."""
     try:
         app(args=argv, standalone_mode=False)
     except typer.Exit as exc:
         return int(exc.exit_code or 0)
+    except LzaError as exc:
+        print_error(str(exc))
+        return 1
     except Exception as exc:
         show = getattr(exc, "show", None)
         exit_code = getattr(exc, "exit_code", None)

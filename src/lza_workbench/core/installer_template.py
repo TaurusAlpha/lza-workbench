@@ -7,7 +7,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-import typer
+from lza_workbench.core.errors import LzaError
+from lza_workbench.utils.output import print_info
 
 PACKAGED_INSTALLER_VERSION = "v1.16.0"
 INSTALLER_TEMPLATE_FILENAME = "AWSAccelerator-InstallerStack.template"
@@ -46,7 +47,7 @@ def resolve_installer_template(
         The downloaded or fallback CloudFormation template content as a string.
 
     Raises:
-        typer.BadParameter: If the template cannot be downloaded and no fallback is available.
+        LzaError: If the template cannot be downloaded and no fallback is available.
     """
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "LZA-Workbench"})
@@ -56,7 +57,7 @@ def resolve_installer_template(
         if fallback_version is not None and fallback_path is not None and fallback_path.is_file():
             return fallback_path.read_text(encoding="utf-8")
 
-        raise typer.BadParameter(
+        raise LzaError(
             f"Unable to download installer template from {url} and no local template was found."
         ) from exc
 
@@ -74,7 +75,7 @@ def download_installer_template(version: str, local_path: Path | None = None) ->
     if local_path is None:
         local_path = Path.cwd() / INSTALLER_TEMPLATE_FILENAME
     local_path.write_text(template_content, encoding="utf-8")
-    typer.echo(f"Downloaded installer template for version {version} to {local_path}")
+    print_info(f"Downloaded installer template for version {version} to {local_path}")
     return local_path
 
 

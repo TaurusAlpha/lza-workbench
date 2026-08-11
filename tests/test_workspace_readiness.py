@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import typer
 
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.workspace import (
     WORKSPACE_CONFIG_FILE,
     WORKSPACE_STATE_FILE,
@@ -135,5 +135,5 @@ def test_load_workspace_context_success(tmp_path: Path):
 
 def test_load_workspace_context_fails_when_below_min_readiness(tmp_path: Path):
     ws_dir = create_minimal_workspace(tmp_path, has_config_dir=False, has_installer_params=False)
-    with pytest.raises(typer.BadParameter, match="missing required LZA templates"):
+    with pytest.raises(LzaError, match="missing required LZA templates"):
         load_workspace_context(ws_dir, min_readiness=WorkspaceReadinessLevel.IMPORTED)

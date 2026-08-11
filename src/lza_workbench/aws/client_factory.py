@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 import boto3
-import typer
 
+from lza_workbench.core.errors import LzaError
 from lza_workbench.utils.output import (
     print_info,
     print_warning,
@@ -72,7 +72,7 @@ class AwsClientFactory:
                 message="Run the following command to authenticate:\n"
                 f"  aws sso login --profile {profile_name}"
             )
-            raise typer.BadParameter(
+            raise LzaError(
                 f"AWS profile validation failed for {profile_name}: {exc}"
             ) from exc
 

@@ -6,10 +6,10 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-import typer
 from botocore.exceptions import ClientError
 
 from lza_workbench.commands.installer_plan import run_installer_plan
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.workspace import (
     AwsConfig,
     CustomerConfig,
@@ -79,7 +79,7 @@ def test_missing_parameters_graceful_failure(tmp_path: Path) -> None:
     template_file = ws_dir / "aws-accelerator-installer" / "AWSAccelerator-InstallerStack.template"
     template_file.write_text('{"Description": "Installer", "Parameters": {}}', encoding="utf-8")
 
-    with pytest.raises(typer.BadParameter) as exc_info:
+    with pytest.raises(LzaError) as exc_info:
         run_installer_plan(
             aws_profile="test-profile",
             aws_region="us-east-1",
