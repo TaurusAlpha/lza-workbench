@@ -14,7 +14,7 @@ lza:
 
 installer:
   local_path: aws-accelerator-installer
-  stack_name: AWSAccelerator-InstallerStack
+  stack_name: cf-lza-installer
   # CloudFormation template used to deploy or update the LZA installer stack.
   # The official template URL is version-specific.
   stack_template:

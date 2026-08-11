@@ -6,7 +6,11 @@ from typing import Any
 
 import boto3
 import typer
-from botocore.exceptions import BotoCoreError, ClientError
+
+from lza_workbench.utils.output import (
+    print_info,
+    print_warning,
+)
 
 
 class AwsClientFactory:
@@ -48,28 +52,29 @@ class AwsClientFactory:
 
     def validate_identity(self) -> dict[str, str]:
         """Validate AWS profile caller identity using STS GetCallerIdentity."""
-        self._prime_session_credentials()
-        session = self.get_session()
         profile_name = self.profile or "default"
         try:
+            self._prime_session_credentials()
+            session = self.get_session()
             sts = session.client("sts", region_name=self.region)
             response = sts.get_caller_identity()
-        except ClientError as exc:
-            error_code = exc.response.get("Error", {}).get("Code", "")
-            error_msg = exc.response.get("Error", {}).get("Message", str(exc))
-            raise typer.BadParameter(
-                f"AWS profile validation failed for {profile_name} [{error_code}]: {error_msg}"
-            ) from exc
-        except BotoCoreError as exc:
+            return {
+                "account": str(response.get("Account", "")),
+                "arn": str(response.get("Arn", "")),
+                "user_id": str(response.get("UserId", "")),
+            }
+        except Exception as exc:
+            print_warning(
+                f"AWS profile validation failed for '{profile_name}'. "
+                "AWS operations might be limited."
+            )
+            print_info(
+                message="Run the following command to authenticate:\n"
+                f"  aws sso login --profile {profile_name}"
+            )
             raise typer.BadParameter(
                 f"AWS profile validation failed for {profile_name}: {exc}"
             ) from exc
-
-        return {
-            "account": str(response.get("Account", "")),
-            "arn": str(response.get("Arn", "")),
-            "user_id": str(response.get("UserId", "")),
-        }
 
     def get_client(self, service_name: str) -> Any:
         """Create a boto3 client for the specified AWS service."""

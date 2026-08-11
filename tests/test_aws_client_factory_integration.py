@@ -6,6 +6,10 @@ import ast
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+import typer
+from botocore.exceptions import ClientError
+
 from lza_workbench.aws.client_factory import AwsClientFactory
 
 
@@ -82,3 +86,51 @@ def test_aws_client_factory_reuses_session_across_sts_and_services() -> None:
         assert "cloudformation" in services_called
         assert "s3" in services_called
         assert "codecommit" in services_called
+
+
+def test_validate_identity_success() -> None:
+    """Verify that caller identity is returned on success."""
+    with (
+        patch("boto3.Session") as mock_session_cls,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory._prime_session_credentials"),
+    ):
+        mock_session_instance = MagicMock()
+        mock_session_cls.return_value = mock_session_instance
+
+        mock_sts = MagicMock()
+        mock_session_instance.client.return_value = mock_sts
+        mock_sts.get_caller_identity.return_value = {
+            "Account": "123456789012",
+            "Arn": "arn:aws:iam::123456789012:user/test",
+            "UserId": "AKIAEXAMPLE",
+        }
+
+        factory = AwsClientFactory(profile="test-profile", region="eu-west-1")
+        identity = factory.validate_identity()
+
+        assert identity["account"] == "123456789012"
+        assert identity["arn"] == "arn:aws:iam::123456789012:user/test"
+
+
+def test_validate_identity_failure_prints_warning_and_command() -> None:
+    """Verify that identity check failure prints warning, command, and raises BadParameter."""
+    with (
+        patch("boto3.Session") as mock_session_cls,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory._prime_session_credentials"),
+    ):
+        mock_session_instance = MagicMock()
+        mock_session_cls.return_value = mock_session_instance
+
+        mock_sts = MagicMock()
+        mock_session_instance.client.return_value = mock_sts
+        mock_sts.get_caller_identity.side_effect = ClientError(
+            {"Code": "SSO_ERROR", "Message": "Token for test-profile does not exist"},
+            "GetCallerIdentity",
+        )
+
+        factory = AwsClientFactory(profile="test-profile", region="eu-west-1")
+
+        with pytest.raises(typer.BadParameter) as excinfo:
+            factory.validate_identity()
+
+        assert "test-profile" in str(excinfo.value)

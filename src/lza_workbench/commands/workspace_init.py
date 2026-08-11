@@ -6,7 +6,7 @@ from pathlib import Path
 
 import typer
 
-from lza_workbench.aws.identity import validate_aws_profile
+from lza_workbench.aws.client_factory import validate_aws_profile
 from lza_workbench.core.templates import resolve_template_source, validate_template
 from lza_workbench.core.workspace import (
     AwsConfig,
