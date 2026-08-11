@@ -122,14 +122,6 @@ Defaults are defined in `src/lza_workbench/core/workspace.py`; YAML supplies exp
 overrides. Unknown keys are rejected. See `src/lza_workbench/config/examples/` for minimal,
 full, configuration-only, and installer-only examples.
 
-## Design Principles
-
-- Keep business logic in Python.
-- Customer workspaces live outside this repository.
-- AWS authentication is managed externally.
-- Prefer explicit, reviewable behavior over hidden automation.
-- Keep the implementation modular and easy to extend.
-
 ## Development
 
 Install dependencies:
