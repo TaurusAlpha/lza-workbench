@@ -79,6 +79,16 @@ AWS SDK initialization is centralized.
 - AWS-specific behavior should remain separated from workspace/configuration logic where practical.
 - Customer-owned LZA configuration is independent from installer source-code management.
 
+### Error Handling
+
+Application errors must remain independent of presentation and execution interfaces.
+
+- Business logic should raise application-specific exceptions rather than Typer, Rich, HTTP, or other interface-specific errors.
+- CLI handlers translate application errors into user-facing output and exit codes.
+- Future API or headless-service interfaces may translate the same errors into HTTP responses, structured results, logs, or worker status.
+- Typer/Click usage exceptions should be reserved for invalid command-line arguments or invocation syntax.
+- Unexpected programming errors should remain distinguishable from expected application failures.
+
 ### Workspace Readiness
 
 Commands operate against explicit workspace readiness rather than independently repairing missing workspace configuration.

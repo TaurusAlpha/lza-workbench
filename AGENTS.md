@@ -20,7 +20,7 @@
 ## Validation
 
 Before finishing
-Run: `uv run ruff . --fix`.
+Run: `uv run ruff check . --fix`.
 Run only if requested: `uv run pytest`.
 
 ## Responses

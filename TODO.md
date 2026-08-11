@@ -23,7 +23,6 @@ This file tracks active, planned, unresolved, refactoring, and technical-debt wo
 Create a new customer-specific LZA workspace.
 
 - [] Support selecting a packaged template when multiple templates exist.
-- [] Support `--force`.
 - [] Init local git repository in LZA configuration directory and "init" commit.
   Check for correlation if configuration repo is already stored in Git or CodeCommit or other supported repository.
 
@@ -186,6 +185,11 @@ Future design decision:
 - [] Allow `lza init` and `lza import` to establish missing core configuration.
 - [] Require other commands to validate their minimum workspace readiness before execution.
 - [] Fail early with clear errors when required workspace configuration is missing.
+- [] Add target AWS account ID to workspace configuration.
+- [] Resolve account ID from authenticated AWS identity when available.
+- [] Allow account ID to be derived from AWS profile configuration when reliably possible.
+- [] Persist the accepted account ID in `lza-workspace.yaml`.
+- [] Validate authenticated AWS account against the configured workspace account where appropriate.
 
 ## Authentication
 
