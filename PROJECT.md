@@ -2,325 +2,163 @@
 
 ## Purpose
 
-LZA Workbench is a local, workspace-based helper tool for AWS Landing Zone Accelerator engineers.
+LZA Workbench is a local, workspace-based CLI toolkit for AWS Landing Zone Accelerator engineers.
 
-Its initial goal is to automate the customer onboarding/init phase for AWS Landing Zone Accelerator by creating a clean customer workspace, copying selected LZA configuration templates, generating workspace metadata, and providing helper commands for common LZA bootstrap operations.
+It assists with creating and managing customer-specific LZA workspaces and automates common LZA bootstrap, configuration, deployment, validation, and troubleshooting workflows.
 
-The tool starts as a personal productivity helper but should be structured cleanly enough to become usable by coworkers or the wider community later.
+The project is initially a personal engineering productivity tool, but its structure should remain suitable for wider use.
 
 ## Scope
 
-This project is strictly focused on AWS Landing Zone Accelerator related workflows.
+LZA Workbench is strictly focused on AWS Landing Zone Accelerator workflows.
 
 In scope:
 
-- Create customer-specific LZA workspace folders.
-- Copy or initialize `aws-accelerator-config`.
-- Use local or Git-based LZA configuration templates.
-- Generate and store workspace metadata.
-- Resolve the LZA installer stack template from the official remote template or a local workspace copy, as required.
-- Plan installer configuration and reconcile the deployed installer with that desired state.
-- Generate helper scripts or commands for LZA bootstrap workflows.
-- Validate that the selected AWS profile can access the target account as shared command preflight behavior and through diagnostics.
-- Support multiple LZA versions.
-- Support different configuration repository locations such as S3, CodeCommit, or GitHub where applicable.
-- Keep the code expandable for future config generation, validation, and AI/MCP assistance.
+- Customer workspace initialization and import.
+- LZA installer lifecycle operations.
+- Customer `aws-accelerator-config` management.
+- Configuration synchronization.
+- LZA pipeline execution and monitoring.
+- Workspace and deployment status.
+- LZA-specific validation and diagnostics.
+- Support for multiple LZA versions and supported repository/source types.
+- Future LZA-specific configuration generation and AI-assisted workflows.
 
-## Non-Goals
+Out of scope:
 
-The following are intentionally outside the scope of this project unless explicitly revisited in the future:
-
-- Managing general AWS infrastructure unrelated to AWS Landing Zone Accelerator.
-- Acting as a generic DevOps platform.
-- Replacing AWS authentication tooling.
-- Automatically designing complex customer network or security architectures.
-- Becoming a server-side, multi-user application.
-- Allowing AI to autonomously modify customer environments.
-
-## Core Principle
-
-The tool should not own AWS authentication.
-
-If the following command works, the tool should be able to use that profile:
-
-```bash
-aws sts get-caller-identity --profile <profile-name>
-```
-
-Authentication methods such as AWS SSO, static access keys, AssumeRole chains, bastion-based access, or proxy-based access are the user's responsibility.
-
-AWS authentication management may be considered later as a low-priority feature.
-
-### AWS Client Management
-
-The application should have a single, centralized mechanism for creating AWS sessions and service clients.
-
-- All boto3 `Session` and service client creation must go through `AwsClientFactory`.
-- Commands should create one factory instance per execution and reuse it for all AWS interactions.
-- AWS service modules (CloudFormation, S3, CodeCommit, STS, etc.) should not create their own sessions or clients.
-- Service modules should operate on injected boto3 clients rather than managing authentication themselves.
-- Authentication, credential resolution, retry behavior, and future client configuration should be implemented only in `AwsClientFactory`.
+- Generic AWS infrastructure management.
+- Generic DevOps automation.
+- Autonomous AI modification of customer AWS environments.
 
 ## Workspace Model
 
-The tool is workspace-based.
+The application is workspace-based.
 
-Each customer gets an independent local workspace.
+Each customer has an independent local workspace outside this repository.
 
 Example:
 
 ```text
 customers/
-  comm-it/
+  example/
     lza-workspace.yaml
     aws-accelerator-config/
     aws-accelerator-installer/
-    scripts/
     .lza/
+      logs/
+      state.json
 ```
 
-The tool should be able to manage one customer or many customers without requiring a central server or shared database.
+### Declarative Configuration
 
-## Source of Truth
+`lza-workspace.yaml` is the declarative source of truth for the workspace.
 
-Each customer workspace should contain a workspace metadata file.
+It contains configuration and user decisions required to reproduce or operate the workspace.
 
-Recommended name:
+### Runtime State
 
-```text
-lza-workspace.yaml
-```
+`.lza/state.json` stores operational information discovered or produced during command execution.
 
-This file stores the key decisions used during initialization and later operations. `lza-workspace.yaml` is the declarative source of truth. Runtime and execution metadata is stored separately in `.lza/state.json`.
+Runtime state must not duplicate declarative configuration already stored in `lza-workspace.yaml` unless specifically required for operational efficiency and state reconciliation.
 
-Example:
+## Core Architecture
 
-```yaml
-customer:
-  name: Example Customer
-  slug: example-customer
+### AWS Client Management
 
-aws:
-  profile: example-root
-  region: eu-west-1
+AWS SDK initialization is centralized.
 
-configuration:
-  local_path: customer-accelerator-config
-  template:
-    source: git
-    repository: https://github.com/example/lza-config-templates.git
-    ref: main
-    path: templates/default
-  repository:
-    type: git
-    repository: git@github.com:example/customer-lza-config.git
-    branch: main
-```
+- `AwsClientFactory` is the single mechanism for creating boto3 sessions and service clients.
+- Commands create and reuse a factory for their execution context.
+- AWS service modules receive clients rather than creating their own sessions.
+- Authentication resolution, retry configuration, and shared AWS client behavior belong in the centralized factory.
 
-The CLI may collect these values interactively, but it should persist them into this file so the workspace remains repeatable.
+### Application Boundaries
 
-## Template Model
-
-Templates may come from:
-
-- bundled templates
-- local folder
-- Git repository
-- Bitbucket repository
-- future custom template providers
-
-Initial version supports the bundled default template and local template folders. Git and Bitbucket template sources are future work.
-
-Example:
-
-```yaml
-lza:
-  template_source_type: local
-  template_source: ~/templates/lza/default
-```
-
-After a template is copied into a customer workspace, it becomes customer-owned configuration.
-
-The copied `aws-accelerator-config` should be treated as the customer's working LZA configuration.
-
-## First Supported Workflow
-
-The first supported workflow is customer initialization. The primary entry point is:
-
-```bash
-lza init comm-it
-```
-
-This workflow creates a new customer workspace, collects the minimum required workspace metadata, copies the selected LZA configuration template, creates local state, validates the selected AWS profile unless skipped, and leaves the workspace ready for the next deployment steps. The exact implementation of this workflow is intentionally maintained in TODO.md rather than this document.
-
-## Workspace Layout
-
-```text
-comm-it/
-  lza-workspace.yaml
-
-  aws-accelerator-config/
-    global-config.yaml
-    organization-config.yaml
-    accounts-config.yaml
-    network-config.yaml
-    security-config.yaml
-    replacements-config.yaml
-
-  aws-accelerator-installer/
-    AWSAccelerator-InstallerStack.template.json
-
-  .lza/
-    state.json
-    logs/
-```
-
-## State Model
-
-No database is required initially.
-
-Local state may be stored under:
-
-```text
-.lza/state.json
-```
-
-Example state:
-
-```json
-{
-  "initialized_at": null,
-  "updated_at": null,
-  "management_account_id": null,
-  "caller_arn": null,
-  "installer_stack_id": null
-}
-```
-
-State should never duplicate configuration already present in `lza-workspace.yaml`.
-It exists only to store information discovered or produced during command execution.
-
-## Installer Model
-
-The installer consists of two independent components:
-
-- The CloudFormation installer stack template.
-- The Landing Zone Accelerator source code consumed by the installer.
-
-The customer configuration (`aws-accelerator-config`) is managed independently and should not be coupled to installer source management.
-
-Installer deployment capabilities are being introduced incrementally based on practical customer workflows rather than a predefined end-state.
-
-The workspace model should describe the desired installer source independently of its implementation so source preparation and synchronization can be added for Amazon S3, AWS CodeCommit, and the official AWS GitHub repository without changing the overall configuration model. Provider-specific source preparation is future work.
-
-`lza installer plan` is the configuration collection step. It should collect every available installer template parameter, apply explicit defaults where appropriate, validate the result, and persist the accepted desired state in `lza-workspace.yaml`. Later installer commands should rely on that persisted state rather than recollecting configuration.
-
-`lza installer deploy` reconciles the locally configured desired state with AWS for both initial installation and later updates. It should preview create, update, or no-change behavior and ask for confirmation before applying changes unless explicitly bypassed. A separate `lza installer update` command is not part of the command model.
-
-Installer template handling depends on whether the template must be modified. A local template is required when a change such as disabling anonymous data sharing must be applied. When no template modification is needed, the official remote template may be usable. Whether to retain both paths or standardize on local templates remains a design decision.
-
-AWS context:
-
-- [Installer pipeline](https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/awsaccelerator-installer.html)
-- [Source code location](https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/source-code-location.html)
-
-Detailed command behavior, implementation phases, and provider-specific functionality are intentionally maintained in `TODO.md` rather than this document.
-
-## Command Model
-
-- `lza installer plan` resolves and persists installer configuration without changing AWS.
-- `lza installer deploy` handles both initial deployment and updates by reconciling local desired state with AWS.
-- Installer template download is internal to planning and deployment rather than a standalone command.
-- `lza config upload` transfers configuration to an S3-backed configuration source without starting the pipeline.
-- `lza config deploy` synchronizes configuration and stops by default; optional flags may start and/or watch the configuration pipeline.
-- `lza pipeline start` and `lza pipeline watch` remain separate commands for explicit pipeline control.
-- `lza status` is the single status entry point, with an overall summary and installer, configuration, and pipeline filtered views.
-- `lza doctor` runs diagnostic checks and reports advice without modifying local files or AWS resources. A future `--fix` mode is an undecided enhancement, not current behavior.
-- `lza uninstall` is a top-level, destructive solution lifecycle command rather than an installer-stack delete command. It must make preservation choices explicit because a complete LZA uninstall spans the Installer and Core pipelines, retained data, and additional regional/account stacks.
-
-The standalone commands `lza profile check`, `lza installer download`, `lza installer update`, `lza installer status`, and `lza installer delete` are not part of the command model.
-
-## Workspace Configuration Model
-
-`lza-workspace.yaml` is represented internally by strongly typed Pydantic models.
-The workspace configuration is loaded, validated, and exposed through typed objects rather than untyped dictionaries.
-Derived values should be calculated at runtime instead of persisted whenever practical.
+- CLI command handlers should coordinate workflows rather than contain substantial business logic.
+- Business logic should live in appropriate Python modules outside the CLI layer.
+- AWS-specific behavior should remain separated from workspace/configuration logic where practical.
+- Customer-owned LZA configuration is independent from installer source-code management.
 
 ### Workspace Readiness
 
-Workspace commands operate against explicit readiness levels rather than independently checking individual configuration values.
+Commands operate against explicit workspace readiness rather than independently repairing missing workspace configuration.
 
-#### Core Workspace Configuration
+`lza init` and `lza import` establish or complete the workspace.
 
-A workspace is core-configured when the minimum values required for normal command execution are present.
+Other commands should validate the minimum workspace state they require and fail clearly when it is incomplete.
 
-Core values currently include:
+AWS authentication validity and deployed-resource health are separate from workspace readiness.
 
-- AWS profile
-- AWS region
+## CLI Design Principles
 
-`lza init` and `lza import` are responsible for establishing or completing core workspace configuration. They may accept these values through CLI options or interactive prompts.
+The CLI should follow LZA workflow domains rather than expose low-level AWS resource operations directly.
 
-Commands other than `lza init` and `lza import` must not interactively collect or repair missing core workspace configuration.
+General principles:
 
-If a required core value is missing, the command must fail before command-specific logic or AWS operations and clearly report the missing values.
+- Prefer commands that represent meaningful LZA workflows.
+- Keep planning/read-only behavior separate from mutation where practical.
+- AWS-mutating operations must have clear command intent.
+- Prefer reconciliation semantics when initial deployment and later updates represent the same operation.
+- Avoid duplicate commands that provide overlapping workflow semantics.
+- Keep explicit control available for operations such as synchronization, execution, and monitoring.
 
-#### Workspace Readiness Levels
+The current command set, detailed command behavior, unresolved command-design decisions, and implementation status are maintained in `TODO.md`.
 
-The workspace progresses through increasingly complete states:
+## Development Model
 
-- **Uninitialized** — no valid LZA Workbench workspace exists.
-- **Core configured** — required core workspace configuration is present.
-- **Imported** — a valid customer `aws-accelerator-config` and required LZA Workbench metadata are present.
-- **Configured** — command-specific configuration required for installer planning or deployment is present.
-- **Deployed** — the installer has been deployed and deployment state has been recorded.
+The project evolves rapidly.
 
-Commands should validate the minimum readiness level they require before executing command-specific logic.
+Documentation therefore has intentionally separate responsibilities:
 
-Readiness levels describe workspace state, not AWS authentication validity or deployed-resource health. Those should be validated separately by commands that require them.
+- `PROJECT.md` defines durable project identity and architectural invariants.
+- `TODO.md` contains active feature design, backlog, technical debt, refactoring tasks, and unresolved decisions.
+- `AGENTS.md` defines the current implementation and coding baseline for AI-assisted development.
+- `README.md` documents current user-facing and development usage.
 
-Command-specific optional values may still be accepted through CLI options when appropriate.
+Detailed feature specifications should not be duplicated in `PROJECT.md`.
 
-## Current Technical Direction
+## Architectural Change Rule
 
-The current implementation is expected to use the following technologies. These are implementation preferences rather than permanent architectural decisions:
+Update this document only when a change affects a durable project-wide assumption or architectural boundary.
+
+Examples include:
+
+- changing ownership of AWS authentication;
+- changing the workspace/source-of-truth model;
+- changing AWS client construction;
+- changing major application-layer responsibilities;
+- changing fundamental CLI design principles.
+
+Feature behavior, individual commands, implementation details, repository refactors, and temporary design decisions belong elsewhere.
+
+## Technical Direction
+
+The current implementation uses:
 
 - Python
-- Typer for CLI
-- Pydantic for config/schema validation
-- boto3 for AWS API calls
-- ruamel.yaml for YAML read/write while preserving formatting
-- Rich for CLI output
-- pytest for tests
+- Typer
+- Pydantic
+- boto3
+- ruamel.yaml
+- Rich
+- pytest
+- uv
 
-The tech stack is not final and may be changed later.
-
-## Design Guidelines
-
-- Keep the first version simple.
-- Prefer explicit local files over hidden logic.
-- Avoid hardcoded company-specific values.
-- Make every generated file reviewable.
-- Prefer dry-run behavior where possible.
-- Do not mutate AWS resources without clear command intent.
-- Keep complex LZA config generation out of the MVP.
-- Structure code so modules can be extended later.
-- Centralize AWS SDK initialization and authentication logic in a single component.
+These are implementation choices rather than permanent architectural requirements unless explicitly promoted to an architectural constraint.
 
 ## Future Direction
 
-The following capabilities are considered natural evolution of the project. Their prioritization and implementation details are intentionally maintained in TODO.md.
+Natural areas of future development include:
 
-- config validation
-- schema-aware editing
-- LZA version discovery
-- pipeline monitoring
-- CodeBuild log summarization
-- config diff reports
-- account/OU generators
-- network pattern generators
-- security pack side-loading
-- SCP/RCP/config-rule packs
-- optional MCP/AI assistant integration
+- LZA configuration validation;
+- version-aware schemas;
+- pipeline monitoring and diagnostics;
+- config diff/reporting;
+- configuration generators;
+- security and policy pack integration;
+- optional LZA-focused MCP/AI assistance.
+- Server-side or multi-user operation.
 
-AI should assist, suggest, validate, and troubleshoot. It should not become the primary execution engine in the early versions.
+Detailed planning and prioritization belong in `TODO.md`.
+
+AI should assist with analysis, generation, validation, and troubleshooting. It should not become the primary autonomous execution mechanism for customer environments.
