@@ -85,12 +85,24 @@ Do not add detailed feature specifications or implementation status.
 
 ### TODO.md
 
+Focuses exclusively on active, planned, unresolved, refactoring, and technical-debt work.
+
 Update when:
 
-- Work is added, completed, removed, or redesigned.
+- Work is planned, added, removed, or redesigned.
 - A feature has unresolved design decisions.
 - Technical debt or a meaningful refactor is identified.
-- Existing code should later be migrated to a newly adopted convention.
+- Work is completed and needs to be cleaned up / summarized into `docs/DONE.md`.
+
+### docs/DONE.md
+
+Maintain as a concise, high-level historical log of completed feature milestones and refactors.
+
+Rules:
+
+- Move work to `docs/DONE.md` only after implementation, integration, code review, and validation/tests are complete.
+- Summarize delivered capabilities concisely; do not copy verbose micro-checklists, commit logs, or full specs.
+- Retain remaining unfinished follow-up items in `TODO.md`.
 
 ### README.md
 

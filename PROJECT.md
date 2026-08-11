@@ -112,6 +112,7 @@ Documentation therefore has intentionally separate responsibilities:
 
 - `PROJECT.md` defines durable project identity and architectural invariants.
 - `TODO.md` contains active feature design, backlog, technical debt, refactoring tasks, and unresolved decisions.
+- `docs/DONE.md` logs completed features and refactoring milestones.
 - `AGENTS.md` defines the current implementation and coding baseline for AI-assisted development.
 - `README.md` documents current user-facing and development usage.
 
