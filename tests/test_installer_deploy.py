@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackStatusResult
 from lza_workbench.aws.codecommit import CodeCommitPlanResult
@@ -61,19 +62,19 @@ def sample_workspace(tmp_path: Path) -> Path:
 
 
 def test_missing_aws_profile_failure(tmp_path: Path) -> None:
-    """Test that missing AWS profile in lza-workspace.yaml raises an LzaError exception."""
+    """Test that missing AWS profile in lza-workspace.yaml raises an exception."""
     ws_dir = tmp_path / "no-aws"
     ws_dir.mkdir(parents=True, exist_ok=True)
-    config = WorkspaceConfig(
-        customer=CustomerConfig(name="No AWS", slug="no-aws"),
-        aws=AwsConfig(profile="", region="us-east-1"),
-        lza=LzaConfig(version="v1.16.0"),
-    )
-    write_workspace_config(ws_dir / "lza-workspace.yaml", config)
-
     with pytest.raises(
-        LzaError, match="missing required core configuration|AWS profile is missing"
+        (LzaError, ValueError, ValidationError),
+        match="missing required core configuration|profile|AWS configuration requires",
     ):
+        config = WorkspaceConfig(
+            customer=CustomerConfig(name="No AWS", slug="no-aws"),
+            aws=AwsConfig(profile="", region="us-east-1"),
+            lza=LzaConfig(version="v1.16.0"),
+        )
+        write_workspace_config(ws_dir / "lza-workspace.yaml", config)
         run_installer_deploy(target_dir=ws_dir)
 
 

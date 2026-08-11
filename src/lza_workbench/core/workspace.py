@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import typer
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
@@ -54,6 +54,25 @@ class AwsConfig(WorkspaceModel):
         if v is None:
             return None
         return str(v)
+
+    @model_validator(mode="after")
+    def validate_auth_credentials(self) -> AwsConfig:
+        has_profile = bool(self.profile)
+        has_role = bool(self.role)
+        has_keys = bool(self.access_key and self.secret_access_key)
+
+        # Ensure at least one valid combination exists
+        if not (has_profile or has_role or has_keys):
+            raise ValueError(
+                "AWS configuration requires at least one authentication method: "
+                "'profile', 'role', or both 'access_key' and 'secret_access_key'."
+            )
+
+        # Optional: Ensure partial keys aren't provided
+        if bool(self.access_key) != bool(self.secret_access_key):
+            raise ValueError("Both 'access_key' and 'secret_access_key' must be provided together.")
+
+        return self
 
 
 class LzaConfig(WorkspaceModel):
@@ -318,9 +337,7 @@ def validate_workspace_target(
         raise LzaError(f"LZA workspace already exists: {workspace_dir}")
     candidate_config = workspace_dir / config_local_path
     if candidate_config.exists() or candidate_config.is_symlink():
-        raise LzaError(
-            f"Target directory already contains an LZA configuration: {workspace_dir}."
-        )
+        raise LzaError(f"Target directory already contains an LZA configuration: {workspace_dir}.")
     if any(workspace_dir.iterdir()):
         raise LzaError(f"Target directory is not empty: {workspace_dir}")
 
@@ -538,9 +555,14 @@ def evaluate_workspace_readiness(
     state: WorkspaceState,
 ) -> WorkspaceReadinessLevel:
     """Evaluate current workspace readiness level based on config, directory, and state."""
+    has_aws_auth = bool(
+        (config.aws.profile or "").strip()
+        or (config.aws.role or "").strip()
+        or ((config.aws.access_key or "").strip() and (config.aws.secret_access_key or "").strip())
+    )
     if (
         not (config.customer.slug or "").strip()
-        or not (config.aws.profile or "").strip()
+        or not has_aws_auth
         or not (config.aws.region or "").strip()
     ):
         return WorkspaceReadinessLevel.UNINITIALIZED
@@ -590,7 +612,7 @@ def _raise_readiness_error(
     if current == WorkspaceReadinessLevel.UNINITIALIZED:
         raise LzaError(
             f"Workspace at '{workspace_dir}' is missing required core configuration "
-            "(AWS profile/region or customer details in lza-workspace.yaml). "
+            "(AWS authentication/region or customer details in lza-workspace.yaml). "
             "Initialize the workspace with 'lza init' or update lza-workspace.yaml."
         )
     if current == WorkspaceReadinessLevel.CORE_CONFIGURED:

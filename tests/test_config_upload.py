@@ -62,7 +62,8 @@ def test_run_upload_config_requires_profile(workspace_dir: Path) -> None:
     write_workspace_config(config_file, cfg)
 
     with pytest.raises(
-        LzaError, match="missing required core configuration|AWS profile"
+        (LzaError, ValueError),
+        match="AWS configuration requires|profile|Invalid workspace configuration",
     ):
         run_upload_config(target_dir=workspace_dir, interactive=False)
 

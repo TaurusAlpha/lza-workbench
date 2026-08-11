@@ -75,13 +75,12 @@ def test_evaluate_uninitialized(tmp_path: Path):
     ws_dir = tmp_path / "empty"
     ws_dir.mkdir()
     config = WorkspaceConfig(
-        customer=CustomerConfig(name="Test", slug="test"),
-        aws=AwsConfig(profile="", region="us-east-1"),
+        customer=CustomerConfig(name="", slug=""),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
     )
     state = WorkspaceState()
     assert (
-        evaluate_workspace_readiness(ws_dir, config, state)
-        == WorkspaceReadinessLevel.UNINITIALIZED
+        evaluate_workspace_readiness(ws_dir, config, state) == WorkspaceReadinessLevel.UNINITIALIZED
     )
 
 
