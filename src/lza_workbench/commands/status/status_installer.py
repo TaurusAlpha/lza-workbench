@@ -14,17 +14,7 @@ from lza_workbench.aws.cloudformation import (
     get_cloudformation_stack_status,
 )
 from lza_workbench.core.errors import LzaError
-from lza_workbench.core.workspace import (
-    WORKSPACE_CONFIG_FILE,
-    WORKSPACE_STATE_FILE,
-    WorkspaceConfig,
-    WorkspaceReadinessLevel,
-    WorkspaceState,
-    build_installer_cfn_parameters,
-    load_workspace_context,
-    write_workspace_config,
-    write_workspace_state,
-)
+from lza_workbench.installer.config import build_installer_cfn_parameters
 from lza_workbench.utils.output import (
     console,
     print_info,
@@ -33,6 +23,10 @@ from lza_workbench.utils.output import (
     print_section,
     print_success,
 )
+from lza_workbench.workspace.config import write_workspace_config
+from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.models import WorkspaceConfig, WorkspaceState
+from lza_workbench.workspace.state import write_workspace_state
 
 
 def extract_version_from_branch(branch: str) -> str:
@@ -143,7 +137,7 @@ def sync_installer_state(
     state.installer_template_version = deployed_version
     state.updated_at = now
 
-    write_workspace_state(workspace_dir / WORKSPACE_STATE_FILE, state)
+    write_workspace_state(workspace_dir / ".lza" / "state.json", state)
     console.print(
         "[bold green]Synchronized .lza/state.json with live AWS installer state.[/bold green]"
     )
@@ -209,7 +203,7 @@ def sync_installer_config(
     if "UseExistingConfigRepo" in params:
         config.installer.options.use_existing_config_repo = params["UseExistingConfigRepo"] == "Yes"
 
-    write_workspace_config(workspace_dir / WORKSPACE_CONFIG_FILE, config)
+    write_workspace_config(workspace_dir / "lza-workspace.yaml", config)
     print_success("Synchronized lza-workspace.yaml with deployed AWS installer configuration.")
     return config
 

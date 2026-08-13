@@ -10,16 +10,15 @@ from botocore.exceptions import ClientError
 
 from lza_workbench.commands.installer_plan import run_installer_plan
 from lza_workbench.core.errors import LzaError
-from lza_workbench.core.workspace import (
+from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+from lza_workbench.workspace.models import (
     AwsConfig,
     CustomerConfig,
     LzaConfig,
     WorkspaceConfig,
     WorkspaceState,
-    load_workspace_config,
-    write_workspace_config,
-    write_workspace_state,
 )
+from lza_workbench.workspace.state import write_workspace_state
 
 
 @pytest.fixture
@@ -85,7 +84,6 @@ def test_missing_parameters_graceful_failure(tmp_path: Path) -> None:
             aws_region="us-east-1",
             dry_run=False,
             no_save=False,
-            interactive=False,
             target_dir=ws_dir,
         )
 
@@ -103,7 +101,6 @@ def test_installer_plan_no_save(sample_workspace: Path) -> None:
                 aws_region="us-east-1",
                 dry_run=False,
                 no_save=True,
-                interactive=False,
                 target_dir=sample_workspace,
             )
 
@@ -141,7 +138,6 @@ def test_installer_plan_codecommit_missing(sample_workspace: Path) -> None:
                 aws_region="us-east-1",
                 dry_run=False,
                 no_save=False,
-                interactive=False,
                 target_dir=sample_workspace,
             )
 
@@ -194,7 +190,6 @@ def test_installer_plan_cfn_update_detected(sample_workspace: Path) -> None:
                 aws_region="us-east-1",
                 dry_run=False,
                 no_save=False,
-                interactive=False,
                 target_dir=sample_workspace,
             )
 

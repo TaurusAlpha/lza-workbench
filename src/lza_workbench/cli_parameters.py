@@ -40,21 +40,6 @@ AwsProfile = Annotated[
     typer.Option("--aws-profile", help="AWS profile for the workspace."),
 ]
 
-AwsRole = Annotated[
-    str,
-    typer.Option("--aws-role", help="AWS IAM role ARN for the workspace."),
-]
-
-AwsAccessKey = Annotated[
-    str,
-    typer.Option("--aws-access-key", help="AWS IAM access key ID for the workspace."),
-]
-
-AwsSecretKey = Annotated[
-    str,
-    typer.Option("--aws-secret-key", help="AWS IAM secret access key for the workspace."),
-]
-
 AwsRegion = Annotated[
     str,
     typer.Option("--aws-region", help="AWS region for the workspace."),

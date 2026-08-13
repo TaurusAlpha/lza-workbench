@@ -12,16 +12,15 @@ from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackSt
 from lza_workbench.aws.codecommit import CodeCommitPlanResult
 from lza_workbench.commands.installer_deploy import run_installer_deploy
 from lza_workbench.core.errors import LzaError
-from lza_workbench.core.workspace import (
+from lza_workbench.workspace.config import write_workspace_config
+from lza_workbench.workspace.models import (
     AwsConfig,
     CustomerConfig,
     LzaConfig,
     WorkspaceConfig,
     WorkspaceState,
-    load_workspace_state,
-    write_workspace_config,
-    write_workspace_state,
 )
+from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
 
 @pytest.fixture

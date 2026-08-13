@@ -24,14 +24,7 @@ from lza_workbench.core.installer_template import (
     INSTALLER_TEMPLATE_FILENAME,
     download_installer_template,
 )
-from lza_workbench.core.workspace import (
-    WORKSPACE_CONFIG_FILE,
-    WorkspaceConfig,
-    WorkspaceReadinessLevel,
-    build_installer_cfn_parameters,
-    load_workspace_context,
-    write_workspace_config,
-)
+from lza_workbench.installer.config import build_installer_cfn_parameters
 from lza_workbench.utils.output import (
     console,
     print_info,
@@ -40,6 +33,9 @@ from lza_workbench.utils.output import (
     print_section,
     print_warning,
 )
+from lza_workbench.workspace.config import write_workspace_config
+from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.models import WorkspaceConfig
 
 
 @dataclass
@@ -58,7 +54,6 @@ def run_installer_plan(
     aws_region: str | None = None,
     dry_run: bool = False,
     no_save: bool = False,
-    interactive: bool = False,
     target_dir: Path | None = None,
 ) -> None:
     """Resolve installer config from workspace and show planned deployment actions."""
@@ -84,7 +79,7 @@ def run_installer_plan(
 
     # Save accepted installer settings if requested and not dry run
     if not no_save and not dry_run:
-        write_workspace_config(workspace_dir / WORKSPACE_CONFIG_FILE, config)
+        write_workspace_config(workspace_dir / "lza-workspace.yaml", config)
         print_info("Installer configuration verified in lza-workspace.yaml", dim=True)
 
     # Step 1: Template Resolution & Parameter Schema Inspection

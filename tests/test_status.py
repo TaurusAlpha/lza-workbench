@@ -19,14 +19,14 @@ from lza_workbench.commands.status.status_installer import (
     sync_installer_state,
 )
 from lza_workbench.core.errors import LzaError
-from lza_workbench.core.workspace import (
+from lza_workbench.workspace.config import load_workspace_config
+from lza_workbench.workspace.models import (
     AwsConfig,
     CustomerConfig,
     WorkspaceConfig,
     WorkspaceState,
-    load_workspace_config,
-    load_workspace_state,
 )
+from lza_workbench.workspace.state import load_workspace_state
 
 runner = CliRunner()
 

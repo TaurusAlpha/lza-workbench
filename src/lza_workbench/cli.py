@@ -23,8 +23,8 @@ from lza_workbench.commands.status import (
 from lza_workbench.commands.workspace_import import run_import
 from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.core.errors import LzaError
-from lza_workbench.core.workspace import resolve_init_workspace_dir
 from lza_workbench.utils.output import print_error
+from lza_workbench.workspace.setup import resolve_init_workspace_dir
 
 app = typer.Typer(
     help="LZA Workbench CLI",
@@ -58,7 +58,6 @@ def installer_plan_command(
     run_installer_plan(
         dry_run=dry_run,
         no_save=no_save,
-        interactive=_is_interactive(),
     )
 
 
@@ -158,9 +157,6 @@ def init_command(
     workspace_dir: params.WorkspaceDir = None,
     aws_auth_type: params.AwsAuthType = "profile",
     aws_profile: params.AwsProfile = "",
-    aws_role: params.AwsRole = "",
-    aws_access_key: params.AwsAccessKey = "",
-    aws_secret_key: params.AwsSecretKey = "",
     aws_region: params.AwsRegion = "",
     lza_version: params.LzaVersion = None,
     dry_run: params.DryRun = False,
@@ -181,9 +177,6 @@ def init_command(
         workspace_dir=resolved_workspace_dir,
         aws_auth_type=aws_auth_type,
         aws_profile=aws_profile or None,
-        aws_role=aws_role or None,
-        aws_access_key=aws_access_key or None,
-        aws_secret_key=aws_secret_key or None,
         aws_region=aws_region or None,
         lza_version=lza_version,
         dry_run=dry_run,
@@ -200,9 +193,6 @@ def import_command(
     config_dir: params.LzaConfigDir = None,
     aws_auth_type: params.AwsAuthType = "profile",
     aws_profile: params.AwsProfile = "",
-    aws_role: params.AwsRole = "",
-    aws_access_key: params.AwsAccessKey = "",
-    aws_secret_key: params.AwsSecretKey = "",
     aws_region: params.AwsRegion = "",
     lza_version: params.LzaVersion = None,
     dry_run: params.DryRun = False,
@@ -216,9 +206,6 @@ def import_command(
         config_dir=config_dir,
         aws_auth_type=aws_auth_type,
         aws_profile=aws_profile or None,
-        aws_role=aws_role or None,
-        aws_access_key=aws_access_key or None,
-        aws_secret_key=aws_secret_key or None,
         aws_region=aws_region or None,
         lza_version=lza_version,
         dry_run=dry_run,

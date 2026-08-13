@@ -28,15 +28,7 @@ from lza_workbench.commands.installer_plan import (
     _validate_parameters_against_schema,
 )
 from lza_workbench.core.errors import LzaError
-from lza_workbench.core.workspace import (
-    WORKSPACE_STATE_FILE,
-    WorkspaceReadinessLevel,
-    WorkspaceState,
-    build_installer_cfn_parameters,
-    load_workspace_context,
-    load_workspace_state,
-    write_workspace_state,
-)
+from lza_workbench.installer.config import build_installer_cfn_parameters
 from lza_workbench.utils.output import (
     console,
     print_info,
@@ -45,6 +37,9 @@ from lza_workbench.utils.output import (
     print_section,
     print_warning,
 )
+from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.models import WorkspaceState
+from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
 
 def run_installer_deploy(
@@ -80,9 +75,7 @@ def run_installer_deploy(
         factory = AwsClientFactory(profile=profile, region=region)
         aws_identity = factory.validate_identity()
     except Exception as exc:
-        raise LzaError(
-            f"AWS authentication check failed for profile '{profile}': {exc}"
-        ) from exc
+        raise LzaError(f"AWS authentication check failed for profile '{profile}': {exc}") from exc
 
     # 4. Resolve Template & Validate Parameters
     template_path = _resolve_installer_template(workspace_dir, config, dry_run=dry_run)
@@ -254,7 +247,7 @@ def run_installer_deploy(
         )
 
         # 9. Record State in .lza/state.json
-        state_file = workspace_dir / WORKSPACE_STATE_FILE
+        state_file = workspace_dir / ".lza" / "state.json"
         state = load_workspace_state(state_file) if state_file.exists() else WorkspaceState()
         state.management_account_id = aws_identity["account"]
         state.caller_arn = aws_identity["arn"]

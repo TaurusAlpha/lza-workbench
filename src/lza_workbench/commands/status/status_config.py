@@ -6,16 +6,13 @@ from pathlib import Path
 
 from rich.panel import Panel
 
-from lza_workbench.core.workspace import (
-    WorkspaceReadinessLevel,
-    load_workspace_context,
-)
 from lza_workbench.utils.output import (
     console,
     print_info,
     print_kv,
     print_section,
 )
+from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 
 
 def run_config_status(
@@ -60,10 +57,10 @@ def run_config_status(
         print_kv("S3 Bucket", s3_bucket)
         print_kv("S3 Key Prefix", f"{s3_prefix}/{s3_key}")
     elif repo_config.type == "codecommit":
-        print_kv("Repository Name", repo_config.repository or "Not set")
+        print_kv("Repository Name", repo_config.repository_name or "Not set")
         print_kv("Branch", repo_config.branch or "main")
     elif repo_config.type == "git":
-        print_kv("Git Repository", repo_config.repository or "Not set")
+        print_kv("Git Repository", repo_config.repository_name or "Not set")
         print_kv("Branch", repo_config.branch or "main")
 
     console.print()

@@ -6,7 +6,6 @@ customer:
 
 aws:
   profile: example-root
-  role: null
   region: eu-west-1
 
 lza:

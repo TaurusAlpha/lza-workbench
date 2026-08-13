@@ -9,11 +9,9 @@ from lza_workbench.commands.workspace_init import (
     resolve_packaged_template,
     run_init,
 )
-from lza_workbench.core.workspace import (
-    load_workspace_config,
-    load_workspace_state,
-    resolve_init_workspace_dir,
-)
+from lza_workbench.workspace.config import load_workspace_config
+from lza_workbench.workspace.setup import resolve_init_workspace_dir
+from lza_workbench.workspace.state import load_workspace_state
 
 
 def test_resolve_init_workspace_dir_uses_customer_slug(tmp_path: Path, monkeypatch) -> None:

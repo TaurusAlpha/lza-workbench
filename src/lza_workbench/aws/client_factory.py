@@ -13,7 +13,7 @@ from lza_workbench.utils.output import (
 )
 
 if TYPE_CHECKING:
-    from lza_workbench.core.workspace import AwsConfig
+    from lza_workbench.workspace.models import AwsConfig
 
 
 class AwsClientFactory:
@@ -23,14 +23,8 @@ class AwsClientFactory:
         self,
         profile: str | None = None,
         region: str | None = None,
-        role: str | None = None,
-        access_key: str | None = None,
-        secret_access_key: str | None = None,
     ) -> None:
         self.profile = (profile or "").strip() or None
-        self.role = (role or "").strip() or None
-        self.access_key = (access_key or "").strip() or None
-        self.secret_access_key = (secret_access_key or "").strip() or None
         self.region = (region or "").strip() or "us-east-1"
         self._session: boto3.Session | None = None
         self._primed: bool = False
@@ -40,9 +34,6 @@ class AwsClientFactory:
         """Create factory instance from an AwsConfig model."""
         return cls(
             profile=aws_config.profile,
-            role=aws_config.role,
-            access_key=aws_config.access_key,
-            secret_access_key=aws_config.secret_access_key,
             region=aws_config.region,
         )
 
@@ -52,28 +43,10 @@ class AwsClientFactory:
             kwargs: dict[str, Any] = {}
             if self.profile:
                 kwargs["profile_name"] = self.profile
-            if self.access_key and self.secret_access_key:
-                kwargs["aws_access_key_id"] = self.access_key
-                kwargs["aws_secret_access_key"] = self.secret_access_key
             if self.region:
                 kwargs["region_name"] = self.region
+            self._session = boto3.Session(**kwargs)
 
-            base_session = boto3.Session(**kwargs)
-            if self.role:
-                sts = base_session.client("sts", region_name=self.region)
-                assumed_role = sts.assume_role(
-                    RoleArn=self.role,
-                    RoleSessionName="LZAWorkbenchSession",
-                )
-                credentials = assumed_role["Credentials"]
-                self._session = boto3.Session(
-                    aws_access_key_id=credentials["AccessKeyId"],
-                    aws_secret_access_key=credentials["SecretAccessKey"],
-                    aws_session_token=credentials["SessionToken"],
-                    region_name=self.region,
-                )
-            else:
-                self._session = base_session
         return self._session
 
     def _prime_session_credentials(self) -> None:
@@ -95,7 +68,7 @@ class AwsClientFactory:
 
     def validate_identity(self) -> dict[str, str]:
         """Validate AWS caller identity using STS GetCallerIdentity."""
-        auth_descr = self.profile or self.role or self.access_key or "default"
+        auth_descr = self.profile or "default"
         try:
             self._prime_session_credentials()
             session = self.get_session()
@@ -116,9 +89,7 @@ class AwsClientFactory:
                     message="Run the following command to authenticate:\n"
                     f"  aws sso login --profile {self.profile}"
                 )
-            raise LzaError(
-                f"AWS authentication validation failed for {auth_descr}: {exc}"
-            ) from exc
+            raise LzaError(f"AWS authentication validation failed for {auth_descr}: {exc}") from exc
 
     def get_client(self, service_name: str) -> Any:
         """Create a boto3 client for the specified AWS service."""
@@ -130,16 +101,10 @@ class AwsClientFactory:
 def get_aws_session(
     profile: str | None = None,
     region: str | None = None,
-    role: str | None = None,
-    access_key: str | None = None,
-    secret_access_key: str | None = None,
 ) -> boto3.Session:
     """Obtain a boto3 Session using the centralized factory."""
     factory = AwsClientFactory(
         profile=profile,
-        role=role,
-        access_key=access_key,
-        secret_access_key=secret_access_key,
         region=region,
     )
     return factory.get_session()

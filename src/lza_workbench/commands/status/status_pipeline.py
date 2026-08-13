@@ -7,10 +7,6 @@ from pathlib import Path
 from rich.panel import Panel
 
 from lza_workbench.aws.client_factory import AwsClientFactory
-from lza_workbench.core.workspace import (
-    WorkspaceReadinessLevel,
-    load_workspace_context,
-)
 from lza_workbench.utils.output import (
     console,
     print_info,
@@ -18,6 +14,7 @@ from lza_workbench.utils.output import (
     print_notice,
     print_section,
 )
+from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 
 
 def run_pipeline_status(

@@ -7,7 +7,7 @@ customer:
 aws:
   profile: comm-it-root
   region: eu-west-1
-  account_id: "123456789012"
+  account_id: '123456789012'
 
 lza:
   version: v1.15.5
@@ -57,7 +57,7 @@ installer:
     # S3 example:
     # repository_type: s3
     # bucket: aws-accelerator-installer-123456789012-eu-west-1
-    # key: source/landing-zone-accelerator-on-aws-v1.15.5.zip
+    # key: source/v1.15.5.zip
     #
     # CodeConnection example:
     # repository_type: codeconnection
@@ -103,7 +103,7 @@ configuration:
 
   # Destination used by the LZA configuration pipeline.
   repository:
-    type: s3 # s3 | codecommit | git
+    type: s3 # s3 | codecommit | codeconnection
 
     bucket: aws-accelerator-config-123456789012-eu-west-1
     prefix: zipped/
@@ -114,17 +114,19 @@ configuration:
     # repository_name: aws-accelerator-config
     # branch: main
     #
-    # Git example:
-    # type: git
-    # repository: git@github.com:example/customer-lza-config.git
+    # codeconnection example:
+    # type: codeconnection
+    # connection_arn: arn:aws:codeconnections:eu-west-1:123456789012:connection/example
+    # owner: example
+    # repository_name: customer-lza-config
     # branch: main
 
-  packaging:
-    exclude:
-      directories:
-        - .git
-      files:
-        - .DS_Store
+    s3_packaging:
+      exclude:
+        directories:
+          - .git
+        files:
+          - .DS_Store
 
 pipelines:
   installer:
@@ -139,5 +141,4 @@ pipelines:
 
 cli_defaults:
   debug: false
-  validate_aws_credentials: false
   dry_run: false

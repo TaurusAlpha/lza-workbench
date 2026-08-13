@@ -10,21 +10,6 @@ import typer
 from lza_workbench.aws.client_factory import validate_aws_credentials
 from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import validate_template
-from lza_workbench.core.workspace import (
-    AwsConfig,
-    ConfigurationConfig,
-    ConfigurationTemplateConfig,
-    CustomerConfig,
-    LzaConfig,
-    WorkspaceConfig,
-    WorkspaceState,
-    load_workspace_config,
-    load_workspace_state,
-    normalize_customer_slug,
-    resolve_init_workspace_dir,
-    write_workspace_config,
-    write_workspace_state,
-)
 from lza_workbench.utils.output import (
     console,
     print_dry_run_header,
@@ -32,6 +17,18 @@ from lza_workbench.utils.output import (
     print_success,
     print_warning,
 )
+from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+from lza_workbench.workspace.models import (
+    AwsConfig,
+    ConfigurationConfig,
+    ConfigurationTemplateConfig,
+    CustomerConfig,
+    LzaConfig,
+    WorkspaceConfig,
+    WorkspaceState,
+)
+from lza_workbench.workspace.setup import normalize_customer_slug, resolve_init_workspace_dir
+from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
 
 @dataclass(frozen=True)
@@ -49,9 +46,6 @@ def run_import(
     config_dir: Path | None,
     aws_auth_type: str = "profile",
     aws_profile: str | None = None,
-    aws_role: str | None = None,
-    aws_access_key: str | None = None,
-    aws_secret_key: str | None = None,
     aws_region: str | None,
     lza_version: str | None,
     dry_run: bool,
@@ -59,30 +53,18 @@ def run_import(
     skip_aws_check: bool,
     interactive: bool,
 ) -> None:
+    """Create or update generated metadata without changing LZA configuration files."""
     raw_name = customer_name if customer_name != "." else Path.cwd().name
     customer_slug = normalize_customer_slug(raw_name)
     resolved_profile: str | None = None
-    resolved_role: str | None = None
-    resolved_access_key: str | None = None
-    resolved_secret_key: str | None = None
 
     if aws_auth_type == "profile":
         resolved_profile = _value_or_prompt(
             "AWS profile", aws_profile, f"{customer_slug}-root", interactive
         )
-    elif aws_auth_type == "role":
-        resolved_role = _value_or_prompt("AWS role ARN", aws_role, None, interactive)
-    elif aws_auth_type == "user":
-        resolved_access_key = _value_or_prompt(
-            "AWS access key ID", aws_access_key, None, interactive
-        )
-        resolved_secret_key = _value_or_prompt(
-            "AWS secret access key", aws_secret_key, None, interactive
-        )
     else:
         raise LzaError(f"Invalid AWS auth type: {aws_auth_type}")
 
-    """Create or update generated metadata without changing LZA configuration files."""
     if customer_name == ".":
         customer_name = Path.cwd().name
         workspace_dir = Path.cwd()
@@ -103,9 +85,6 @@ def run_import(
         customer_name=customer_name,
         customer_slug=customer_slug,
         aws_profile=resolved_profile,
-        aws_role=resolved_role,
-        aws_access_key=resolved_access_key,
-        aws_secret_key=resolved_secret_key,
         aws_region=_value_or_prompt(
             "AWS region",
             aws_region,
@@ -193,9 +172,6 @@ def build_workspace_config(
     customer_name: str,
     customer_slug: str,
     aws_profile: str | None = None,
-    aws_role: str | None = None,
-    aws_access_key: str | None = None,
-    aws_secret_key: str | None = None,
     aws_region: str,
     lza_version: str,
     workspace_dir: Path,
@@ -211,9 +187,6 @@ def build_workspace_config(
         "customer": CustomerConfig(name=customer_name, slug=customer_slug),
         "aws": AwsConfig(
             profile=aws_profile,
-            role=aws_role,
-            access_key=aws_access_key,
-            secret_access_key=aws_secret_key,
             region=aws_region,
         ),
         "lza": LzaConfig(version=lza_version),

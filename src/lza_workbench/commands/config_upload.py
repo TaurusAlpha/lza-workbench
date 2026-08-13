@@ -12,12 +12,6 @@ from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.s3 import resolve_s3_archive_uri, upload_s3_archive
 from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import validate_template
-from lza_workbench.core.workspace import (
-    WORKSPACE_STATE_FILE,
-    WorkspaceReadinessLevel,
-    load_workspace_context,
-    write_workspace_state,
-)
 from lza_workbench.utils.archive import create_zip_archive
 from lza_workbench.utils.output import (
     print_diff_summary,
@@ -25,6 +19,8 @@ from lza_workbench.utils.output import (
     print_kv,
     print_success,
 )
+from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.state import write_workspace_state
 
 
 def run_upload_config(
@@ -109,7 +105,7 @@ def run_upload_config(
         "removed": len(diff_result.removed),
     }
 
-    write_workspace_state(workspace_dir / WORKSPACE_STATE_FILE, state)
+    write_workspace_state(workspace_dir / ".lza" / "state.json", state)
 
     print_success("Packaged and uploaded LZA configuration")
     print_kv("Workspace", workspace_dir)

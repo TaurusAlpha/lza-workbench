@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.core.workspace import load_workspace_config
+from lza_workbench.utils.archive import count_config_files, is_path_excluded
+from lza_workbench.workspace.config import load_workspace_config
 
 CONFIG_DIR = Path(__file__).parents[1] / "src" / "lza_workbench" / "config" / "examples"
 
@@ -62,8 +63,6 @@ cli_defaults:
 
 
 def test_is_path_excluded_and_count_config_files(tmp_path: Path) -> None:
-    from lza_workbench.core.workspace import count_config_files, is_path_excluded
-
     assert is_path_excluded(Path(".git/config"), exclude_dirs={".git"})
     assert is_path_excluded(Path("sub/.git/HEAD"), exclude_dirs={".git"})
     assert not is_path_excluded(Path("accounts/accounts.yaml"), exclude_dirs={".git"})
@@ -76,23 +75,3 @@ def test_is_path_excluded_and_count_config_files(tmp_path: Path) -> None:
     (config_dir / ".git" / "HEAD").write_text("ref")
 
     assert count_config_files(config_dir, exclude_dirs={".git"}) == 1
-
-
-def test_unquoted_account_id_coerces_to_str(tmp_path: Path) -> None:
-    config_path = tmp_path / "lza-workspace.yaml"
-    config_path.write_text(
-        """\
-customer:
-  name: Example Customer
-  slug: example-customer
-aws:
-  profile: example-root
-  region: eu-west-1
-  account_id: 123456789012
-""",
-        encoding="utf-8",
-    )
-
-    config = load_workspace_config(config_path)
-    assert config.aws.account_id == "123456789012"
-

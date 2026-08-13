@@ -6,9 +6,21 @@ import hashlib
 import shutil
 import tempfile
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 
-from lza_workbench.core.workspace import ConfigDiffResult, is_path_excluded
+
+@dataclass(frozen=True)
+class ConfigDiffResult:
+    """Summary of changes between existing and new configuration files."""
+
+    added: list[str]
+    modified: list[str]
+    removed: list[str]
+
+    @property
+    def has_changes(self) -> bool:
+        return bool(self.added or self.modified or self.removed)
 
 
 def create_zip_archive(
@@ -130,3 +142,32 @@ def scan_directory_files(directory: Path, exclude_dirs: set[str]) -> dict[str, s
         files_map[str(rel)] = hashlib.sha256(path.read_bytes()).hexdigest()
 
     return files_map
+
+
+def is_path_excluded(
+    rel_path: Path,
+    exclude_dirs: set[str],
+    exclude_files: set[str] | None = None,
+) -> bool:
+    """Check if a relative file path matches excluded directory or file rules."""
+    if any(part in exclude_dirs for part in rel_path.parts[:-1]):
+        return True
+    if exclude_files and rel_path.name in exclude_files:
+        return True
+    return False
+
+
+def count_config_files(config_dir: Path, exclude_dirs: set[str]) -> int:
+    """Count configuration files in directory using an explicit loop."""
+    if not config_dir.is_dir():
+        return 0
+
+    total_files = 0
+    for path in config_dir.rglob("*"):
+        if not path.is_file():
+            continue
+        rel_path = path.relative_to(config_dir)
+        if not is_path_excluded(rel_path, exclude_dirs):
+            total_files += 1
+
+    return total_files

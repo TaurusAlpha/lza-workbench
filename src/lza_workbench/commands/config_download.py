@@ -11,20 +11,20 @@ import typer
 from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.s3 import download_s3_archive, resolve_s3_archive_uri
 from lza_workbench.core.errors import LzaError
-from lza_workbench.core.workspace import (
-    WORKSPACE_STATE_FILE,
+from lza_workbench.utils.archive import (
     ConfigDiffResult,
-    WorkspaceReadinessLevel,
     count_config_files,
-    load_workspace_context,
-    write_workspace_state,
+    extract_zip_to_workspace,
 )
-from lza_workbench.utils.archive import extract_zip_to_workspace
 from lza_workbench.utils.output import (
     print_diff_summary,
     print_dry_run_header,
     print_kv,
     print_success,
+)
+from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.state import (
+    write_workspace_state,
 )
 
 
@@ -126,7 +126,7 @@ def run_download_config(
         "removed": len(diff_result.removed),
     }
 
-    write_workspace_state(workspace_dir / WORKSPACE_STATE_FILE, state)
+    write_workspace_state(workspace_dir / ".lza" / "state.json", state)
 
     action_str = "Downloaded and extracted " if extract else "Downloaded "
     print_success(f"{action_str}LZA configuration")

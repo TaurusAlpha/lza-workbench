@@ -9,22 +9,24 @@ import typer
 from lza_workbench.aws.client_factory import validate_aws_credentials
 from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import resolve_template_source, validate_template
-from lza_workbench.core.workspace import (
-    AwsConfig,
-    CustomerConfig,
-    LzaConfig,
-    WorkspaceConfig,
-    WorkspaceState,
-    create_workspace,
-    normalize_customer_slug,
-    planned_write_paths,
-    validate_workspace_target,
-)
 from lza_workbench.utils.output import (
     console,
     print_dry_run_header,
     print_kv,
     print_success,
+)
+from lza_workbench.workspace.models import (
+    AwsConfig,
+    CustomerConfig,
+    LzaConfig,
+    WorkspaceConfig,
+    WorkspaceState,
+)
+from lza_workbench.workspace.setup import (
+    create_workspace,
+    normalize_customer_slug,
+    planned_write_paths,
+    validate_workspace_structure,
 )
 
 
@@ -34,9 +36,6 @@ def run_init(
     workspace_dir: Path,
     aws_auth_type: str = "profile",
     aws_profile: str | None = None,
-    aws_role: str | None = None,
-    aws_access_key: str | None = None,
-    aws_secret_key: str | None = None,
     aws_region: str | None = None,
     lza_version: str | None = None,
     dry_run: bool,
@@ -47,22 +46,10 @@ def run_init(
     """Create a customer workspace using the configured packaged template."""
     customer_slug = normalize_customer_slug(customer_name)
     resolved_profile: str | None = None
-    resolved_role: str | None = None
-    resolved_access_key: str | None = None
-    resolved_secret_key: str | None = None
 
     if aws_auth_type == "profile":
         resolved_profile = _value_or_prompt(
             "AWS profile", aws_profile, f"{customer_slug}-root", interactive
-        )
-    elif aws_auth_type == "role":
-        resolved_role = _value_or_prompt("AWS role ARN", aws_role, None, interactive)
-    elif aws_auth_type == "user":
-        resolved_access_key = _value_or_prompt(
-            "AWS access key ID", aws_access_key, None, interactive
-        )
-        resolved_secret_key = _value_or_prompt(
-            "AWS secret access key", aws_secret_key, None, interactive
         )
     else:
         raise LzaError(f"Invalid AWS auth type: {aws_auth_type}")
@@ -71,16 +58,13 @@ def run_init(
         customer_name=customer_name,
         customer_slug=customer_slug,
         aws_profile=resolved_profile,
-        aws_role=resolved_role,
-        aws_access_key=resolved_access_key,
-        aws_secret_key=resolved_secret_key,
         aws_region=_value_or_prompt("AWS region", aws_region, "us-east-1", interactive),
         lza_version=_value_or_prompt("LZA version", lza_version, LzaConfig().version, interactive),
     )
     template_dir = resolve_packaged_template(config)
 
     validate_template(template_dir)
-    validate_workspace_target(workspace_dir, force)
+    validate_workspace_structure(workspace_dir, force)
 
     if skip_aws_check:
         identity = None
@@ -106,9 +90,6 @@ def build_workspace_config(
     customer_name: str,
     customer_slug: str,
     aws_profile: str | None = None,
-    aws_role: str | None = None,
-    aws_access_key: str | None = None,
-    aws_secret_key: str | None = None,
     aws_region: str,
     lza_version: str,
 ) -> WorkspaceConfig:
@@ -117,9 +98,6 @@ def build_workspace_config(
         customer=CustomerConfig(name=customer_name, slug=customer_slug),
         aws=AwsConfig(
             profile=aws_profile,
-            role=aws_role,
-            access_key=aws_access_key,
-            secret_access_key=aws_secret_key,
             region=aws_region,
         ),
         lza=LzaConfig(version=lza_version),
@@ -160,10 +138,6 @@ def print_success_summary(
     print_kv("Customer", f"{config.customer.name} ({config.customer.slug})")
     if config.aws.profile:
         print_kv("AWS profile", config.aws.profile)
-    elif config.aws.role:
-        print_kv("AWS role", config.aws.role)
-    elif config.aws.access_key:
-        print_kv("AWS access key", config.aws.access_key)
     print_kv("AWS region", config.aws.region)
     print_kv("LZA version", config.lza.version)
     if identity:

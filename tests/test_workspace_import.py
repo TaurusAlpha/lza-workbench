@@ -6,7 +6,8 @@ from pathlib import Path
 
 from lza_workbench.commands.workspace_import import resolve_import_paths, run_import
 from lza_workbench.core.templates import REQUIRED_TEMPLATE_FILES
-from lza_workbench.core.workspace import load_workspace_config, load_workspace_state
+from lza_workbench.workspace.config import load_workspace_config
+from lza_workbench.workspace.state import load_workspace_state
 
 
 def test_import_creates_metadata_without_modifying_configuration(tmp_path: Path) -> None:
