@@ -3,6 +3,12 @@
 Historical record of completed features is recorded in [`docs/DONE.md`](file:///Users/andreyv/Projects/personal/lza-workbench/docs/DONE.md).
 This file tracks active, planned, unresolved, refactoring, and technical-debt work.
 
+## Refactoring
+
+- [] Follow the architectural direction in [`docs/refactor.md`](docs/refactor.md).
+- [] Work through the incremental learning checklist in
+  [`docs/refactor_steps.md`](docs/refactor_steps.md).
+
 ## CLI Commands
 
 - [x] `lza init`
