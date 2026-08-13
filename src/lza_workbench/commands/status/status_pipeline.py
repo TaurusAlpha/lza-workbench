@@ -19,16 +19,14 @@ from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_worksp
 
 def run_pipeline_status(
     *,
-    aws_profile: str | None = None,
-    aws_region: str | None = None,
     target_dir: Path | None = None,
 ) -> None:
     """Query AWS CodePipeline state for current workspace pipelines."""
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
-    profile = (aws_profile or "").strip() or (config.aws.profile or "").strip()
-    region = (aws_region or "").strip() or (config.aws.region or "").strip() or "us-east-1"
+    profile = config.aws.profile or ""
+    region = config.aws.region
 
     factory = None
     aws_identity = None

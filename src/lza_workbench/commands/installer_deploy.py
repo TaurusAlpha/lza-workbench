@@ -54,7 +54,7 @@ def run_installer_deploy(
 
     # 1. Check AWS configuration in lza-workspace.yaml
     profile = config.aws.profile or ""
-    region = config.aws.region or "us-east-1"
+    region = config.aws.region
 
     # 2. Pre-flight check: validate required installer parameters in configuration
     missing_specs = _gather_required_parameters(config)

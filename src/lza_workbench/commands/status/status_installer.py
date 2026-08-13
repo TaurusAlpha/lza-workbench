@@ -55,8 +55,6 @@ def normalize_version(version: str) -> str:
 
 def run_installer_status(
     *,
-    aws_profile: str | None = None,
-    aws_region: str | None = None,
     sync_state: bool = False,
     sync_config: bool = False,
     target_dir: Path | None = None,
@@ -68,8 +66,8 @@ def run_installer_status(
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
-    profile = (aws_profile or "").strip() or (config.aws.profile or "").strip()
-    region = (aws_region or "").strip() or (config.aws.region or "").strip() or "us-east-1"
+    profile = config.aws.profile or ""
+    region = config.aws.region
 
     factory = None
     aws_identity = None

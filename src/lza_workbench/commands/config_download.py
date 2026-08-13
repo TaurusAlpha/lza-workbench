@@ -61,7 +61,7 @@ def run_download_config(
 
     prefix = (repo_config.prefix or "").strip()
     profile = config.aws.profile or ""
-    region = config.aws.region or "us-east-1"
+    region = config.aws.region
 
     s3_bucket, s3_key, zip_name = resolve_s3_archive_uri(bucket, prefix)
     zip_path = workspace_dir / zip_name

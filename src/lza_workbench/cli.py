@@ -82,8 +82,6 @@ def installer_status_command(
 ) -> None:
     """Show the current installer deployment state (alias for `lza status installer`)."""
     run_installer_status(
-        aws_profile=aws_profile or None,
-        aws_region=aws_region or None,
         sync_state=sync_state,
         sync_config=sync_config,
     )
@@ -97,10 +95,7 @@ def status_root_callback(
 ) -> None:
     """Show overall workspace status overview."""
     if ctx.invoked_subcommand is None:
-        run_root_status(
-            aws_profile=aws_profile or None,
-            aws_region=aws_region or None,
-        )
+        run_root_status()
 
 
 @status_app.command("installer")
@@ -112,8 +107,6 @@ def status_installer_command(
 ) -> None:
     """Show the current installer stack status details."""
     run_installer_status(
-        aws_profile=aws_profile or None,
-        aws_region=aws_region or None,
         sync_state=sync_state,
         sync_config=sync_config,
     )
@@ -131,10 +124,7 @@ def status_pipeline_command(
     aws_region: params.AwsRegion = "",
 ) -> None:
     """Show CodePipeline status details."""
-    run_pipeline_status(
-        aws_profile=aws_profile or None,
-        aws_region=aws_region or None,
-    )
+    run_pipeline_status()
 
 
 app.add_typer(config_app, name="config")

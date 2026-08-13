@@ -50,8 +50,6 @@ class RequiredParamSpec:
 
 def run_installer_plan(
     *,
-    aws_profile: str | None = None,
-    aws_region: str | None = None,
     dry_run: bool = False,
     no_save: bool = False,
     target_dir: Path | None = None,
@@ -60,8 +58,8 @@ def run_installer_plan(
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CONFIGURED)
     workspace_dir, config = ctx.workspace_dir, ctx.config
 
-    profile = (aws_profile or "").strip() or (config.aws.profile or "").strip()
-    region = (aws_region or "").strip() or (config.aws.region or "").strip() or "us-east-1"
+    profile = config.aws.profile or ""
+    region = config.aws.region
 
     # Validate required installer configuration parameters in workspace
     missing_specs = _gather_required_parameters(config)

@@ -20,16 +20,14 @@ from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_worksp
 
 def run_root_status(
     *,
-    aws_profile: str | None = None,
-    aws_region: str | None = None,
     target_dir: Path | None = None,
 ) -> None:
     """Display overall summary status for the customer LZA workspace."""
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
     workspace_dir, config = ctx.workspace_dir, ctx.config
 
-    profile = (aws_profile or "").strip() or (config.aws.profile or "").strip()
-    region = (aws_region or "").strip() or (config.aws.region or "").strip() or "us-east-1"
+    profile = config.aws.profile or ""
+    region = config.aws.region or "us-east-1"
 
     factory = None
     aws_identity = None

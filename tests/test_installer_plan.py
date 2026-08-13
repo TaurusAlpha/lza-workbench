@@ -80,8 +80,6 @@ def test_missing_parameters_graceful_failure(tmp_path: Path) -> None:
 
     with pytest.raises(LzaError) as exc_info:
         run_installer_plan(
-            aws_profile="test-profile",
-            aws_region="us-east-1",
             dry_run=False,
             no_save=False,
             target_dir=ws_dir,
@@ -97,8 +95,6 @@ def test_installer_plan_no_save(sample_workspace: Path) -> None:
         with patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client:
             mock_client.return_value = MagicMock()
             run_installer_plan(
-                aws_profile="test-profile",
-                aws_region="us-east-1",
                 dry_run=False,
                 no_save=True,
                 target_dir=sample_workspace,
@@ -134,8 +130,6 @@ def test_installer_plan_codecommit_missing(sample_workspace: Path) -> None:
             side_effect=client_side_effect,
         ):
             run_installer_plan(
-                aws_profile="test-profile",
-                aws_region="us-east-1",
                 dry_run=False,
                 no_save=False,
                 target_dir=sample_workspace,
@@ -186,8 +180,6 @@ def test_installer_plan_cfn_update_detected(sample_workspace: Path) -> None:
             side_effect=client_side_effect,
         ):
             run_installer_plan(
-                aws_profile="test-profile",
-                aws_region="us-east-1",
                 dry_run=False,
                 no_save=False,
                 target_dir=sample_workspace,
