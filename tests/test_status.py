@@ -72,7 +72,7 @@ def test_sync_installer_state_success(tmp_path):
     assert new_state.installer_stack_status == "CREATE_COMPLETE"
     assert new_state.installer_template_version == "v1.15.5"
 
-    loaded_state = load_workspace_state(tmp_path / ".lza" / "state.json")
+    loaded_state = load_workspace_state(tmp_path)
     assert loaded_state.installer_stack_id == cfn_status.stack_id
 
 
@@ -102,7 +102,7 @@ def test_sync_installer_config_success(tmp_path):
     assert new_config.installer.options.management_account_email == "mgmt@example.com"
     assert new_config.installer.options.enable_approval_stage is True
 
-    loaded_config = load_workspace_config(tmp_path / "lza-workspace.yaml")
+    loaded_config = load_workspace_config(tmp_path)
     assert loaded_config.installer.options.management_account_email == "mgmt@example.com"
 
 

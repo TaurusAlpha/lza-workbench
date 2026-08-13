@@ -34,10 +34,9 @@ def workspace_dir(tmp_path: Path) -> Path:
         skip_aws_check=True,
         interactive=False,
     )
-    config_path = target / "lza-workspace.yaml"
-    config = load_workspace_config(config_path)
+    config = load_workspace_config(target)
     config.configuration.repository.type = "s3"
-    write_workspace_config(config_path, config)
+    write_workspace_config(target, config)
     return target
 
 
@@ -57,30 +56,27 @@ def test_run_download_config_requires_bucket(workspace_dir: Path) -> None:
 
 
 def test_run_download_config_dry_run(workspace_dir: Path) -> None:
-    config_file = workspace_dir / "lza-workspace.yaml"
-    cfg = load_workspace_config(config_file)
+    cfg = load_workspace_config(workspace_dir)
     cfg.configuration.repository.bucket = "my-test-bucket"
-    write_workspace_config(config_file, cfg)
+    write_workspace_config(workspace_dir, cfg)
 
     path = run_download_config(target_dir=workspace_dir, dry_run=True)
     assert path == workspace_dir / "aws-accelerator-config"
 
 
 def test_run_download_config_force_required(workspace_dir: Path) -> None:
-    config_file = workspace_dir / "lza-workspace.yaml"
-    cfg = load_workspace_config(config_file)
+    cfg = load_workspace_config(workspace_dir)
     cfg.configuration.repository.bucket = "my-test-bucket"
-    write_workspace_config(config_file, cfg)
+    write_workspace_config(workspace_dir, cfg)
 
     with pytest.raises(LzaError, match="not empty"):
         run_download_config(target_dir=workspace_dir, force=False, interactive=False)
 
 
 def test_run_download_config_success(workspace_dir: Path) -> None:
-    config_file = workspace_dir / "lza-workspace.yaml"
-    cfg = load_workspace_config(config_file)
+    cfg = load_workspace_config(workspace_dir)
     cfg.configuration.repository.bucket = "my-test-bucket"
-    write_workspace_config(config_file, cfg)
+    write_workspace_config(workspace_dir, cfg)
 
     config_dir = workspace_dir / "aws-accelerator-config"
     for item in config_dir.iterdir():
@@ -118,7 +114,7 @@ def test_run_download_config_success(workspace_dir: Path) -> None:
     assert (git_dir / "HEAD").is_file()
     assert (workspace_dir / "aws-accelerator-config.zip").is_file()
 
-    state = load_workspace_state(workspace_dir / ".lza" / "state.json")
+    state = load_workspace_state(workspace_dir)
     assert state.config_downloaded_at is not None
     assert state.config_artifact_sha256 is not None
     assert state.config_files_count == 2
@@ -126,10 +122,9 @@ def test_run_download_config_success(workspace_dir: Path) -> None:
 
 
 def test_run_download_config_without_extract(workspace_dir: Path) -> None:
-    config_file = workspace_dir / "lza-workspace.yaml"
-    cfg = load_workspace_config(config_file)
+    cfg = load_workspace_config(workspace_dir)
     cfg.configuration.repository.bucket = "my-test-bucket"
-    write_workspace_config(config_file, cfg)
+    write_workspace_config(workspace_dir, cfg)
 
     def fake_download(bucket: str, key: str, filename: str) -> None:
         p = Path(filename)
@@ -147,10 +142,9 @@ def test_run_download_config_without_extract(workspace_dir: Path) -> None:
 
 
 def test_cli_config_download_command(workspace_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    config_file = workspace_dir / "lza-workspace.yaml"
-    cfg = load_workspace_config(config_file)
+    cfg = load_workspace_config(workspace_dir)
     cfg.configuration.repository.bucket = "my-test-bucket"
-    write_workspace_config(config_file, cfg)
+    write_workspace_config(workspace_dir, cfg)
 
     monkeypatch.chdir(workspace_dir)
     exit_code = main(["config", "download", "--dry-run"])

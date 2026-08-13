@@ -126,7 +126,7 @@ def run_download_config(
         "removed": len(diff_result.removed),
     }
 
-    write_workspace_state(workspace_dir / ".lza" / "state.json", state)
+    write_workspace_state(workspace_dir, state)
 
     action_str = "Downloaded and extracted " if extract else "Downloaded "
     print_success(f"{action_str}LZA configuration")

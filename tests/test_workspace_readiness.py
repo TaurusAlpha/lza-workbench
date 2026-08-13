@@ -56,8 +56,8 @@ def create_minimal_workspace(
 
     (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
 
-    write_workspace_config(ws_dir / "lza-workspace.yaml", config)
-    write_workspace_state(ws_dir / ".lza" / "workspace-state.yaml", state)
+    write_workspace_config(ws_dir, config)
+    write_workspace_state(ws_dir, state)
 
     return ws_dir
 
@@ -84,8 +84,8 @@ def test_evaluate_uninitialized(tmp_path: Path):
 
 def test_evaluate_core_configured(tmp_path: Path):
     ws_dir = create_minimal_workspace(tmp_path, has_config_dir=False)
-    config = load_workspace_config(ws_dir / "lza-workspace.yaml")
-    state = load_workspace_state(ws_dir / ".lza" / "workspace-state.yaml")
+    config = load_workspace_config(ws_dir)
+    state = load_workspace_state(ws_dir)
 
     assert (
         evaluate_workspace_readiness(ws_dir, config, state)
@@ -95,16 +95,16 @@ def test_evaluate_core_configured(tmp_path: Path):
 
 def test_evaluate_imported(tmp_path: Path):
     ws_dir = create_minimal_workspace(tmp_path, has_config_dir=True, has_installer_params=False)
-    config = load_workspace_config(ws_dir / "lza-workspace.yaml")
-    state = load_workspace_state(ws_dir / ".lza" / "workspace-state.yaml")
+    config = load_workspace_config(ws_dir)
+    state = load_workspace_state(ws_dir)
 
     assert evaluate_workspace_readiness(ws_dir, config, state) == WorkspaceReadinessLevel.IMPORTED
 
 
 def test_evaluate_configured(tmp_path: Path):
     ws_dir = create_minimal_workspace(tmp_path, has_config_dir=True, has_installer_params=True)
-    config = load_workspace_config(ws_dir / "lza-workspace.yaml")
-    state = load_workspace_state(ws_dir / ".lza" / "workspace-state.yaml")
+    config = load_workspace_config(ws_dir)
+    state = load_workspace_state(ws_dir)
 
     assert evaluate_workspace_readiness(ws_dir, config, state) == WorkspaceReadinessLevel.CONFIGURED
 
@@ -116,8 +116,8 @@ def test_evaluate_deployed(tmp_path: Path):
         has_installer_params=True,
         installer_stack_id="arn:aws:cloudformation:us-east-1:123456789012:stack/test/123",
     )
-    config = load_workspace_config(ws_dir / "lza-workspace.yaml")
-    state = load_workspace_state(ws_dir / ".lza" / "workspace-state.yaml")
+    config = load_workspace_config(ws_dir)
+    state = load_workspace_state(ws_dir)
 
     assert evaluate_workspace_readiness(ws_dir, config, state) == WorkspaceReadinessLevel.DEPLOYED
 

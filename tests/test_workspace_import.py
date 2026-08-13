@@ -28,10 +28,10 @@ def test_import_creates_metadata_without_modifying_configuration(tmp_path: Path)
         interactive=False,
     )
 
-    config = load_workspace_config(workspace_dir / "lza-workspace.yaml")
+    config = load_workspace_config(workspace_dir)
     assert config.configuration.local_path == "aws-accelerator-config"
     assert config.configuration.template.source == "local"
-    assert load_workspace_state(workspace_dir / ".lza" / "state.json")
+    assert load_workspace_state(workspace_dir)
     assert config_file.read_text(encoding="utf-8") == content_before
 
 

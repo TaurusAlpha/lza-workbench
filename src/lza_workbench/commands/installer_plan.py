@@ -77,7 +77,7 @@ def run_installer_plan(
 
     # Save accepted installer settings if requested and not dry run
     if not no_save and not dry_run:
-        write_workspace_config(workspace_dir / "lza-workspace.yaml", config)
+        write_workspace_config(workspace_dir, config)
         print_info("Installer configuration verified in lza-workspace.yaml", dim=True)
 
     # Step 1: Template Resolution & Parameter Schema Inspection

@@ -86,8 +86,8 @@ def test_run_init_creates_workspace_from_packaged_template(tmp_path: Path) -> No
         interactive=False,
     )
 
-    config = load_workspace_config(workspace_dir / "lza-workspace.yaml")
-    state = load_workspace_state(workspace_dir / ".lza" / "state.json")
+    config = load_workspace_config(workspace_dir)
+    state = load_workspace_state(workspace_dir)
     assert config.customer.slug == "example-customer"
     assert (workspace_dir / config.configuration.local_path / "global-config.yaml").is_file()
     assert (workspace_dir / config.installer.local_path).is_dir()

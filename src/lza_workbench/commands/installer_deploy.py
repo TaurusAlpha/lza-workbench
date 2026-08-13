@@ -38,7 +38,6 @@ from lza_workbench.utils.output import (
     print_warning,
 )
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
-from lza_workbench.workspace.models import WorkspaceState
 from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
 
@@ -247,15 +246,14 @@ def run_installer_deploy(
         )
 
         # 9. Record State in .lza/state.json
-        state_file = workspace_dir / ".lza" / "state.json"
-        state = load_workspace_state(state_file) if state_file.exists() else WorkspaceState()
+        state = load_workspace_state(workspace_dir)
         state.management_account_id = aws_identity["account"]
         state.caller_arn = aws_identity["arn"]
         state.installer_stack_id = final_status.stack_id or stack_id
         state.installer_stack_status = final_status.stack_status
         state.installer_stack_updated_at = datetime.now(UTC)
         state.updated_at = datetime.now(UTC)
-        write_workspace_state(state_file, state)
+        write_workspace_state(workspace_dir, state)
         print_info("Updated operational state in .lza/state.json", dim=True)
 
         # 10. Output & Extensible Next Steps

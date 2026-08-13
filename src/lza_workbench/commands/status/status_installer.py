@@ -135,7 +135,7 @@ def sync_installer_state(
     state.installer_template_version = deployed_version
     state.updated_at = now
 
-    write_workspace_state(workspace_dir / ".lza" / "state.json", state)
+    write_workspace_state(workspace_dir, state)
     console.print(
         "[bold green]Synchronized .lza/state.json with live AWS installer state.[/bold green]"
     )
@@ -201,7 +201,7 @@ def sync_installer_config(
     if "UseExistingConfigRepo" in params:
         config.installer.options.use_existing_config_repo = params["UseExistingConfigRepo"] == "Yes"
 
-    write_workspace_config(workspace_dir / "lza-workspace.yaml", config)
+    write_workspace_config(workspace_dir, config)
     print_success("Synchronized lza-workspace.yaml with deployed AWS installer configuration.")
     return config
 

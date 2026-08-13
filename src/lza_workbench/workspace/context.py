@@ -5,7 +5,6 @@ from enum import IntEnum
 from pathlib import Path
 
 from lza_workbench.core.errors import LzaError
-from lza_workbench.workspace import WORKSPACE_CONFIG_FILE, WORKSPACE_STATE_FILE
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.models import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.setup import resolve_workspace_dir
@@ -94,8 +93,8 @@ def load_workspace_context(
 ) -> WorkspaceContext:
     """Resolve workspace directory, load configuration and state, and enforce readiness level."""
     workspace_dir = resolve_workspace_dir(target_dir)
-    config = load_workspace_config(workspace_dir / WORKSPACE_CONFIG_FILE)
-    state = load_workspace_state(workspace_dir / WORKSPACE_STATE_FILE)
+    config = load_workspace_config(workspace_dir)
+    state = load_workspace_state(workspace_dir)
 
     readiness = evaluate_workspace_readiness(workspace_dir, config, state)
 

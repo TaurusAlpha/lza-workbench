@@ -5,10 +5,9 @@ from pathlib import Path
 import typer
 
 from lza_workbench.core.errors import LzaError
-from lza_workbench.workspace import WORKSPACE_CONFIG_FILE, WORKSPACE_STATE_FILE
-from lza_workbench.workspace.config import write_workspace_config
+from lza_workbench.workspace.config import WORKSPACE_CONFIG_FILE, write_workspace_config
 from lza_workbench.workspace.models import WorkspaceConfig, WorkspaceState
-from lza_workbench.workspace.state import write_workspace_state
+from lza_workbench.workspace.state import WORKSPACE_STATE_FILE, write_workspace_state
 
 
 def normalize_path(path: Path) -> Path:
@@ -99,8 +98,8 @@ def create_workspace(
         template_config_dir, target / config.configuration.local_path, dirs_exist_ok=True
     )
 
-    write_workspace_config(target / WORKSPACE_CONFIG_FILE, config)
-    write_workspace_state(target / WORKSPACE_STATE_FILE, state)
+    write_workspace_config(target, config)
+    write_workspace_state(target, state)
 
 
 def planned_write_paths(workspace_dir: Path, config: WorkspaceConfig) -> list[Path]:

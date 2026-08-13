@@ -105,7 +105,7 @@ def run_upload_config(
         "removed": len(diff_result.removed),
     }
 
-    write_workspace_state(workspace_dir / ".lza" / "state.json", state)
+    write_workspace_state(workspace_dir, state)
 
     print_success("Packaged and uploaded LZA configuration")
     print_kv("Workspace", workspace_dir)

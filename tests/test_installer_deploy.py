@@ -45,8 +45,8 @@ def sample_workspace(tmp_path: Path) -> Path:
     config.installer.options.log_archive_account_email = "log@example.com"
     config.installer.options.audit_account_email = "audit@example.com"
 
-    write_workspace_config(ws_dir / "lza-workspace.yaml", config)
-    write_workspace_state(ws_dir / ".lza" / "state.json", WorkspaceState.from_config(config))
+    write_workspace_config(ws_dir, config)
+    write_workspace_state(ws_dir, WorkspaceState.from_config(config))
 
     template_file = ws_dir / "aws-accelerator-installer" / "AWSAccelerator-InstallerStack.template"
     template_file.write_text(
@@ -73,7 +73,7 @@ def test_missing_aws_profile_failure(tmp_path: Path) -> None:
             aws=AwsConfig(profile="", region="us-east-1"),
             lza=LzaConfig(version="v1.16.0"),
         )
-        write_workspace_config(ws_dir / "lza-workspace.yaml", config)
+        write_workspace_config(ws_dir, config)
         run_installer_deploy(target_dir=ws_dir)
 
 
@@ -87,7 +87,7 @@ def test_missing_required_params_failure(tmp_path: Path) -> None:
         aws=AwsConfig(profile="test-profile", region="us-east-1"),
         lza=LzaConfig(version="v1.16.0"),
     )
-    write_workspace_config(ws_dir / "lza-workspace.yaml", config)
+    write_workspace_config(ws_dir, config)
 
     with pytest.raises(
         LzaError,
@@ -112,7 +112,7 @@ def test_installer_deploy_dry_run(
 
     run_installer_deploy(dry_run=True, force=True, target_dir=sample_workspace)
 
-    state = load_workspace_state(sample_workspace / ".lza" / "state.json")
+    state = load_workspace_state(sample_workspace)
     assert state.installer_stack_id is None
 
 
@@ -166,7 +166,7 @@ def test_installer_deploy_success(
 
     run_installer_deploy(force=True, target_dir=sample_workspace)
 
-    state = load_workspace_state(sample_workspace / ".lza" / "state.json")
+    state = load_workspace_state(sample_workspace)
     assert state.installer_stack_status == "CREATE_COMPLETE"
     assert (
         state.installer_stack_id

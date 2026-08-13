@@ -33,10 +33,9 @@ def workspace_dir(tmp_path: Path) -> Path:
         skip_aws_check=True,
         interactive=False,
     )
-    config_path = target / "lza-workspace.yaml"
-    config = load_workspace_config(config_path)
+    config = load_workspace_config(target)
     config.configuration.repository.type = "s3"
-    write_workspace_config(config_path, config)
+    write_workspace_config(target, config)
     return target
 
 
@@ -56,11 +55,10 @@ def test_run_upload_config_requires_bucket(workspace_dir: Path) -> None:
 
 
 def test_run_upload_config_requires_profile(workspace_dir: Path) -> None:
-    config_file = workspace_dir / "lza-workspace.yaml"
-    cfg = load_workspace_config(config_file)
+    cfg = load_workspace_config(workspace_dir)
     cfg.configuration.repository.bucket = "my-test-bucket"
     cfg.aws.profile = None
-    write_workspace_config(config_file, cfg)
+    write_workspace_config(workspace_dir, cfg)
 
     with pytest.raises(
         (LzaError, ValueError),
@@ -70,21 +68,19 @@ def test_run_upload_config_requires_profile(workspace_dir: Path) -> None:
 
 
 def test_run_upload_config_dry_run(workspace_dir: Path) -> None:
-    config_file = workspace_dir / "lza-workspace.yaml"
-    cfg = load_workspace_config(config_file)
+    cfg = load_workspace_config(workspace_dir)
     cfg.configuration.repository.bucket = "my-test-bucket"
-    write_workspace_config(config_file, cfg)
+    write_workspace_config(workspace_dir, cfg)
 
     zip_path = run_upload_config(target_dir=workspace_dir, dry_run=True)
     assert zip_path == workspace_dir / "aws-accelerator-config.zip"
 
 
 def test_run_upload_config_success(workspace_dir: Path) -> None:
-    config_file = workspace_dir / "lza-workspace.yaml"
-    cfg = load_workspace_config(config_file)
+    cfg = load_workspace_config(workspace_dir)
     cfg.configuration.repository.bucket = "my-test-bucket"
     cfg.configuration.repository.prefix = "my-prefix"
-    write_workspace_config(config_file, cfg)
+    write_workspace_config(workspace_dir, cfg)
 
     config_dir = workspace_dir / "aws-accelerator-config"
     (config_dir / ".DS_Store").write_text("dummy", encoding="utf-8")
@@ -112,7 +108,7 @@ def test_run_upload_config_success(workspace_dir: Path) -> None:
         str(zip_path), "my-test-bucket", "my-prefix/aws-accelerator-config.zip"
     )
 
-    state = load_workspace_state(workspace_dir / ".lza" / "state.json")
+    state = load_workspace_state(workspace_dir)
     assert state.config_uploaded_at is not None
     assert state.config_artifact_sha256 is not None
     assert state.config_artifact_etag == "123456789"
@@ -122,10 +118,9 @@ def test_run_upload_config_success(workspace_dir: Path) -> None:
 
 
 def test_run_upload_config_diff_calculation(workspace_dir: Path) -> None:
-    config_file = workspace_dir / "lza-workspace.yaml"
-    cfg = load_workspace_config(config_file)
+    cfg = load_workspace_config(workspace_dir)
     cfg.configuration.repository.bucket = "my-test-bucket"
-    write_workspace_config(config_file, cfg)
+    write_workspace_config(workspace_dir, cfg)
 
     zip_path = workspace_dir / "aws-accelerator-config.zip"
 
@@ -146,17 +141,16 @@ def test_run_upload_config_diff_calculation(workspace_dir: Path) -> None:
         mock_session_cls.return_value.client.return_value = mock_s3
         run_upload_config(target_dir=workspace_dir)
 
-    state = load_workspace_state(workspace_dir / ".lza" / "state.json")
+    state = load_workspace_state(workspace_dir)
     assert state.config_last_diff_summary is not None
     assert state.config_last_diff_summary["modified"] >= 1
     assert state.config_last_diff_summary["removed"] >= 1
 
 
 def test_cli_config_upload_command(workspace_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    config_file = workspace_dir / "lza-workspace.yaml"
-    cfg = load_workspace_config(config_file)
+    cfg = load_workspace_config(workspace_dir)
     cfg.configuration.repository.bucket = "my-test-bucket"
-    write_workspace_config(config_file, cfg)
+    write_workspace_config(workspace_dir, cfg)
 
     monkeypatch.chdir(workspace_dir)
     exit_code = main(["config", "upload", "--dry-run"])

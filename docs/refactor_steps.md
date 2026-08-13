@@ -53,37 +53,11 @@ diffs.
 
 ## Phase 2: Separate Workspace Models
 
-- [] Inventory every import from `core.workspace` and group imported names into models,
-      persistence, readiness, paths, and other helpers.
-- [x] Create the chosen workspace package or models module without moving behavior yet.
-- [x] Move `WorkspaceModel`, `CustomerConfig`, `AwsConfig`, and `LzaConfig` to the models module.
-- [] Keep temporary re-exports from `core/workspace.py` so existing callers continue to work.
-- [x] Run workspace configuration, initialization, and import tests.
-- [x] Move installer-related Pydantic models to the models module.
-- [x] Run installer plan and deployment tests.
-- [x] Move configuration, packaging, and repository Pydantic models to the models module.
-- [x] Run configuration upload and download tests.
-- [x] Move pipeline and CLI-default models to the models module.
-- [x] Move `WorkspaceConfig` and `WorkspaceState` after their dependent models have moved.
-- [x] Update one caller group at a time to import models from their new public location.
-- [x] Remove model re-exports from `core/workspace.py` only after `rg` confirms no callers use
-      them.
-
-Achievement: workspace data definitions have one clear home, and you have practiced safe moves
-with compatibility re-exports.
+DONE
 
 ## Phase 3: Separate Workspace Persistence
 
-- [x] Create the chosen workspace storage module.
-- [] Move workspace config and state path constants to the storage or paths module.
-- [x] Move `load_workspace_config` and `write_workspace_config` without changing serialization.
-- [] Add or verify round-trip tests for workspace YAML before updating all callers.
-- [x] Move `load_workspace_state` and `write_workspace_state` without changing serialization.
-- [] Add or verify round-trip tests for state JSON.
-- [x] Update initialization and import workflows to use the new storage module.
-- [x] Update installer and configuration workflows to use the new storage module.
-- [x] Update status workflows to use the new storage module.
-- [] Remove temporary persistence re-exports after confirming there are no remaining callers.
+DONE
 
 Achievement: models no longer know how or where they are stored.
 

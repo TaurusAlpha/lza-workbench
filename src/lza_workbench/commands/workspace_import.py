@@ -114,9 +114,9 @@ def run_import(
 
     (workspace_dir / ".lza").mkdir(parents=True, exist_ok=True)
     if workspace_dir / "lza-workspace.yaml" in paths:
-        write_workspace_config(workspace_dir / "lza-workspace.yaml", config)
+        write_workspace_config(workspace_dir, config)
     if workspace_dir / ".lza" / "state.json" in paths:
-        write_workspace_state(workspace_dir / ".lza" / "state.json", state)
+        write_workspace_state(workspace_dir, state)
     _print_summary("Imported LZA workspace", workspace_dir, config_dir, paths, identity)
 
 
@@ -160,8 +160,8 @@ def load_existing_metadata(workspace_dir: Path) -> ExistingMetadata | None:
         return None
     try:
         return ExistingMetadata(
-            config=load_workspace_config(config_path),
-            state=load_workspace_state(state_path),
+            config=load_workspace_config(workspace_dir),
+            state=load_workspace_state(workspace_dir),
         )
     except ValueError as exc:
         raise LzaError(str(exc)) from exc
