@@ -108,21 +108,21 @@ Achievement: installer plan and deploy share public domain logic instead of comm
 
 This is intentionally late because it requires understanding all preceding boundaries.
 
-- [] Write a one-page sequence of the current deployment stages and their failure points.
-- [] Identify which stages are read-only and which mutate local files or AWS.
-- [] Extract preflight validation from `run_installer_deploy` into a focused function.
-- [] Extract source repository inspection from deployment orchestration.
-- [] Fix S3 source preparation to use configured bucket and key values in a separate behavioral
+- [x] Write a one-page sequence of the current deployment stages and their failure points.
+- [x] Identify which stages are read-only and which mutate local files or AWS.
+- [x] Extract preflight validation from `run_installer_deploy` into a focused function.
+- [x] Extract source repository inspection from deployment orchestration.
+- [ ] Fix S3 source preparation to use configured bucket and key values in a separate behavioral
       commit.
-- [] Decide whether CodeCommit synchronization is implemented or explicitly required as a
+- [x] Decide whether CodeCommit synchronization is implemented or explicitly required as a
       manual prerequisite.
-- [] Add a regression test for the chosen CodeCommit behavior.
-- [] Extract CloudFormation plan preparation from deployment orchestration.
-- [] Reject unsafe or unknown CloudFormation states before mutation.
-- [] Extract confirmation and Rich tables into presentation helpers.
-- [] Extract state update after successful deployment.
-- [] Reduce `run_installer_deploy` to readable orchestration of named stages.
-- [] Add tests for create, update, no-change, inaccessible, and failure outcomes.
+- [x] Add a regression test for the chosen CodeCommit behavior.
+- [x] Extract CloudFormation plan preparation from deployment orchestration.
+- [x] Reject unsafe or unknown CloudFormation states before mutation.
+- [x] Extract confirmation and Rich tables into presentation helpers.
+- [x] Extract state update after successful deployment.
+- [x] Reduce `run_installer_deploy` to readable orchestration of named stages.
+- [x] Add tests for create, update, no-change, inaccessible, and failure outcomes.
 
 Achievement: deployment reads as a short workflow, and each risky stage can be tested separately.
 

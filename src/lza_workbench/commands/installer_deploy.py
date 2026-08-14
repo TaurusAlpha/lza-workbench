@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -11,23 +10,20 @@ from rich.panel import Panel
 from rich.table import Table
 
 from lza_workbench.aws.cloudformation import (
+    CfnDeploymentPlanResult,
+    CfnStackStatusResult,
     deploy_cloudformation_stack,
     inspect_cloudformation_stack,
     stream_cloudformation_stack_events,
 )
-from lza_workbench.aws.codecommit import (
-    ensure_codecommit_repository,
-    inspect_codecommit_repository,
-)
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.aws.s3 import ensure_s3_installer_source
 from lza_workbench.core.errors import LzaError
-from lza_workbench.installer.config import validate_installer_configuration
-from lza_workbench.installer.parameters import build_installer_cfn_parameters
-from lza_workbench.installer.template import (
-    inspect_template_parameters,
-    resolve_installer_template,
-    validate_parameters_against_schema,
+from lza_workbench.installer.deployment import (
+    inspect_installer_source,
+    prepare_installer_template,
+    update_successful_deployment_state,
+    validate_cloudformation_plan,
+    validate_deployment_preflight,
 )
 from lza_workbench.utils.output import (
     console,
@@ -35,257 +31,201 @@ from lza_workbench.utils.output import (
     print_kv,
     print_notice,
     print_section,
-    print_warning,
 )
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
-from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
 
 def run_installer_deploy(
-    *,
-    dry_run: bool = False,
-    force: bool = False,
-    target_dir: Path | None = None,
+    *, dry_run: bool = False, force: bool = False, target_dir: Path | None = None
 ) -> None:
-    """Deploy the LZA installer CloudFormation stack for the current workspace."""
+    """Deploy the LZA installer stack through explicit, independently testable stages."""
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CONFIGURED)
-    workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
-
-    # 1. Check AWS configuration in lza-workspace.yaml
+    workspace_dir, config = ctx.workspace_dir, ctx.config
     profile = config.aws.profile or ""
 
-    # 2. Pre-flight check: validate required installer parameters in configuration
-    validation = validate_installer_configuration(config)
-    if not validation.is_complete:
-        console.print(
-            "[bold red]Configuration error: missing required installer settings in"
-            " lza-workspace.yaml:[/bold red]"
-        )
-        for spec in validation.missing_fields:
-            console.print(f"  - [bold]{spec.label}[/bold] ({spec.section}.{spec.attribute})")
-        raise LzaError(
-            f"{len(validation.missing_fields)} required parameter(s) missing from "
-            "lza-workspace.yaml. "
-            "Run 'lza installer plan' to resolve and configure missing values."
-        )
+    try:
+        validate_deployment_preflight(config)
+    except LzaError:
+        _render_missing_configuration(config)
+        raise
 
-    # 3. AWS Client & Identity Validation
     try:
         aws_context = resolve_aws_execution_context(
-            config.aws,
-            require_identity=True,
-            require_expected_account=True,
+            config.aws, require_identity=True, require_expected_account=True
         )
     except Exception as exc:
         raise LzaError(f"AWS authentication check failed for profile '{profile}': {exc}") from exc
-    factory = aws_context.factory
-    aws_identity = aws_context.identity
-    region = aws_context.region
-    assert aws_identity is not None
+    assert aws_context.identity is not None
 
-    # 4. Resolve Template & Validate Parameters
-    template_path = resolve_installer_template(workspace_dir, config, dry_run=dry_run)
-    params_schema = inspect_template_parameters(template_path)
-    resolved_params = build_installer_cfn_parameters(config)
-    validate_parameters_against_schema(resolved_params, params_schema)
+    template_path, resolved_parameters = prepare_installer_template(
+        workspace_dir=workspace_dir, config=config, dry_run=dry_run
+    )
+    inspect_installer_source(factory=aws_context.factory, config=config, region=aws_context.region)
 
-    # 5. Source Preparation Check (CodeCommit / S3)
-    source_type = config.installer.source_code.repository_type
-    if source_type == "codecommit":
-        repo_name = config.installer.source_code.repository_name or "aws-accelerator-installer"
-        branch_name = config.installer.source_code.branch or "main"
-        cc_plan = inspect_codecommit_repository(
-            factory=factory,
-            repository_type=source_type,
-            repository_name=repo_name,
-            branch_name=branch_name,
-            lza_version=config.lza.version,
-            region=region,
-        )
-        if cc_plan.creation_required or cc_plan.sync_required:
-            print_warning(
-                f"Source repository '{repo_name}' (branch '{branch_name}') "
-                "is missing or uninitialized."
-            )
-            if not force and not dry_run:
-                confirm_source = typer.confirm(
-                    f"Create and prepare CodeCommit repository '{repo_name}' automatically?",
-                    default=True,
-                )
-                if not confirm_source:
-                    console.print(
-                        "[yellow]Source preparation cancelled by user. Halting deployment.[/yellow]"
-                    )
-                    return
-
-            if not dry_run:
-                print_info(f"Preparing CodeCommit repository '{repo_name}'...", dim=True)
-                ensure_codecommit_repository(
-                    factory=factory,
-                    repository_name=repo_name,
-                    branch_name=branch_name,
-                )
-                print_info(f"CodeCommit repository '{repo_name}' is ready.")
-
-    elif source_type == "s3":
-        bucket_name = config.installer.source_code.bucket or (
-            f"aws-accelerator-installer-{aws_identity['account']}-{region}"
-        )
-        if not dry_run:
-            ensure_s3_installer_source(
-                factory=factory,
-                bucket_name=bucket_name,
-                region=region,
-            )
-
-    # 6. CloudFormation Inspection
     stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
     cfn_plan = inspect_cloudformation_stack(
-        factory=factory,
+        factory=aws_context.factory,
         stack_name=stack_name,
-        resolved_parameters=resolved_params,
+        resolved_parameters=resolved_parameters,
     )
-
-    operation = cfn_plan.operation
-    print_section(1, f"LZA Installer Stack Deployment ({operation})")
-    print_kv("Stack Name", stack_name)
-    print_kv("AWS Account", aws_identity["account"])
-    print_kv("AWS Region", region)
-    print_kv("AWS Profile", profile)
-    print_kv("Operation", operation)
-    if cfn_plan.stack_status:
-        print_kv("Current Stack Status", cfn_plan.stack_status)
-
-    console.print()
-    if cfn_plan.parameter_diffs:
-        diff_table = Table(title="Parameter Changes to be Applied", show_header=True)
-        diff_table.add_column("Parameter Key", style="cyan")
-        diff_table.add_column("Current Deployed Value", style="red")
-        diff_table.add_column("Planned New Value", style="green")
-
-        for k, (old_v, new_v) in sorted(cfn_plan.parameter_diffs.items()):
-            diff_table.add_row(k, str(old_v), str(new_v))
-
-        console.print(diff_table)
-    else:
-        param_table = Table(title="CloudFormation Parameters to be Deployed", show_header=True)
-        param_table.add_column("Parameter Key", style="cyan")
-        param_table.add_column("Value", style="white")
-
-        for k, v in sorted(resolved_params.items()):
-            param_table.add_row(k, str(v))
-
-        console.print(param_table)
-
-    console.print()
+    operation = validate_cloudformation_plan(cfn_plan)
+    _render_deployment_plan(
+        stack_name=stack_name,
+        profile=profile,
+        region=aws_context.region,
+        account_id=aws_context.identity["account"],
+        plan=cfn_plan,
+    )
 
     if operation == "NO_CHANGE" and not force:
-        print_info("No CloudFormation stack parameter changes detected. Stack is up to date.")
-        confirm_redeploy = typer.confirm("Force re-deployment of stack?", default=False)
-        if not confirm_redeploy:
+        if not typer.confirm("Force re-deployment of stack?", default=False):
             console.print("[dim]Deployment skipped as stack has no parameter changes.[/dim]")
             return
+        operation = "UPDATE"
 
-    # 7. Confirmation Prompt
-    if not force and not dry_run:
-        proceed = typer.confirm(
-            f"Proceed with CloudFormation stack deployment ({operation}) for '{stack_name}'?",
-            default=True,
-        )
-        if not proceed:
-            console.print("[yellow]Deployment cancelled by user.[/yellow]")
-            return
-
+    if not _confirm_deployment(
+        operation=operation, stack_name=stack_name, dry_run=dry_run, force=force
+    ):
+        return
     if dry_run:
-        console.print(
-            Panel(
-                f"[bold green]Dry-run complete.[/bold green]\n"
-                f"Would execute CloudFormation [bold]{operation}[/bold] "
-                f"for stack [bold]{stack_name}[/bold].\n"
-                "No AWS resources were modified.",
-                title="Dry Run Summary",
-            )
-        )
+        _render_dry_run(operation=operation, stack_name=stack_name)
         return
 
-    # 8. Deploy Stack & Stream Events
-    template_body = template_path.read_text(encoding="utf-8")
-    deploy_op = (
-        "UPDATE"
-        if cfn_plan.stack_status
-        in {"CREATE_COMPLETE", "UPDATE_COMPLETE", "UPDATE_ROLLBACK_COMPLETE"}
-        else "CREATE"
+    stack_id = _deploy_stack(
+        factory=aws_context.factory,
+        stack_name=stack_name,
+        template_path=template_path,
+        parameters=resolved_parameters,
+        operation=operation,
+    )
+    final_status = stream_cloudformation_stack_events(
+        factory=aws_context.factory, stack_name=stack_name, on_event=_render_stack_event
+    )
+    _handle_deployment_result(
+        final_status=final_status,
+        stack_id=stack_id,
+        stack_name=stack_name,
+        workspace_dir=workspace_dir,
+        aws_identity=aws_context.identity,
     )
 
-    print_info(f"Initiating CloudFormation stack {deploy_op}...", dim=True)
+
+def _render_missing_configuration(config: Any) -> None:
+    """Render missing preflight fields while validation remains presentation-independent."""
+    from lza_workbench.installer.config import validate_installer_configuration
+
+    validation = validate_installer_configuration(config)
+    console.print(
+        "[bold red]Configuration error: missing required installer settings in "
+        "lza-workspace.yaml:[/bold red]"
+    )
+    for spec in validation.missing_fields:
+        console.print(f"  - [bold]{spec.label}[/bold] ({spec.section}.{spec.attribute})")
+
+
+def _render_deployment_plan(
+    *,
+    stack_name: str,
+    profile: str,
+    region: str,
+    account_id: str,
+    plan: CfnDeploymentPlanResult,
+) -> None:
+    """Render the read-only CloudFormation deployment plan."""
+    print_section(1, f"LZA Installer Stack Deployment ({plan.operation})")
+    print_kv("Stack Name", stack_name)
+    print_kv("AWS Account", account_id)
+    print_kv("AWS Region", region)
+    print_kv("AWS Profile", profile)
+    print_kv("Operation", plan.operation)
+    if plan.stack_status:
+        print_kv("Current Stack Status", plan.stack_status)
+
+    title = (
+        "Parameter Changes to be Applied"
+        if plan.parameter_diffs
+        else "CloudFormation Parameters to be Deployed"
+    )
+    table = Table(title=title, show_header=True)
+    table.add_column("Parameter Key", style="cyan")
+    table.add_column("Current Deployed Value" if plan.parameter_diffs else "Value", style="white")
+    if plan.parameter_diffs:
+        table.add_column("Planned New Value", style="green")
+        for key, (old_value, new_value) in sorted(plan.parameter_diffs.items()):
+            table.add_row(key, str(old_value), str(new_value))
+    else:
+        for key, value in sorted(plan.resolved_parameters.items()):
+            table.add_row(key, str(value))
+    console.print(table)
+    console.print()
+
+
+def _confirm_deployment(*, operation: str, stack_name: str, dry_run: bool, force: bool) -> bool:
+    """Prompt for AWS mutation unless it has been explicitly skipped or forced."""
+    if force or dry_run:
+        return True
+    prompt = f"Proceed with CloudFormation stack deployment ({operation}) for '{stack_name}'?"
+    if typer.confirm(prompt, default=True):
+        return True
+    console.print("[yellow]Deployment cancelled by user.[/yellow]")
+    return False
+
+
+def _render_dry_run(*, operation: str, stack_name: str) -> None:
+    """Render the no-mutation dry-run result."""
+    console.print(
+        Panel(
+            f"[bold green]Dry-run complete.[/bold green]\nWould execute CloudFormation "
+            f"[bold]{operation}[/bold] for stack [bold]{stack_name}[/bold].\n"
+            "No AWS resources were modified.",
+            title="Dry Run Summary",
+        )
+    )
+
+
+def _deploy_stack(
+    *,
+    factory: Any,
+    stack_name: str,
+    template_path: Path,
+    parameters: dict[str, str],
+    operation: str,
+) -> str:
+    """Start a safe CloudFormation operation after confirmation."""
+    print_info(f"Initiating CloudFormation stack {operation}...", dim=True)
     stack_id = deploy_cloudformation_stack(
         factory=factory,
         stack_name=stack_name,
-        template_body=template_body,
-        parameters=resolved_params,
-        operation=deploy_op,
+        template_body=template_path.read_text(encoding="utf-8"),
+        parameters=parameters,
+        operation=operation,
     )
     print_info(f"Stack operation initiated (Stack ID: {stack_id}). Streaming events...", dim=True)
+    return stack_id
 
-    def _render_evt(evt: dict[str, Any]) -> None:
-        r_type = evt.get("ResourceType", "")
-        r_id = evt.get("LogicalResourceId", "")
-        r_status = evt.get("ResourceStatus", "")
-        r_reason = evt.get("ResourceStatusReason", "")
-        ts = str(evt.get("Timestamp", ""))[:19]
-        reason_str = f" ({r_reason})" if r_reason else ""
-        console.print(
-            f"  [dim]{ts}[/dim] [bold]{r_id}[/bold] "
-            f"({r_type}) -> [cyan]{r_status}[/cyan]{reason_str}"
-        )
 
-    final_status = stream_cloudformation_stack_events(
-        factory=factory,
-        stack_name=stack_name,
-        on_event=_render_evt,
+def _render_stack_event(event: dict[str, Any]) -> None:
+    """Render a single CloudFormation event."""
+    reason = event.get("ResourceStatusReason", "")
+    reason_text = f" ({reason})" if reason else ""
+    console.print(
+        f"  [dim]{str(event.get('Timestamp', ''))[:19]}[/dim] "
+        f"[bold]{event.get('LogicalResourceId', '')}[/bold] "
+        f"({event.get('ResourceType', '')}) -> "
+        f"[cyan]{event.get('ResourceStatus', '')}[/cyan]{reason_text}"
     )
 
-    if final_status.stack_status in {"CREATE_COMPLETE", "UPDATE_COMPLETE"}:
-        print_notice(
-            f"CloudFormation stack '{stack_name}' deployed successfully "
-            f"({final_status.stack_status})."
-        )
 
-        # 9. Record State in .lza/state.json
-        state = load_workspace_state(workspace_dir)
-        state.management_account_id = aws_identity["account"]
-        state.caller_arn = aws_identity["arn"]
-        state.installer_stack_id = final_status.stack_id or stack_id
-        state.installer_stack_status = final_status.stack_status
-        state.installer_stack_updated_at = datetime.now(UTC)
-        state.updated_at = datetime.now(UTC)
-        write_workspace_state(workspace_dir, state)
-        print_info("Updated operational state in .lza/state.json", dim=True)
-
-        # 10. Output & Extensible Next Steps
-        if final_status.outputs:
-            tbl = Table(title="Stack Outputs", show_header=True)
-            tbl.add_column("Key", style="bold cyan")
-            tbl.add_column("Value", style="green")
-            for k, v in final_status.outputs.items():
-                tbl.add_row(k, v)
-            console.print(tbl)
-
-        print_section(2, "Deployment Roadmap & Next Steps")
-        console.print(
-            "  [bold green]Phase 1 Complete:[/bold green] Installer CloudFormation stack deployed."
-        )
-        console.print(
-            "  [bold yellow]Phase 2 Pending:[/bold yellow] AWS LZA Installer Pipeline execution."
-        )
-        console.print(
-            "  [bold yellow]Phase 3 Pending:[/bold yellow] LZA Config Pipeline execution."
-        )
-        console.print()
-        console.print("Recommended next commands:")
-        console.print("  1. Upload LZA configuration: [bold code]lza config upload[/bold code]")
-        console.print("  2. Monitor installer status: [bold code]lza installer status[/bold code]")
-    else:
+def _handle_deployment_result(
+    *,
+    final_status: CfnStackStatusResult,
+    stack_id: str,
+    stack_name: str,
+    workspace_dir: Path,
+    aws_identity: dict[str, str],
+) -> None:
+    """Persist successful state and render the final deployment outcome."""
+    if final_status.stack_status not in {"CREATE_COMPLETE", "UPDATE_COMPLETE"}:
         console.print(
             f"[bold red]Deployment failed with stack status "
             f"({final_status.stack_status}).[/bold red]"
@@ -293,3 +233,22 @@ def run_installer_deploy(
         if final_status.error:
             console.print(f"[red]Error detail: {final_status.error}[/red]")
         raise LzaError(f"Deployment failed with stack status ({final_status.stack_status}).")
+
+    print_notice(
+        f"CloudFormation stack '{stack_name}' deployed successfully "
+        f"({final_status.stack_status})."
+    )
+    update_successful_deployment_state(
+        workspace_dir=workspace_dir,
+        aws_identity=aws_identity,
+        stack_id=final_status.stack_id or stack_id,
+        stack_status=final_status.stack_status,
+    )
+    print_info("Updated operational state in .lza/state.json", dim=True)
+    if final_status.outputs:
+        table = Table(title="Stack Outputs", show_header=True)
+        table.add_column("Key", style="bold cyan")
+        table.add_column("Value", style="green")
+        for key, value in final_status.outputs.items():
+            table.add_row(key, value)
+        console.print(table)

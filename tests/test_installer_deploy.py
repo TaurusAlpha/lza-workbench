@@ -13,6 +13,7 @@ from lza_workbench.aws.codecommit import CodeCommitPlanResult
 from lza_workbench.aws.context import AwsExecutionContext
 from lza_workbench.commands.installer_deploy import run_installer_deploy
 from lza_workbench.core.errors import LzaError
+from lza_workbench.installer.deployment import validate_cloudformation_plan
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.models import (
     AwsConfig,
@@ -98,7 +99,9 @@ def test_missing_required_params_failure(tmp_path: Path) -> None:
 
 
 @patch("lza_workbench.commands.installer_deploy.resolve_aws_execution_context")
+@patch("lza_workbench.commands.installer_deploy.inspect_cloudformation_stack")
 def test_installer_deploy_dry_run(
+    mock_inspect_cfn: MagicMock,
     mock_resolve_context: MagicMock,
     sample_workspace: Path,
 ) -> None:
@@ -114,6 +117,12 @@ def test_installer_deploy_dry_run(
         },
         error=None,
     )
+    mock_inspect_cfn.return_value = CfnDeploymentPlanResult(
+        stack_name="AWSAccelerator-InstallerStack",
+        operation="CREATE",
+        stack_status=None,
+        resolved_parameters={},
+    )
 
     run_installer_deploy(dry_run=True, force=True, target_dir=sample_workspace)
 
@@ -124,7 +133,7 @@ def test_installer_deploy_dry_run(
 @patch("lza_workbench.commands.installer_deploy.stream_cloudformation_stack_events")
 @patch("lza_workbench.commands.installer_deploy.deploy_cloudformation_stack")
 @patch("lza_workbench.commands.installer_deploy.inspect_cloudformation_stack")
-@patch("lza_workbench.commands.installer_deploy.inspect_codecommit_repository")
+@patch("lza_workbench.installer.deployment.inspect_codecommit_repository")
 @patch("lza_workbench.commands.installer_deploy.resolve_aws_execution_context")
 def test_installer_deploy_success(
     mock_resolve_context: MagicMock,
@@ -182,3 +191,76 @@ def test_installer_deploy_success(
         == "arn:aws:cloudformation:us-east-1:123456789012:stack/AWSAccelerator-InstallerStack/uuid"
     )
     assert state.management_account_id == "123456789012"
+
+
+@patch("lza_workbench.installer.deployment.inspect_codecommit_repository")
+@patch("lza_workbench.commands.installer_deploy.resolve_aws_execution_context")
+def test_installer_deploy_requires_manually_synchronized_codecommit_source(
+    mock_resolve_context: MagicMock,
+    mock_inspect_cc: MagicMock,
+    sample_workspace: Path,
+) -> None:
+    """An empty CodeCommit repository must not be mistaken for a usable source."""
+    mock_resolve_context.return_value = AwsExecutionContext(
+        region="us-east-1",
+        factory=MagicMock(),
+        identity={
+            "account": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/admin",
+            "user_id": "ADMIN",
+        },
+        error=None,
+    )
+    mock_inspect_cc.return_value = CodeCommitPlanResult(
+        repository_name="aws-accelerator-codecommit",
+        branch_name="release/v1.16.0",
+        status="UNINITIALIZED",
+        creation_required=False,
+        sync_required=True,
+        official_repo_url="",
+        official_version_ref="",
+    )
+
+    with pytest.raises(LzaError, match="manual prerequisite"):
+        run_installer_deploy(force=True, target_dir=sample_workspace)
+
+
+@pytest.mark.parametrize(
+    ("operation", "stack_status", "expected"),
+    [
+        ("CREATE", None, "CREATE"),
+        ("UPDATE", "UPDATE_COMPLETE", "UPDATE"),
+        ("NO_CHANGE", "CREATE_COMPLETE", "NO_CHANGE"),
+    ],
+)
+def test_cloudformation_plan_accepts_safe_outcomes(
+    operation: str, stack_status: str | None, expected: str
+) -> None:
+    """Create, update, and no-change plans are accepted only from safe states."""
+    plan = CfnDeploymentPlanResult(
+        stack_name="AWSAccelerator-InstallerStack",
+        operation=operation,
+        stack_status=stack_status,
+        resolved_parameters={},
+    )
+
+    assert validate_cloudformation_plan(plan) == expected
+
+
+@pytest.mark.parametrize(
+    ("operation", "stack_status"),
+    [("UNKNOWN", "Error: access denied"), ("UPDATE", "UPDATE_IN_PROGRESS")],
+)
+def test_cloudformation_plan_rejects_inaccessible_or_unsafe_outcomes(
+    operation: str, stack_status: str
+) -> None:
+    """Unknown and transitional states cannot reach CloudFormation mutation."""
+    plan = CfnDeploymentPlanResult(
+        stack_name="AWSAccelerator-InstallerStack",
+        operation=operation,
+        stack_status=stack_status,
+        resolved_parameters={},
+    )
+
+    with pytest.raises(LzaError, match="unsafe or unknown"):
+        validate_cloudformation_plan(plan)

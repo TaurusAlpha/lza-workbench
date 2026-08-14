@@ -174,3 +174,31 @@ def ensure_s3_installer_source(
             s3_client.create_bucket(**kwargs)
         else:
             raise
+
+
+def inspect_s3_installer_source(
+    *,
+    factory: AwsClientFactory | None = None,
+    client: Any | None = None,
+    bucket_name: str,
+    object_key: str,
+) -> None:
+    """Verify that the configured installer source object is accessible without mutation."""
+    s3_client = client if client is not None else (factory.get_client("s3") if factory else None)
+    if s3_client is None:
+        raise ValueError("AWS S3 client is not available")
+
+    try:
+        s3_client.head_object(Bucket=bucket_name.strip(), Key=object_key.strip())
+    except ClientError as exc:
+        error = exc.response.get("Error", {})
+        code = error.get("Code", "Unknown")
+        if code in {"404", "NoSuchKey", "NoSuchBucket", "NotFound"}:
+            raise LzaError(
+                f"Installer source object not found: s3://{bucket_name}/{object_key}"
+            ) from exc
+        if code in {"403", "AccessDenied"}:
+            raise LzaError(
+                f"Access denied to installer source: s3://{bucket_name}/{object_key}"
+            ) from exc
+        raise LzaError(f"Unable to inspect installer source: {exc}") from exc

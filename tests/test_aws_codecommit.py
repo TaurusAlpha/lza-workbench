@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError
 
 from lza_workbench.aws.cloudformation import inspect_cloudformation_stack
 from lza_workbench.aws.codecommit import inspect_codecommit_repository
+from lza_workbench.aws.s3 import inspect_s3_installer_source
 
 
 def test_inspect_codecommit_repository_missing() -> None:
@@ -50,3 +51,18 @@ def test_inspect_cloudformation_stack_create() -> None:
 
     assert res.operation == "CREATE"
     assert res.stack_status is None
+
+
+def test_inspect_s3_installer_source_uses_configured_bucket_and_key() -> None:
+    """Installer source inspection must not substitute a generated bucket or key."""
+    client = MagicMock()
+
+    inspect_s3_installer_source(
+        client=client,
+        bucket_name="configured-installer-source",
+        object_key="releases/v1.16.0/source.zip",
+    )
+
+    client.head_object.assert_called_once_with(
+        Bucket="configured-installer-source", Key="releases/v1.16.0/source.zip"
+    )
