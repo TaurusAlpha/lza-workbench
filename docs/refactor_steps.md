@@ -91,16 +91,7 @@ Achievement: authentication is external, consistent, and safe across every comma
 
 ## Phase 8: Establish Installer Feature Modules
 
-- [x] Create the installer feature package only when the first shared function is ready to move.
-- [x] Move template resolution from `commands/installer_plan.py` into the installer feature.
-- [x] Move template parameter inspection into the installer feature.
-- [x] Move template parameter validation into the installer feature.
-- [x] Give these functions public names and update installer plan to use them.
-- [x] Update installer deploy to use the same public functions.
-- [x] Remove imports of underscore-prefixed helpers from one command module into another.
-- [x] Move planning result preparation out of Rich rendering code.
-- [x] Make the plan renderer accept prepared results and only render them.
-- [x] Run plan tests after each moved responsibility.
+DONE
 
 Achievement: installer plan and deploy share public domain logic instead of command internals.
 
