@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackStatusResult
 from lza_workbench.aws.codecommit import CodeCommitPlanResult
+from lza_workbench.aws.context import AwsExecutionContext
 from lza_workbench.commands.installer_deploy import run_installer_deploy
 from lza_workbench.core.errors import LzaError
 from lza_workbench.workspace.config import write_workspace_config
@@ -96,19 +97,23 @@ def test_missing_required_params_failure(tmp_path: Path) -> None:
         run_installer_deploy(target_dir=ws_dir)
 
 
-@patch("lza_workbench.commands.installer_deploy.AwsClientFactory")
+@patch("lza_workbench.commands.installer_deploy.resolve_aws_execution_context")
 def test_installer_deploy_dry_run(
-    mock_factory_cls: MagicMock,
+    mock_resolve_context: MagicMock,
     sample_workspace: Path,
 ) -> None:
     """Test dry-run deployment does not mutate AWS resources or update state."""
     mock_factory = MagicMock()
-    mock_factory_cls.return_value = mock_factory
-    mock_factory.validate_identity.return_value = {
-        "account": "123456789012",
-        "arn": "arn:aws:iam::123456789012:user/admin",
-        "user_id": "ADMIN",
-    }
+    mock_resolve_context.return_value = AwsExecutionContext(
+        region="us-east-1",
+        factory=mock_factory,
+        identity={
+            "account": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/admin",
+            "user_id": "ADMIN",
+        },
+        error=None,
+    )
 
     run_installer_deploy(dry_run=True, force=True, target_dir=sample_workspace)
 
@@ -120,9 +125,9 @@ def test_installer_deploy_dry_run(
 @patch("lza_workbench.commands.installer_deploy.deploy_cloudformation_stack")
 @patch("lza_workbench.commands.installer_deploy.inspect_cloudformation_stack")
 @patch("lza_workbench.commands.installer_deploy.inspect_codecommit_repository")
-@patch("lza_workbench.commands.installer_deploy.AwsClientFactory")
+@patch("lza_workbench.commands.installer_deploy.resolve_aws_execution_context")
 def test_installer_deploy_success(
-    mock_factory_cls: MagicMock,
+    mock_resolve_context: MagicMock,
     mock_inspect_cc: MagicMock,
     mock_inspect_cfn: MagicMock,
     mock_deploy_cfn: MagicMock,
@@ -131,12 +136,16 @@ def test_installer_deploy_success(
 ) -> None:
     """Test successful deployment updates workspace state correctly."""
     mock_factory = MagicMock()
-    mock_factory_cls.return_value = mock_factory
-    mock_factory.validate_identity.return_value = {
-        "account": "123456789012",
-        "arn": "arn:aws:iam::123456789012:user/admin",
-        "user_id": "ADMIN",
-    }
+    mock_resolve_context.return_value = AwsExecutionContext(
+        region="us-east-1",
+        factory=mock_factory,
+        identity={
+            "account": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/admin",
+            "user_id": "ADMIN",
+        },
+        error=None,
+    )
 
     mock_inspect_cc.return_value = CodeCommitPlanResult(
         repository_name="aws-accelerator-codecommit",

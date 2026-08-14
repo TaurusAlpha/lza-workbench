@@ -9,7 +9,6 @@ from typing import Any
 from rich.panel import Panel
 from rich.table import Table
 
-from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.cloudformation import (
     CfnDeploymentPlanResult,
     inspect_cloudformation_stack,
@@ -18,6 +17,7 @@ from lza_workbench.aws.codecommit import (
     CodeCommitPlanResult,
     inspect_codecommit_repository,
 )
+from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.core.errors import LzaError
 from lza_workbench.core.installer_template import (
     INSTALLER_TEMPLATE_FILENAME,
@@ -49,7 +49,6 @@ def run_installer_plan(
     workspace_dir, config = ctx.workspace_dir, ctx.config
 
     profile = config.aws.profile or ""
-    region = config.aws.region
 
     # Validate required installer configuration parameters in workspace
     validation = validate_installer_configuration(config)
@@ -80,18 +79,14 @@ def run_installer_plan(
     _validate_parameters_against_schema(resolved_params, params_schema)
 
     # Step 3: Create AWS Factory & Validate Profile Identity
-    factory = None
-    aws_identity = None
-    aws_error = None
-    if profile:
-        try:
-            factory = AwsClientFactory(profile, region)
-            aws_identity = factory.validate_identity()
-        except Exception as exc:  # noqa: BLE001
-            aws_error = str(exc)
+    aws_context = resolve_aws_execution_context(config.aws)
+    factory = aws_context.factory
+    region = aws_context.region
+    aws_identity = aws_context.identity
+    aws_error = aws_context.error
 
     # Step 4: CodeCommit Source Planning
-    codecommit_client = factory.get_client("codecommit") if factory else None
+    codecommit_client = factory.get_client("codecommit") if aws_identity else None
     codecommit_plan = inspect_codecommit_repository(
         client=codecommit_client,
         repository_type=config.installer.source_code.repository_type,
@@ -103,7 +98,7 @@ def run_installer_plan(
 
     # Step 5: CloudFormation Deployment Planning
     stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
-    cfn_client = factory.get_client("cloudformation") if factory else None
+    cfn_client = factory.get_client("cloudformation") if aws_identity else None
     cfn_plan = inspect_cloudformation_stack(
         client=cfn_client,
         stack_name=stack_name,

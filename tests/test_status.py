@@ -6,6 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from lza_workbench.aws.cloudformation import CfnStackStatusResult
+from lza_workbench.aws.context import AwsExecutionContext
 from lza_workbench.cli import app
 from lza_workbench.commands.status import (
     run_config_status,
@@ -94,18 +95,19 @@ def test_sync_installer_config_success(tmp_path):
 
 
 @patch("lza_workbench.commands.status.status_main.get_cloudformation_stack_status")
-@patch("lza_workbench.commands.status.status_main.AwsClientFactory")
-def test_run_root_status(mock_factory_cls, mock_get_cfn, tmp_path, monkeypatch):
+@patch("lza_workbench.commands.status.status_main.resolve_aws_execution_context")
+def test_run_root_status(mock_resolve_context, mock_get_cfn, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "lza-workspace.yaml").write_text(
         "customer:\n  name: Test\n  slug: test\naws:\n  profile: default\n  region: us-east-1\n"
     )
     mock_factory = MagicMock()
-    mock_factory.validate_identity.return_value = {
-        "account": "123456789012",
-        "arn": "arn:aws:iam::123:user/test",
-    }
-    mock_factory_cls.return_value = mock_factory
+    mock_resolve_context.return_value = AwsExecutionContext(
+        region="us-east-1",
+        factory=mock_factory,
+        identity={"account": "123456789012", "arn": "arn:aws:iam::123:user/test"},
+        error=None,
+    )
     mock_get_cfn.return_value = CfnStackStatusResult(
         stack_name="AWSAccelerator-InstallerStack", exists=True, stack_status="CREATE_COMPLETE"
     )
@@ -129,35 +131,49 @@ def test_run_config_status(mock_load_ctx, tmp_path):
     run_config_status(target_dir=tmp_path)
 
 
-@patch("lza_workbench.commands.status.status_pipeline.AwsClientFactory")
-def test_run_pipeline_status(mock_factory_cls, tmp_path, monkeypatch):
+@patch("lza_workbench.commands.status.status_pipeline.resolve_aws_execution_context")
+def test_run_pipeline_status(mock_resolve_context, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "lza-workspace.yaml").write_text(
         "customer:\n  name: Test\n  slug: test\naws:\n  profile: default\n  region: us-east-1\n"
     )
     mock_factory = MagicMock()
-    mock_factory.validate_identity.return_value = {
-        "account": "123456789012",
-        "arn": "arn:aws:iam::123:user/test",
-    }
-    mock_factory_cls.return_value = mock_factory
+    mock_resolve_context.return_value = AwsExecutionContext(
+        region="us-east-1",
+        factory=mock_factory,
+        identity={"account": "123456789012", "arn": "arn:aws:iam::123:user/test"},
+        error=None,
+    )
 
     run_pipeline_status(target_dir=tmp_path)
 
 
 @patch("lza_workbench.commands.status.status_installer.get_cloudformation_stack_status")
-@patch("lza_workbench.commands.status.status_installer.AwsClientFactory")
-def test_cli_status_commands(mock_factory_cls, mock_get_cfn, tmp_path, monkeypatch):
+@patch("lza_workbench.commands.status.status_installer.resolve_aws_execution_context")
+@patch("lza_workbench.commands.status.status_main.resolve_aws_execution_context")
+@patch("lza_workbench.commands.status.status_pipeline.resolve_aws_execution_context")
+def test_cli_status_commands(
+    mock_pipeline_context,
+    mock_main_context,
+    mock_installer_context,
+    mock_get_cfn,
+    tmp_path,
+    monkeypatch,
+):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "lza-workspace.yaml").write_text(
         "customer:\n  name: Test\n  slug: test\naws:\n  profile: default\n  region: us-east-1\n"
     )
     mock_factory = MagicMock()
-    mock_factory.validate_identity.return_value = {
-        "account": "123456789012",
-        "arn": "arn:aws:iam::123:user/test",
-    }
-    mock_factory_cls.return_value = mock_factory
+    aws_context = AwsExecutionContext(
+        region="us-east-1",
+        factory=mock_factory,
+        identity={"account": "123456789012", "arn": "arn:aws:iam::123:user/test"},
+        error=None,
+    )
+    mock_pipeline_context.return_value = aws_context
+    mock_main_context.return_value = aws_context
+    mock_installer_context.return_value = aws_context
     mock_get_cfn.return_value = CfnStackStatusResult(
         stack_name="AWSAccelerator-InstallerStack", exists=True, stack_status="CREATE_COMPLETE"
     )

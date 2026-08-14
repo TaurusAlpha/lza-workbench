@@ -76,17 +76,7 @@ Achievement: version behavior is documented by tests and has one source of truth
 
 ## Phase 6: Consolidate Installer Configuration Validation
 
-- [x] Compare `_has_required_installer_config` with `_gather_required_parameters` field by field.
-- [x] Write tests for required fields for GitHub, CodeCommit, S3, and CodeConnections sources.
-- [x] Choose one structured validation result that can describe every missing field.
-- [x] Move required-field validation into the installer configuration module.
-- [x] Make installer planning use the shared validator.
-- [x] Make installer deployment use the shared validator.
-- [x] Make workspace readiness derive its Boolean decision from the shared validation result.
-- [x] Remove the old duplicate validators.
-- [x] Move CloudFormation installer parameter mapping from workspace code to installer
-      configuration code.
-- [x] Add mapping tests for every supported repository source type.
+DONE
 
 Achievement: plan, deploy, and readiness cannot silently disagree about installer completeness.
 
@@ -95,22 +85,22 @@ Achievement: plan, deploy, and readiness cannot silently disagree about installe
 This phase changes behavior and security assumptions. Keep its fixes separate from structural
 moves and review operational impact carefully.
 
-- [] Document the supported external authentication methods before editing models.
-- [] Remove secret access keys from declarative workspace configuration and examples.
-- [] Remove CLI options that would persist secret keys in workspace YAML.
-- [] Add migration/error behavior for an existing workspace that contains secret-key fields.
-- [] Add tests proving secrets are never serialized to `lza-workspace.yaml`.
-- [] Define a small AWS execution-context result containing the resolved region, factory, and
+- [x] Document the supported external authentication methods before editing models.
+- [x] Remove secret access keys from declarative workspace configuration and examples.
+- [x] Remove CLI options that would persist secret keys in workspace YAML.
+- [x] Add migration/error behavior for an existing workspace that contains secret-key fields.
+- [x] Add tests proving secrets are never serialized to `lza-workspace.yaml`.
+- [x] Define a small AWS execution-context result containing the resolved region, factory, and
       optional identity/error information.
-- [] Implement one resolver for profile overrides, configured profile/role, region, and identity
+- [x] Implement one resolver for profile overrides, configured profile/role, region, and identity
       validation.
-- [] Migrate installer planning to the resolver.
-- [] Migrate installer deployment to the resolver.
-- [] Migrate configuration upload and download to the resolver.
-- [] Migrate root, installer, and pipeline status to the resolver one command at a time.
-- [] Add tests proving every workflow uses the selected profile or role.
-- [] Add an account-safety check before mutating AWS when the configured account ID is available.
-- [] Remove repeated profile/region/factory/identity blocks after confirming no callers remain.
+- [x] Migrate installer planning to the resolver.
+- [x] Migrate installer deployment to the resolver.
+- [x] Migrate configuration upload and download to the resolver.
+- [x] Migrate root, installer, and pipeline status to the resolver one command at a time.
+- [x] Add tests proving every workflow uses the selected profile or role.
+- [x] Add an account-safety check before mutating AWS when the configured account ID is available.
+- [x] Remove repeated profile/region/factory/identity blocks after confirming no callers remain.
 
 Achievement: authentication is external, consistent, and safe across every command.
 

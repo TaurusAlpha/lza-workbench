@@ -6,7 +6,7 @@ from pathlib import Path
 
 from rich.panel import Panel
 
-from lza_workbench.aws.client_factory import AwsClientFactory
+from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.utils.output import (
     console,
     print_info,
@@ -28,15 +28,10 @@ def run_pipeline_status(
     profile = config.aws.profile or ""
     region = config.aws.region
 
-    factory = None
-    aws_identity = None
-    aws_error = None
-    if profile:
-        try:
-            factory = AwsClientFactory(profile, region)
-            aws_identity = factory.validate_identity()
-        except Exception as exc:  # noqa: BLE001
-            aws_error = str(exc)
+    aws_context = resolve_aws_execution_context(config.aws)
+    region = aws_context.region
+    aws_identity = aws_context.identity
+    aws_error = aws_context.error
 
     account_id = aws_identity["account"] if aws_identity else "UNKNOWN_ACCOUNT"
 

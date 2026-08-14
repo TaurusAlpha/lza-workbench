@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from lza_workbench.aws.client_factory import validate_aws_credentials
+from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import validate_template
 from lza_workbench.utils.helpers import normalize_customer_slug, value_or_prompt
@@ -109,7 +109,11 @@ def run_import(
     )
     state = existing.state if existing else WorkspaceState.from_config(config)
 
-    identity = None if skip_aws_check else validate_aws_credentials(config.aws)
+    identity = (
+        None
+        if skip_aws_check
+        else resolve_aws_execution_context(config.aws, require_identity=True).identity
+    )
     paths = _metadata_paths(workspace_dir, existing, config, state)
     if dry_run:
         _print_summary("Dry run: lza import", workspace_dir, config_dir, paths, identity)

@@ -38,8 +38,6 @@ def download_s3_archive(
     s3_key: str,
     prefix: str,
     zip_path: Path,
-    profile: str | None = None,
-    region: str | None = None,
     factory: AwsClientFactory | None = None,
     client: Any | None = None,
 ) -> None:
@@ -50,8 +48,7 @@ def download_s3_archive(
         elif factory is not None:
             s3 = factory.get_client("s3")
         else:
-            factory = AwsClientFactory(profile, region)
-            s3 = factory.get_client("s3")
+            raise ValueError("An AWS client or AwsClientFactory is required.")
 
         single_zip_success = False
         try:
@@ -105,8 +102,6 @@ def upload_s3_archive(
     zip_path: Path,
     s3_bucket: str,
     s3_key: str,
-    profile: str | None = None,
-    region: str | None = None,
     factory: AwsClientFactory | None = None,
     client: Any | None = None,
 ) -> tuple[str | None, str | None]:
@@ -117,8 +112,7 @@ def upload_s3_archive(
         elif factory is not None:
             s3 = factory.get_client("s3")
         else:
-            factory = AwsClientFactory(profile, region)
-            s3 = factory.get_client("s3")
+            raise ValueError("An AWS client or AwsClientFactory is required.")
 
         s3.upload_file(str(zip_path), s3_bucket, s3_key)
 
@@ -180,4 +174,3 @@ def ensure_s3_installer_source(
             s3_client.create_bucket(**kwargs)
         else:
             raise
-

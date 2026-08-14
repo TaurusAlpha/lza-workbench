@@ -27,12 +27,13 @@ class AwsConfig(WorkspaceModel):
     account_id: str | None = None
     region: str = "us-east-1"
     profile: str | None = None
+    role_arn: str | None = None
 
     @model_validator(mode="after")
     def require_profile(self) -> AwsConfig:
         """Require the externally managed AWS profile used by this workspace."""
-        if not (self.profile or "").strip():
-            raise ValueError("AWS configuration requires a profile.")
+        if not (self.profile or self.role_arn or "").strip():
+            raise ValueError("AWS configuration requires a profile or role_arn.")
         return self
 
 

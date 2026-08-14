@@ -23,10 +23,13 @@ class AwsClientFactory:
         self,
         profile: str | None = None,
         region: str | None = None,
+        role_arn: str | None = None,
     ) -> None:
         self.profile = (profile or "").strip() or None
         self.region = (region or "").strip() or "us-east-1"
+        self.role_arn = (role_arn or "").strip() or None
         self._session: boto3.Session | None = None
+        self._source_session: boto3.Session | None = None
         self._primed: bool = False
 
     @classmethod
@@ -35,6 +38,7 @@ class AwsClientFactory:
         return cls(
             profile=aws_config.profile,
             region=aws_config.region,
+            role_arn=aws_config.role_arn,
         )
 
     def get_session(self) -> boto3.Session:
@@ -45,7 +49,22 @@ class AwsClientFactory:
                 kwargs["profile_name"] = self.profile
             if self.region:
                 kwargs["region_name"] = self.region
-            self._session = boto3.Session(**kwargs)
+            self._source_session = boto3.Session(**kwargs)
+            if not self.role_arn:
+                self._session = self._source_session
+            else:
+                sts = self._source_session.client("sts", region_name=self.region)
+                response = sts.assume_role(
+                    RoleArn=self.role_arn,
+                    RoleSessionName="lza-workbench",
+                )
+                credentials = response["Credentials"]
+                self._session = boto3.Session(
+                    aws_access_key_id=credentials["AccessKeyId"],
+                    aws_secret_access_key=credentials["SecretAccessKey"],
+                    aws_session_token=credentials["SessionToken"],
+                    region_name=self.region,
+                )
 
         return self._session
 
@@ -68,7 +87,7 @@ class AwsClientFactory:
 
     def validate_identity(self) -> dict[str, str]:
         """Validate AWS caller identity using STS GetCallerIdentity."""
-        auth_descr = self.profile or "default"
+        auth_descr = self.role_arn or self.profile or "default"
         try:
             self._prime_session_credentials()
             session = self.get_session()
@@ -96,27 +115,3 @@ class AwsClientFactory:
         self._prime_session_credentials()
         session = self.get_session()
         return session.client(service_name, region_name=self.region)
-
-
-def get_aws_session(
-    profile: str | None = None,
-    region: str | None = None,
-) -> boto3.Session:
-    """Obtain a boto3 Session using the centralized factory."""
-    factory = AwsClientFactory(
-        profile=profile,
-        region=region,
-    )
-    return factory.get_session()
-
-
-def validate_aws_profile(profile: str, region: str) -> dict[str, str]:
-    """Validate AWS profile identity using the centralized factory."""
-    factory = AwsClientFactory(profile=profile, region=region)
-    return factory.validate_identity()
-
-
-def validate_aws_credentials(aws_config: AwsConfig) -> dict[str, str]:
-    """Validate AWS identity for an AwsConfig using the centralized factory."""
-    factory = AwsClientFactory.from_aws_config(aws_config)
-    return factory.validate_identity()

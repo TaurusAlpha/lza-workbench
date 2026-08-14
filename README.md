@@ -119,6 +119,18 @@ Defaults are defined in `src/lza_workbench/core/workspace.py`; YAML supplies exp
 overrides. Unknown keys are rejected. See `src/lza_workbench/config/examples/` for minimal,
 full, configuration-only, and installer-only examples.
 
+### AWS authentication
+
+LZA Workbench never stores AWS access keys or session tokens in `lza-workspace.yaml`.
+Authentication is external to the tool: use an AWS profile backed by IAM Identity Center (SSO)
+or shared credentials, or configure `aws.role_arn` to assume a role using external source
+credentials (such as environment or instance/container credentials). The optional
+`aws.account_id` is a safety guard: AWS-mutating commands stop if STS resolves a different
+account.
+
+Existing workspace YAML containing `access_key` or `secret_access_key` is rejected with a
+migration error. Remove the secret fields and configure authentication outside the workspace.
+
 ## Development
 
 Install dependencies:

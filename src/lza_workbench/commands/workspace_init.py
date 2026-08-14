@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lza_workbench.aws.client_factory import validate_aws_credentials
+from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import resolve_template_source, validate_template
 from lza_workbench.utils.helpers import normalize_customer_slug, value_or_prompt
@@ -92,7 +92,10 @@ def run_init(
     if skip_aws_check:
         identity = None
     else:
-        identity = validate_aws_credentials(config.aws)
+        identity = resolve_aws_execution_context(
+            config.aws,
+            require_identity=True,
+        ).identity
 
     if dry_run:
         print_dry_run_summary(workspace_dir, config, identity)

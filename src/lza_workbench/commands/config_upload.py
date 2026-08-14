@@ -8,7 +8,7 @@ from pathlib import Path
 
 import typer
 
-from lza_workbench.aws.client_factory import AwsClientFactory
+from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.s3 import resolve_s3_archive_uri, upload_s3_archive
 from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import validate_template
@@ -84,7 +84,12 @@ def run_upload_config(
         exclude_files=exclude_files,
     )
 
-    factory = AwsClientFactory(profile, region)
+    aws_context = resolve_aws_execution_context(
+        config.aws,
+        require_identity=True,
+        require_expected_account=True,
+    )
+    factory = aws_context.factory
     etag, version_id = upload_s3_archive(
         zip_path=zip_path,
         s3_bucket=s3_bucket,

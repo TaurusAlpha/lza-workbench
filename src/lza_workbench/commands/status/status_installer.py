@@ -8,11 +8,11 @@ from pathlib import Path
 from rich.panel import Panel
 from rich.table import Table
 
-from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.cloudformation import (
     CfnStackStatusResult,
     get_cloudformation_stack_status,
 )
+from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.core.errors import LzaError
 from lza_workbench.installer.parameters import build_installer_cfn_parameters
 from lza_workbench.installer.versions import branch_to_version, normalize_lza_version
@@ -46,18 +46,14 @@ def run_installer_status(
     profile = config.aws.profile or ""
     region = config.aws.region
 
-    factory = None
-    aws_identity = None
-    aws_error = None
-    if profile:
-        try:
-            factory = AwsClientFactory(profile, region)
-            aws_identity = factory.validate_identity()
-        except Exception as exc:  # noqa: BLE001
-            aws_error = str(exc)
+    aws_context = resolve_aws_execution_context(config.aws)
+    factory = aws_context.factory
+    region = aws_context.region
+    aws_identity = aws_context.identity
+    aws_error = aws_context.error
 
     cfn_stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
-    cfn_client = factory.get_client("cloudformation") if factory else None
+    cfn_client = factory.get_client("cloudformation") if aws_identity else None
     cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=cfn_stack_name)
 
     branch = (

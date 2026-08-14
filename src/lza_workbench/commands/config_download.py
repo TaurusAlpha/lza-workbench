@@ -8,7 +8,7 @@ from pathlib import Path
 
 import typer
 
-from lza_workbench.aws.client_factory import AwsClientFactory
+from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.s3 import download_s3_archive, resolve_s3_archive_uri
 from lza_workbench.core.errors import LzaError
 from lza_workbench.utils.archive import (
@@ -91,7 +91,8 @@ def run_download_config(
 
     exclude_dirs = set(config.configuration.packaging.exclude.directories)
 
-    factory = AwsClientFactory(profile, region)
+    aws_context = resolve_aws_execution_context(config.aws, require_identity=True)
+    factory = aws_context.factory
     download_s3_archive(
         s3_bucket=s3_bucket,
         s3_key=s3_key,

@@ -10,7 +10,6 @@ import typer
 from rich.panel import Panel
 from rich.table import Table
 
-from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.cloudformation import (
     deploy_cloudformation_stack,
     inspect_cloudformation_stack,
@@ -20,6 +19,7 @@ from lza_workbench.aws.codecommit import (
     ensure_codecommit_repository,
     inspect_codecommit_repository,
 )
+from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.s3 import ensure_s3_installer_source
 from lza_workbench.commands.installer_plan import (
     _inspect_template_parameters,
@@ -53,7 +53,6 @@ def run_installer_deploy(
 
     # 1. Check AWS configuration in lza-workspace.yaml
     profile = config.aws.profile or ""
-    region = config.aws.region
 
     # 2. Pre-flight check: validate required installer parameters in configuration
     validation = validate_installer_configuration(config)
@@ -72,10 +71,17 @@ def run_installer_deploy(
 
     # 3. AWS Client & Identity Validation
     try:
-        factory = AwsClientFactory(profile=profile, region=region)
-        aws_identity = factory.validate_identity()
+        aws_context = resolve_aws_execution_context(
+            config.aws,
+            require_identity=True,
+            require_expected_account=True,
+        )
     except Exception as exc:
         raise LzaError(f"AWS authentication check failed for profile '{profile}': {exc}") from exc
+    factory = aws_context.factory
+    aws_identity = aws_context.identity
+    region = aws_context.region
+    assert aws_identity is not None
 
     # 4. Resolve Template & Validate Parameters
     template_path = _resolve_installer_template(workspace_dir, config, dry_run=dry_run)
@@ -122,9 +128,8 @@ def run_installer_deploy(
                 print_info(f"CodeCommit repository '{repo_name}' is ready.")
 
     elif source_type == "s3":
-        bucket_name = (
-            config.installer.source_code.owner
-            or f"aws-accelerator-installer-{aws_identity['account']}-{region}"
+        bucket_name = config.installer.source_code.bucket or (
+            f"aws-accelerator-installer-{aws_identity['account']}-{region}"
         )
         if not dry_run:
             ensure_s3_installer_source(

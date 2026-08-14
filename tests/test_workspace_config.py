@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 from lza_workbench.utils.archive import count_config_files, is_path_excluded
-from lza_workbench.workspace.config import load_workspace_config
+from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+from lza_workbench.workspace.models import AwsConfig, CustomerConfig, WorkspaceConfig
 
 CONFIG_DIR = Path(__file__).parents[1] / "src" / "lza_workbench" / "config" / "examples"
 
@@ -72,6 +73,32 @@ cli_defaults:
 
     with pytest.raises(ValueError, match="watch_pipline"):
         load_workspace_config(tmp_path)  # Pass workspace root directory tmp_path
+
+
+@pytest.mark.parametrize("field", ["access_key", "secret_access_key"])
+def test_workspace_rejects_persisted_aws_secrets(tmp_path: Path, field: str) -> None:
+    (tmp_path / "lza-workspace.yaml").write_text(
+        "customer:\n  name: Example\n  slug: example\naws:\n"
+        f"  profile: example-root\n  {field}: value\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="not supported"):
+        load_workspace_config(tmp_path)
+
+
+def test_workspace_writer_never_serializes_secret_keys(tmp_path: Path) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Example", slug="example"),
+        aws=AwsConfig(profile="example-root", role_arn="arn:aws:iam::123456789012:role/Lza"),
+    )
+
+    write_workspace_config(tmp_path, config)
+
+    serialized = (tmp_path / "lza-workspace.yaml").read_text(encoding="utf-8")
+    assert "access_key" not in serialized
+    assert "secret_access_key" not in serialized
+    assert "role_arn" in serialized
 
 
 def test_is_path_excluded_and_count_config_files(tmp_path: Path) -> None:
