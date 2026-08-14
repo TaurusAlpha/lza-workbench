@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from lza_workbench.commands.workspace_init import (
     build_workspace_config,
     resolve_packaged_template,
     run_init,
 )
+from lza_workbench.core.errors import LzaError
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.setup import resolve_init_workspace_dir
 from lza_workbench.workspace.state import load_workspace_state
@@ -17,11 +20,7 @@ from lza_workbench.workspace.state import load_workspace_state
 def test_resolve_init_workspace_dir_uses_customer_slug(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 
-    workspace_dir = resolve_init_workspace_dir(
-        customer_name="Example Customer",
-        workspace_dir=None,
-        interactive=False,
-    )
+    workspace_dir = resolve_init_workspace_dir("Example Customer")
 
     assert workspace_dir == tmp_path / "example-customer"
 
@@ -92,3 +91,21 @@ def test_run_init_creates_workspace_from_packaged_template(tmp_path: Path) -> No
     assert (workspace_dir / config.configuration.local_path / "global-config.yaml").is_file()
     assert (workspace_dir / config.installer.local_path).is_dir()
     assert state.initialized_at is None
+
+
+def test_init_existing_directory_directs_user_to_import(tmp_path: Path) -> None:
+    workspace_dir = tmp_path / "existing"
+    workspace_dir.mkdir()
+
+    with pytest.raises(LzaError, match=r"lza import"):
+        run_init(
+            customer_name="Example Customer",
+            workspace_dir=workspace_dir,
+            aws_profile="example-root",
+            aws_region="eu-west-1",
+            lza_version="v1.15.5",
+            dry_run=False,
+            force=False,
+            skip_aws_check=True,
+            interactive=False,
+        )

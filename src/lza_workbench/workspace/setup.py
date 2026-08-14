@@ -2,17 +2,11 @@ import re
 import shutil
 from pathlib import Path
 
-import typer
-
 from lza_workbench.core.errors import LzaError
+from lza_workbench.utils.helpers import normalize_path
 from lza_workbench.workspace.config import WORKSPACE_CONFIG_FILE, write_workspace_config
 from lza_workbench.workspace.models import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.state import WORKSPACE_STATE_FILE, write_workspace_state
-
-
-def normalize_path(path: Path) -> Path:
-    """Consistently expand user home directory and resolve path."""
-    return path.expanduser().resolve()
 
 
 def normalize_customer_slug(customer_name: str) -> str:
@@ -26,59 +20,45 @@ def normalize_customer_slug(customer_name: str) -> str:
     return slug
 
 
+def is_workspace_dir(path: Path) -> bool:
+    """Return whether a directory declares itself as a workspace."""
+    return (normalize_path(path) / WORKSPACE_CONFIG_FILE).is_file()
+
+
 def resolve_workspace_dir(target_dir: Path | None = None) -> Path:
     """Resolve workspace directory containing lza-workspace.yaml starting from cwd or target_dir."""
     current = normalize_path(target_dir or Path.cwd())
     for directory in [current, *current.parents]:
-        if (directory / WORKSPACE_CONFIG_FILE).is_file():
+        if is_workspace_dir(directory):
             return directory
     raise LzaError(
         f"Command must be run inside an LZA workspace directory (missing {WORKSPACE_CONFIG_FILE})."
     )
 
 
-def resolve_init_workspace_dir(
-    *,
-    customer_name: str,
-    workspace_dir: Path | None = None,
-    interactive: bool = False,
-) -> Path:
-    """Resolve the target workspace directory path."""
+def resolve_init_workspace_dir(customer_name: str, workspace_dir: Path | None = None) -> Path:
+    """Resolve an explicit init target or the default customer workspace path."""
     if workspace_dir is not None:
         return normalize_path(workspace_dir)
-
-    default_path = Path.cwd() / normalize_customer_slug(customer_name)
-    if interactive:
-        prompted = typer.prompt("Workspace directory", default=str(default_path))
-        return normalize_path(Path(prompted))
-
-    return normalize_path(default_path)
+    return normalize_path(Path.cwd() / normalize_customer_slug(customer_name))
 
 
 def validate_workspace_structure(
     workspace_dir: Path,
     force: bool = False,
-    config_local_path: str | None = None,
-) -> None:
-    """Prevent accidental overwrite of an existing workspace directory or configuration."""
+) -> bool:
+    """Validate an init target and return whether it already exists."""
     target = normalize_path(workspace_dir)
     if not target.exists():
-        return
+        return False
     if not target.is_dir():
         raise LzaError(f"Target path exists and is not a directory: {target}")
-    if force:
-        return
-
-    if (target / WORKSPACE_CONFIG_FILE).exists():
-        raise LzaError(f"LZA workspace already exists: {target}")
-
-    if config_local_path:
-        candidate_config = target / config_local_path
-        if candidate_config.exists() or candidate_config.is_symlink():
-            raise LzaError(f"Target directory already contains an LZA configuration: {target}.")
-
-    if any(target.iterdir()):
-        raise LzaError(f"Target directory is not empty: {target}")
+    if not force:
+        raise LzaError(
+            f"Workspace directory already exists: {target}. "
+            f"To adopt it, run `lza import {target}`."
+        )
+    return True
 
 
 def create_workspace(
@@ -98,6 +78,15 @@ def create_workspace(
         template_config_dir, target / config.configuration.local_path, dirs_exist_ok=True
     )
 
+    write_workspace_config(target, config)
+    write_workspace_state(target, state)
+
+
+def overwrite_workspace_metadata(
+    workspace_dir: Path, config: WorkspaceConfig, state: WorkspaceState
+) -> None:
+    """Replace generated metadata without changing customer-owned configuration files."""
+    target = normalize_path(workspace_dir)
     write_workspace_config(target, config)
     write_workspace_state(target, state)
 

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from lza_workbench.commands.workspace_import import resolve_import_paths, run_import
+from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import REQUIRED_TEMPLATE_FILES
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.state import load_workspace_state
@@ -41,10 +44,8 @@ def test_import_accepts_explicit_configuration_directory(tmp_path: Path) -> None
     _write_required_files(config_dir)
 
     resolved_workspace, resolved_config = resolve_import_paths(
-        customer_name="Example Customer",
-        workspace_dir=None,
+        workspace_dir=workspace_dir,
         config_dir=config_dir,
-        interactive=False,
     )
 
     assert resolved_workspace == workspace_dir
@@ -69,6 +70,40 @@ def test_import_dry_run_does_not_write_metadata(tmp_path: Path) -> None:
 
     assert not (workspace_dir / "lza-workspace.yaml").exists()
     assert not (workspace_dir / ".lza").exists()
+
+
+def test_import_invalid_metadata_requires_force(tmp_path: Path) -> None:
+    workspace_dir, _ = _make_configuration(tmp_path)
+    (workspace_dir / "lza-workspace.yaml").write_text("invalid: true\n", encoding="utf-8")
+
+    with pytest.raises(LzaError, match=r"--force"):
+        run_import(
+            customer_name="Example Customer",
+            workspace_dir=workspace_dir,
+            config_dir=None,
+            aws_profile="example-root",
+            aws_region="eu-west-1",
+            lza_version="v1.15.5",
+            dry_run=False,
+            force=False,
+            skip_aws_check=True,
+            interactive=False,
+        )
+
+    run_import(
+        customer_name="Example Customer",
+        workspace_dir=workspace_dir,
+        config_dir=None,
+        aws_profile="example-root",
+        aws_region="eu-west-1",
+        lza_version="v1.15.5",
+        dry_run=False,
+        force=True,
+        skip_aws_check=True,
+        interactive=False,
+    )
+
+    assert load_workspace_config(workspace_dir).customer.name == "Example Customer"
 
 
 def _make_configuration(tmp_path: Path) -> tuple[Path, Path]:

@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import typer
-
 from lza_workbench.aws.client_factory import validate_aws_credentials
 from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import resolve_template_source, validate_template
+from lza_workbench.utils.helpers import value_or_prompt
 from lza_workbench.utils.output import (
     console,
     print_dry_run_header,
@@ -17,6 +16,7 @@ from lza_workbench.utils.output import (
 )
 from lza_workbench.workspace.models import (
     AwsConfig,
+    ConfigurationConfig,
     CustomerConfig,
     LzaConfig,
     WorkspaceConfig,
@@ -25,7 +25,9 @@ from lza_workbench.workspace.models import (
 from lza_workbench.workspace.setup import (
     create_workspace,
     normalize_customer_slug,
+    overwrite_workspace_metadata,
     planned_write_paths,
+    resolve_init_workspace_dir,
     validate_workspace_structure,
 )
 
@@ -33,7 +35,7 @@ from lza_workbench.workspace.setup import (
 def run_init(
     *,
     customer_name: str,
-    workspace_dir: Path,
+    workspace_dir: Path | None,
     aws_auth_type: str = "profile",
     aws_profile: str | None = None,
     aws_region: str | None = None,
@@ -45,10 +47,31 @@ def run_init(
 ) -> None:
     """Create a customer workspace using the configured packaged template."""
     customer_slug = normalize_customer_slug(customer_name)
-    resolved_profile: str | None = None
+    default_workspace_dir = resolve_init_workspace_dir(customer_name)
+    if workspace_dir is None:
+        workspace_dir = (
+            Path(
+                value_or_prompt(
+                    "Workspace directory",
+                    None,
+                    str(default_workspace_dir),
+                    interactive,
+                )
+            )
+            .expanduser()
+            .resolve()
+        )
+    else:
+        workspace_dir = resolve_init_workspace_dir(customer_name, workspace_dir)
+
+    existing_directory = validate_workspace_structure(workspace_dir, force)
+    if existing_directory and not (workspace_dir / ConfigurationConfig().local_path).is_dir():
+        raise LzaError(
+            f"Cannot overwrite metadata: LZA configuration directory is missing in {workspace_dir}."
+        )
 
     if aws_auth_type == "profile":
-        resolved_profile = _value_or_prompt(
+        resolved_profile = value_or_prompt(
             "AWS profile", aws_profile, f"{customer_slug}-root", interactive
         )
     else:
@@ -58,13 +81,14 @@ def run_init(
         customer_name=customer_name,
         customer_slug=customer_slug,
         aws_profile=resolved_profile,
-        aws_region=_value_or_prompt("AWS region", aws_region, "us-east-1", interactive),
-        lza_version=_value_or_prompt("LZA version", lza_version, LzaConfig().version, interactive),
+        aws_region=value_or_prompt("AWS region", aws_region, "us-east-1", interactive),
+        lza_version=value_or_prompt("LZA version", lza_version, LzaConfig().version, interactive),
     )
     template_dir = resolve_packaged_template(config)
 
-    validate_template(template_dir)
-    validate_workspace_structure(workspace_dir, force)
+    # TODO(refactor): Prompt for a packaged template after multiple templates exist.
+    if not existing_directory:
+        validate_template(template_dir)
 
     if skip_aws_check:
         identity = None
@@ -75,13 +99,17 @@ def run_init(
         print_dry_run_summary(workspace_dir, config, identity)
         return
 
-    create_workspace(
-        workspace_dir=workspace_dir,
-        template_config_dir=template_dir,
-        config=config,
-        state=WorkspaceState.from_config(config),
-    )
-    validate_template(workspace_dir / config.configuration.local_path)
+    state = WorkspaceState.from_config(config)
+    if existing_directory:
+        overwrite_workspace_metadata(workspace_dir, config, state)
+    else:
+        create_workspace(
+            workspace_dir=workspace_dir,
+            template_config_dir=template_dir,
+            config=config,
+            state=state,
+        )
+        validate_template(workspace_dir / config.configuration.local_path)
     print_success_summary(workspace_dir, config, identity)
 
 
@@ -143,15 +171,3 @@ def print_success_summary(
     if identity:
         print_kv("AWS account", identity["account"])
         print_kv("Caller ARN", identity["arn"])
-
-
-def _value_or_prompt(label: str, value: str | None, default: str | None, interactive: bool) -> str:
-    if value:
-        return value
-    if interactive:
-        if default is not None:
-            return typer.prompt(label, default=default)
-        return typer.prompt(label)
-    if default is not None:
-        return default
-    raise LzaError(f"{label} is required.")

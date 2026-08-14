@@ -5,19 +5,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import typer
-
 from lza_workbench.aws.client_factory import validate_aws_credentials
 from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import validate_template
+from lza_workbench.utils.helpers import value_or_prompt
 from lza_workbench.utils.output import (
     console,
     print_dry_run_header,
     print_kv,
     print_success,
-    print_warning,
 )
-from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+from lza_workbench.workspace.config import (
+    WORKSPACE_CONFIG_FILE,
+    load_workspace_config,
+    write_workspace_config,
+)
 from lza_workbench.workspace.models import (
     AwsConfig,
     ConfigurationConfig,
@@ -27,8 +29,12 @@ from lza_workbench.workspace.models import (
     WorkspaceConfig,
     WorkspaceState,
 )
-from lza_workbench.workspace.setup import normalize_customer_slug, resolve_init_workspace_dir
-from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
+from lza_workbench.workspace.setup import normalize_customer_slug
+from lza_workbench.workspace.state import (
+    WORKSPACE_STATE_FILE,
+    load_workspace_state,
+    write_workspace_state,
+)
 
 
 @dataclass(frozen=True)
@@ -41,8 +47,8 @@ class ExistingMetadata:
 
 def run_import(
     *,
-    customer_name: str,
-    workspace_dir: Path | None,
+    customer_name: str | None,
+    workspace_dir: Path,
     config_dir: Path | None,
     aws_auth_type: str = "profile",
     aws_profile: str | None = None,
@@ -54,44 +60,45 @@ def run_import(
     interactive: bool,
 ) -> None:
     """Create or update generated metadata without changing LZA configuration files."""
-    raw_name = customer_name if customer_name != "." else Path.cwd().name
-    customer_slug = normalize_customer_slug(raw_name)
-    resolved_profile: str | None = None
+    workspace_dir, config_dir = resolve_import_paths(
+        workspace_dir=workspace_dir,
+        config_dir=config_dir,
+    )
+    existing = load_existing_metadata(workspace_dir, force=force)
+    validate_template(config_dir)
 
+    customer_name = value_or_prompt(
+        "Customer name",
+        customer_name,
+        existing.config.customer.name if existing else workspace_dir.name,
+        interactive,
+    )
+    customer_slug = (
+        existing.config.customer.slug
+        if existing and existing.config.customer.name == customer_name
+        else normalize_customer_slug(customer_name)
+    )
     if aws_auth_type == "profile":
-        resolved_profile = _value_or_prompt(
-            "AWS profile", aws_profile, f"{customer_slug}-root", interactive
+        resolved_profile = value_or_prompt(
+            "AWS profile",
+            aws_profile,
+            existing.config.aws.profile if existing else f"{customer_slug}-root",
+            interactive,
         )
     else:
         raise LzaError(f"Invalid AWS auth type: {aws_auth_type}")
 
-    if customer_name == ".":
-        customer_name = Path.cwd().name
-        workspace_dir = Path.cwd()
-    workspace_dir, config_dir = resolve_import_paths(
-        customer_name=customer_name,
-        workspace_dir=workspace_dir,
-        config_dir=config_dir,
-        interactive=interactive,
-    )
-    existing = load_existing_metadata(workspace_dir)
-    if existing and not force:
-        print_warning("Workspace already exists; use --force to overwrite metadata.")
-        return
-    validate_template(config_dir)
-
-    customer_slug = _customer_slug(customer_name, existing)
     config = build_workspace_config(
         customer_name=customer_name,
         customer_slug=customer_slug,
         aws_profile=resolved_profile,
-        aws_region=_value_or_prompt(
+        aws_region=value_or_prompt(
             "AWS region",
             aws_region,
             existing.config.aws.region if existing else "us-east-1",
             interactive,
         ),
-        lza_version=_value_or_prompt(
+        lza_version=value_or_prompt(
             "LZA version",
             lza_version,
             existing.config.lza.version if existing else LzaConfig().version,
@@ -120,21 +127,13 @@ def run_import(
     _print_summary("Imported LZA workspace", workspace_dir, config_dir, paths, identity)
 
 
-def resolve_import_paths(
-    *, customer_name: str, workspace_dir: Path | None, config_dir: Path | None, interactive: bool
-) -> tuple[Path, Path]:
+def resolve_import_paths(*, workspace_dir: Path, config_dir: Path | None) -> tuple[Path, Path]:
     """Resolve the workspace and its existing LZA configuration directory."""
     if config_dir is not None:
         resolved_config_dir = config_dir.expanduser().resolve()
-        resolved_workspace_dir = (
-            workspace_dir.expanduser().resolve() if workspace_dir else resolved_config_dir.parent
-        )
+        resolved_workspace_dir = workspace_dir.expanduser().resolve()
     else:
-        resolved_workspace_dir = resolve_init_workspace_dir(
-            customer_name=customer_name,
-            workspace_dir=workspace_dir,
-            interactive=interactive,
-        )
+        resolved_workspace_dir = workspace_dir.expanduser().resolve()
         resolved_config_dir = resolved_workspace_dir / ConfigurationConfig().local_path
 
     if not resolved_workspace_dir.is_dir():
@@ -150,21 +149,26 @@ def resolve_import_paths(
     return resolved_workspace_dir, resolved_config_dir
 
 
-def load_existing_metadata(workspace_dir: Path) -> ExistingMetadata | None:
+def load_existing_metadata(workspace_dir: Path, *, force: bool) -> ExistingMetadata | None:
     """Load a complete existing metadata pair, if present."""
-    config_path = workspace_dir / "lza-workspace.yaml"
-    state_path = workspace_dir / ".lza" / "state.json"
-    if config_path.exists() != state_path.exists():
-        raise LzaError("Workspace has partial metadata; both metadata files are required.")
-    if not config_path.exists():
-        return None
+    config_path = workspace_dir / WORKSPACE_CONFIG_FILE
+    state_path = workspace_dir / WORKSPACE_STATE_FILE
     try:
+        if config_path.exists() != state_path.exists():
+            raise ValueError("Workspace has partial metadata; both metadata files are required.")
+        if not config_path.exists():
+            return None
         return ExistingMetadata(
             config=load_workspace_config(workspace_dir),
             state=load_workspace_state(workspace_dir),
         )
     except ValueError as exc:
-        raise LzaError(str(exc)) from exc
+        if force:
+            return None
+        raise LzaError(
+            f"Invalid workspace metadata in {workspace_dir}: {exc}. "
+            f"Run `lza import {workspace_dir} --force` to replace it."
+        ) from exc
 
 
 def build_workspace_config(
@@ -203,8 +207,8 @@ def _metadata_paths(
     config: WorkspaceConfig,
     state: WorkspaceState,
 ) -> list[Path]:
-    config_path = workspace_dir / "lza-workspace.yaml"
-    state_path = workspace_dir / ".lza" / "state.json"
+    config_path = workspace_dir / WORKSPACE_CONFIG_FILE
+    state_path = workspace_dir / WORKSPACE_STATE_FILE
     if existing is None:
         return [config_path, state_path]
     return [
@@ -215,12 +219,6 @@ def _metadata_paths(
         )
         if changed
     ]
-
-
-def _customer_slug(customer_name: str, existing: ExistingMetadata | None) -> str:
-    if existing and existing.config.customer.name == customer_name:
-        return existing.config.customer.slug
-    return normalize_customer_slug(customer_name)
 
 
 def _print_summary(
@@ -244,15 +242,3 @@ def _print_summary(
         print_kv("AWS account", identity["account"])
         print_kv("Caller ARN", identity["arn"])
     console.print("Customer configuration files were preserved.")
-
-
-def _value_or_prompt(label: str, value: str | None, default: str | None, interactive: bool) -> str:
-    if value:
-        return value
-    if interactive:
-        if default is not None:
-            return typer.prompt(label, default=default)
-        return typer.prompt(label)
-    if default is not None:
-        return default
-    raise LzaError(f"{label} is required.")

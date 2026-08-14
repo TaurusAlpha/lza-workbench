@@ -60,6 +60,16 @@ CustomerName = Annotated[
     typer.Argument(help="Customer name used for the workspace."),
 ]
 
+ImportWorkspaceDir = Annotated[
+    Path,
+    typer.Argument(help="Existing workspace directory; use . for the current directory."),
+]
+
+ImportCustomerName = Annotated[
+    str | None,
+    typer.Option("--customer-name", help="Customer name stored in workspace metadata."),
+]
+
 WorkspaceDir = Annotated[
     Path | None,
     typer.Option(

@@ -66,14 +66,14 @@ Achievement: models no longer know how or where they are stored.
 - [] List all workspace path-resolution functions and identify which ones are pure path logic
       and which ones prompt through Typer.
 - [] Move pure path-resolution functions to a workspace paths module.
-- [] Move prompting out of workspace/core code and into the init or import command boundary.
-- [] Run workspace path, init, and import tests.
+- [x] Move prompting out of workspace/core code and into the init or import command boundary.
+- [x] Run workspace path, init, and import tests.
 - [x] Move `WorkspaceReadinessLevel` and `WorkspaceContext` to the context module.
 - [x] Move readiness evaluation without changing its rules.
 - [x] Move readiness error construction to the context module.
 - [] Add table-driven tests covering each readiness transition.
 - [x] Update callers one workflow at a time.
-- [] Remove readiness re-exports after confirming all callers use the new module.
+- [x] Remove readiness re-exports after confirming all callers use the new module.
 
 Achievement: workspace discovery, persistence, and readiness have separate responsibilities, and
 the workspace domain no longer depends on Typer.

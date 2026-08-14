@@ -6,6 +6,7 @@ Define the CLI entrypoint and command workflows for workspace management.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import typer
 
@@ -24,7 +25,6 @@ from lza_workbench.commands.workspace_import import run_import
 from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.core.errors import LzaError
 from lza_workbench.utils.output import print_error
-from lza_workbench.workspace.setup import resolve_init_workspace_dir
 
 app = typer.Typer(
     help="LZA Workbench CLI",
@@ -75,8 +75,6 @@ def installer_deploy_command(
 
 @installer_app.command("status")
 def installer_status_command(
-    aws_profile: params.AwsProfile = "",
-    aws_region: params.AwsRegion = "",
     sync_state: params.SyncState = False,
     sync_config: params.SyncConfig = False,
 ) -> None:
@@ -90,8 +88,6 @@ def installer_status_command(
 @status_app.callback(invoke_without_command=True)
 def status_root_callback(
     ctx: typer.Context,
-    aws_profile: params.AwsProfile = "",
-    aws_region: params.AwsRegion = "",
 ) -> None:
     """Show overall workspace status overview."""
     if ctx.invoked_subcommand is None:
@@ -100,8 +96,6 @@ def status_root_callback(
 
 @status_app.command("installer")
 def status_installer_command(
-    aws_profile: params.AwsProfile = "",
-    aws_region: params.AwsRegion = "",
     sync_state: params.SyncState = False,
     sync_config: params.SyncConfig = False,
 ) -> None:
@@ -119,10 +113,7 @@ def status_config_command() -> None:
 
 
 @status_app.command("pipeline")
-def status_pipeline_command(
-    aws_profile: params.AwsProfile = "",
-    aws_region: params.AwsRegion = "",
-) -> None:
+def status_pipeline_command() -> None:
     """Show CodePipeline status details."""
     run_pipeline_status()
 
@@ -154,17 +145,10 @@ def init_command(
     skip_aws_check: params.SkipAwsCheck = True,
 ) -> None:
     """Create a new customer-specific LZA workspace."""
-    interactive = _is_interactive()
-
-    resolved_workspace_dir = resolve_init_workspace_dir(
-        customer_name=customer_name,
-        workspace_dir=workspace_dir,
-        interactive=interactive,
-    )
 
     run_init(
         customer_name=customer_name,
-        workspace_dir=resolved_workspace_dir,
+        workspace_dir=workspace_dir,
         aws_auth_type=aws_auth_type,
         aws_profile=aws_profile or None,
         aws_region=aws_region or None,
@@ -172,14 +156,14 @@ def init_command(
         dry_run=dry_run,
         force=force,
         skip_aws_check=skip_aws_check,
-        interactive=interactive,
+        interactive=_is_interactive(),
     )
 
 
 @app.command("import")
 def import_command(
-    customer_name: params.CustomerName,
-    workspace_dir: params.WorkspaceDir = None,
+    workspace_dir: params.ImportWorkspaceDir = Path("."),
+    customer_name: params.ImportCustomerName = None,
     config_dir: params.LzaConfigDir = None,
     aws_auth_type: params.AwsAuthType = "profile",
     aws_profile: params.AwsProfile = "",
@@ -190,6 +174,7 @@ def import_command(
     skip_aws_check: params.SkipAwsCheck = False,
 ) -> None:
     """Adopt an existing customer-owned LZA configuration."""
+
     run_import(
         customer_name=customer_name,
         workspace_dir=workspace_dir,

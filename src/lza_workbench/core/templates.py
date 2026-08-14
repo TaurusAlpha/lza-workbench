@@ -7,7 +7,7 @@ from importlib.resources import files
 from pathlib import Path
 
 from lza_workbench.core.errors import LzaError
-from lza_workbench.utils.output import console, print_warning
+from lza_workbench.utils.output import print_warning
 
 DEFAULT_TEMPLATE_SOURCE = "default"
 REQUIRED_TEMPLATE_FILES = (
@@ -67,7 +67,7 @@ def validate_template(template_config_dir: Path) -> None:
 
     if missing_required:
         missing_list = ", ".join(missing_required)
-        console.print(f"[bold red]Template is missing required files: {missing_list}[/bold red]")
+        raise LzaError(f"Template is missing required files: {missing_list}")
     if missing_optional:
         missing_list = ", ".join(missing_optional)
         print_warning(f"Template is missing optional files: {missing_list}")

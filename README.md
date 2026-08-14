@@ -49,29 +49,25 @@ uv run lza init comm-it --dry-run --skip-aws-check
 
 ## Import an Existing Workspace
 
-Adopt an existing customer-owned LZA configuration from the default workspace path,
-derived from the customer name:
+Adopt an existing customer-owned LZA configuration by directory:
 
 ```bash
-lza import comm-it
+lza import /path/to/comm-it
 ```
 
-Override the default workspace path and, when needed, explicitly identify the existing configuration directory:
+From inside that directory, use `.`:
 
 ```bash
-lza import comm-it \
-  --workspace-dir /path/to/comm-it \
-  --config-dir /path/to/comm-it/aws-accelerator-config
+lza import .
 ```
 
-When `--workspace-dir` is omitted, import uses `<current-directory>/<customer-slug>`,
-matching `lza init`. When `--config-dir` is omitted, import uses the configured local
-path (`aws-accelerator-config`) inside the workspace. Missing metadata values are prompted
-for in an interactive terminal and can be supplied explicitly for scripts:
+Use `--lza-config-dir` when the configuration folder is not the default
+`aws-accelerator-config`. Import reads valid existing metadata as the prompt defaults;
+explicit options replace them:
 
 ```bash
-lza import Comm-IT \
-  --workspace-dir /path/to/comm-it \
+lza import /path/to/comm-it \
+  --customer-name Comm-IT \
   --aws-profile comm-it-root \
   --aws-region eu-west-1 \
   --lza-version v1.15.5
@@ -84,11 +80,12 @@ Import validates the existing configuration structure but never writes beneath
 Preview metadata changes without writing:
 
 ```bash
-lza import comm-it --dry-run
+lza import /path/to/comm-it --dry-run
 ```
 
-When `lza init` finds an existing configuration directory, it stops and directs you to use
-`lza import`. `lza init --force` retains its explicit reinitialization behavior.
+When `lza init` finds an existing directory, it stops and directs you to use `lza import`.
+`lza init --force` overwrites generated metadata only and leaves the customer configuration
+directory unchanged.
 
 ## Workspace Configuration
 
