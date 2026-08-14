@@ -124,3 +124,24 @@ def test_load_workspace_context_fails_when_below_min_readiness(tmp_path: Path):
     ws_dir = create_minimal_workspace(tmp_path, has_config_dir=False, has_installer_params=False)
     with pytest.raises(LzaError, match="missing required LZA templates"):
         load_workspace_context(ws_dir, min_readiness=WorkspaceReadinessLevel.IMPORTED)
+
+
+def test_readiness_uses_shared_installer_validation(tmp_path: Path) -> None:
+    ws_dir = tmp_path / "workspace"
+    ws_dir.mkdir()
+    (ws_dir / "aws-accelerator-config").mkdir()
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0", accelerator_prefix="AWSAccelerator"),
+    )
+    config.installer.source_code.repository_type = "codeconnection"
+    config.installer.source_code.connection_arn = ""
+    config.installer.options.management_account_email = "mgmt@example.com"
+    config.installer.options.log_archive_account_email = "log@example.com"
+    config.installer.options.audit_account_email = "audit@example.com"
+
+    assert (
+        evaluate_workspace_readiness(ws_dir, config, WorkspaceState())
+        == WorkspaceReadinessLevel.IMPORTED
+    )

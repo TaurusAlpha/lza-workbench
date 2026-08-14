@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +23,7 @@ from lza_workbench.core.installer_template import (
     INSTALLER_TEMPLATE_FILENAME,
     download_installer_template,
 )
+from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import build_installer_cfn_parameters
 from lza_workbench.utils.output import (
     console,
@@ -36,16 +36,6 @@ from lza_workbench.utils.output import (
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.models import WorkspaceConfig
-
-
-@dataclass
-class RequiredParamSpec:
-    """Specification of a required parameter for installer configuration."""
-
-    label: str
-    section: str
-    attribute: str
-    value: str | None
 
 
 def run_installer_plan(
@@ -62,16 +52,17 @@ def run_installer_plan(
     region = config.aws.region
 
     # Validate required installer configuration parameters in workspace
-    missing_specs = _gather_required_parameters(config)
-    if missing_specs:
+    validation = validate_installer_configuration(config)
+    if not validation.is_complete:
         console.print(
             "[bold red]Configuration error: missing required installer settings in "
             "lza-workspace.yaml:[/bold red]"
         )
-        for spec in missing_specs:
+        for spec in validation.missing_fields:
             console.print(f"  - [bold]{spec.label}[/bold] ({spec.section}.{spec.attribute})")
         raise LzaError(
-            f"{len(missing_specs)} required parameter(s) missing from lza-workspace.yaml. "
+            f"{len(validation.missing_fields)} required parameter(s) missing from "
+            "lza-workspace.yaml. "
             "Update lza-workspace.yaml with required values."
         )
 
@@ -131,106 +122,6 @@ def run_installer_plan(
         cfn_plan=cfn_plan,
         dry_run=dry_run,
     )
-
-
-def _gather_required_parameters(config: WorkspaceConfig) -> list[RequiredParamSpec]:
-    """Identify missing required parameters for installer configuration."""
-    installer_config = config.installer
-    source_type = installer_config.source_code.repository_type
-    missing: list[RequiredParamSpec] = []
-
-    # Source code parameters by type
-    if source_type == "codecommit":
-        if not (installer_config.source_code.repository_name or "").strip():
-            missing.append(
-                RequiredParamSpec(
-                    label="CodeCommit Repository Name",
-                    section="installer.source_code",
-                    attribute="repository_name",
-                    value=installer_config.source_code.repository_name,
-                )
-            )
-    elif source_type == "github":
-        if not (installer_config.source_code.owner or "").strip():
-            missing.append(
-                RequiredParamSpec(
-                    label="GitHub Repository Owner",
-                    section="installer.source_code",
-                    attribute="owner",
-                    value=installer_config.source_code.owner,
-                )
-            )
-        if not (installer_config.source_code.repository_name or "").strip():
-            missing.append(
-                RequiredParamSpec(
-                    label="GitHub Repository Name",
-                    section="installer.source_code",
-                    attribute="repository_name",
-                    value=installer_config.source_code.repository_name,
-                )
-            )
-    elif source_type == "s3":
-        if not (installer_config.source_code.bucket or "").strip():
-            missing.append(
-                RequiredParamSpec(
-                    label="Source S3 Bucket",
-                    section="installer.source_code",
-                    attribute="bucket",
-                    value=installer_config.source_code.bucket,
-                )
-            )
-        if not (installer_config.source_code.key or "").strip():
-            missing.append(
-                RequiredParamSpec(
-                    label="Source S3 Key",
-                    section="installer.source_code",
-                    attribute="key",
-                    value=installer_config.source_code.key,
-                )
-            )
-
-    # Common mandatory account emails
-    options = installer_config.options
-    if not (options.management_account_email or "").strip():
-        missing.append(
-            RequiredParamSpec(
-                label="Management Account Email",
-                section="installer.options",
-                attribute="management_account_email",
-                value=options.management_account_email,
-            )
-        )
-    if not (options.log_archive_account_email or "").strip():
-        missing.append(
-            RequiredParamSpec(
-                label="Log Archive Account Email",
-                section="installer.options",
-                attribute="log_archive_account_email",
-                value=options.log_archive_account_email,
-            )
-        )
-    if not (options.audit_account_email or "").strip():
-        missing.append(
-            RequiredParamSpec(
-                label="Audit Account Email",
-                section="installer.options",
-                attribute="audit_account_email",
-                value=options.audit_account_email,
-            )
-        )
-
-    # Accelerator prefix
-    if not (config.lza.accelerator_prefix or "").strip():
-        missing.append(
-            RequiredParamSpec(
-                label="Accelerator Prefix",
-                section="lza",
-                attribute="accelerator_prefix",
-                value=config.lza.accelerator_prefix,
-            )
-        )
-
-    return missing
 
 
 def _resolve_installer_template(

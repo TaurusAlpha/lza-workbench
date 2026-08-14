@@ -5,6 +5,7 @@ from enum import IntEnum
 from pathlib import Path
 
 from lza_workbench.core.errors import LzaError
+from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.models import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.paths import resolve_workspace_dir
@@ -31,40 +32,6 @@ class WorkspaceContext:
     readiness_level: WorkspaceReadinessLevel
 
 
-def _has_required_installer_config(config: WorkspaceConfig) -> bool:
-    """Check whether mandatory installer deployment configuration is complete."""
-    installer_config = config.installer
-    source_type = installer_config.source_code.repository_type
-
-    if source_type == "codecommit":
-        if not (installer_config.source_code.repository_name or "").strip():
-            return False
-    elif source_type == "github":
-        if (
-            not (installer_config.source_code.owner or "").strip()
-            or not (installer_config.source_code.repository_name or "").strip()
-        ):
-            return False
-    elif source_type == "s3":
-        if (
-            not (installer_config.source_code.bucket or "").strip()
-            or not (installer_config.source_code.key or "").strip()
-        ):
-            return False
-
-    options = installer_config.options
-    if not (options.management_account_email or "").strip():
-        return False
-    if not (options.log_archive_account_email or "").strip():
-        return False
-    if not (options.audit_account_email or "").strip():
-        return False
-    if not (config.lza.accelerator_prefix or "").strip():
-        return False
-
-    return True
-
-
 def evaluate_workspace_readiness(
     workspace_dir: Path,
     config: WorkspaceConfig,
@@ -78,7 +45,7 @@ def evaluate_workspace_readiness(
     if not config_dir.is_dir():
         return WorkspaceReadinessLevel.CORE_CONFIGURED
 
-    if not _has_required_installer_config(config):
+    if not validate_installer_configuration(config).is_complete:
         return WorkspaceReadinessLevel.IMPORTED
 
     if (state.installer_stack_id or "").strip():

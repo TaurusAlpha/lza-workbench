@@ -22,12 +22,12 @@ from lza_workbench.aws.codecommit import (
 )
 from lza_workbench.aws.s3 import ensure_s3_installer_source
 from lza_workbench.commands.installer_plan import (
-    _gather_required_parameters,
     _inspect_template_parameters,
     _resolve_installer_template,
     _validate_parameters_against_schema,
 )
 from lza_workbench.core.errors import LzaError
+from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import build_installer_cfn_parameters
 from lza_workbench.utils.output import (
     console,
@@ -56,16 +56,17 @@ def run_installer_deploy(
     region = config.aws.region
 
     # 2. Pre-flight check: validate required installer parameters in configuration
-    missing_specs = _gather_required_parameters(config)
-    if missing_specs:
+    validation = validate_installer_configuration(config)
+    if not validation.is_complete:
         console.print(
             "[bold red]Configuration error: missing required installer settings in"
             " lza-workspace.yaml:[/bold red]"
         )
-        for spec in missing_specs:
+        for spec in validation.missing_fields:
             console.print(f"  - [bold]{spec.label}[/bold] ({spec.section}.{spec.attribute})")
         raise LzaError(
-            f"{len(missing_specs)} required parameter(s) missing from lza-workspace.yaml. "
+            f"{len(validation.missing_fields)} required parameter(s) missing from "
+            "lza-workspace.yaml. "
             "Run 'lza installer plan' to resolve and configure missing values."
         )
 

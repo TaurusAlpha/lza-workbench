@@ -70,35 +70,23 @@ the workspace domain no longer depends on Typer.
 
 ## Phase 5: Consolidate Installer Version Rules
 
-- [x] Inventory every function and inline expression that converts LZA versions, release refs,
-      and branch names.
-- [x] Write tests describing expected handling of `latest`, `main`, `master`, `vX.Y.Z`, `X.Y.Z`,
-      and `release/vX.Y.Z`.
-- [x] Choose one installer versions module as the owner of normalization rules.
-- [x] Move or implement one authoritative version-normalization function.
-- [x] Move or implement one authoritative version-to-branch conversion function.
-- [x] Move or implement branch-to-version extraction if status reporting needs the reverse
-      conversion.
-- [x] Replace the CodeCommit implementation with calls to the shared functions.
-- [x] Replace inline conversion in CloudFormation parameter construction.
-- [x] Replace status-specific normalization functions.
-- [x] Remove duplicate version helpers after `rg` confirms they have no callers.
+DONE
 
 Achievement: version behavior is documented by tests and has one source of truth.
 
 ## Phase 6: Consolidate Installer Configuration Validation
 
-- [] Compare `_has_required_installer_config` with `_gather_required_parameters` field by field.
-- [] Write tests for required fields for GitHub, CodeCommit, S3, and CodeConnections sources.
-- [] Choose one structured validation result that can describe every missing field.
-- [] Move required-field validation into the installer configuration module.
-- [] Make installer planning use the shared validator.
-- [] Make installer deployment use the shared validator.
-- [] Make workspace readiness derive its Boolean decision from the shared validation result.
-- [] Remove the old duplicate validators.
+- [x] Compare `_has_required_installer_config` with `_gather_required_parameters` field by field.
+- [x] Write tests for required fields for GitHub, CodeCommit, S3, and CodeConnections sources.
+- [x] Choose one structured validation result that can describe every missing field.
+- [x] Move required-field validation into the installer configuration module.
+- [x] Make installer planning use the shared validator.
+- [x] Make installer deployment use the shared validator.
+- [x] Make workspace readiness derive its Boolean decision from the shared validation result.
+- [x] Remove the old duplicate validators.
 - [x] Move CloudFormation installer parameter mapping from workspace code to installer
       configuration code.
-- [] Add mapping tests for every supported repository source type.
+- [x] Add mapping tests for every supported repository source type.
 
 Achievement: plan, deploy, and readiness cannot silently disagree about installer completeness.
 
