@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import re
 
 import typer
 
 from lza_workbench.core.errors import LzaError
 
 
-def normalize_path(path: Path) -> Path:
-    """Consistently expand user home directory and resolve path."""
-    return path.expanduser().resolve()
+def normalize_customer_slug(customer_name: str) -> str:
+    """Normalize a customer name into a filesystem-safe slug."""
+    slug = customer_name.strip().lower()
+    slug = re.sub(r"[\s_]+", "-", slug)
+    slug = re.sub(r"[^a-z0-9-]+", "", slug)
+    slug = re.sub(r"-+", "-", slug).strip("-")
+    if not slug:
+        raise ValueError("Customer name does not produce a valid workspace slug.")
+    return slug
 
 
 def value_or_prompt(label: str, value: str | None, default: str | None, interactive: bool) -> str:

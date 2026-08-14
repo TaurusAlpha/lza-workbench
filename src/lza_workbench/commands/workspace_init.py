@@ -7,7 +7,7 @@ from pathlib import Path
 from lza_workbench.aws.client_factory import validate_aws_credentials
 from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import resolve_template_source, validate_template
-from lza_workbench.utils.helpers import value_or_prompt
+from lza_workbench.utils.helpers import normalize_customer_slug, value_or_prompt
 from lza_workbench.utils.output import (
     console,
     print_dry_run_header,
@@ -22,12 +22,11 @@ from lza_workbench.workspace.models import (
     WorkspaceConfig,
     WorkspaceState,
 )
+from lza_workbench.workspace.paths import resolve_init_workspace_dir
 from lza_workbench.workspace.setup import (
     create_workspace,
-    normalize_customer_slug,
     overwrite_workspace_metadata,
     planned_write_paths,
-    resolve_init_workspace_dir,
     validate_workspace_structure,
 )
 

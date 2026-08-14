@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from lza_workbench.core.errors import LzaError
-from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import (
     WorkspaceReadinessLevel,
     evaluate_workspace_readiness,
@@ -20,7 +20,7 @@ from lza_workbench.workspace.models import (
     WorkspaceConfig,
     WorkspaceState,
 )
-from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
+from lza_workbench.workspace.state import write_workspace_state
 
 
 def create_minimal_workspace(
@@ -69,57 +69,47 @@ def test_readiness_level_enum_ordering():
     assert WorkspaceReadinessLevel.CONFIGURED < WorkspaceReadinessLevel.DEPLOYED
 
 
-def test_evaluate_uninitialized(tmp_path: Path):
-    ws_dir = tmp_path / "empty"
+@pytest.mark.parametrize(
+    ("has_core_config", "has_config_dir", "has_installer_params", "installer_stack_id", "expected"),
+    [
+        (False, False, False, None, WorkspaceReadinessLevel.UNINITIALIZED),
+        (True, False, False, None, WorkspaceReadinessLevel.CORE_CONFIGURED),
+        (True, True, False, None, WorkspaceReadinessLevel.IMPORTED),
+        (True, True, True, None, WorkspaceReadinessLevel.CONFIGURED),
+        (True, True, True, "stack-id", WorkspaceReadinessLevel.DEPLOYED),
+    ],
+)
+def test_evaluate_workspace_readiness_transitions(
+    tmp_path: Path,
+    has_core_config: bool,
+    has_config_dir: bool,
+    has_installer_params: bool,
+    installer_stack_id: str | None,
+    expected: WorkspaceReadinessLevel,
+) -> None:
+    """Each row describes the minimum state required for one readiness level."""
+    ws_dir = tmp_path / "workspace"
     ws_dir.mkdir()
     config = WorkspaceConfig(
-        customer=CustomerConfig(name="", slug=""),
+        customer=CustomerConfig(
+            name="Test Customer" if has_core_config else "",
+            slug="test-customer" if has_core_config else "",
+        ),
         aws=AwsConfig(profile="test-profile", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0", accelerator_prefix="AWSAccelerator"),
     )
-    state = WorkspaceState()
-    assert (
-        evaluate_workspace_readiness(ws_dir, config, state) == WorkspaceReadinessLevel.UNINITIALIZED
-    )
+    if has_config_dir:
+        (ws_dir / config.configuration.local_path).mkdir()
+    if has_installer_params:
+        config.installer.source_code.repository_type = "codecommit"
+        config.installer.source_code.repository_name = "test-repo"
+        config.installer.options.management_account_email = "mgmt@example.com"
+        config.installer.options.log_archive_account_email = "log@example.com"
+        config.installer.options.audit_account_email = "audit@example.com"
 
+    state = WorkspaceState(installer_stack_id=installer_stack_id)
 
-def test_evaluate_core_configured(tmp_path: Path):
-    ws_dir = create_minimal_workspace(tmp_path, has_config_dir=False)
-    config = load_workspace_config(ws_dir)
-    state = load_workspace_state(ws_dir)
-
-    assert (
-        evaluate_workspace_readiness(ws_dir, config, state)
-        == WorkspaceReadinessLevel.CORE_CONFIGURED
-    )
-
-
-def test_evaluate_imported(tmp_path: Path):
-    ws_dir = create_minimal_workspace(tmp_path, has_config_dir=True, has_installer_params=False)
-    config = load_workspace_config(ws_dir)
-    state = load_workspace_state(ws_dir)
-
-    assert evaluate_workspace_readiness(ws_dir, config, state) == WorkspaceReadinessLevel.IMPORTED
-
-
-def test_evaluate_configured(tmp_path: Path):
-    ws_dir = create_minimal_workspace(tmp_path, has_config_dir=True, has_installer_params=True)
-    config = load_workspace_config(ws_dir)
-    state = load_workspace_state(ws_dir)
-
-    assert evaluate_workspace_readiness(ws_dir, config, state) == WorkspaceReadinessLevel.CONFIGURED
-
-
-def test_evaluate_deployed(tmp_path: Path):
-    ws_dir = create_minimal_workspace(
-        tmp_path,
-        has_config_dir=True,
-        has_installer_params=True,
-        installer_stack_id="arn:aws:cloudformation:us-east-1:123456789012:stack/test/123",
-    )
-    config = load_workspace_config(ws_dir)
-    state = load_workspace_state(ws_dir)
-
-    assert evaluate_workspace_readiness(ws_dir, config, state) == WorkspaceReadinessLevel.DEPLOYED
+    assert evaluate_workspace_readiness(ws_dir, config, state) == expected
 
 
 def test_load_workspace_context_success(tmp_path: Path):

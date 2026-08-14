@@ -7,7 +7,7 @@ from pathlib import Path
 from lza_workbench.core.errors import LzaError
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.models import WorkspaceConfig, WorkspaceState
-from lza_workbench.workspace.setup import resolve_workspace_dir
+from lza_workbench.workspace.paths import resolve_workspace_dir
 from lza_workbench.workspace.state import load_workspace_state
 
 

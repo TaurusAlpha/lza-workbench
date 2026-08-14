@@ -63,15 +63,18 @@ Achievement: models no longer know how or where they are stored.
 
 ## Phase 4: Separate Workspace Paths and Readiness
 
-- [] List all workspace path-resolution functions and identify which ones are pure path logic
+- [x] List all workspace path-resolution functions and identify which ones are pure path logic
       and which ones prompt through Typer.
-- [] Move pure path-resolution functions to a workspace paths module.
+      - Pure: `workspace.paths.is_workspace_dir`, `resolve_workspace_dir`, and
+        `resolve_init_workspace_dir`.
+      - Prompting: `commands.workspace_common.value_or_prompt`, called only by init/import.
+- [x] Move pure path-resolution functions to a workspace paths module.
 - [x] Move prompting out of workspace/core code and into the init or import command boundary.
 - [x] Run workspace path, init, and import tests.
 - [x] Move `WorkspaceReadinessLevel` and `WorkspaceContext` to the context module.
 - [x] Move readiness evaluation without changing its rules.
 - [x] Move readiness error construction to the context module.
-- [] Add table-driven tests covering each readiness transition.
+- [x] Add table-driven tests covering each readiness transition.
 - [x] Update callers one workflow at a time.
 - [x] Remove readiness re-exports after confirming all callers use the new module.
 

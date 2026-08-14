@@ -1,46 +1,11 @@
-import re
 import shutil
 from pathlib import Path
 
 from lza_workbench.core.errors import LzaError
-from lza_workbench.utils.helpers import normalize_path
 from lza_workbench.workspace.config import WORKSPACE_CONFIG_FILE, write_workspace_config
 from lza_workbench.workspace.models import WorkspaceConfig, WorkspaceState
+from lza_workbench.workspace.paths import normalize_path
 from lza_workbench.workspace.state import WORKSPACE_STATE_FILE, write_workspace_state
-
-
-def normalize_customer_slug(customer_name: str) -> str:
-    """Normalize a customer name into a filesystem-safe slug."""
-    slug = customer_name.strip().lower()
-    slug = re.sub(r"[\s_]+", "-", slug)
-    slug = re.sub(r"[^a-z0-9-]+", "", slug)
-    slug = re.sub(r"-+", "-", slug).strip("-")
-    if not slug:
-        raise ValueError("Customer name does not produce a valid workspace slug.")
-    return slug
-
-
-def is_workspace_dir(path: Path) -> bool:
-    """Return whether a directory declares itself as a workspace."""
-    return (normalize_path(path) / WORKSPACE_CONFIG_FILE).is_file()
-
-
-def resolve_workspace_dir(target_dir: Path | None = None) -> Path:
-    """Resolve workspace directory containing lza-workspace.yaml starting from cwd or target_dir."""
-    current = normalize_path(target_dir or Path.cwd())
-    for directory in [current, *current.parents]:
-        if is_workspace_dir(directory):
-            return directory
-    raise LzaError(
-        f"Command must be run inside an LZA workspace directory (missing {WORKSPACE_CONFIG_FILE})."
-    )
-
-
-def resolve_init_workspace_dir(customer_name: str, workspace_dir: Path | None = None) -> Path:
-    """Resolve an explicit init target or the default customer workspace path."""
-    if workspace_dir is not None:
-        return normalize_path(workspace_dir)
-    return normalize_path(Path.cwd() / normalize_customer_slug(customer_name))
 
 
 def validate_workspace_structure(
@@ -55,8 +20,7 @@ def validate_workspace_structure(
         raise LzaError(f"Target path exists and is not a directory: {target}")
     if not force:
         raise LzaError(
-            f"Workspace directory already exists: {target}. "
-            f"To adopt it, run `lza import {target}`."
+            f"Workspace directory already exists: {target}. To adopt it, run `lza import {target}`."
         )
     return True
 

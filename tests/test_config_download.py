@@ -16,7 +16,7 @@ from lza_workbench.commands.config_download import (
 from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.core.errors import LzaError
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
-from lza_workbench.workspace.setup import resolve_workspace_dir
+from lza_workbench.workspace.paths import resolve_workspace_dir
 from lza_workbench.workspace.state import load_workspace_state
 
 
