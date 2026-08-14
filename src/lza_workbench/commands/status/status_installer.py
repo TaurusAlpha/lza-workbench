@@ -14,7 +14,8 @@ from lza_workbench.aws.cloudformation import (
     get_cloudformation_stack_status,
 )
 from lza_workbench.core.errors import LzaError
-from lza_workbench.installer.config import build_installer_cfn_parameters
+from lza_workbench.installer.parameters import build_installer_cfn_parameters
+from lza_workbench.installer.versions import branch_to_version, normalize_lza_version
 from lza_workbench.utils.output import (
     console,
     print_info,
@@ -27,30 +28,6 @@ from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.models import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.state import write_workspace_state
-
-
-def extract_version_from_branch(branch: str) -> str:
-    """Extract LZA version string from a Git/CodeCommit branch name."""
-    cleaned = (branch or "").strip()
-    if not cleaned:
-        return "Unknown"
-    if cleaned.startswith("release/"):
-        cleaned = cleaned[len("release/") :]
-    if cleaned in ("main", "master", "latest"):
-        return "latest"
-    if cleaned and not cleaned.startswith("v"):
-        cleaned = f"v{cleaned}"
-    return cleaned
-
-
-def normalize_version(version: str) -> str:
-    """Normalize version string for comparison (e.g. 1.16.0 -> v1.16.0)."""
-    cleaned = (version or "").strip()
-    if not cleaned or cleaned.lower() == "latest":
-        return "latest"
-    if not cleaned.lower().startswith("v"):
-        return f"v{cleaned}"
-    return cleaned
 
 
 def run_installer_status(
@@ -86,7 +63,7 @@ def run_installer_status(
     branch = (
         cfn_status.deployed_parameters.get("RepositoryBranchName", "") if cfn_status.exists else ""
     )
-    deployed_version = extract_version_from_branch(branch)
+    deployed_version = branch_to_version(branch)
 
     if sync_state:
         state = sync_installer_state(
@@ -169,7 +146,7 @@ def sync_installer_config(
     if "RepositoryBranchName" in params:
         branch = params["RepositoryBranchName"]
         config.installer.source_code.branch = branch
-        extracted_ver = extract_version_from_branch(branch)
+        extracted_ver = branch_to_version(branch)
         if extracted_ver and extracted_ver != "Unknown":
             config.lza.version = extracted_ver
 
@@ -286,7 +263,7 @@ def _render_status_report(
     branch = (
         cfn_status.deployed_parameters.get("RepositoryBranchName", "") if cfn_status.exists else ""
     )
-    deployed_version = extract_version_from_branch(branch) if branch else "Unknown"
+    deployed_version = branch_to_version(branch)
 
     if cfn_status.exists and cfn_status.deployed_parameters:
         source_type = cfn_status.deployed_parameters.get(
@@ -306,8 +283,8 @@ def _render_status_report(
         print_kv("Repository", f"{owner}/{repo_name}")
         print_kv("Branch", branch)
 
-        norm_cfg = normalize_version(config.lza.version)
-        norm_dep = normalize_version(deployed_version)
+        norm_cfg = normalize_lza_version(config.lza.version)
+        norm_dep = normalize_lza_version(deployed_version)
         if norm_cfg == norm_dep:
             print_kv("Version Match", "Match (Configured matches Deployed)", style="green")
         else:
@@ -376,9 +353,9 @@ def _render_status_report(
                 state.installer_stack_id is None or state.installer_stack_id == cfn_status.stack_id
             )
             state_status_match = state.installer_stack_status == cfn_status.stack_status
-            state_ver_match = normalize_version(
+            state_ver_match = normalize_lza_version(
                 state.installer_template_version or ""
-            ) == normalize_version(deployed_version)
+            ) == normalize_lza_version(deployed_version)
 
             if state_id_match and state_status_match and state_ver_match:
                 align_msg = "In Sync (.lza/state.json matches live AWS state)"

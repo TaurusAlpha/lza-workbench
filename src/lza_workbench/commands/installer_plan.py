@@ -24,7 +24,7 @@ from lza_workbench.core.installer_template import (
     INSTALLER_TEMPLATE_FILENAME,
     download_installer_template,
 )
-from lza_workbench.installer.config import build_installer_cfn_parameters
+from lza_workbench.installer.parameters import build_installer_cfn_parameters
 from lza_workbench.utils.output import (
     console,
     print_info,

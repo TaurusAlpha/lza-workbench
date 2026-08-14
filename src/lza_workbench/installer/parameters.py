@@ -1,3 +1,6 @@
+"""Build CloudFormation parameters for the LZA installer stack."""
+
+from lza_workbench.installer.versions import version_to_branch
 from lza_workbench.workspace.models import WorkspaceConfig
 
 
@@ -9,14 +12,7 @@ def build_installer_cfn_parameters(config: WorkspaceConfig) -> dict[str, str]:
 
     branch = (source_code.branch or "").strip()
     if not branch:
-        lza_ver = (config.lza.version or "").strip()
-        if lza_ver == "latest":
-            branch = "main"
-        elif not lza_ver.startswith("release/"):
-            norm = lza_ver if lza_ver.startswith("v") else f"v{lza_ver}"
-            branch = f"release/{norm}"
-        else:
-            branch = lza_ver
+        branch = version_to_branch(config.lza.version)
 
     notify_emails = ",".join(options.approval_stage_notify_email_list)
 

@@ -21,16 +21,6 @@ LOCAL_PACKAGED_INSTALLER_TEMPLATE = (
 )
 
 
-def normalize_lza_version(version: str) -> str:
-    """Normalize version string for comparison (e.g. 1.16.0 -> v1.16.0)."""
-    cleaned = (version or "").strip()
-    if not cleaned or cleaned.lower() in ("latest", "main", "master"):
-        return "latest"
-    if not cleaned.lower().startswith("v"):
-        return f"v{cleaned}"
-    return cleaned
-
-
 def resolve_installer_template(
     url: str,
     fallback_version: str | None = None,

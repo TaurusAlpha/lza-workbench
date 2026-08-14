@@ -28,7 +28,7 @@ from lza_workbench.commands.installer_plan import (
     _validate_parameters_against_schema,
 )
 from lza_workbench.core.errors import LzaError
-from lza_workbench.installer.config import build_installer_cfn_parameters
+from lza_workbench.installer.parameters import build_installer_cfn_parameters
 from lza_workbench.utils.output import (
     console,
     print_info,

@@ -8,7 +8,7 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
-from lza_workbench.core.installer_template import normalize_lza_version
+from lza_workbench.installer.versions import version_to_branch
 
 
 @dataclass
@@ -37,14 +37,7 @@ def inspect_codecommit_repository(
 ) -> CodeCommitPlanResult:
     """Inspect CodeCommit repository state without mutating AWS resources."""
     repo_name = (repository_name or "aws-accelerator-codecommit").strip()
-    norm_version = normalize_lza_version(lza_version)
-
-    if norm_version == "latest":
-        version_ref = "main"
-    elif norm_version.startswith("release/"):
-        version_ref = norm_version
-    else:
-        version_ref = f"release/{norm_version}"
+    version_ref = version_to_branch(lza_version)
 
     resolved_branch = (branch_name or version_ref).strip()
     official_repo_url = "https://github.com/awslabs/landing-zone-accelerator-on-aws"

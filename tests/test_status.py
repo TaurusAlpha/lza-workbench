@@ -13,8 +13,6 @@ from lza_workbench.commands.status import (
     run_root_status,
 )
 from lza_workbench.commands.status.status_installer import (
-    extract_version_from_branch,
-    normalize_version,
     sync_installer_config,
     sync_installer_state,
 )
@@ -29,17 +27,6 @@ from lza_workbench.workspace.models import (
 from lza_workbench.workspace.state import load_workspace_state
 
 runner = CliRunner()
-
-
-def test_extract_and_normalize_version():
-    assert extract_version_from_branch("") == "Unknown"
-    assert extract_version_from_branch("release/v1.15.5") == "v1.15.5"
-    assert extract_version_from_branch("main") == "latest"
-    assert extract_version_from_branch("1.15.5") == "v1.15.5"
-
-    assert normalize_version("1.15.5") == "v1.15.5"
-    assert normalize_version("v1.15.5") == "v1.15.5"
-    assert normalize_version("latest") == "latest"
 
 
 def test_sync_installer_state_raises_when_not_exists(tmp_path):
