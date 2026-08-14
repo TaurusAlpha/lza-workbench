@@ -39,7 +39,7 @@ changing it.
       `DEFAULT_AWS_REGION` have callers.
 - [x] Remove unused command defaults or migrate callers to one authoritative default location.
 - [x] Resolve the `eu-west-1` versus `us-east-1` default-region inconsistency.
-- [] In `commands/status/status_pipeline.py`, replace the nonexistent
+- [] In `commands/status/pipeline.py`, replace the nonexistent
       `pipeline_execution_id` lookup with the intended installer and/or configuration execution
       state fields.
 - [] Add a focused status test proving the correct execution ID is displayed.
@@ -105,44 +105,30 @@ Achievement: deployment reads as a short workflow, and each risky stage can be t
 
 ## Phase 10: Simplify Configuration Upload and Download
 
-- [x] Compare `config_upload.py` and `config_download.py` and list duplicated business rules.
-- [x] Extract one shared resolver for the configured S3 archive location.
-- [x] Reuse the shared AWS execution context rather than constructing a factory locally.
-- [x] Extract configuration artifact metadata updates into a focused state helper.
-- [x] Keep upload-specific packaging and download-specific extraction separate.
-- [x] Add tests proving excluded files and directories behave consistently in both directions.
-- [x] Check extraction behavior for archives containing excluded directories.
-- [x] Move archive operations into the configuration feature package when their callers are
-      ready.
+DONE
 
 Achievement: upload and download share only real domain rules while retaining clear individual
 workflows.
 
 ## Phase 11: Separate Status Data from Rendering
 
-- [] For root status, create a structured result before rendering any Rich output.
-- [] For installer status, separate AWS/config/state comparison from report rendering.
-- [] Move configuration drift calculation into a pure function and add focused tests.
-- [] Move state-alignment calculation into a pure function and add focused tests.
-- [] For pipeline status, prepare pipeline names and execution metadata before rendering.
-- [] Make status renderers consume results without calling AWS or writing files.
-- [] Keep explicit synchronization actions outside read-only report rendering.
-- [] Shorten the 200-line installer status renderer by rendering small, named report sections.
+DONE
 
 Achievement: status calculations can be tested without capturing terminal output.
 
 ## Phase 12: Clarify Files and Resource Names
 
-- [] Inventory which files under `src/lza_workbench/config/` are packaged resources, examples,
+- [x] Inventory which files under `src/lza_workbench/config/` are packaged resources, examples,
       or obsolete runtime-like files.
-- [] Confirm whether packaged `state.json` has a supported purpose; remove or relocate it if not.
-- [] Create a resources hierarchy only after agreeing on its categories.
-- [] Move the packaged installer CloudFormation template and update its resolver.
-- [] Move workspace examples and update documentation references.
-- [] Move the default customer configuration template and update template discovery.
-- [] Rename status modules from redundant names only after functional refactors are complete.
-- [] Rename configuration model classes only when the value outweighs compatibility churn.
-- [] Verify package build contents after resource moves.
+- [x] Confirm whether packaged `state.json` has a supported purpose; remove or relocate it if not.
+- [x] Create a resources hierarchy only after agreeing on its categories.
+- [x] Move the packaged installer CloudFormation template and update its resolver.
+- [x] Move workspace examples and update documentation references.
+- [x] Move the default customer configuration template and update template discovery.
+- [x] Rename status modules from redundant names only after functional refactors are complete.
+- [x] Evaluate configuration model names; retain the current public names because the clarity gain
+      does not outweigh compatibility churn.
+- [x] Verify package build contents after resource moves.
 
 Achievement: directory and file names reveal whether content is code, a packaged template, an
 example, or runtime workspace data.

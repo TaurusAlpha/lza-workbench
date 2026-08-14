@@ -13,11 +13,16 @@ from lza_workbench.commands.status import (
     run_pipeline_status,
     run_root_status,
 )
-from lza_workbench.commands.status.status_installer import (
+from lza_workbench.commands.status.installer import (
+    prepare_installer_status,
     sync_installer_config,
     sync_installer_state,
 )
 from lza_workbench.core.errors import LzaError
+from lza_workbench.installer.status import (
+    calculate_configuration_drift,
+    calculate_state_alignment,
+)
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.models import (
     AwsConfig,
@@ -94,8 +99,114 @@ def test_sync_installer_config_success(tmp_path):
     assert loaded_config.installer.options.management_account_email == "mgmt@example.com"
 
 
-@patch("lza_workbench.commands.status.status_main.get_cloudformation_stack_status")
-@patch("lza_workbench.commands.status.status_main.resolve_aws_execution_context")
+def test_calculate_configuration_drift_returns_only_changed_parameters():
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+
+    drift = calculate_configuration_drift(
+        config,
+        {
+            "RepositorySource": "github",
+            "RepositoryOwner": "awslabs",
+            "RepositoryName": "landing-zone-accelerator-on-aws",
+            "RepositoryBranchName": "release/v1.15.5",
+            "EnableApprovalStage": "Yes",
+        },
+    )
+
+    assert drift["EnableApprovalStage"] == ("Yes", "No")
+    assert "RepositorySource" not in drift
+
+
+def test_calculate_state_alignment_compares_stack_and_version_metadata():
+    state = WorkspaceState(
+        installer_stack_id="stack-id",
+        installer_stack_status="CREATE_COMPLETE",
+        installer_template_version="v1.15.5",
+    )
+
+    aligned = calculate_state_alignment(
+        state,
+        stack_id="stack-id",
+        stack_status="CREATE_COMPLETE",
+        deployed_version="release/v1.15.5",
+    )
+    stale = calculate_state_alignment(
+        state,
+        stack_id="stack-id",
+        stack_status="UPDATE_COMPLETE",
+        deployed_version="v1.15.5",
+    )
+
+    assert aligned.in_sync is True
+    assert stale.in_sync is False
+
+
+def test_prepare_installer_status_separates_comparisons_from_rendering(tmp_path):
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    state = WorkspaceState(
+        installer_stack_status="CREATE_COMPLETE",
+        installer_template_version="v1.15.5",
+    )
+    cfn_status = CfnStackStatusResult(
+        stack_name="AWSAccelerator-InstallerStack",
+        exists=True,
+        stack_status="CREATE_COMPLETE",
+        deployed_parameters={"RepositoryBranchName": "release/v1.15.5"},
+    )
+
+    result = prepare_installer_status(
+        workspace_dir=tmp_path,
+        config=config,
+        state=state,
+        profile="test-profile",
+        region="us-east-1",
+        aws_identity=None,
+        aws_error="No credentials",
+        cfn_status=cfn_status,
+    )
+
+    assert result.deployed_version == "v1.15.5"
+    assert result.state_alignment is not None
+    assert result.state_alignment.in_sync is True
+
+
+def test_pipeline_status_displays_separate_execution_ids(tmp_path, monkeypatch):
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    state = WorkspaceState(
+        installer_pipeline_execution_id="installer-execution",
+        config_pipeline_execution_id="config-execution",
+    )
+    mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=state)
+    aws_context = AwsExecutionContext(
+        region="us-east-1", factory=MagicMock(), identity=None, error="No credentials"
+    )
+    monkeypatch.setattr(
+        "lza_workbench.commands.status.pipeline.load_workspace_context",
+        lambda *_args, **_kwargs: mock_ctx,
+    )
+    monkeypatch.setattr(
+        "lza_workbench.commands.status.pipeline.resolve_aws_execution_context",
+        lambda _: aws_context,
+    )
+
+    result = runner.invoke(app, ["status", "pipeline"])
+
+    assert result.exit_code == 0
+    assert "installer-execution" in result.output
+    assert "config-execution" in result.output
+
+
+@patch("lza_workbench.commands.status.main.get_cloudformation_stack_status")
+@patch("lza_workbench.commands.status.main.resolve_aws_execution_context")
 def test_run_root_status(mock_resolve_context, mock_get_cfn, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "lza-workspace.yaml").write_text(
@@ -115,7 +226,7 @@ def test_run_root_status(mock_resolve_context, mock_get_cfn, tmp_path, monkeypat
     run_root_status(target_dir=tmp_path)
 
 
-@patch("lza_workbench.commands.status.status_config.load_workspace_context")
+@patch("lza_workbench.commands.status.config.load_workspace_context")
 def test_run_config_status(mock_load_ctx, tmp_path):
     config = WorkspaceConfig(
         customer=CustomerConfig(name="Test Customer", slug="test-customer"),
@@ -131,7 +242,7 @@ def test_run_config_status(mock_load_ctx, tmp_path):
     run_config_status(target_dir=tmp_path)
 
 
-@patch("lza_workbench.commands.status.status_pipeline.resolve_aws_execution_context")
+@patch("lza_workbench.commands.status.pipeline.resolve_aws_execution_context")
 def test_run_pipeline_status(mock_resolve_context, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "lza-workspace.yaml").write_text(
@@ -148,10 +259,10 @@ def test_run_pipeline_status(mock_resolve_context, tmp_path, monkeypatch):
     run_pipeline_status(target_dir=tmp_path)
 
 
-@patch("lza_workbench.commands.status.status_installer.get_cloudformation_stack_status")
-@patch("lza_workbench.commands.status.status_installer.resolve_aws_execution_context")
-@patch("lza_workbench.commands.status.status_main.resolve_aws_execution_context")
-@patch("lza_workbench.commands.status.status_pipeline.resolve_aws_execution_context")
+@patch("lza_workbench.commands.status.installer.get_cloudformation_stack_status")
+@patch("lza_workbench.commands.status.installer.resolve_aws_execution_context")
+@patch("lza_workbench.commands.status.main.resolve_aws_execution_context")
+@patch("lza_workbench.commands.status.pipeline.resolve_aws_execution_context")
 def test_cli_status_commands(
     mock_pipeline_context,
     mock_main_context,

@@ -11,12 +11,14 @@ from lza_workbench.config.archive import count_config_files, is_path_excluded
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.models import AwsConfig, CustomerConfig, WorkspaceConfig
 
-CONFIG_DIR = Path(__file__).parents[1] / "src" / "lza_workbench" / "config" / "examples"
+WORKSPACE_EXAMPLES_DIR = (
+    Path(__file__).parents[1] / "src" / "lza_workbench" / "resources" / "workspace_examples"
+)
 
 
 def _create_test_workspace(target_dir: Path, example_file: str) -> Path:
     """Helper to place an example YAML into a mock workspace directory as lza-workspace.yaml."""
-    source_path = CONFIG_DIR / example_file
+    source_path = WORKSPACE_EXAMPLES_DIR / example_file
     destination = target_dir / "lza-workspace.yaml"
     shutil.copy(source_path, destination)
     return target_dir

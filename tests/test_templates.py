@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib.resources import files
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,17 @@ def test_resolve_template_source_default() -> None:
     assert resolved.source_type == "bundled"
     assert resolved.config_dir.is_dir()
     assert (resolved.config_dir / "global-config.yaml").is_file()
+
+
+def test_bundled_resources_are_in_the_resources_hierarchy() -> None:
+    """Packaged assets have explicit resource categories."""
+    installer_template = (
+        files("lza_workbench.resources.installer") / "AWSAccelerator-InstallerStack.template"
+    )
+    workspace_example = files("lza_workbench.resources.workspace_examples") / "minimal.yaml"
+
+    assert installer_template.is_file()
+    assert workspace_example.is_file()
 
 
 def test_resolve_template_source_local(tmp_path: Path) -> None:

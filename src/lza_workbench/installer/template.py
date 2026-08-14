@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +30,12 @@ def resolve_installer_template(
                 "Would download during execution.",
                 dim=True,
             )
-            packaged = Path(__file__).parent.parent / "config" / INSTALLER_TEMPLATE_FILENAME
+            packaged = Path(
+                str(
+                    files("lza_workbench.resources.installer")
+                    / INSTALLER_TEMPLATE_FILENAME
+                )
+            )
             if packaged.exists():
                 return packaged
             return template_path

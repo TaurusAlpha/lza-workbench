@@ -215,7 +215,7 @@ Names are already mostly understandable. Improve names only where they clarify o
 
 - Prefer `InstallerConfig` over `LzaInstaller` when that model is moved.
 - Prefer `InstallerPipelineConfig` over `PipelineInstaller` when that model is moved.
-- Inside a `status/` package, prefer `installer.py` to `status_installer.py`.
+- Inside a `status/` package, use concise module names such as `installer.py`.
 - Prefer public domain names such as `find_missing_installer_parameters` over importing private
   helpers from command modules.
 - Keep domain-standard abbreviations such as AWS, LZA, ARN, S3, and CloudFormation.
@@ -271,4 +271,3 @@ The refactor is successful when:
 - Packaged resources have unambiguous locations.
 - Existing CLI behavior remains covered by tests.
 - The known correctness and security findings have focused regression tests.
-

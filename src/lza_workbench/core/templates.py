@@ -74,7 +74,11 @@ def validate_template(template_config_dir: Path) -> None:
 
 
 def _bundled_default_template_dir() -> Path:
-    return Path(str(files("lza_workbench.templates"))) / "default" / "aws-accelerator-config"
+    return (
+        Path(str(files("lza_workbench.resources.customer_configurations")))
+        / "default"
+        / "aws-accelerator-config"
+    )
 
 
 def _local_template_config_dir(source_path: Path) -> Path:

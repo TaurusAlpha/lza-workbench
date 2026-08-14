@@ -8,8 +8,8 @@ The repository contains the application source code, bundled LZA templates, and 
 
 - `src/` — Application source code and all execution logic.
 - `tests/` — Automated tests.
-- `src/lza_workbench/templates/` — Bundled templates shipped with the CLI.
-- `src/lza_workbench/config/examples/` — Typed workspace configuration examples.
+- `src/lza_workbench/resources/` — Bundled installer templates, starter customer configuration,
+  and workspace examples shipped with the CLI.
 - `PROJECT.md` — Long-term project vision, architecture, and design principles.
 - `TODO.md` — Feature backlog and implementation ideas.
 
@@ -116,7 +116,7 @@ pipelines:
 ```
 
 Defaults are defined in `src/lza_workbench/core/workspace.py`; YAML supplies explicit
-overrides. Unknown keys are rejected. See `src/lza_workbench/config/examples/` for minimal,
+overrides. Unknown keys are rejected. See `src/lza_workbench/resources/workspace_examples/` for minimal,
 full, configuration-only, and installer-only examples.
 
 ### AWS authentication

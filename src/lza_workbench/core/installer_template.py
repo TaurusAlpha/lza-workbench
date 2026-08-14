@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import urllib.request
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
@@ -16,8 +17,8 @@ INSTALLER_TEMPLATE_URL_TEMPLATE = (
     "https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/"
     "{version}/{filename}"
 )
-LOCAL_PACKAGED_INSTALLER_TEMPLATE = (
-    Path(__file__).parent.parent / "config" / INSTALLER_TEMPLATE_FILENAME
+LOCAL_PACKAGED_INSTALLER_TEMPLATE = Path(
+    str(files("lza_workbench.resources.installer") / INSTALLER_TEMPLATE_FILENAME)
 )
 
 
