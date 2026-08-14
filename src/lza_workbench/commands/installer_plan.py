@@ -2,29 +2,30 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any
 
 from rich.panel import Panel
 from rich.table import Table
 
 from lza_workbench.aws.cloudformation import (
-    CfnDeploymentPlanResult,
     inspect_cloudformation_stack,
 )
 from lza_workbench.aws.codecommit import (
-    CodeCommitPlanResult,
     inspect_codecommit_repository,
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.core.errors import LzaError
-from lza_workbench.core.installer_template import (
-    INSTALLER_TEMPLATE_FILENAME,
-    download_installer_template,
-)
 from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import build_installer_cfn_parameters
+from lza_workbench.installer.planning import (
+    InstallerPlanResult,
+    prepare_installer_plan_result,
+)
+from lza_workbench.installer.template import (
+    inspect_template_parameters,
+    resolve_installer_template,
+    validate_parameters_against_schema,
+)
 from lza_workbench.utils.output import (
     console,
     print_info,
@@ -35,7 +36,6 @@ from lza_workbench.utils.output import (
 )
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
-from lza_workbench.workspace.models import WorkspaceConfig
 
 
 def run_installer_plan(
@@ -47,8 +47,6 @@ def run_installer_plan(
     """Resolve installer config from workspace and show planned deployment actions."""
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CONFIGURED)
     workspace_dir, config = ctx.workspace_dir, ctx.config
-
-    profile = config.aws.profile or ""
 
     # Validate required installer configuration parameters in workspace
     validation = validate_installer_configuration(config)
@@ -71,12 +69,12 @@ def run_installer_plan(
         print_info("Installer configuration verified in lza-workspace.yaml", dim=True)
 
     # Step 1: Template Resolution & Parameter Schema Inspection
-    template_path = _resolve_installer_template(workspace_dir, config, dry_run=dry_run)
-    params_schema = _inspect_template_parameters(template_path)
+    template_path = resolve_installer_template(workspace_dir, config, dry_run=dry_run)
+    params_schema = inspect_template_parameters(template_path)
 
     # Step 2: Validate Resolved Parameters against Template Schema
     resolved_params = build_installer_cfn_parameters(config)
-    _validate_parameters_against_schema(resolved_params, params_schema)
+    validate_parameters_against_schema(resolved_params, params_schema)
 
     # Step 3: Create AWS Factory & Validate Profile Identity
     aws_context = resolve_aws_execution_context(config.aws)
@@ -106,93 +104,30 @@ def run_installer_plan(
     )
 
     # Step 6: Render Read-Only Summary Plan Report
-    _render_plan_report(
+    plan_result = prepare_installer_plan_result(
         workspace_dir=workspace_dir,
         config=config,
-        profile=profile,
         region=region,
         aws_identity=aws_identity,
         aws_error=aws_error,
         codecommit_plan=codecommit_plan,
-        cfn_plan=cfn_plan,
+        cloudformation_plan=cfn_plan,
         dry_run=dry_run,
     )
+    _render_plan_report(plan_result)
 
 
-def _resolve_installer_template(
-    workspace_dir: Path, config: WorkspaceConfig, dry_run: bool
-) -> Path:
-    """Locate local template or download it into installer local directory."""
-    installer_dir = workspace_dir / config.installer.local_path
-    template_path = installer_dir / INSTALLER_TEMPLATE_FILENAME
-
-    if not template_path.exists():
-        if dry_run:
-            print_info(
-                f"Template {INSTALLER_TEMPLATE_FILENAME} not found locally. "
-                "Would download during execution.",
-                dim=True,
-            )
-            packaged = Path(__file__).parent.parent / "config" / INSTALLER_TEMPLATE_FILENAME
-            if packaged.exists():
-                return packaged
-            return template_path
-
-        ver = config.lza.version
-        print_notice(f"Downloading LZA installer template ({ver})...")
-        template_path = download_installer_template(
-            version=config.lza.version,
-            local_path=template_path,
-        )
-
-    return template_path
-
-
-def _inspect_template_parameters(template_path: Path) -> dict[str, dict[str, Any]]:
-    """Parse JSON template and extract parameter schema definitions."""
-    if not template_path.exists():
-        return {}
-
-    try:
-        data = json.loads(template_path.read_text(encoding="utf-8"))
-        return data.get("Parameters", {})
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def _validate_parameters_against_schema(
-    resolved_params: dict[str, str], schema: dict[str, dict[str, Any]]
-) -> None:
-    """Validate resolved parameter values against CloudFormation template schema."""
-    if not schema:
-        return
-
-    for key, value in resolved_params.items():
-        if key not in schema:
-            continue
-
-        param_def = schema[key]
-        allowed = param_def.get("AllowedValues")
-        if allowed and value not in allowed:
-            raise LzaError(
-                f"Invalid parameter value '{value}' for {key}. "
-                f"Allowed values are: {', '.join(allowed)}"
-            )
-
-
-def _render_plan_report(
-    *,
-    workspace_dir: Path,
-    config: WorkspaceConfig,
-    profile: str,
-    region: str,
-    aws_identity: dict[str, str] | None,
-    aws_error: str | None,
-    codecommit_plan: CodeCommitPlanResult,
-    cfn_plan: CfnDeploymentPlanResult,
-    dry_run: bool,
-) -> None:
+def _render_plan_report(plan: InstallerPlanResult) -> None:
     """Render structured rich summary plan output for the user."""
+    workspace_dir = plan.workspace_dir
+    config = plan.config
+    profile = plan.profile
+    region = plan.region
+    aws_identity = plan.aws_identity
+    aws_error = plan.aws_error
+    codecommit_plan = plan.codecommit_plan
+    cfn_plan = plan.cloudformation_plan
+    dry_run = plan.dry_run
     title = f"[bold cyan]LZA Installer Plan - {config.customer.name}[/bold cyan]"
     if dry_run:
         title += " [yellow](Dry Run)[/yellow]"

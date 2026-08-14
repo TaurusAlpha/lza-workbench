@@ -21,14 +21,14 @@ from lza_workbench.aws.codecommit import (
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.s3 import ensure_s3_installer_source
-from lza_workbench.commands.installer_plan import (
-    _inspect_template_parameters,
-    _resolve_installer_template,
-    _validate_parameters_against_schema,
-)
 from lza_workbench.core.errors import LzaError
 from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import build_installer_cfn_parameters
+from lza_workbench.installer.template import (
+    inspect_template_parameters,
+    resolve_installer_template,
+    validate_parameters_against_schema,
+)
 from lza_workbench.utils.output import (
     console,
     print_info,
@@ -84,10 +84,10 @@ def run_installer_deploy(
     assert aws_identity is not None
 
     # 4. Resolve Template & Validate Parameters
-    template_path = _resolve_installer_template(workspace_dir, config, dry_run=dry_run)
-    params_schema = _inspect_template_parameters(template_path)
+    template_path = resolve_installer_template(workspace_dir, config, dry_run=dry_run)
+    params_schema = inspect_template_parameters(template_path)
     resolved_params = build_installer_cfn_parameters(config)
-    _validate_parameters_against_schema(resolved_params, params_schema)
+    validate_parameters_against_schema(resolved_params, params_schema)
 
     # 5. Source Preparation Check (CodeCommit / S3)
     source_type = config.installer.source_code.repository_type

@@ -10,6 +10,7 @@ from botocore.exceptions import ClientError
 
 from lza_workbench.commands.installer_plan import run_installer_plan
 from lza_workbench.core.errors import LzaError
+from lza_workbench.installer.planning import InstallerPlanResult
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.models import (
     AwsConfig,
@@ -102,6 +103,23 @@ def test_installer_plan_no_save(sample_workspace: Path) -> None:
 
     config = load_workspace_config(sample_workspace)
     assert config.installer.options.management_account_email == "root@example.com"
+
+
+def test_installer_plan_prepares_result_before_rendering(sample_workspace: Path) -> None:
+    """The renderer receives a prepared result rather than command workflow inputs."""
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.commands.installer_plan._render_plan_report") as mock_render,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = MagicMock()
+
+        run_installer_plan(dry_run=False, no_save=True, target_dir=sample_workspace)
+
+    rendered_plan = mock_render.call_args.args[0]
+    assert isinstance(rendered_plan, InstallerPlanResult)
+    assert rendered_plan.workspace_dir == sample_workspace
 
 
 def test_installer_plan_codecommit_missing(sample_workspace: Path) -> None:

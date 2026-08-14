@@ -85,37 +85,22 @@ Achievement: plan, deploy, and readiness cannot silently disagree about installe
 This phase changes behavior and security assumptions. Keep its fixes separate from structural
 moves and review operational impact carefully.
 
-- [x] Document the supported external authentication methods before editing models.
-- [x] Remove secret access keys from declarative workspace configuration and examples.
-- [x] Remove CLI options that would persist secret keys in workspace YAML.
-- [x] Add migration/error behavior for an existing workspace that contains secret-key fields.
-- [x] Add tests proving secrets are never serialized to `lza-workspace.yaml`.
-- [x] Define a small AWS execution-context result containing the resolved region, factory, and
-      optional identity/error information.
-- [x] Implement one resolver for profile overrides, configured profile/role, region, and identity
-      validation.
-- [x] Migrate installer planning to the resolver.
-- [x] Migrate installer deployment to the resolver.
-- [x] Migrate configuration upload and download to the resolver.
-- [x] Migrate root, installer, and pipeline status to the resolver one command at a time.
-- [x] Add tests proving every workflow uses the selected profile or role.
-- [x] Add an account-safety check before mutating AWS when the configured account ID is available.
-- [x] Remove repeated profile/region/factory/identity blocks after confirming no callers remain.
+DONE
 
 Achievement: authentication is external, consistent, and safe across every command.
 
 ## Phase 8: Establish Installer Feature Modules
 
 - [x] Create the installer feature package only when the first shared function is ready to move.
-- [] Move template resolution from `commands/installer_plan.py` into the installer feature.
-- [] Move template parameter inspection into the installer feature.
-- [] Move template parameter validation into the installer feature.
-- [] Give these functions public names and update installer plan to use them.
-- [] Update installer deploy to use the same public functions.
-- [] Remove imports of underscore-prefixed helpers from one command module into another.
-- [] Move planning result preparation out of Rich rendering code.
-- [] Make the plan renderer accept prepared results and only render them.
-- [] Run plan tests after each moved responsibility.
+- [x] Move template resolution from `commands/installer_plan.py` into the installer feature.
+- [x] Move template parameter inspection into the installer feature.
+- [x] Move template parameter validation into the installer feature.
+- [x] Give these functions public names and update installer plan to use them.
+- [x] Update installer deploy to use the same public functions.
+- [x] Remove imports of underscore-prefixed helpers from one command module into another.
+- [x] Move planning result preparation out of Rich rendering code.
+- [x] Make the plan renderer accept prepared results and only render them.
+- [x] Run plan tests after each moved responsibility.
 
 Achievement: installer plan and deploy share public domain logic instead of command internals.
 
