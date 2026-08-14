@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.utils.archive import count_config_files, is_path_excluded
+from lza_workbench.config.archive import count_config_files, is_path_excluded
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.models import AwsConfig, CustomerConfig, WorkspaceConfig
 

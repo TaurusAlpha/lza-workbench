@@ -2,20 +2,16 @@
 
 from __future__ import annotations
 
-import hashlib
-from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
 
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.aws.s3 import download_s3_archive, resolve_s3_archive_uri
+from lza_workbench.aws.s3 import download_s3_archive
+from lza_workbench.config.archive import ConfigDiffResult, extract_zip_to_workspace
+from lza_workbench.config.state import record_config_download
+from lza_workbench.config.transfer import resolve_configuration_archive_location
 from lza_workbench.core.errors import LzaError
-from lza_workbench.utils.archive import (
-    ConfigDiffResult,
-    count_config_files,
-    extract_zip_to_workspace,
-)
 from lza_workbench.utils.output import (
     print_diff_summary,
     print_dry_run_header,
@@ -40,36 +36,22 @@ def run_download_config(
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
-    repo_config = config.configuration.repository
     config_dir = workspace_dir / config.configuration.local_path
-
-    if repo_config.type != "s3":
-        raise LzaError(
-            f"Unsupported configuration repository type: '{repo_config.type}'. "
-            "Only 's3' is supported."
-        )
-
-    bucket = (repo_config.bucket or "").strip()
-    if not bucket:
-        if interactive:
-            bucket = typer.prompt("S3 bucket name for configuration").strip()
-        if not bucket:
-            raise LzaError(
-                "No S3 bucket configured in lza-workspace.yaml under "
-                "configuration.repository.bucket."
-            )
-
-    prefix = (repo_config.prefix or "").strip()
+    archive_location = resolve_configuration_archive_location(
+        workspace_dir=workspace_dir,
+        repository=config.configuration.repository,
+        prompt_for_bucket=(lambda: typer.prompt("S3 bucket name for configuration"))
+        if interactive
+        else None,
+    )
     profile = config.aws.profile or ""
     region = config.aws.region
-
-    s3_bucket, s3_key, zip_name = resolve_s3_archive_uri(bucket, prefix)
-    zip_path = workspace_dir / zip_name
+    zip_path = archive_location.zip_path
 
     if dry_run:
         print_dry_run_header("lza config download")
         print_kv("Workspace", workspace_dir)
-        print_kv("S3 Source", f"s3://{s3_bucket}/{s3_key}")
+        print_kv("S3 Source", f"s3://{archive_location.bucket}/{archive_location.key}")
         print_kv("AWS Profile", profile)
         print_kv("AWS Region", region)
         print_kv("Local Zip Path", zip_path)
@@ -90,49 +72,42 @@ def run_download_config(
             )
 
     exclude_dirs = set(config.configuration.packaging.exclude.directories)
+    exclude_files = set(config.configuration.packaging.exclude.files)
 
     aws_context = resolve_aws_execution_context(config.aws, require_identity=True)
-    factory = aws_context.factory
     download_s3_archive(
-        s3_bucket=s3_bucket,
-        s3_key=s3_key,
-        prefix=prefix,
+        s3_bucket=archive_location.bucket,
+        s3_key=archive_location.key,
+        prefix=config.configuration.repository.prefix.strip(),
         zip_path=zip_path,
-        factory=factory,
+        factory=aws_context.factory,
     )
 
     if extract:
         diff_result = extract_zip_to_workspace(
             zip_path=zip_path,
-            workspace_dir=workspace_dir,
             config_dir=config_dir,
             exclude_dirs=exclude_dirs,
+            exclude_files=exclude_files,
         )
     else:
         diff_result = ConfigDiffResult(added=[zip_path.name], modified=[], removed=[])
 
-    now = datetime.now(UTC)
-    state.updated_at = now
-    state.config_downloaded_at = now
-
-    if zip_path.exists():
-        state.config_artifact_sha256 = hashlib.sha256(zip_path.read_bytes()).hexdigest()
-
-    if config_dir.exists():
-        state.config_files_count = count_config_files(config_dir, exclude_dirs)
-
-    state.config_last_diff_summary = {
-        "added": len(diff_result.added),
-        "modified": len(diff_result.modified),
-        "removed": len(diff_result.removed),
-    }
+    record_config_download(
+        state,
+        zip_path=zip_path,
+        config_dir=config_dir,
+        exclude_dirs=exclude_dirs,
+        exclude_files=exclude_files,
+        diff_result=diff_result,
+    )
 
     write_workspace_state(workspace_dir, state)
 
     action_str = "Downloaded and extracted " if extract else "Downloaded "
     print_success(f"{action_str}LZA configuration")
     print_kv("Workspace", workspace_dir)
-    print_kv("Source", f"s3://{s3_bucket}/{s3_key}")
+    print_kv("Source", f"s3://{archive_location.bucket}/{archive_location.key}")
     print_kv("Zip archive", zip_path)
     print_kv("Extracted to", config_dir)
 

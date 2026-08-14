@@ -99,34 +99,20 @@ Achievement: installer plan and deploy share public domain logic instead of comm
 
 This is intentionally late because it requires understanding all preceding boundaries.
 
-- [x] Write a one-page sequence of the current deployment stages and their failure points.
-- [x] Identify which stages are read-only and which mutate local files or AWS.
-- [x] Extract preflight validation from `run_installer_deploy` into a focused function.
-- [x] Extract source repository inspection from deployment orchestration.
-- [ ] Fix S3 source preparation to use configured bucket and key values in a separate behavioral
-      commit.
-- [x] Decide whether CodeCommit synchronization is implemented or explicitly required as a
-      manual prerequisite.
-- [x] Add a regression test for the chosen CodeCommit behavior.
-- [x] Extract CloudFormation plan preparation from deployment orchestration.
-- [x] Reject unsafe or unknown CloudFormation states before mutation.
-- [x] Extract confirmation and Rich tables into presentation helpers.
-- [x] Extract state update after successful deployment.
-- [x] Reduce `run_installer_deploy` to readable orchestration of named stages.
-- [x] Add tests for create, update, no-change, inaccessible, and failure outcomes.
+DONE
 
 Achievement: deployment reads as a short workflow, and each risky stage can be tested separately.
 
 ## Phase 10: Simplify Configuration Upload and Download
 
-- [] Compare `config_upload.py` and `config_download.py` and list duplicated business rules.
-- [] Extract one shared resolver for the configured S3 archive location.
-- [] Reuse the shared AWS execution context rather than constructing a factory locally.
-- [] Extract configuration artifact metadata updates into a focused state helper.
-- [] Keep upload-specific packaging and download-specific extraction separate.
-- [] Add tests proving excluded files and directories behave consistently in both directions.
-- [] Check extraction behavior for archives containing excluded directories.
-- [] Move archive operations into the configuration feature package when their callers are
+- [x] Compare `config_upload.py` and `config_download.py` and list duplicated business rules.
+- [x] Extract one shared resolver for the configured S3 archive location.
+- [x] Reuse the shared AWS execution context rather than constructing a factory locally.
+- [x] Extract configuration artifact metadata updates into a focused state helper.
+- [x] Keep upload-specific packaging and download-specific extraction separate.
+- [x] Add tests proving excluded files and directories behave consistently in both directions.
+- [x] Check extraction behavior for archives containing excluded directories.
+- [x] Move archive operations into the configuration feature package when their callers are
       ready.
 
 Achievement: upload and download share only real domain rules while retaining clear individual

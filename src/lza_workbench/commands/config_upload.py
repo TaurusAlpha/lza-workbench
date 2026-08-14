@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import hashlib
-from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
 
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.aws.s3 import resolve_s3_archive_uri, upload_s3_archive
+from lza_workbench.aws.s3 import upload_s3_archive
+from lza_workbench.config.archive import create_zip_archive
+from lza_workbench.config.state import record_config_upload
+from lza_workbench.config.transfer import resolve_configuration_archive_location
 from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import validate_template
-from lza_workbench.utils.archive import create_zip_archive
 from lza_workbench.utils.output import (
     print_diff_summary,
     print_dry_run_header,
@@ -33,43 +33,30 @@ def run_upload_config(
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
-    repo_config = config.configuration.repository
     config_dir = workspace_dir / config.configuration.local_path
-
-    if repo_config.type != "s3":
-        raise LzaError(
-            f"Unsupported configuration repository type: '{repo_config.type}'. "
-            "Only 's3' is supported."
-        )
 
     if not config_dir.exists() or not config_dir.is_dir():
         raise LzaError(f"Configuration directory does not exist: {config_dir}")
 
     validate_template(config_dir)
 
-    bucket = (repo_config.bucket or "").strip()
-    if not bucket:
-        if interactive:
-            bucket = typer.prompt("S3 bucket name for configuration").strip()
-        if not bucket:
-            raise LzaError(
-                "No S3 bucket configured in lza-workspace.yaml under "
-                "configuration.repository.bucket."
-            )
-
-    prefix = (repo_config.prefix or "").strip()
+    archive_location = resolve_configuration_archive_location(
+        workspace_dir=workspace_dir,
+        repository=config.configuration.repository,
+        prompt_for_bucket=(lambda: typer.prompt("S3 bucket name for configuration"))
+        if interactive
+        else None,
+    )
     profile = config.aws.profile or ""
     region = config.aws.region
-
-    s3_bucket, s3_key, zip_name = resolve_s3_archive_uri(bucket, prefix)
-    zip_path = workspace_dir / zip_name
+    zip_path = archive_location.zip_path
 
     if dry_run:
         print_dry_run_header("lza config upload")
         print_kv("Workspace", workspace_dir)
         print_kv("Source Directory", config_dir)
         print_kv("Local Zip Path", zip_path)
-        print_kv("S3 Target", f"s3://{s3_bucket}/{s3_key}")
+        print_kv("S3 Target", f"s3://{archive_location.bucket}/{archive_location.key}")
         print_kv("AWS Profile", profile)
         print_kv("AWS Region", region)
         return zip_path
@@ -89,33 +76,27 @@ def run_upload_config(
         require_identity=True,
         require_expected_account=True,
     )
-    factory = aws_context.factory
     etag, version_id = upload_s3_archive(
         zip_path=zip_path,
-        s3_bucket=s3_bucket,
-        s3_key=s3_key,
-        factory=factory,
+        s3_bucket=archive_location.bucket,
+        s3_key=archive_location.key,
+        factory=aws_context.factory,
     )
-
-    now = datetime.now(UTC)
-    state.updated_at = now
-    state.config_uploaded_at = now
-    state.config_artifact_sha256 = hashlib.sha256(zip_path.read_bytes()).hexdigest()
-    state.config_artifact_etag = etag
-    state.config_artifact_version_id = version_id
-    state.config_files_count = len(zip_manifest)
-    state.config_last_diff_summary = {
-        "added": len(diff_result.added),
-        "modified": len(diff_result.modified),
-        "removed": len(diff_result.removed),
-    }
+    record_config_upload(
+        state,
+        zip_path=zip_path,
+        manifest=zip_manifest,
+        diff_result=diff_result,
+        etag=etag,
+        version_id=version_id,
+    )
 
     write_workspace_state(workspace_dir, state)
 
     print_success("Packaged and uploaded LZA configuration")
     print_kv("Workspace", workspace_dir)
     print_kv("Zip archive", zip_path)
-    print_kv("Destination", f"s3://{s3_bucket}/{s3_key}")
+    print_kv("Destination", f"s3://{archive_location.bucket}/{archive_location.key}")
 
     print_diff_summary(diff_result.added, diff_result.modified, diff_result.removed)
 
