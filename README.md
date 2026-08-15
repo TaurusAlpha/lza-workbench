@@ -115,8 +115,8 @@ pipelines:
     name: AWSAccelerator-Pipeline
 ```
 
-Defaults are defined in `src/lza_workbench/core/workspace.py`; YAML supplies explicit
-overrides. Unknown keys are rejected. See `src/lza_workbench/resources/workspace_examples/` for minimal,
+Defaults are defined by `WorkspaceConfig` in `src/lza_workbench/workspace/models.py`; YAML supplies
+explicit overrides. Unknown keys are rejected. See `src/lza_workbench/resources/workspace_examples/` for minimal,
 full, configuration-only, and installer-only examples.
 
 ### AWS authentication

@@ -15,12 +15,10 @@ from lza_workbench.commands.config_download import run_download_config
 from lza_workbench.commands.config_upload import run_upload_config
 from lza_workbench.commands.installer_deploy import run_installer_deploy
 from lza_workbench.commands.installer_plan import run_installer_plan
-from lza_workbench.commands.status import (
-    run_config_status,
-    run_installer_status,
-    run_pipeline_status,
-    run_root_status,
-)
+from lza_workbench.commands.status.config import run_config_status
+from lza_workbench.commands.status.installer import run_installer_status
+from lza_workbench.commands.status.main import run_root_status
+from lza_workbench.commands.status.pipeline import run_pipeline_status
 from lza_workbench.commands.workspace_import import run_import
 from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.core.errors import LzaError

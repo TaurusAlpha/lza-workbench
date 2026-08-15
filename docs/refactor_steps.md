@@ -19,14 +19,7 @@ for a patch only after choosing the intended boundary yourself.
 
 ## Phase 0: Establish a Safe Baseline
 
-- [] Review the current working tree and finish, commit, or deliberately preserve unrelated
-      edits before starting the refactor.
-- [] Run the existing Ruff check and record whether it passes before changing code.
-- [] Run the full test suite once and record the baseline result.
-- [] Draw the current call path for `lza init` from `cli.py` to its lowest-level file writes.
-- [] Draw the current call path for `lza installer plan` from `cli.py` to AWS inspection.
-- [] Draw the current call path for `lza installer deploy` from `cli.py` to state persistence.
-- [] Write down which modules currently prompt, print, read files, write files, and call AWS.
+DONE
 
 Achievement: you have a verified starting point and can describe the current architecture before
 changing it.
@@ -118,36 +111,19 @@ Achievement: status calculations can be tested without capturing terminal output
 
 ## Phase 12: Clarify Files and Resource Names
 
-- [x] Inventory which files under `src/lza_workbench/config/` are packaged resources, examples,
-      or obsolete runtime-like files.
-- [x] Confirm whether packaged `state.json` has a supported purpose; remove or relocate it if not.
-- [x] Create a resources hierarchy only after agreeing on its categories.
-- [x] Move the packaged installer CloudFormation template and update its resolver.
-- [x] Move workspace examples and update documentation references.
-- [x] Move the default customer configuration template and update template discovery.
-- [x] Rename status modules from redundant names only after functional refactors are complete.
-- [x] Evaluate configuration model names; retain the current public names because the clarity gain
-      does not outweigh compatibility churn.
-- [x] Verify package build contents after resource moves.
+DOME
 
 Achievement: directory and file names reveal whether content is code, a packaged template, an
 example, or runtime workspace data.
 
 ## Phase 13: Remove Compatibility Layers and Review the Result
 
-- [] Search for temporary re-exports and compatibility imports created during the refactor.
-- [] Remove one compatibility layer at a time and run focused tests.
-- [] Confirm no command module imports private helpers from another command module.
-- [] Confirm core, workspace, installer-domain, and AWS modules do not import Typer or Rich.
-- [] Confirm authentication resolution has one source of truth.
-- [] Confirm installer validation has one source of truth.
-- [] Confirm version conversion has one source of truth.
-- [] Run Ruff, the full test suite, and package build validation.
-- [] Review `pyproject.toml`, README usage, TODO items, and package version for release readiness.
-- [] Update `docs/DONE.md` only after the refactor is implemented, reviewed, and validated.
+DONE
 
 Achievement: temporary migration scaffolding is gone and the final structure matches the intended
 dependency direction.
+
+DONE
 
 ## Definition of Done for Each Checkbox
 

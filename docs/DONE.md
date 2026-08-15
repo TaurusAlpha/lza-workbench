@@ -23,3 +23,8 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ### AWS Integration Architecture Refactoring
 - Centralized boto3 session and client creation into `AwsClientFactory` across all service modules, eliminating direct `boto3` calls outside the factory.
+
+### Refactor Phase 13: Compatibility and Dependency Review
+- Removed the remaining status-command compatibility re-exports; the CLI now imports each public status workflow directly.
+- Added architecture checks for presentation-framework imports in domain/AWS packages and cross-command imports.
+- Confirmed the shared AWS context resolver, installer configuration validator, and installer version conversion functions remain their single sources of truth.

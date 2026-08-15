@@ -8,16 +8,14 @@ from typer.testing import CliRunner
 from lza_workbench.aws.cloudformation import CfnStackStatusResult
 from lza_workbench.aws.context import AwsExecutionContext
 from lza_workbench.cli import app
-from lza_workbench.commands.status import (
-    run_config_status,
-    run_pipeline_status,
-    run_root_status,
-)
+from lza_workbench.commands.status.config import run_config_status
 from lza_workbench.commands.status.installer import (
     prepare_installer_status,
     sync_installer_config,
     sync_installer_state,
 )
+from lza_workbench.commands.status.main import run_root_status
+from lza_workbench.commands.status.pipeline import run_pipeline_status
 from lza_workbench.core.errors import LzaError
 from lza_workbench.installer.status import (
     calculate_configuration_drift,
