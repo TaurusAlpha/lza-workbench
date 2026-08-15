@@ -26,20 +26,7 @@ changing it.
 
 ## Phase 1: Small Cleanup and Confidence Builders
 
-- [x] In `commands/workspace_import.py`, move the misplaced workflow description to the actual
-      `run_import` docstring position without changing behavior.
-- [x] Inspect `commands/__init__.py` and confirm whether `DEFAULT_LZA_VERSION` and
-      `DEFAULT_AWS_REGION` have callers.
-- [x] Remove unused command defaults or migrate callers to one authoritative default location.
-- [x] Resolve the `eu-west-1` versus `us-east-1` default-region inconsistency.
-- [] In `commands/status/pipeline.py`, replace the nonexistent
-      `pipeline_execution_id` lookup with the intended installer and/or configuration execution
-      state fields.
-- [] Add a focused status test proving the correct execution ID is displayed.
-- [] Inspect unnecessary `hasattr` and `getattr` calls on known Pydantic fields and remove one
-      only when the model guarantees the field exists.
-- [] Rename the mocked AWS client factory test module if the team agrees that “integration” is
-      misleading; do not change its behavior in the same task.
+DONE
 
 Achievement: you have completed several small, testable improvements and practiced making narrow
 diffs.

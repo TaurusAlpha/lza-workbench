@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal, cast
 
 from rich.panel import Panel
 from rich.table import Table
@@ -177,7 +178,9 @@ def sync_installer_config(
     params = cfn_status.deployed_parameters
     source_type = params.get("RepositorySource")
     if source_type in {"github", "codecommit", "s3", "codeconnection"}:
-        config.installer.source_code.repository_type = source_type
+        config.installer.source_code.repository_type = cast(
+            Literal["github", "codecommit", "s3", "codeconnection"], source_type
+        )
     config.installer.source_code.owner = params.get(
         "RepositoryOwner", config.installer.source_code.owner
     )
@@ -198,8 +201,10 @@ def sync_installer_config(
     if prefix := params.get("AcceleratorPrefix"):
         config.lza.accelerator_prefix = prefix
     repo_type = params.get("ConfigurationRepositoryLocation")
-    if repo_type in {"s3", "codecommit", "git"}:
-        config.configuration.repository.type = repo_type
+    if repo_type in {"s3", "codecommit", "codeconnection", "git"}:
+        config.configuration.repository.type = cast(
+            Literal["s3", "codecommit", "codeconnection", "git"], repo_type
+        )
     if "EnableApprovalStage" in params:
         config.installer.options.enable_approval_stage = params["EnableApprovalStage"] == "Yes"
         config.installer.options.approval_stage_notify_email_list = (

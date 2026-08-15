@@ -97,6 +97,26 @@ def test_sync_installer_config_success(tmp_path):
     assert loaded_config.installer.options.management_account_email == "mgmt@example.com"
 
 
+def test_sync_installer_config_accepts_codeconnection_repository(tmp_path):
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    cfn_status = CfnStackStatusResult(
+        stack_name="AWSAccelerator-InstallerStack",
+        exists=True,
+        deployed_parameters={"ConfigurationRepositoryLocation": "codeconnection"},
+    )
+
+    new_config = sync_installer_config(
+        workspace_dir=tmp_path,
+        config=config,
+        cfn_status=cfn_status,
+    )
+
+    assert new_config.configuration.repository.type == "codeconnection"
+
+
 def test_calculate_configuration_drift_returns_only_changed_parameters():
     config = WorkspaceConfig(
         customer=CustomerConfig(name="Test Customer", slug="test-customer"),
