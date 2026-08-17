@@ -21,7 +21,7 @@ from lza_workbench.installer.planning import (
     InstallerPlanResult,
     prepare_installer_plan_result,
 )
-from lza_workbench.installer.template import (
+from lza_workbench.installer.templates import (
     inspect_template_parameters,
     resolve_installer_template,
     validate_parameters_against_schema,

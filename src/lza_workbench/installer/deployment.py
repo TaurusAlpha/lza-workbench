@@ -15,7 +15,7 @@ from lza_workbench.installer.config import (
     validate_installer_configuration,
 )
 from lza_workbench.installer.parameters import build_installer_cfn_parameters
-from lza_workbench.installer.template import (
+from lza_workbench.installer.templates import (
     inspect_template_parameters,
     resolve_installer_template,
     validate_parameters_against_schema,

@@ -1,4 +1,4 @@
-"""Download, resolve, and configure the LZA installer CloudFormation template."""
+"""Download, resolve, configure, and validate LZA installer CloudFormation templates."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.versions import normalize_lza_version
-from lza_workbench.utils.output import print_info
+from lza_workbench.workspace.models import WorkspaceConfig
 
 PACKAGED_INSTALLER_VERSION = "v1.16.0"
 INSTALLER_TEMPLATE_FILENAME = "AWSAccelerator-InstallerStack.template"
@@ -23,7 +23,7 @@ LOCAL_PACKAGED_INSTALLER_TEMPLATE = Path(
 )
 
 
-def resolve_installer_template(
+def download_installer_template_content(
     url: str,
     fallback_version: str | None = None,
     fallback_path: Path | None = LOCAL_PACKAGED_INSTALLER_TEMPLATE,
@@ -73,15 +73,16 @@ def download_installer_template(version: str, local_path: Path | None = None) ->
 
     Args:
         version: The LZA version to download the installer template for.
+        local_path: The local filesystem path to write the downloaded template to.
     """
     url = INSTALLER_TEMPLATE_URL_TEMPLATE.format(
         version=version, filename=INSTALLER_TEMPLATE_FILENAME
     )
-    template_content = resolve_installer_template(url, fallback_version=version)
+    template_content = download_installer_template_content(url, fallback_version=version)
     if local_path is None:
         local_path = Path.cwd() / INSTALLER_TEMPLATE_FILENAME
+    local_path.parent.mkdir(parents=True, exist_ok=True)
     local_path.write_text(template_content, encoding="utf-8")
-    print_info(f"Downloaded installer template for version {version} to {local_path}")
     return local_path
 
 
@@ -96,3 +97,59 @@ def configure_anonymous_data(content: str, enable: bool) -> str:
         return json.dumps(data, indent=2) + "\n"
     except json.JSONDecodeError:
         return content
+
+
+def resolve_installer_template(
+    workspace_dir: Path, config: WorkspaceConfig, dry_run: bool = False
+) -> Path:
+    """Locate a local installer template or download it into the workspace."""
+    installer_dir = workspace_dir / config.installer.local_path
+    template_path = installer_dir / INSTALLER_TEMPLATE_FILENAME
+
+    if not template_path.exists():
+        if dry_run:
+            if (
+                normalize_lza_version(config.lza.version)
+                == normalize_lza_version(PACKAGED_INSTALLER_VERSION)
+                and LOCAL_PACKAGED_INSTALLER_TEMPLATE.exists()
+            ):
+                return LOCAL_PACKAGED_INSTALLER_TEMPLATE
+            return template_path
+
+        template_path = download_installer_template(
+            version=config.lza.version,
+            local_path=template_path,
+        )
+
+    return template_path
+
+
+def inspect_template_parameters(template_path: Path) -> dict[str, dict[str, Any]]:
+    """Return parameter schema definitions from a JSON installer template."""
+    if not template_path.exists():
+        return {}
+
+    try:
+        data = json.loads(template_path.read_text(encoding="utf-8"))
+        return data.get("Parameters", {})
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def validate_parameters_against_schema(
+    resolved_params: dict[str, str], schema: dict[str, dict[str, Any]]
+) -> None:
+    """Reject parameter values excluded by the installer template schema."""
+    if not schema:
+        return
+
+    for key, value in resolved_params.items():
+        if key not in schema:
+            continue
+
+        allowed = schema[key].get("AllowedValues")
+        if allowed and value not in allowed:
+            raise LzaError(
+                f"Invalid parameter value '{value}' for {key}. "
+                f"Allowed values are: {', '.join(allowed)}"
+            )
