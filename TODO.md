@@ -176,11 +176,6 @@ Future design decision:
 - [ ] Support AssumeRole profile configuration.
 - [ ] Document bastion and proxy setup where required.
 
-## Technical Debt
-
-- [ ] Consolidate CLI exception translation in `cli.main` and remove the unused duplicate helpers
-  in `cli.errors` and their isolated test coverage.
-
 ## Configuration Templates
 
 - [ ] List available packaged templates.

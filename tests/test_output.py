@@ -1,10 +1,9 @@
-"""Tests for shared CLI presentation utilities and error handling."""
+"""Tests for shared CLI presentation utilities."""
 
 from __future__ import annotations
 
 import pytest
 
-from lza_workbench.cli.errors import handle_cli_error
 from lza_workbench.cli.input import value_or_prompt
 from lza_workbench.cli.output import (
     print_diff_summary,
@@ -94,9 +93,3 @@ def test_value_or_prompt_non_interactive() -> None:
     assert value_or_prompt("Name", None, "default_val", interactive=False) == "default_val"
     with pytest.raises(LzaError, match="Name is required"):
         value_or_prompt("Name", None, None, interactive=False)
-
-
-def test_handle_cli_error(capsys) -> None:
-    code = handle_cli_error(LzaError("Planned failure"))
-    assert code == 1
-    assert "Planned failure" in capsys.readouterr().out
