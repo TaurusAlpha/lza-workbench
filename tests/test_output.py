@@ -90,6 +90,22 @@ def test_print_diff_summary_with_changes(capsys) -> None:
 
 def test_value_or_prompt_non_interactive() -> None:
     assert value_or_prompt("Name", "explicit", None, interactive=False) == "explicit"
+    assert (
+        value_or_prompt("Name", "  explicit_padded  ", None, interactive=False)
+        == "explicit_padded"
+    )
     assert value_or_prompt("Name", None, "default_val", interactive=False) == "default_val"
     with pytest.raises(LzaError, match="Name is required"):
         value_or_prompt("Name", None, None, interactive=False)
+    with pytest.raises(LzaError, match="Name is required"):
+        value_or_prompt("Name", "   ", None, interactive=False)
+
+
+def test_value_or_prompt_email_validation() -> None:
+    from lza_workbench.cli.input import validate_email
+
+    assert validate_email("  user@example.com  ") == "user@example.com"
+    with pytest.raises(ValueError, match="Must be a valid email address"):
+        validate_email("invalid-email")
+    with pytest.raises(ValueError, match="Must be a valid email address"):
+        validate_email("   ")

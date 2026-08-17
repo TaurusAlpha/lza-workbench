@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from lza_workbench.aws.cloudformation import inspect_cloudformation_stack
@@ -29,22 +30,36 @@ def plan_installer_workflow(
     log_archive_account_email: str | None = None,
     audit_account_email: str | None = None,
     accelerator_prefix: str | None = None,
+    prompter: Callable[[str, str | None], str] | None = None,
     dry_run: bool = False,
     no_save: bool = False,
 ) -> InstallerPlanResult:
     """Execute the installer planning workflow and return structured results."""
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.IMPORTED)
     workspace_dir, config = ctx.workspace_dir, ctx.config
+    options = config.installer.options
 
-    # Apply any explicit installer option overrides
-    if management_account_email is not None:
-        config.installer.options.management_account_email = management_account_email
-    if log_archive_account_email is not None:
-        config.installer.options.log_archive_account_email = log_archive_account_email
-    if audit_account_email is not None:
-        config.installer.options.audit_account_email = audit_account_email
-    if accelerator_prefix is not None:
-        config.lza.accelerator_prefix = accelerator_prefix
+    # Apply any explicit installer option overrides or prompt if prompter provided
+    mgmt = management_account_email or options.management_account_email
+    if mgmt and mgmt.strip():
+        options.management_account_email = mgmt.strip()
+    elif prompter:
+        options.management_account_email = prompter("Management Account Email", None)
+
+    log = log_archive_account_email or options.log_archive_account_email
+    if log and log.strip():
+        options.log_archive_account_email = log.strip()
+    elif prompter:
+        options.log_archive_account_email = prompter("Log Archive Account Email", None)
+
+    audit = audit_account_email or options.audit_account_email
+    if audit and audit.strip():
+        options.audit_account_email = audit.strip()
+    elif prompter:
+        options.audit_account_email = prompter("Audit Account Email", None)
+
+    if accelerator_prefix is not None and accelerator_prefix.strip():
+        config.lza.accelerator_prefix = accelerator_prefix.strip()
 
     # Save accepted installer settings if requested and not dry run
     if not no_save and not dry_run:

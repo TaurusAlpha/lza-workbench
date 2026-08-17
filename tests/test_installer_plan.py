@@ -140,8 +140,8 @@ def test_installer_plan_prompts_and_updates_workspace_config(tmp_path: Path) -> 
     assert updated_config.installer.options.audit_account_email == "audit@prompted.com"
 
 
-def test_installer_plan_non_interactive_raises_on_missing_required(tmp_path: Path) -> None:
-    """Non-interactive installer plan raises an error if required parameters are missing."""
+def test_installer_plan_non_interactive_succeeds_without_emails(tmp_path: Path) -> None:
+    """Non-interactive installer plan succeeds using core workspace defaults."""
     ws_dir = tmp_path / "non-interactive-ws"
     ws_dir.mkdir(parents=True, exist_ok=True)
     (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
@@ -155,8 +155,7 @@ def test_installer_plan_non_interactive_raises_on_missing_required(tmp_path: Pat
     write_workspace_config(ws_dir, config)
     write_workspace_state(ws_dir, WorkspaceState.from_config(config))
 
-    with pytest.raises(LzaError, match="Management Account Email is required"):
-        run_installer_plan(target_dir=ws_dir, interactive=False)
+    run_installer_plan(target_dir=ws_dir, interactive=False, dry_run=True, no_save=True)
 
 
 def test_installer_plan_no_save(sample_workspace: Path) -> None:
