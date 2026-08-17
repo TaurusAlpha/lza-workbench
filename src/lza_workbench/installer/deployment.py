@@ -20,6 +20,7 @@ from lza_workbench.installer.templates import (
     resolve_installer_template,
     validate_parameters_against_schema,
 )
+from lza_workbench.installer.versions import version_to_branch
 from lza_workbench.workspace.models import WorkspaceConfig
 from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
@@ -30,14 +31,24 @@ SAFE_EXISTING_STACK_STATUSES = {
 }
 
 
+class InstallerConfigValidationError(LzaError):
+    """Raised when installer configuration is incomplete for deployment."""
+
+    def __init__(self, validation: InstallerConfigValidationResult) -> None:
+        self.validation = validation
+        missing = ", ".join(f"{s.section}.{s.attribute}" for s in validation.missing_fields)
+        super().__init__(
+            f"{len(validation.missing_fields)} required parameter(s) missing from "
+            f"lza-workspace.yaml ({missing}). "
+            "Run 'lza installer plan' to resolve and configure missing values."
+        )
+
+
 def validate_deployment_preflight(config: WorkspaceConfig) -> InstallerConfigValidationResult:
     """Validate configuration required before any AWS deployment activity."""
     validation = validate_installer_configuration(config)
     if not validation.is_complete:
-        raise LzaError(
-            f"{len(validation.missing_fields)} required parameter(s) missing from "
-            "lza-workspace.yaml. Run 'lza installer plan' to resolve and configure missing values."
-        )
+        raise InstallerConfigValidationError(validation)
     return validation
 
 
@@ -62,12 +73,13 @@ def inspect_installer_source(
     """
     source = config.installer.source_code
     if source.repository_type == "codecommit":
+        version_ref = version_to_branch(config.lza.version)
         plan = inspect_codecommit_repository(
             factory=factory,
             repository_type=source.repository_type,
             repository_name=source.repository_name,
             branch_name=source.branch,
-            lza_version=config.lza.version,
+            version_ref=version_ref,
             region=region,
         )
         if plan.status != "INITIALIZED":

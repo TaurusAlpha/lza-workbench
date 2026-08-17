@@ -16,7 +16,9 @@ from lza_workbench.aws.cloudformation import (
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.errors import LzaError
+from lza_workbench.installer.config import InstallerConfigValidationResult
 from lza_workbench.installer.deployment import (
+    InstallerConfigValidationError,
     inspect_installer_source,
     prepare_installer_template,
     update_successful_deployment_state,
@@ -38,6 +40,9 @@ class InstallerDeployResult:
     final_status: CfnStackStatusResult | None
     dry_run: bool
     skipped: bool
+    profile: str = ""
+    region: str = ""
+    account_id: str = ""
 
 
 def deploy_installer_workflow(
@@ -57,11 +62,17 @@ def deploy_installer_workflow(
 
     try:
         aws_context = resolve_aws_execution_context(
-            config.aws, require_identity=True, require_expected_account=True
+            profile=config.aws.profile,
+            region=config.aws.region,
+            role_arn=config.aws.role_arn,
+            expected_account_id=config.aws.account_id,
+            require_identity=True,
+            require_expected_account=True,
         )
     except Exception as exc:
         raise LzaError(f"AWS authentication check failed for profile '{profile}': {exc}") from exc
     assert aws_context.identity is not None
+    account_id = aws_context.identity["account"]
 
     template_path, resolved_parameters = prepare_installer_template(
         workspace_dir=workspace_dir, config=config, dry_run=dry_run
@@ -86,6 +97,9 @@ def deploy_installer_workflow(
             final_status=None,
             dry_run=dry_run,
             skipped=True,
+            profile=profile,
+            region=aws_context.region,
+            account_id=account_id,
         )
 
     if operation == "NO_CHANGE" and (force or force_no_change):
@@ -101,6 +115,9 @@ def deploy_installer_workflow(
             final_status=None,
             dry_run=True,
             skipped=False,
+            profile=profile,
+            region=aws_context.region,
+            account_id=account_id,
         )
 
     stack_id = deploy_cloudformation_stack(
@@ -118,16 +135,17 @@ def deploy_installer_workflow(
     )
 
     if final_status.stack_status not in {"CREATE_COMPLETE", "UPDATE_COMPLETE"}:
+        status_name = final_status.stack_status or "UNKNOWN"
+        error_detail = f": {final_status.error}" if final_status.error else ""
         raise LzaError(
-            f"Deployment failed with stack status ({final_status.stack_status}): "
-            f"{final_status.error or 'Unknown error'}"
+            f"CloudFormation stack deployment failed with status ({status_name}){error_detail}"
         )
 
     update_successful_deployment_state(
         workspace_dir=workspace_dir,
         aws_identity=aws_context.identity,
         stack_id=final_status.stack_id or stack_id,
-        stack_status=final_status.stack_status,
+        stack_status=final_status.stack_status or "CREATE_COMPLETE",
     )
 
     return InstallerDeployResult(
@@ -139,4 +157,17 @@ def deploy_installer_workflow(
         final_status=final_status,
         dry_run=False,
         skipped=False,
+        profile=profile,
+        region=aws_context.region,
+        account_id=account_id,
     )
+
+
+__all__ = [
+    "CfnDeploymentPlanResult",
+    "CfnStackStatusResult",
+    "InstallerConfigValidationError",
+    "InstallerConfigValidationResult",
+    "InstallerDeployResult",
+    "deploy_installer_workflow",
+]

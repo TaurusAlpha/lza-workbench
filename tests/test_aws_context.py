@@ -8,66 +8,64 @@ import pytest
 
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.errors import LzaError
-from lza_workbench.workspace.models import AwsConfig
 
 
-@patch("lza_workbench.aws.context.AwsClientFactory.from_aws_config")
-def test_resolver_uses_configured_profile_and_region(mock_from_config: MagicMock) -> None:
+@patch("lza_workbench.aws.context.AwsClientFactory")
+def test_resolver_uses_configured_profile_and_region(mock_factory_cls: MagicMock) -> None:
     factory = MagicMock()
     factory.validate_identity.return_value = {"account": "123456789012", "arn": "arn:test"}
-    mock_from_config.return_value = factory
+    mock_factory_cls.return_value = factory
 
-    context = resolve_aws_execution_context(AwsConfig(profile="selected", region="eu-west-1"))
+    context = resolve_aws_execution_context(profile="selected", region="eu-west-1")
 
     assert context.region == "eu-west-1"
     assert context.identity == {"account": "123456789012", "arn": "arn:test"}
-    assert mock_from_config.call_args.args[0].profile == "selected"
+    assert mock_factory_cls.call_args.kwargs["profile"] == "selected"
+    assert mock_factory_cls.call_args.kwargs["region"] == "eu-west-1"
 
 
-@patch("lza_workbench.aws.context.AwsClientFactory.from_aws_config")
-def test_resolver_uses_profile_override_without_losing_role(mock_from_config: MagicMock) -> None:
+@patch("lza_workbench.aws.context.AwsClientFactory")
+def test_resolver_uses_profile_override_without_losing_role(mock_factory_cls: MagicMock) -> None:
     factory = MagicMock()
-    mock_from_config.return_value = factory
+    mock_factory_cls.return_value = factory
 
     resolve_aws_execution_context(
-        AwsConfig(
-            profile="workspace",
-            role_arn="arn:aws:iam::123456789012:role/Lza",
-            region="eu-west-1",
-        ),
+        profile="workspace",
+        role_arn="arn:aws:iam::123456789012:role/Lza",
+        region="eu-west-1",
         profile_override="override",
         validate_identity=False,
     )
 
-    resolved = mock_from_config.call_args.args[0]
-    assert resolved.profile == "override"
-    assert resolved.role_arn == "arn:aws:iam::123456789012:role/Lza"
+    assert mock_factory_cls.call_args.kwargs["profile"] == "override"
+    assert mock_factory_cls.call_args.kwargs["role_arn"] == "arn:aws:iam::123456789012:role/Lza"
 
 
-@patch("lza_workbench.aws.context.AwsClientFactory.from_aws_config")
-def test_mutating_resolver_rejects_unexpected_account(mock_from_config: MagicMock) -> None:
+@patch("lza_workbench.aws.context.AwsClientFactory")
+def test_mutating_resolver_rejects_unexpected_account(mock_factory_cls: MagicMock) -> None:
     factory = MagicMock()
     factory.validate_identity.return_value = {"account": "999999999999", "arn": "arn:test"}
-    mock_from_config.return_value = factory
+    mock_factory_cls.return_value = factory
 
     with pytest.raises(LzaError, match="does not match"):
         resolve_aws_execution_context(
-            AwsConfig(profile="selected", account_id="123456789012"),
+            profile="selected",
+            expected_account_id="123456789012",
             require_identity=True,
             require_expected_account=True,
         )
 
 
-@patch("lza_workbench.aws.context.AwsClientFactory.from_aws_config")
-def test_resolver_passes_prime_credentials_flag(mock_from_config: MagicMock) -> None:
+@patch("lza_workbench.aws.context.AwsClientFactory")
+def test_resolver_passes_prime_credentials_flag(mock_factory_cls: MagicMock) -> None:
     factory = MagicMock()
-    mock_from_config.return_value = factory
+    mock_factory_cls.return_value = factory
 
     resolve_aws_execution_context(
-        AwsConfig(profile="selected", region="eu-west-1"),
+        profile="selected",
+        region="eu-west-1",
         validate_identity=False,
         prime_credentials=True,
     )
 
-    assert mock_from_config.call_args.kwargs["prime_credentials"] is True
-
+    assert mock_factory_cls.call_args.kwargs["prime_credentials"] is True

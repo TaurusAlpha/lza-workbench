@@ -86,7 +86,13 @@ def download_configuration_workflow(
     exclude_dirs = set(config.configuration.packaging.exclude.directories)
     exclude_files = set(config.configuration.packaging.exclude.files)
 
-    aws_context = resolve_aws_execution_context(config.aws, require_identity=True)
+    aws_context = resolve_aws_execution_context(
+        profile=config.aws.profile,
+        region=config.aws.region,
+        role_arn=config.aws.role_arn,
+        expected_account_id=config.aws.account_id,
+        require_identity=True,
+    )
     download_s3_archive(
         s3_bucket=archive_location.bucket,
         s3_key=archive_location.key,

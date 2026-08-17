@@ -18,7 +18,7 @@ from lza_workbench.installer.status import (
     calculate_configuration_drift,
     calculate_state_alignment,
 )
-from lza_workbench.installer.versions import branch_to_version
+from lza_workbench.installer.versions import branch_to_version, normalize_lza_version
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
@@ -188,7 +188,12 @@ def get_installer_status_workflow(
 
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
-    aws_context = resolve_aws_execution_context(config.aws)
+    aws_context = resolve_aws_execution_context(
+        profile=config.aws.profile,
+        region=config.aws.region,
+        role_arn=config.aws.role_arn,
+        expected_account_id=config.aws.account_id,
+    )
     cfn_stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
     cfn_client = aws_context.factory.get_client("cloudformation") if aws_context.identity else None
     cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=cfn_stack_name)
@@ -226,3 +231,13 @@ def get_installer_status_workflow(
         state_synced=state_synced,
         config_synced=config_synced,
     )
+
+
+__all__ = [
+    "InstallerStatusResult",
+    "get_installer_status_workflow",
+    "normalize_lza_version",
+    "prepare_installer_status",
+    "sync_installer_config",
+    "sync_installer_state",
+]

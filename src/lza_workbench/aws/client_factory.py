@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import boto3
 
 from lza_workbench.errors import LzaError
-
-if TYPE_CHECKING:
-    from lza_workbench.workspace.models import AwsConfig
 
 
 class AwsClientFactory:
@@ -30,18 +27,6 @@ class AwsClientFactory:
         self._source_session: boto3.Session | None = None
         self._primed: bool = False
 
-    @classmethod
-    def from_aws_config(
-        cls, aws_config: AwsConfig, prime_credentials: bool = False
-    ) -> AwsClientFactory:
-        """Create factory instance from an AwsConfig model."""
-        return cls(
-            profile=aws_config.profile,
-            region=aws_config.region,
-            role_arn=aws_config.role_arn,
-            prime_credentials=prime_credentials,
-        )
-
     def _get_source_session(self) -> boto3.Session:
         """Get or create the source session before any role assumption."""
         if self._source_session is None:
@@ -59,43 +44,46 @@ class AwsClientFactory:
         Opt-in regional STS endpoints (e.g. il-central-1) can fail to assume roles directly
         from SSO tokens unless credentials are primed first via global STS (us-east-1).
         """
-        if self._primed or not self.prime_credentials:
+        if self._primed:
             return
         source_session = self._get_source_session()
-        try:
-            sts_global = source_session.client("sts", region_name="us-east-1")
-            sts_global.get_caller_identity()
-            self._primed = True
-        except Exception:
-            # Fall back if us-east-1 priming fails
-            pass
+        sts_global = source_session.client("sts", region_name="us-east-1")
+        sts_global.get_caller_identity()
+        self._primed = True
 
     def get_session(self) -> boto3.Session:
-        """Get or create the cached boto3 Session."""
+        """Get or create the authenticated boto3 session."""
         if self._session is None:
             source_session = self._get_source_session()
-            if not self.role_arn:
-                self._session = source_session
-            else:
+
+            if self.role_arn:
                 if self.prime_credentials:
                     self._prime_source_credentials()
+
                 sts = source_session.client("sts", region_name=self.region)
+                session_name = "lza-workbench"
                 response = sts.assume_role(
                     RoleArn=self.role_arn,
-                    RoleSessionName="lza-workbench",
+                    RoleSessionName=session_name,
                 )
-                credentials = response["Credentials"]
+                creds = response["Credentials"]
                 self._session = boto3.Session(
-                    aws_access_key_id=credentials["AccessKeyId"],
-                    aws_secret_access_key=credentials["SecretAccessKey"],
-                    aws_session_token=credentials["SessionToken"],
+                    aws_access_key_id=creds["AccessKeyId"],
+                    aws_secret_access_key=creds["SecretAccessKey"],
+                    aws_session_token=creds["SessionToken"],
                     region_name=self.region,
                 )
+            else:
+                self._session = source_session
 
         return self._session
 
+    def get_client(self, service_name: str) -> Any:
+        """Create a service client using the authenticated session."""
+        return self.get_session().client(service_name)
+
     def validate_identity(self) -> dict[str, str]:
-        """Validate AWS caller identity using STS GetCallerIdentity."""
+        """Validate external AWS credentials and return caller identity."""
         auth_descr = self.role_arn or self.profile or "default"
         try:
             if not self.role_arn and self.prime_credentials:
@@ -113,9 +101,3 @@ class AwsClientFactory:
             if self.profile:
                 msg += f" Run 'aws sso login --profile {self.profile}' to authenticate."
             raise LzaError(msg) from exc
-
-    def get_client(self, service_name: str) -> Any:
-        """Create a boto3 client for the specified AWS service."""
-        session = self.get_session()
-        return session.client(service_name, region_name=self.region)
-

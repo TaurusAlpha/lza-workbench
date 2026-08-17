@@ -85,3 +85,67 @@ def test_lower_layers_do_not_import_higher_layers() -> None:
                         )
 
     assert not violations, f"Layering violations detected: {violations}"
+
+
+def test_aws_adapters_do_not_import_workspace_or_features() -> None:
+    """AWS adapters must remain thin boto3 wrappers without domain policy dependencies."""
+    forbidden = {
+        "lza_workbench.workspace",
+        "lza_workbench.installer",
+        "lza_workbench.config",
+        "lza_workbench.configuration",
+        "lza_workbench.pipeline",
+        "lza_workbench.workflows",
+        "lza_workbench.cli",
+    }
+    violations: list[tuple[str, int, str]] = []
+
+    for path in (SOURCE_ROOT / "aws").glob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                for f in forbidden:
+                    if node.module == f or node.module.startswith(f"{f}."):
+                        violations.append(
+                            (str(path.relative_to(PROJECT_ROOT)), node.lineno, node.module)
+                        )
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    for f in forbidden:
+                        if alias.name == f or alias.name.startswith(f"{f}."):
+                            violations.append(
+                                (str(path.relative_to(PROJECT_ROOT)), node.lineno, alias.name)
+                            )
+
+    assert not violations, f"AWS layer imports domain/workspace/workflow packages: {violations}"
+
+
+def test_cli_commands_do_not_import_aws_or_installer_internals() -> None:
+    """CLI command handlers should delegate to workflows and not import AWS/installer internals."""
+    forbidden = {
+        "lza_workbench.aws",
+        "lza_workbench.installer",
+    }
+    violations: list[tuple[str, int, str]] = []
+
+    for path in (SOURCE_ROOT / "cli" / "commands").glob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                for f in forbidden:
+                    if node.module == f or node.module.startswith(f"{f}."):
+                        violations.append(
+                            (str(path.relative_to(PROJECT_ROOT)), node.lineno, node.module)
+                        )
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    for f in forbidden:
+                        if alias.name == f or alias.name.startswith(f"{f}."):
+                            violations.append(
+                                (str(path.relative_to(PROJECT_ROOT)), node.lineno, alias.name)
+                            )
+
+    assert (
+        not violations
+    ), f"CLI command handlers import directly from AWS or installer internals: {violations}"
+

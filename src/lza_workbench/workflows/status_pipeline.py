@@ -37,7 +37,12 @@ def get_pipeline_status_workflow(
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
     profile = config.aws.profile or ""
-    aws_context = resolve_aws_execution_context(config.aws)
+    aws_context = resolve_aws_execution_context(
+        profile=profile,
+        region=config.aws.region,
+        role_arn=config.aws.role_arn,
+        expected_account_id=config.aws.account_id,
+    )
     region = aws_context.region
     aws_identity = aws_context.identity
     aws_error = aws_context.error

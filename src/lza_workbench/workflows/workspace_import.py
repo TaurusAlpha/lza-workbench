@@ -218,7 +218,13 @@ def import_workspace_workflow(
     identity = (
         None
         if skip_aws_check
-        else resolve_aws_execution_context(config.aws, require_identity=True).identity
+        else resolve_aws_execution_context(
+            profile=config.aws.profile,
+            region=config.aws.region,
+            role_arn=config.aws.role_arn,
+            expected_account_id=config.aws.account_id,
+            require_identity=True,
+        ).identity
     )
     paths = _metadata_paths(resolved_workspace_dir, existing, config, state)
 

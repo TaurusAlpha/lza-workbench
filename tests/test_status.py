@@ -219,7 +219,7 @@ def test_pipeline_status_displays_separate_execution_ids(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(
         "lza_workbench.workflows.status_pipeline.resolve_aws_execution_context",
-        lambda _: aws_context,
+        lambda *args, **kwargs: aws_context,
     )
 
     result = runner.invoke(app, ["status", "pipeline"])

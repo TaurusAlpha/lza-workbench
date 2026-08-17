@@ -40,7 +40,12 @@ def get_root_status_workflow(
     workspace_dir, config = ctx.workspace_dir, ctx.config
 
     profile = config.aws.profile or ""
-    aws_context = resolve_aws_execution_context(config.aws)
+    aws_context = resolve_aws_execution_context(
+        profile=profile,
+        region=config.aws.region,
+        role_arn=config.aws.role_arn,
+        expected_account_id=config.aws.account_id,
+    )
     factory = aws_context.factory
     region = aws_context.region
     aws_identity = aws_context.identity

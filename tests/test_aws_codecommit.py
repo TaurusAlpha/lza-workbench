@@ -24,7 +24,7 @@ def test_inspect_codecommit_repository_missing() -> None:
         repository_type="codecommit",
         repository_name="my-repo",
         branch_name="main",
-        lza_version="v1.16.0",
+        version_ref="release/v1.16.0",
         region="us-east-1",
     )
 
@@ -79,7 +79,7 @@ def test_inspect_codecommit_branch_exists() -> None:
         repository_type="codecommit",
         repository_name="my-repo",
         branch_name="release/v1.16.0",
-        lza_version="v1.16.0",
+        version_ref="release/v1.16.0",
         region="us-east-1",
     )
 
@@ -101,7 +101,7 @@ def test_inspect_codecommit_branch_missing() -> None:
         repository_type="codecommit",
         repository_name="my-repo",
         branch_name="release/v1.16.0",
-        lza_version="v1.16.0",
+        version_ref="release/v1.16.0",
         region="us-east-1",
     )
 
@@ -123,7 +123,7 @@ def test_inspect_codecommit_branch_access_denied_fails_closed() -> None:
         repository_type="codecommit",
         repository_name="my-repo",
         branch_name="release/v1.16.0",
-        lza_version="v1.16.0",
+        version_ref="release/v1.16.0",
         region="us-east-1",
     )
 
@@ -146,7 +146,7 @@ def test_inspect_codecommit_branch_unexpected_error_fails_closed() -> None:
         repository_type="codecommit",
         repository_name="my-repo",
         branch_name="release/v1.16.0",
-        lza_version="v1.16.0",
+        version_ref="release/v1.16.0",
         region="us-east-1",
     )
 

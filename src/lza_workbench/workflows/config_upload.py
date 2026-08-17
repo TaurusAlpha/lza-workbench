@@ -94,7 +94,10 @@ def upload_configuration_workflow(
     )
 
     aws_context = resolve_aws_execution_context(
-        config.aws,
+        profile=config.aws.profile,
+        region=config.aws.region,
+        role_arn=config.aws.role_arn,
+        expected_account_id=config.aws.account_id,
         require_identity=True,
         require_expected_account=True,
     )

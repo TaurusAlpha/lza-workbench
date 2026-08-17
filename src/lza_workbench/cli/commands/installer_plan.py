@@ -16,8 +16,10 @@ from lza_workbench.cli.presentation import (
     print_section,
     print_warning,
 )
-from lza_workbench.installer.planning import InstallerPlanResult
-from lza_workbench.workflows.installer_plan import plan_installer_workflow
+from lza_workbench.workflows.installer_plan import (
+    InstallerPlanResult,
+    plan_installer_workflow,
+)
 
 
 def render_installer_plan_report(plan: InstallerPlanResult) -> None:

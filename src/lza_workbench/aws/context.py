@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.errors import LzaError
-from lza_workbench.workspace.models import AwsConfig
 
 
 @dataclass(frozen=True)
@@ -20,8 +19,11 @@ class AwsExecutionContext:
 
 
 def resolve_aws_execution_context(
-    aws_config: AwsConfig,
     *,
+    profile: str | None = None,
+    region: str = "us-east-1",
+    role_arn: str | None = None,
+    expected_account_id: str | None = None,
     profile_override: str | None = None,
     validate_identity: bool = True,
     require_identity: bool = False,
@@ -29,10 +31,15 @@ def resolve_aws_execution_context(
     prime_credentials: bool = False,
 ) -> AwsExecutionContext:
     """Resolve profile/role/region once and optionally validate the target account."""
-    profile = (profile_override or aws_config.profile or "").strip() or None
-    resolved_config = aws_config.model_copy(update={"profile": profile})
-    factory = AwsClientFactory.from_aws_config(
-        resolved_config, prime_credentials=prime_credentials
+    resolved_profile = (profile_override or profile or "").strip() or None
+    resolved_region = (region or "").strip() or "us-east-1"
+    resolved_role_arn = (role_arn or "").strip() or None
+
+    factory = AwsClientFactory(
+        profile=resolved_profile,
+        region=resolved_region,
+        role_arn=resolved_role_arn,
+        prime_credentials=prime_credentials,
     )
     identity: dict[str, str] | None = None
     error: str | None = None
@@ -48,14 +55,14 @@ def resolve_aws_execution_context(
     if require_expected_account:
         if identity is None:
             raise LzaError("AWS identity validation is required before mutating AWS resources.")
-        if aws_config.account_id and identity["account"] != aws_config.account_id:
+        if expected_account_id and identity["account"] != expected_account_id:
             raise LzaError(
                 "Authenticated AWS account does not match lza-workspace.yaml: "
-                f"expected {aws_config.account_id}, received {identity['account']}."
+                f"expected {expected_account_id}, received {identity['account']}."
             )
 
     return AwsExecutionContext(
-        region=resolved_config.region,
+        region=resolved_region,
         factory=factory,
         identity=identity,
         error=error,

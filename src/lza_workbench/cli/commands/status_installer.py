@@ -16,10 +16,10 @@ from lza_workbench.cli.presentation import (
     print_section,
     print_success,
 )
-from lza_workbench.installer.versions import normalize_lza_version
 from lza_workbench.workflows.status_installer import (
     InstallerStatusResult,
     get_installer_status_workflow,
+    normalize_lza_version,
 )
 
 

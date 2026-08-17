@@ -8,7 +8,6 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
-from lza_workbench.installer.versions import version_to_branch
 
 
 @dataclass
@@ -32,14 +31,13 @@ def inspect_codecommit_repository(
     repository_type: str,
     repository_name: str | None,
     branch_name: str | None,
-    lza_version: str,
+    version_ref: str,
     region: str,
 ) -> CodeCommitPlanResult:
     """Inspect CodeCommit repository state without mutating AWS resources."""
     repo_name = (repository_name or "aws-accelerator-codecommit").strip()
-    version_ref = version_to_branch(lza_version)
-
-    resolved_branch = (branch_name or version_ref).strip()
+    resolved_version_ref = (version_ref or "").strip()
+    resolved_branch = (branch_name or resolved_version_ref).strip()
     official_repo_url = "https://github.com/awslabs/landing-zone-accelerator-on-aws"
 
     if repository_type != "codecommit":
@@ -50,7 +48,7 @@ def inspect_codecommit_repository(
             creation_required=False,
             sync_required=False,
             official_repo_url=official_repo_url,
-            official_version_ref=version_ref,
+            official_version_ref=resolved_version_ref,
             actions=[f"Installer source repository type is '{repository_type}'"],
         )
 
@@ -62,10 +60,13 @@ def inspect_codecommit_repository(
             creation_required=True,
             sync_required=True,
             official_repo_url=official_repo_url,
-            official_version_ref=version_ref,
+            official_version_ref=resolved_version_ref,
             actions=[
                 f"Create CodeCommit repository '{repo_name}' in region '{region}'",
-                f"Clone official LZA repo awslabs/landing-zone-accelerator-on-aws@{version_ref}",
+                (
+                    "Clone official LZA repo "
+                    f"awslabs/landing-zone-accelerator-on-aws@{resolved_version_ref}"
+                ),
                 f"Push to CodeCommit repository '{repo_name}' branch '{resolved_branch}'",
             ],
         )
@@ -90,7 +91,7 @@ def inspect_codecommit_repository(
                 creation_req = False
                 sync_req = True
                 actions = [
-                    f"Sync from awslabs/landing-zone-accelerator-on-aws@{version_ref}",
+                    f"Sync from awslabs/landing-zone-accelerator-on-aws@{resolved_version_ref}",
                     f"Push to CodeCommit repository '{repo_name}' branch '{resolved_branch}'",
                 ]
             elif code in {"AccessDeniedException", "403"}:
@@ -126,7 +127,10 @@ def inspect_codecommit_repository(
             sync_req = True
             actions = [
                 f"Create CodeCommit repository '{repo_name}' in region '{region}'",
-                f"Clone official LZA repo awslabs/landing-zone-accelerator-on-aws@{version_ref}",
+                (
+                    "Clone official LZA repo "
+                    f"awslabs/landing-zone-accelerator-on-aws@{resolved_version_ref}"
+                ),
                 f"Push to CodeCommit repository '{repo_name}' branch '{resolved_branch}'",
             ]
         elif code in {"AccessDeniedException", "403"}:
@@ -152,7 +156,7 @@ def inspect_codecommit_repository(
         creation_required=creation_req,
         sync_required=sync_req,
         official_repo_url=official_repo_url,
-        official_version_ref=version_ref,
+        official_version_ref=resolved_version_ref,
         actions=actions,
     )
 

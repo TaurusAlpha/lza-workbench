@@ -8,10 +8,6 @@ from typing import Any
 import typer
 from rich.table import Table
 
-from lza_workbench.aws.cloudformation import (
-    CfnDeploymentPlanResult,
-    CfnStackStatusResult,
-)
 from lza_workbench.cli import params
 from lza_workbench.cli.presentation import (
     console,
@@ -21,17 +17,14 @@ from lza_workbench.cli.presentation import (
     print_notice,
     print_section,
 )
-from lza_workbench.errors import LzaError
-from lza_workbench.installer.config import validate_installer_configuration
-from lza_workbench.installer.deployment import (
-    validate_deployment_preflight,
-)
 from lza_workbench.workflows.installer_deploy import (
+    CfnDeploymentPlanResult,
+    CfnStackStatusResult,
+    InstallerConfigValidationError,
+    InstallerConfigValidationResult,
     InstallerDeployResult,
     deploy_installer_workflow,
 )
-from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
-from lza_workbench.workspace.schema import WorkspaceConfig
 
 
 def _render_deployment_plan(
@@ -45,7 +38,7 @@ def _render_deployment_plan(
     print_section(1, "Deployment Target")
     print_kv("Target AWS Profile", profile or "default")
     print_kv("Target Region", region)
-    print_kv("Target Account", account_id)
+    print_kv("Target Account", account_id or "RESOLVED")
     print_kv("CloudFormation Stack", stack_name)
     print_kv("Current Stack Status", plan.stack_status or "DOES NOT EXIST")
     print_kv("Planned Action", plan.operation, bold_value=True)
@@ -95,8 +88,7 @@ def _render_stack_event(event: dict[str, Any]) -> None:
     console.print(msg)
 
 
-def _render_missing_configuration(config: WorkspaceConfig) -> None:
-    validation = validate_installer_configuration(config)
+def _render_missing_configuration(validation: InstallerConfigValidationResult) -> None:
     console.print(
         "[bold red]Configuration error: missing required installer settings in "
         "lza-workspace.yaml:[/bold red]"
@@ -111,27 +103,21 @@ def installer_deploy_command(
     target_dir: Path | None = None,
 ) -> None:
     """Deploy the LZA installer CloudFormation stack for the current workspace."""
-    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CONFIGURED)
-    config = ctx.config
-    profile = config.aws.profile or ""
-
     try:
-        validate_deployment_preflight(config)
-    except LzaError:
-        _render_missing_configuration(config)
+        plan_result = deploy_installer_workflow(
+            target_dir=target_dir,
+            dry_run=True,
+            force=force,
+        )
+    except InstallerConfigValidationError as exc:
+        _render_missing_configuration(exc.validation)
         raise
-
-    plan_result = deploy_installer_workflow(
-        target_dir=target_dir,
-        dry_run=True,
-        force=force,
-    )
 
     _render_deployment_plan(
         stack_name=plan_result.stack_name,
-        profile=profile,
-        region=config.aws.region,
-        account_id=config.aws.account_id or "RESOLVED",
+        profile=plan_result.profile,
+        region=plan_result.region,
+        account_id=plan_result.account_id,
         plan=plan_result.cfn_plan,
     )
 
@@ -180,6 +166,8 @@ def installer_deploy_command(
 __all__ = [
     "CfnDeploymentPlanResult",
     "CfnStackStatusResult",
+    "InstallerConfigValidationError",
+    "InstallerConfigValidationResult",
     "InstallerDeployResult",
     "_confirm_deployment",
     "_render_deployment_plan",

@@ -19,6 +19,7 @@ from lza_workbench.installer.templates import (
     resolve_installer_template,
     validate_parameters_against_schema,
 )
+from lza_workbench.installer.versions import version_to_branch
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 
@@ -29,7 +30,7 @@ def plan_installer_workflow(
     dry_run: bool = False,
     no_save: bool = False,
 ) -> InstallerPlanResult:
-    """Execute the installer planning workflow and return structured plan results."""
+    """Execute the installer planning workflow and return structured results."""
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.IMPORTED)
     workspace_dir, config = ctx.workspace_dir, ctx.config
 
@@ -46,7 +47,7 @@ def plan_installer_workflow(
     if not no_save and not dry_run:
         write_workspace_config(workspace_dir, config)
 
-    # Step 1: Template Resolution & Parameter Schema Inspection
+    # Step 1: Resolve Template & Schema
     template_path = resolve_installer_template(workspace_dir, config, dry_run=dry_run)
     params_schema = inspect_template_parameters(template_path)
 
@@ -55,7 +56,12 @@ def plan_installer_workflow(
     validate_parameters_against_schema(resolved_params, params_schema)
 
     # Step 3: Create AWS Factory & Validate Profile Identity
-    aws_context = resolve_aws_execution_context(config.aws)
+    aws_context = resolve_aws_execution_context(
+        profile=config.aws.profile,
+        region=config.aws.region,
+        role_arn=config.aws.role_arn,
+        expected_account_id=config.aws.account_id,
+    )
     factory = aws_context.factory
     region = aws_context.region
     aws_identity = aws_context.identity
@@ -63,12 +69,13 @@ def plan_installer_workflow(
 
     # Step 4: CodeCommit Source Planning
     codecommit_client = factory.get_client("codecommit") if aws_identity else None
+    version_ref = version_to_branch(config.lza.version)
     codecommit_plan = inspect_codecommit_repository(
         client=codecommit_client,
         repository_type=config.installer.source_code.repository_type,
         repository_name=config.installer.source_code.repository_name,
         branch_name=config.installer.source_code.branch,
-        lza_version=config.lza.version,
+        version_ref=version_ref,
         region=region,
     )
 
@@ -92,3 +99,9 @@ def plan_installer_workflow(
         cloudformation_plan=cfn_plan,
         dry_run=dry_run,
     )
+
+
+__all__ = [
+    "InstallerPlanResult",
+    "plan_installer_workflow",
+]
