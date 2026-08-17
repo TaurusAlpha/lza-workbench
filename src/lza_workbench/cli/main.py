@@ -17,9 +17,13 @@ from lza_workbench.cli.commands.config_download import (
 from lza_workbench.cli.commands.config_upload import (
     config_upload_command as run_cli_upload_config,
 )
+from lza_workbench.cli.commands.installer_deploy import (
+    installer_deploy_command as run_cli_installer_deploy,
+)
+from lza_workbench.cli.commands.installer_plan import (
+    installer_plan_command as run_cli_installer_plan,
+)
 from lza_workbench.cli.presentation import print_error
-from lza_workbench.commands.installer_deploy import run_installer_deploy
-from lza_workbench.commands.installer_plan import run_installer_plan
 from lza_workbench.commands.status.config import run_config_status
 from lza_workbench.commands.status.installer import run_installer_status
 from lza_workbench.commands.status.main import run_root_status
@@ -57,7 +61,7 @@ def installer_plan_command(
     no_save: bool = False,
 ) -> None:
     """Resolve and persist installer configuration, then show the actions required to deploy."""
-    run_installer_plan(
+    run_cli_installer_plan(
         dry_run=dry_run,
         no_save=no_save,
     )
@@ -69,7 +73,7 @@ def installer_deploy_command(
     force: params.Force = False,
 ) -> None:
     """Deploy the LZA installer CloudFormation stack for the current workspace."""
-    run_installer_deploy(
+    run_cli_installer_deploy(
         dry_run=dry_run,
         force=force,
     )

@@ -1,11 +1,11 @@
-"""Compatibility wrapper for installer deploy command (to be removed in Step 16)."""
+"""Workflow for deploying the LZA installer CloudFormation stack."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
-
-import typer
-from rich.table import Table
+from typing import Any
 
 from lza_workbench.aws.cloudformation import (
     CfnDeploymentPlanResult,
@@ -15,19 +15,6 @@ from lza_workbench.aws.cloudformation import (
     stream_cloudformation_stack_events,
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.cli.commands.installer_deploy import (
-    _confirm_deployment,
-    _render_deployment_plan,
-    _render_dry_run,
-    _render_missing_configuration,
-    _render_stack_event,
-    installer_deploy_command,
-)
-from lza_workbench.cli.presentation import (
-    console,
-    print_info,
-    print_notice,
-)
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.deployment import (
     inspect_installer_source,
@@ -39,19 +26,34 @@ from lza_workbench.installer.deployment import (
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 
 
-def run_installer_deploy(
-    *, dry_run: bool = False, force: bool = False, target_dir: Path | None = None
-) -> None:
-    """Deploy the LZA installer CloudFormation stack for the current workspace."""
+@dataclass(frozen=True)
+class InstallerDeployResult:
+    """Structured result of installer deployment workflow."""
+
+    workspace_dir: Path
+    stack_name: str
+    operation: str
+    cfn_plan: CfnDeploymentPlanResult
+    stack_id: str | None
+    final_status: CfnStackStatusResult | None
+    dry_run: bool
+    skipped: bool
+
+
+def deploy_installer_workflow(
+    *,
+    target_dir: Path | None = None,
+    dry_run: bool = False,
+    force: bool = False,
+    force_no_change: bool = False,
+    on_event: Callable[[dict[str, Any]], None] | None = None,
+) -> InstallerDeployResult:
+    """Execute the installer deployment workflow and return structured results."""
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CONFIGURED)
     workspace_dir, config = ctx.workspace_dir, ctx.config
     profile = config.aws.profile or ""
 
-    try:
-        validate_deployment_preflight(config)
-    except LzaError:
-        _render_missing_configuration(config)
-        raise
+    validate_deployment_preflight(config)
 
     try:
         aws_context = resolve_aws_execution_context(
@@ -74,30 +76,33 @@ def run_installer_deploy(
     )
     operation = validate_cloudformation_plan(cfn_plan)
 
-    _render_deployment_plan(
-        stack_name=stack_name,
-        profile=profile,
-        region=aws_context.region,
-        account_id=aws_context.identity["account"],
-        plan=cfn_plan,
-    )
+    if operation == "NO_CHANGE" and not force and not force_no_change:
+        return InstallerDeployResult(
+            workspace_dir=workspace_dir,
+            stack_name=stack_name,
+            operation=operation,
+            cfn_plan=cfn_plan,
+            stack_id=None,
+            final_status=None,
+            dry_run=dry_run,
+            skipped=True,
+        )
 
-    if operation == "NO_CHANGE" and not force:
-        if not typer.confirm("Force re-deployment of stack?", default=False):
-            console.print("[dim]Deployment skipped as stack has no parameter changes.[/dim]")
-            return
+    if operation == "NO_CHANGE" and (force or force_no_change):
         operation = "UPDATE"
 
-    if not _confirm_deployment(
-        operation=operation, stack_name=stack_name, dry_run=dry_run, force=force
-    ):
-        return
-
     if dry_run:
-        _render_dry_run(operation=operation, stack_name=stack_name)
-        return
+        return InstallerDeployResult(
+            workspace_dir=workspace_dir,
+            stack_name=stack_name,
+            operation=operation,
+            cfn_plan=cfn_plan,
+            stack_id=None,
+            final_status=None,
+            dry_run=True,
+            skipped=False,
+        )
 
-    print_info(f"Initiating CloudFormation stack {operation}...", dim=True)
     stack_id = deploy_cloudformation_stack(
         client=aws_context.factory.get_client("cloudformation"),
         stack_name=stack_name,
@@ -109,7 +114,7 @@ def run_installer_deploy(
     final_status = stream_cloudformation_stack_events(
         client=aws_context.factory.get_client("cloudformation"),
         stack_name=stack_name,
-        on_event=_render_stack_event,
+        on_event=on_event,
     )
 
     if final_status.stack_status not in {"CREATE_COMPLETE", "UPDATE_COMPLETE"}:
@@ -118,33 +123,20 @@ def run_installer_deploy(
             f"{final_status.error or 'Unknown error'}"
         )
 
-    print_notice(
-        f"CloudFormation stack '{stack_name}' deployed successfully "
-        f"({final_status.stack_status})."
-    )
     update_successful_deployment_state(
         workspace_dir=workspace_dir,
         aws_identity=aws_context.identity,
         stack_id=final_status.stack_id or stack_id,
         stack_status=final_status.stack_status,
     )
-    print_info("Updated operational state in .lza/state.json", dim=True)
-    if final_status.outputs:
-        table = Table(title="Stack Outputs", show_header=True)
-        table.add_column("Key", style="bold cyan")
-        table.add_column("Value", style="bold green")
-        for k, v in sorted(final_status.outputs.items()):
-            table.add_row(k, v)
-        console.print(table)
 
-
-__all__ = [
-    "CfnDeploymentPlanResult",
-    "CfnStackStatusResult",
-    "deploy_cloudformation_stack",
-    "inspect_cloudformation_stack",
-    "installer_deploy_command",
-    "resolve_aws_execution_context",
-    "run_installer_deploy",
-    "stream_cloudformation_stack_events",
-]
+    return InstallerDeployResult(
+        workspace_dir=workspace_dir,
+        stack_name=stack_name,
+        operation=operation,
+        cfn_plan=cfn_plan,
+        stack_id=stack_id,
+        final_status=final_status,
+        dry_run=False,
+        skipped=False,
+    )
