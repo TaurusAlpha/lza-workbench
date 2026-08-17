@@ -70,9 +70,17 @@ def extract_zip_to_workspace(
     exclude_dirs: set[str],
     exclude_files: set[str],
 ) -> ConfigDiffResult:
-    """Extract included archive files into the workspace configuration directory."""
+    """Extract included archive files into the workspace configuration directory safely."""
+    if not zip_path.is_file():
+        raise FileNotFoundError(f"Archive file not found: {zip_path}")
+
     with tempfile.TemporaryDirectory() as tmp_str:
-        staging_dir = Path(tmp_str)
+        temp_root = Path(tmp_str)
+        staging_dir = temp_root / "staging"
+        backup_dir = temp_root / "backup"
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(staging_dir)
 
@@ -93,26 +101,53 @@ def extract_zip_to_workspace(
             removed=sorted(before_keys - incoming_keys),
         )
 
+        if config_dir.is_dir():
+            for item in config_dir.iterdir():
+                if item.name in exclude_dirs or (item.is_file() and item.name in exclude_files):
+                    continue
+                if item.is_dir():
+                    shutil.copytree(item, backup_dir / item.name)
+                else:
+                    shutil.copy2(item, backup_dir / item.name)
+
         config_dir.mkdir(parents=True, exist_ok=True)
-        for item in config_dir.iterdir():
-            if item.name in exclude_dirs or (item.is_file() and item.name in exclude_files):
-                continue
-            if item.is_dir():
-                shutil.rmtree(item)
-            else:
-                item.unlink()
 
-        for item in source_content_dir.rglob("*"):
-            if not item.is_file():
-                continue
-            rel_path = item.relative_to(source_content_dir)
-            if is_path_excluded(rel_path, exclude_dirs, exclude_files):
-                continue
-            dest = config_dir / rel_path
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(item, dest)
+        try:
+            for item in list(config_dir.iterdir()):
+                if item.name in exclude_dirs or (item.is_file() and item.name in exclude_files):
+                    continue
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
 
-        return diff_result
+            for item in source_content_dir.rglob("*"):
+                if not item.is_file():
+                    continue
+                rel_path = item.relative_to(source_content_dir)
+                if is_path_excluded(rel_path, exclude_dirs, exclude_files):
+                    continue
+                dest = config_dir / rel_path
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(item, dest)
+
+            return diff_result
+
+        except Exception:
+            for item in list(config_dir.iterdir()):
+                if item.name in exclude_dirs or (item.is_file() and item.name in exclude_files):
+                    continue
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
+
+            for item in backup_dir.iterdir():
+                if item.is_dir():
+                    shutil.copytree(item, config_dir / item.name)
+                else:
+                    shutil.copy2(item, config_dir / item.name)
+            raise
 
 
 def read_zip_manifest(path: Path) -> dict[str, tuple[int, int]]:
