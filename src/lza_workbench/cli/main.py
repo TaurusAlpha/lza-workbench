@@ -11,9 +11,13 @@ from pathlib import Path
 import typer
 
 from lza_workbench.cli import params
+from lza_workbench.cli.commands.config_download import (
+    config_download_command as run_cli_download_config,
+)
+from lza_workbench.cli.commands.config_upload import (
+    config_upload_command as run_cli_upload_config,
+)
 from lza_workbench.cli.presentation import print_error
-from lza_workbench.commands.config_download import run_download_config
-from lza_workbench.commands.config_upload import run_upload_config
 from lza_workbench.commands.installer_deploy import run_installer_deploy
 from lza_workbench.commands.installer_plan import run_installer_plan
 from lza_workbench.commands.status.config import run_config_status
@@ -195,7 +199,7 @@ def config_download_command(
     extract: params.Extract = True,
 ) -> None:
     """Download LZA configuration from configured repository source."""
-    run_download_config(
+    run_cli_download_config(
         dry_run=dry_run,
         force=force,
         extract=extract,
@@ -208,7 +212,7 @@ def config_upload_command(
     dry_run: params.DryRun = False,
 ) -> None:
     """Upload LZA configuration to configured repository destination."""
-    run_upload_config(
+    run_cli_upload_config(
         dry_run=dry_run,
         interactive=_is_interactive(),
     )
