@@ -128,3 +128,4 @@ class AwsClientFactory:
         """Create a boto3 client for the specified AWS service."""
         session = self.get_session()
         return session.client(service_name, region_name=self.region)
+

@@ -19,7 +19,11 @@ INSTALLER_TEMPLATE_URL_TEMPLATE = (
     "{version}/{filename}"
 )
 LOCAL_PACKAGED_INSTALLER_TEMPLATE = Path(
-    str(files("lza_workbench.resources.installer") / INSTALLER_TEMPLATE_FILENAME)
+    str(
+        files("lza_workbench.resources.installer_templates")
+        / PACKAGED_INSTALLER_VERSION
+        / INSTALLER_TEMPLATE_FILENAME
+    )
 )
 
 

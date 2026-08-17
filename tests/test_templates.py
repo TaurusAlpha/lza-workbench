@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.core.templates import (
+from lza_workbench.config.templates import (
     DEFAULT_TEMPLATE_SOURCE,
     REQUIRED_TEMPLATE_FILES,
     ResolvedTemplateSource,
@@ -29,7 +29,9 @@ def test_resolve_template_source_default() -> None:
 def test_bundled_resources_are_in_the_resources_hierarchy() -> None:
     """Packaged assets have explicit resource categories."""
     installer_template = (
-        files("lza_workbench.resources.installer") / "AWSAccelerator-InstallerStack.template"
+        files("lza_workbench.resources.installer_templates")
+        / "v1.16.0"
+        / "AWSAccelerator-InstallerStack.template"
     )
     workspace_example = files("lza_workbench.resources.workspace_examples") / "minimal.yaml"
 
