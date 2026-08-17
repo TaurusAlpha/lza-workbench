@@ -93,11 +93,30 @@ def inspect_codecommit_repository(
                     f"Sync from awslabs/landing-zone-accelerator-on-aws@{version_ref}",
                     f"Push to CodeCommit repository '{repo_name}' branch '{resolved_branch}'",
                 ]
-            else:
-                status = "INITIALIZED"
+            elif code in {"AccessDeniedException", "403"}:
+                status = "INACCESSIBLE"
                 creation_req = False
                 sync_req = False
-                actions = [f"CodeCommit branch check status: {exc}"]
+                actions = [
+                    f"AWS Access Denied checking branch '{resolved_branch}' in "
+                    f"CodeCommit repository '{repo_name}': {exc}"
+                ]
+            else:
+                status = "INACCESSIBLE"
+                creation_req = False
+                sync_req = False
+                actions = [
+                    f"Unexpected CodeCommit error checking branch '{resolved_branch}' in "
+                    f"repository '{repo_name}': {exc}"
+                ]
+        except BotoCoreError as exc:
+            status = "INACCESSIBLE"
+            creation_req = False
+            sync_req = False
+            actions = [
+                f"AWS connection failure checking branch '{resolved_branch}' in "
+                f"repository '{repo_name}': {exc}"
+            ]
 
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")

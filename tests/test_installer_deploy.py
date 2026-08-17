@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from botocore.exceptions import ClientError
 from pydantic import ValidationError
 
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackStatusResult
@@ -13,7 +14,10 @@ from lza_workbench.aws.codecommit import CodeCommitPlanResult
 from lza_workbench.aws.context import AwsExecutionContext
 from lza_workbench.commands.installer_deploy import run_installer_deploy
 from lza_workbench.core.errors import LzaError
-from lza_workbench.installer.deployment import validate_cloudformation_plan
+from lza_workbench.installer.deployment import (
+    inspect_installer_source,
+    validate_cloudformation_plan,
+)
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.models import (
     AwsConfig,
@@ -264,3 +268,32 @@ def test_cloudformation_plan_rejects_inaccessible_or_unsafe_outcomes(
 
     with pytest.raises(LzaError, match="unsafe or unknown"):
         validate_cloudformation_plan(plan)
+
+
+def test_inspect_installer_source_codecommit_inaccessible_fails_closed() -> None:
+    """Unexpected CodeCommit errors return INACCESSIBLE and fail deployment source preflight."""
+    mock_cc = MagicMock()
+    mock_cc.get_repository.return_value = {"repositoryMetadata": {}}
+    mock_cc.get_branch.side_effect = ClientError(
+        {"Error": {"Code": "AccessDeniedException", "Message": "Not authorized"}}, "GetBranch"
+    )
+
+    mock_factory = MagicMock()
+    mock_factory.get_client.return_value = mock_cc
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test", slug="test"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+    config.installer.source_code.repository_type = "codecommit"
+    config.installer.source_code.repository_name = "test-repo"
+    config.installer.source_code.branch = "release/v1.16.0"
+
+    with pytest.raises(LzaError, match="CodeCommit source is a manual prerequisite"):
+        inspect_installer_source(
+            factory=mock_factory,
+            config=config,
+            region="us-east-1",
+        )
+
