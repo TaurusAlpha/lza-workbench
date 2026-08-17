@@ -10,6 +10,7 @@ unresolved design decisions, and technical debt.
 - [ ] `lza pipeline start`
 - [ ] `lza pipeline watch`
 - [ ] `lza doctor`
+- [x] `lza installer plan`
 
 ### `lza init`
 
@@ -32,11 +33,17 @@ Adopt an existing local LZA configuration without modifying customer-owned files
 
 Resolve and persist installer configuration, then show the actions required to deploy the LZA installer without modifying AWS resources.
 
-- [ ] Collect every parameter exposed by the selected installer template.
-- [ ] Apply documented template defaults and explicit workspace defaults where appropriate.
-- [ ] Preserve a user's existing accepted values when defaults change.
-- [ ] Require a local template when the template must be modified, including when anonymous data sharing is disabled.
-- [ ] Determine whether to support both the official remote template for unmodified deployments and a local template for modified deployments, or always standardize on a local template.
+- [x] Collect every parameter exposed by the selected installer template.
+- [x] Apply documented template defaults and explicit workspace defaults where appropriate.
+- [x] Preserve a user's existing accepted values when defaults change.
+- [x] Require (download if not exists) a local template when the template must be modified, including when anonymous data sharing is disabled.
+- [x] Determine whether to support both the official remote template for unmodified deployments and a local template for modified deployments, or always standardize on a local template.
+- [x] Add check that if official github selected as installer source, then account should have aws secret key with github token as described here: <https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/prerequisites.html#create-a-github-personal-access-token-and-store-in-secrets-manager>
+- [x] If new template version deployed, make a backup of last template version in the workspace, so that if new template version fails, user can rollback to previous version.
+
+Future design decision:
+
+- [ ] Refactor command and make it `lza installer init` as main command and `lza installer plan` as alias/subcommand, so that user can run `lza installer init` to initialize the installer configuration and then run `lza installer plan` to see the plan.
 
 ### `lza installer deploy`
 

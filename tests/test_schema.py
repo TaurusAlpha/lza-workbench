@@ -35,7 +35,7 @@ def test_workspace_schema_composition() -> None:
         cli_defaults=CliConfig(),
     )
     assert config.customer.slug == "acme-corp"
-    assert config.installer.options.repository_source == "github"
+    assert config.installer.source_code.repository_type == "github"
     assert config.configuration.repository.type == "codecommit"
     assert config.schema_version == 2
 

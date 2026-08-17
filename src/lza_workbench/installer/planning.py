@@ -23,6 +23,7 @@ class InstallerPlanResult:
     codecommit_plan: CodeCommitPlanResult
     cloudformation_plan: CfnDeploymentPlanResult
     dry_run: bool
+    github_secret_warning: str | None = None
 
 
 def prepare_installer_plan_result(
@@ -35,6 +36,7 @@ def prepare_installer_plan_result(
     codecommit_plan: CodeCommitPlanResult,
     cloudformation_plan: CfnDeploymentPlanResult,
     dry_run: bool,
+    github_secret_warning: str | None = None,
 ) -> InstallerPlanResult:
     """Collect command results into the presentation-independent plan result."""
     return InstallerPlanResult(
@@ -47,4 +49,5 @@ def prepare_installer_plan_result(
         codecommit_plan=codecommit_plan,
         cloudformation_plan=cloudformation_plan,
         dry_run=dry_run,
+        github_secret_warning=github_secret_warning,
     )

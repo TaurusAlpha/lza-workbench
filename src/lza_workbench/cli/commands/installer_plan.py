@@ -8,7 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from lza_workbench.cli import params
-from lza_workbench.cli.input import validate_email, value_or_prompt
+from lza_workbench.cli.input import value_or_prompt
 from lza_workbench.cli.output import (
     console,
     print_info,
@@ -64,7 +64,11 @@ def render_installer_plan_report(plan: InstallerPlanResult) -> None:
     for action in codecommit_plan.actions:
         console.print(f"  • {action}")
 
+    if plan.github_secret_warning:
+        print_warning(plan.github_secret_warning)
+
     console.print()
+
 
     # CloudFormation Section
     print_section(2, "CloudFormation Deployment Planning")
@@ -124,7 +128,6 @@ def installer_plan_command(
             value=None,
             default=default,
             interactive=interactive,
-            validator=validate_email,
         )
 
     plan_result = plan_installer_workflow(

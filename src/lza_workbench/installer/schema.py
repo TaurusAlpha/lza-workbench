@@ -39,7 +39,7 @@ class InstallerSourceCodeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=False)
 
     repository_type: Literal["github", "codecommit", "s3", "codeconnection"] = "github"
-    owner: str | None = "awslabs"
+    owner: str = "awslabs"
     repository_name: str | None = "landing-zone-accelerator-on-aws"
     branch: str | None = None
     bucket: str | None = None
@@ -50,29 +50,10 @@ class InstallerSourceCodeConfig(BaseModel):
 class InstallerOptionsConfig(BaseModel):
     """CloudFormation parameters for the installer stack.
 
-    Contains all 18 parameters from the CloudFormation template metadata.
+    Contains installer deployment options that are not owned by another workspace section.
     """
 
     model_config = ConfigDict(extra="forbid", strict=False)
-
-    # Source Code Repository Configuration
-    repository_source: Literal["github", "codecommit", "s3"] = Field(
-        default="github",
-        description="Specify the location to use to host the LZA source code.",
-    )
-    repository_owner: str = Field(
-        default="awslabs",
-        description="The owner of the repository containing the accelerator code. (GitHub Only)",
-    )
-    repository_name: str = Field(
-        default="landing-zone-accelerator-on-aws",
-        description="The name of the git repository hosting the accelerator code.",
-    )
-    repository_branch_name: str = Field(
-        default_factory=lambda: f"release/{PACKAGED_INSTALLER_VERSION}",
-        min_length=1,
-        description="The name of the git branch to use for installation.",
-    )
 
     # Pipeline Configuration
     enable_approval_stage: bool = Field(
@@ -253,6 +234,7 @@ class LzaInstaller(BaseModel):
     )
     source_code: InstallerSourceCodeConfig = Field(default_factory=InstallerSourceCodeConfig)
     options: InstallerOptionsConfig = Field(default_factory=InstallerOptionsConfig)
+    template_parameters: dict[str, str] = Field(default_factory=dict)
 
 
 class PipelineInstaller(BaseModel):

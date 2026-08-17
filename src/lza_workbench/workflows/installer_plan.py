@@ -8,7 +8,13 @@ from pathlib import Path
 from lza_workbench.aws.cloudformation import inspect_cloudformation_stack
 from lza_workbench.aws.codecommit import inspect_codecommit_repository
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.installer.parameters import build_installer_cfn_parameters
+from lza_workbench.errors import LzaError
+from lza_workbench.installer.config import validate_installer_configuration
+from lza_workbench.installer.parameters import (
+    apply_installer_parameter,
+    build_installer_cfn_parameters,
+    persist_template_defaults,
+)
 from lza_workbench.installer.planning import (
     InstallerPlanResult,
     prepare_installer_plan_result,
@@ -39,39 +45,51 @@ def plan_installer_workflow(
     workspace_dir, config = ctx.workspace_dir, ctx.config
     options = config.installer.options
 
-    # Apply any explicit installer option overrides or prompt if prompter provided
+    # Apply explicit command-line overrides before asking for the selected template parameters.
     mgmt = management_account_email or options.management_account_email
     if mgmt and mgmt.strip():
         options.management_account_email = mgmt.strip()
-    elif prompter:
-        options.management_account_email = prompter("Management Account Email", None)
 
     log = log_archive_account_email or options.log_archive_account_email
     if log and log.strip():
         options.log_archive_account_email = log.strip()
-    elif prompter:
-        options.log_archive_account_email = prompter("Log Archive Account Email", None)
 
     audit = audit_account_email or options.audit_account_email
     if audit and audit.strip():
         options.audit_account_email = audit.strip()
-    elif prompter:
-        options.audit_account_email = prompter("Audit Account Email", None)
 
     if accelerator_prefix is not None and accelerator_prefix.strip():
         config.lza.accelerator_prefix = accelerator_prefix.strip()
 
-    # Save accepted installer settings if requested and not dry run
-    if not no_save and not dry_run:
-        write_workspace_config(workspace_dir, config)
-
     # Step 1: Resolve Template & Schema
     template_path = resolve_installer_template(workspace_dir, config, dry_run=dry_run)
     params_schema = inspect_template_parameters(template_path)
+    persist_template_defaults(config, params_schema)
+
+    resolved_params = build_installer_cfn_parameters(config, schema=params_schema)
+    if prompter:
+        for parameter_name, definition in params_schema.items():
+            default = resolved_params.get(parameter_name)
+            label = definition.get("Description") or parameter_name
+            value = prompter(f"{parameter_name}: {label}", default)
+            apply_installer_parameter(config, parameter_name, value)
+        resolved_params = build_installer_cfn_parameters(config, schema=params_schema)
+
+    validation = validate_installer_configuration(config)
+    if not validation.is_complete:
+        missing = ", ".join(
+            f"{field.section}.{field.attribute}" for field in validation.missing_fields
+        )
+        raise LzaError(
+            f"Cannot create installer plan; required configuration is missing: {missing}."
+        )
 
     # Step 2: Validate Resolved Parameters against Template Schema
-    resolved_params = build_installer_cfn_parameters(config)
     validate_parameters_against_schema(resolved_params, params_schema)
+
+    # Save accepted installer settings and template defaults after successful validation.
+    if not no_save and not dry_run:
+        write_workspace_config(workspace_dir, config)
 
     # Step 3: Create AWS Factory & Validate Profile Identity
     aws_context = resolve_aws_execution_context(
@@ -97,6 +115,13 @@ def plan_installer_workflow(
         region=region,
     )
 
+    # Check GitHub Secret if GitHub source is selected
+    github_secret_warning = None
+    if resolved_params.get("RepositorySource") == "github" and aws_identity:
+        sm_client = factory.get_client("secretsmanager")
+        if sm_client:
+            github_secret_warning = _check_github_token_secret(sm_client)
+
     # Step 5: CloudFormation Deployment Planning
     stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
     cfn_client = factory.get_client("cloudformation") if aws_identity else None
@@ -116,7 +141,31 @@ def plan_installer_workflow(
         codecommit_plan=codecommit_plan,
         cloudformation_plan=cfn_plan,
         dry_run=dry_run,
+        github_secret_warning=github_secret_warning,
     )
+
+
+def _check_github_token_secret(sm_client: object) -> str | None:
+    """Verify if GitHub token secret exists in AWS Secrets Manager."""
+    from botocore.exceptions import ClientError
+
+    secret_name = "accelerator/github-token"
+    try:
+        sm_client.describe_secret(SecretId=secret_name)  # type: ignore[attr-defined]
+        return None
+    except ClientError as err:
+        code = err.response.get("Error", {}).get("Code")
+        if code != "ResourceNotFoundException":
+            return f"Secrets Manager check for '{secret_name}' returned: {err}"
+    except Exception as exc:
+        return f"Secrets Manager check for '{secret_name}' failed: {exc}"
+
+    return (
+        "GitHub source selected, but AWS Secrets Manager secret 'accelerator/github-token' "
+        "was not found in account/region. "
+        "AWS LZA requires a GitHub token stored in Secrets Manager."
+    )
+
 
 
 __all__ = [

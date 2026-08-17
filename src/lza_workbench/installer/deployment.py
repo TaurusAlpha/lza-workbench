@@ -55,7 +55,7 @@ def prepare_installer_template(
     """Resolve and validate the local template and its parameters against the schema."""
     template_path = resolve_installer_template(workspace_dir, config, dry_run=dry_run)
     schema = inspect_template_parameters(template_path)
-    parameters = build_installer_cfn_parameters(config)
+    parameters = build_installer_cfn_parameters(config, schema=schema)
     validate_parameters_against_schema(parameters, schema)
     return template_path, parameters
 

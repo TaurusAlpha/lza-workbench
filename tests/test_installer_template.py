@@ -51,6 +51,21 @@ def test_parameter_validation_uses_template_allowed_values() -> None:
         )
 
 
+def test_parameter_validation_uses_template_allowed_pattern() -> None:
+    """Shared validation rejects values excluded by a template pattern."""
+    with pytest.raises(LzaError, match="must match template pattern"):
+        validate_parameters_against_schema(
+            {"ManagementAccountEmail": "not-an-email"},
+            {"ManagementAccountEmail": {"AllowedPattern": r"[^\\s@]+@[^\\s@]+\\.[^\\s@]+"}},
+        )
+
+
+def test_parameter_validation_requires_unknown_parameter_without_default() -> None:
+    """A newly exposed required template parameter must be configured explicitly."""
+    with pytest.raises(LzaError, match="has no configured value or template default"):
+        validate_parameters_against_schema({}, {"NewRequiredParameter": {"Type": "String"}})
+
+
 def test_download_installer_template_content_matching_fallback(tmp_path: Path) -> None:
     """When download fails and requested version matches packaged version, fallback is used."""
     fake_fallback = tmp_path / "fallback.template"
@@ -125,3 +140,77 @@ def test_configure_anonymous_data() -> None:
 
     enabled = configure_anonymous_data(disabled, True)
     assert '"Data": "Yes"' in enabled
+
+
+def test_backup_installer_template_on_version_change(tmp_path: Path) -> None:
+    """Template is backed up under version directory when version changes."""
+    workspace_dir = tmp_path / "backup_test"
+    installer_dir = workspace_dir / "aws-accelerator-installer"
+    installer_dir.mkdir(parents=True)
+    template_path = installer_dir / INSTALLER_TEMPLATE_FILENAME
+    template_path.write_text('{"Description": "Version 1.15.0."}', encoding="utf-8")
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Backup", slug="backup"),
+        aws=AwsConfig(profile="default", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+
+    from unittest.mock import patch
+
+    with patch("lza_workbench.installer.templates.download_installer_template") as mock_dl:
+        mock_dl.return_value = template_path
+        resolve_installer_template(workspace_dir, config, dry_run=False)
+
+    backup_path = installer_dir / "backups" / "v1.15.0" / INSTALLER_TEMPLATE_FILENAME
+    assert backup_path.exists()
+    assert backup_path.read_text(encoding="utf-8") == '{"Description": "Version 1.15.0."}'
+
+
+def test_resolve_installer_template_applies_anonymous_data_setting(tmp_path: Path) -> None:
+    """Anonymous data setting is configured in local template on resolution."""
+    workspace_dir = tmp_path / "anon_test"
+    installer_dir = workspace_dir / "aws-accelerator-installer"
+    installer_dir.mkdir(parents=True)
+    template_path = installer_dir / INSTALLER_TEMPLATE_FILENAME
+    template_path.write_text(
+        '{"Mappings": {"Global": {"SendAnonymizedData": {"Data": "Yes"}}}}',
+        encoding="utf-8",
+    )
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Anon", slug="anon"),
+        aws=AwsConfig(profile="default", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+    config.installer.options.anonymous_data = False
+
+    resolve_installer_template(workspace_dir, config, dry_run=False)
+
+    content = template_path.read_text(encoding="utf-8")
+    assert '"Data": "No"' in content
+
+
+def test_resolve_installer_template_honors_local_source(tmp_path: Path) -> None:
+    """A configured local stack template is used instead of the workspace cache."""
+    workspace_dir = tmp_path / "local-source"
+    workspace_dir.mkdir()
+    template_path = workspace_dir / "custom.template"
+    template_path.write_text('{"Parameters": {}}', encoding="utf-8")
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Local", slug="local"),
+        aws=AwsConfig(profile="default", region="us-east-1"),
+    )
+    config.installer.stack_template.source = "local"
+    config.installer.stack_template.path = "custom.template"
+
+    assert resolve_installer_template(workspace_dir, config, dry_run=True) == template_path
+
+
+def test_inspect_template_parameters_rejects_invalid_json(tmp_path: Path) -> None:
+    """A malformed installer template is not treated as an empty schema."""
+    template_path = tmp_path / INSTALLER_TEMPLATE_FILENAME
+    template_path.write_text("not json", encoding="utf-8")
+
+    with pytest.raises(LzaError, match="not valid JSON"):
+        inspect_template_parameters(template_path)
