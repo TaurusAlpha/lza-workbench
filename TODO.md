@@ -168,6 +168,8 @@ Future design decision:
 
 ## Authentication
 
+- [ ] Reassess and likely remove application-managed source credential priming after selecting the
+  preferred external AWS authentication approach. Keep priming opt-in in the meantime.
 - [ ] Add an AWS profile creation or authentication-onboarding helper.
 - [ ] Support AWS IAM Identity Center (SSO) profile bootstrap.
 - [ ] Support static-key profile bootstrap without storing credentials in workspace metadata.

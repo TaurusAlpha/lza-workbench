@@ -31,8 +31,7 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 - **CLI Package**: Consolidated interactive prompting, confirmation handlers, Rich panel/table rendering, and CLI command definitions under `lza_workbench.cli`.
 - **Durable Error Ownership**: Consolidated application error definitions in `errors.py`.
 - **Feature Packages**: Reorganized domain models and schemas into owning packages (`workspace`, `installer`, `config`, `aws`).
-- **Safe Defaults & Fixes**: Restored safe config download archive defaults, honored exact configuration archive keys, ensured proper installer-plan readiness, restricted installer template fallback by version, failed closed on unexpected CodeCommit errors, and primed source credentials before role assumption.
+- **Safe Defaults & Fixes**: Restored safe config download archive defaults, honored exact configuration archive keys, ensured proper installer-plan readiness, restricted installer template fallback by version, failed closed on unexpected CodeCommit errors, and added optional source-credential priming support.
 - **Architectural Tests**: Added AST-based test suite verifying strict layer boundaries and preventing domain/workflow modules from importing presentation frameworks or higher layers.
 - **Removed Legacy Layers**: Deleted deprecated `commands/`, `core/`, `utils/`, and root shim modules.
-
 
