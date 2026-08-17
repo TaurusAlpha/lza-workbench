@@ -23,6 +23,18 @@ from lza_workbench.cli.commands.installer_deploy import (
 from lza_workbench.cli.commands.installer_plan import (
     installer_plan_command as run_cli_installer_plan,
 )
+from lza_workbench.cli.commands.status_config import (
+    status_config_command as run_cli_status_config,
+)
+from lza_workbench.cli.commands.status_installer import (
+    status_installer_command as run_cli_status_installer,
+)
+from lza_workbench.cli.commands.status_pipeline import (
+    status_pipeline_command as run_cli_status_pipeline,
+)
+from lza_workbench.cli.commands.status_root import (
+    status_root_command as run_cli_status_root,
+)
 from lza_workbench.cli.commands.workspace_import import (
     workspace_import_command as run_cli_workspace_import,
 )
@@ -30,10 +42,6 @@ from lza_workbench.cli.commands.workspace_init import (
     workspace_init_command as run_cli_workspace_init,
 )
 from lza_workbench.cli.presentation import print_error
-from lza_workbench.commands.status.config import run_config_status
-from lza_workbench.commands.status.installer import run_installer_status
-from lza_workbench.commands.status.main import run_root_status
-from lza_workbench.commands.status.pipeline import run_pipeline_status
 from lza_workbench.errors import LzaError
 
 app = typer.Typer(
@@ -89,7 +97,7 @@ def installer_status_command(
     sync_config: params.SyncConfig = False,
 ) -> None:
     """Show the current installer deployment state (alias for `lza status installer`)."""
-    run_installer_status(
+    run_cli_status_installer(
         sync_state=sync_state,
         sync_config=sync_config,
     )
@@ -101,7 +109,7 @@ def status_root_callback(
 ) -> None:
     """Show overall workspace status overview."""
     if ctx.invoked_subcommand is None:
-        run_root_status()
+        run_cli_status_root()
 
 
 @status_app.command("installer")
@@ -110,7 +118,7 @@ def status_installer_command(
     sync_config: params.SyncConfig = False,
 ) -> None:
     """Show the current installer stack status details."""
-    run_installer_status(
+    run_cli_status_installer(
         sync_state=sync_state,
         sync_config=sync_config,
     )
@@ -119,13 +127,13 @@ def status_installer_command(
 @status_app.command("config")
 def status_config_command() -> None:
     """Show configuration repository status details."""
-    run_config_status()
+    run_cli_status_config()
 
 
 @status_app.command("pipeline")
 def status_pipeline_command() -> None:
     """Show CodePipeline status details."""
-    run_pipeline_status()
+    run_cli_status_pipeline()
 
 
 app.add_typer(config_app, name="config")

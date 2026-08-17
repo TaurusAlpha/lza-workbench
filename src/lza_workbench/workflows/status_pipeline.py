@@ -1,26 +1,38 @@
-"""Compatibility wrapper for pipeline status command (to be removed in Step 16)."""
+"""Workflow for gathering pipeline status data."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.cli.commands.status_pipeline import (
-    render_pipeline_status,
-    status_pipeline_command,
-)
-from lza_workbench.workflows.status_pipeline import (
-    PipelineStatusResult,
-    get_pipeline_status_workflow,
-)
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 
 
-def run_pipeline_status(
+@dataclass(frozen=True)
+class PipelineStatusResult:
+    """Prepared pipeline names, ARNs, and execution metadata for rendering."""
+
+    workspace_dir: Path
+    customer_name: str
+    profile: str
+    region: str
+    aws_identity: dict[str, str] | None
+    aws_error: str | None
+    installer_pipeline_name: str
+    installer_pipeline_arn: str
+    config_pipeline_name: str
+    config_pipeline_arn: str
+    installer_execution_id: str | None
+    config_execution_id: str | None
+    has_state: bool
+
+
+def get_pipeline_status_workflow(
     *,
     target_dir: Path | None = None,
-) -> None:
-    """Query AWS CodePipeline state for current workspace pipelines."""
+) -> PipelineStatusResult:
+    """Query AWS and workspace state for CodePipeline status."""
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
@@ -35,7 +47,7 @@ def run_pipeline_status(
     installer_pipeline_name = config.pipelines.installer.name or f"{prefix}-Installer"
     config_pipeline_name = config.pipelines.configuration.name or f"{prefix}-Pipeline"
 
-    result = PipelineStatusResult(
+    return PipelineStatusResult(
         workspace_dir=workspace_dir,
         customer_name=config.customer.name,
         profile=profile,
@@ -50,15 +62,3 @@ def run_pipeline_status(
         config_execution_id=state.config_pipeline_execution_id if state else None,
         has_state=state is not None,
     )
-    render_pipeline_status(result, has_state=result.has_state)
-
-
-__all__ = [
-    "PipelineStatusResult",
-    "get_pipeline_status_workflow",
-    "load_workspace_context",
-    "render_pipeline_status",
-    "resolve_aws_execution_context",
-    "run_pipeline_status",
-    "status_pipeline_command",
-]

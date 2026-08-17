@@ -1,24 +1,41 @@
-"""Compatibility wrapper for root status command (to be removed in Step 16)."""
+"""Workflow for gathering root workspace status data."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.aws.cloudformation import get_cloudformation_stack_status
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.cli.commands.status_root import render_root_status, status_root_command
-from lza_workbench.workflows.status_root import (
-    RootStatusResult,
-    get_root_status_workflow,
-)
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 
 
-def run_root_status(
+@dataclass(frozen=True)
+class RootStatusResult:
+    """All data needed to render the root workspace status report."""
+
+    workspace_dir: Path
+    customer_name: str
+    lza_version: str
+    profile: str
+    region: str
+    aws_identity: dict[str, str] | None
+    aws_error: str | None
+    stack_name: str
+    stack_status: str | None
+    stack_exists: bool
+    repository_type: str
+    config_dir: Path
+    config_dir_exists: bool
+    installer_pipeline_name: str
+    config_pipeline_name: str
+
+
+def get_root_status_workflow(
     *,
     target_dir: Path | None = None,
-) -> None:
-    """Display overall summary status for the customer LZA workspace."""
+) -> RootStatusResult:
+    """Query workspace and AWS to collect root summary status."""
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
     workspace_dir, config = ctx.workspace_dir, ctx.config
 
@@ -33,7 +50,7 @@ def run_root_status(
     cfn_client = factory.get_client("cloudformation") if aws_identity else None
     cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=cfn_stack_name)
 
-    result = RootStatusResult(
+    return RootStatusResult(
         workspace_dir=workspace_dir,
         customer_name=config.customer.name,
         lza_version=config.lza.version,
@@ -50,16 +67,3 @@ def run_root_status(
         installer_pipeline_name=f"{config.lza.accelerator_prefix or 'AWSAccelerator'}-Installer",
         config_pipeline_name=f"{config.lza.accelerator_prefix or 'AWSAccelerator'}-Pipeline",
     )
-    render_root_status(result)
-
-
-__all__ = [
-    "RootStatusResult",
-    "get_cloudformation_stack_status",
-    "get_root_status_workflow",
-    "load_workspace_context",
-    "render_root_status",
-    "resolve_aws_execution_context",
-    "run_root_status",
-    "status_root_command",
-]

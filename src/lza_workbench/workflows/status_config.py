@@ -1,25 +1,39 @@
-"""Compatibility wrapper for config status command (to be removed in Step 16)."""
+"""Workflow for gathering configuration repository status data."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
-from lza_workbench.cli.commands.status_config import (
-    render_config_status,
-    status_config_command,
-)
-from lza_workbench.workflows.status_config import (
-    ConfigurationStatusResult,
-    get_config_status_workflow,
-)
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 
 
-def run_config_status(
+@dataclass(frozen=True)
+class ConfigurationStatusResult:
+    """All data needed to render configuration-source status."""
+
+    workspace_dir: Path
+    customer_name: str
+    lza_version: str
+    config_dir: Path
+    config_dir_exists: bool
+    yaml_files: tuple[str, ...]
+    repository_type: str
+    repository_bucket: str | None
+    repository_prefix: str
+    repository_key: str
+    repository_name: str | None
+    repository_branch: str | None
+    uploaded_at: object | None
+    downloaded_at: object | None
+    has_state: bool
+
+
+def get_config_status_workflow(
     *,
     target_dir: Path | None = None,
-) -> None:
-    """Query workspace configuration metadata and display configuration status."""
+) -> ConfigurationStatusResult:
+    """Query workspace configuration metadata and return configuration status result."""
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
@@ -36,7 +50,7 @@ def run_config_status(
         else ()
     )
     repo = config.configuration.repository
-    result = ConfigurationStatusResult(
+    return ConfigurationStatusResult(
         workspace_dir=workspace_dir,
         customer_name=config.customer.name,
         lza_version=config.lza.version,
@@ -53,14 +67,3 @@ def run_config_status(
         downloaded_at=state.config_downloaded_at if state else None,
         has_state=state is not None,
     )
-    render_config_status(result, has_state=result.has_state)
-
-
-__all__ = [
-    "ConfigurationStatusResult",
-    "get_config_status_workflow",
-    "load_workspace_context",
-    "render_config_status",
-    "run_config_status",
-    "status_config_command",
-]
