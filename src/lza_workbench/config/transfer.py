@@ -39,7 +39,11 @@ def resolve_configuration_archive_location(
             "No S3 bucket configured in lza-workspace.yaml under configuration.repository.bucket."
         )
 
-    s3_bucket, s3_key, zip_name = resolve_s3_archive_uri(bucket, repository.prefix.strip())
+    s3_bucket, s3_key, zip_name = resolve_s3_archive_uri(
+        bucket=bucket,
+        prefix=repository.prefix.strip() if repository.prefix else "",
+        key=repository.key.strip() if repository.key else None,
+    )
     return ConfigurationArchiveLocation(
         bucket=s3_bucket,
         key=s3_key,

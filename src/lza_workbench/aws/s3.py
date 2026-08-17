@@ -13,22 +13,35 @@ from lza_workbench.core.errors import LzaError
 DEFAULT_ZIP_FILENAME = "aws-accelerator-config.zip"
 
 
-def resolve_s3_archive_uri(bucket: str, prefix: str) -> tuple[str, str, str]:
+def resolve_s3_archive_uri(
+    bucket: str,
+    prefix: str = "",
+    key: str | None = None,
+) -> tuple[str, str, str]:
     """Resolve bucket name, object key, and local zip file name.
 
     Returns a tuple of (s3_bucket, s3_key, zip_name).
     """
-    clean_bucket = bucket.rstrip("/")
+    clean_bucket = bucket.strip().rstrip("/")
     if clean_bucket.endswith(".zip"):
         parts = clean_bucket.split("/", 1)
         s3_bucket = parts[0]
-        s3_key = parts[1] if len(parts) > 1 else DEFAULT_ZIP_FILENAME
+        s3_key = (
+            parts[1]
+            if len(parts) > 1
+            else (key.strip().lstrip("/") if key and key.strip() else DEFAULT_ZIP_FILENAME)
+        )
         zip_name = Path(s3_key).name
         return s3_bucket, s3_key, zip_name
 
     s3_bucket = clean_bucket
-    zip_name = DEFAULT_ZIP_FILENAME
-    s3_key = f"{prefix}/{zip_name}".lstrip("/") if prefix else zip_name
+    key_filename = key.strip().lstrip("/") if key and key.strip() else DEFAULT_ZIP_FILENAME
+    prefix_clean = prefix.strip().strip("/") if prefix else ""
+    if prefix_clean:
+        s3_key = f"{prefix_clean}/{key_filename}"
+    else:
+        s3_key = key_filename
+    zip_name = Path(key_filename).name
     return s3_bucket, s3_key, zip_name
 
 
@@ -36,8 +49,8 @@ def download_s3_archive(
     *,
     s3_bucket: str,
     s3_key: str,
-    prefix: str,
     zip_path: Path,
+    prefix: str | None = None,
     factory: AwsClientFactory | None = None,
     client: Any | None = None,
 ) -> None:
@@ -50,33 +63,7 @@ def download_s3_archive(
         else:
             raise ValueError("An AWS client or AwsClientFactory is required.")
 
-        single_zip_success = False
-        try:
-            s3.download_file(s3_bucket, s3_key, str(zip_path))
-            single_zip_success = True
-        except ClientError as exc:
-            error_code = exc.response.get("Error", {}).get("Code", "")
-            if error_code not in {"404", "NoSuchKey", "NotFound"}:
-                raise
-
-        if not single_zip_success:
-            paginator = s3.get_paginator("list_objects_v2")
-            found_zip_key = None
-            for page in paginator.paginate(Bucket=s3_bucket, Prefix=prefix):
-                for obj in page.get("Contents", []):
-                    key = obj["Key"]
-                    if key.endswith(".zip"):
-                        found_zip_key = key
-                        break
-                if found_zip_key:
-                    break
-
-            if found_zip_key:
-                s3.download_file(s3_bucket, found_zip_key, str(zip_path))
-            else:
-                raise LzaError(
-                    f"S3 archive object not found at s3://{s3_bucket}/{s3_key}"
-                )
+        s3.download_file(s3_bucket, s3_key, str(zip_path))
 
     except ClientError as exc:
         error = exc.response.get("Error", {})

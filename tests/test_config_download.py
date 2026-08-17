@@ -222,3 +222,33 @@ def test_cli_config_download_command_succeeds_with_force(
         encoding="utf-8"
     ) == "forced content"
 
+
+def test_run_download_config_custom_key_and_prefix(workspace_dir: Path) -> None:
+    cfg = load_workspace_config(workspace_dir)
+    cfg.configuration.repository.bucket = "my-test-bucket"
+    cfg.configuration.repository.prefix = "custom-prefix/"
+    cfg.configuration.repository.key = "custom-archive.zip"
+    write_workspace_config(workspace_dir, cfg)
+
+    mock_s3 = MagicMock()
+
+    def fake_download(bucket: str, key: str, filename: str) -> None:
+        p = Path(filename)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(str(p), "w") as zf:
+            zf.writestr("aws-accelerator-config/global-config.yaml", "custom key content")
+
+    mock_s3.download_file.side_effect = fake_download
+
+    with patch("boto3.Session") as mock_session_cls:
+        mock_session_cls.return_value.client.return_value = mock_s3
+        path = run_download_config(target_dir=workspace_dir, force=True)
+
+    mock_s3.download_file.assert_called_once_with(
+        "my-test-bucket",
+        "custom-prefix/custom-archive.zip",
+        str(workspace_dir / "custom-archive.zip"),
+    )
+    assert (path / "global-config.yaml").read_text(encoding="utf-8") == "custom key content"
+
+

@@ -191,7 +191,7 @@ def import_command(
 @config_app.command("download")
 def config_download_command(
     dry_run: params.DryRun = False,
-    force: params.Force = True,
+    force: params.Force = False,
     extract: params.Extract = True,
 ) -> None:
     """Download LZA configuration from configured repository source."""

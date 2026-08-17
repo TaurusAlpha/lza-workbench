@@ -155,3 +155,24 @@ def test_cli_config_upload_command(workspace_dir: Path, monkeypatch: pytest.Monk
     monkeypatch.chdir(workspace_dir)
     exit_code = main(["config", "upload", "--dry-run"])
     assert exit_code == 0
+
+
+def test_run_upload_config_custom_key_and_prefix(workspace_dir: Path) -> None:
+    cfg = load_workspace_config(workspace_dir)
+    cfg.configuration.repository.bucket = "my-test-bucket"
+    cfg.configuration.repository.prefix = "custom-prefix/"
+    cfg.configuration.repository.key = "custom-archive.zip"
+    write_workspace_config(workspace_dir, cfg)
+
+    mock_s3 = MagicMock()
+    mock_s3.head_object.return_value = {"ETag": '"987654321"', "VersionId": "v2.0"}
+
+    with patch("boto3.Session") as mock_session_cls:
+        mock_session_cls.return_value.client.return_value = mock_s3
+        zip_path = run_upload_config(target_dir=workspace_dir)
+
+    assert zip_path == workspace_dir / "custom-archive.zip"
+    mock_s3.upload_file.assert_called_once_with(
+        str(zip_path), "my-test-bucket", "custom-prefix/custom-archive.zip"
+    )
+

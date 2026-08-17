@@ -78,7 +78,6 @@ def run_download_config(
     download_s3_archive(
         s3_bucket=archive_location.bucket,
         s3_key=archive_location.key,
-        prefix=config.configuration.repository.prefix.strip(),
         zip_path=zip_path,
         factory=aws_context.factory,
     )
