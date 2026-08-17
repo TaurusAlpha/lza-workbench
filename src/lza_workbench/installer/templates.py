@@ -6,13 +6,17 @@ import json
 import urllib.request
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from lza_workbench.errors import LzaError
-from lza_workbench.installer.versions import normalize_lza_version
-from lza_workbench.workspace.models import WorkspaceConfig
+from lza_workbench.installer.versions import (
+    PACKAGED_INSTALLER_VERSION,
+    normalize_lza_version,
+)
 
-PACKAGED_INSTALLER_VERSION = "v1.16.0"
+if TYPE_CHECKING:
+    from lza_workbench.workspace.schema import WorkspaceConfig
+
 INSTALLER_TEMPLATE_FILENAME = "AWSAccelerator-InstallerStack.template"
 INSTALLER_TEMPLATE_URL_TEMPLATE = (
     "https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/"

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+PACKAGED_INSTALLER_VERSION = "v1.16.0"
+
+
 
 def normalize_lza_version(version: str | None) -> str:
     """Return a canonical LZA version: ``latest`` or ``vX.Y.Z``.
