@@ -7,7 +7,7 @@ from pathlib import Path
 import typer
 
 from lza_workbench.cli import params
-from lza_workbench.cli.presentation import (
+from lza_workbench.cli.output import (
     print_diff_summary,
     print_dry_run_header,
     print_kv,

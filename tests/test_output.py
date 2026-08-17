@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 
 from lza_workbench.cli.errors import handle_cli_error
-from lza_workbench.cli.presentation import (
+from lza_workbench.cli.input import value_or_prompt
+from lza_workbench.cli.output import (
     print_diff_summary,
     print_dry_run_header,
     print_error,
@@ -15,7 +16,6 @@ from lza_workbench.cli.presentation import (
     print_section,
     print_success,
     print_warning,
-    value_or_prompt,
 )
 from lza_workbench.errors import LzaError
 

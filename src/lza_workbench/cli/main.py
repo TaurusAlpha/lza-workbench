@@ -41,7 +41,7 @@ from lza_workbench.cli.commands.workspace_import import (
 from lza_workbench.cli.commands.workspace_init import (
     workspace_init_command as run_cli_workspace_init,
 )
-from lza_workbench.cli.presentation import print_error
+from lza_workbench.cli.output import print_error
 from lza_workbench.errors import LzaError
 
 app = typer.Typer(

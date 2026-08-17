@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 
-from lza_workbench.cli.presentation import print_error
+from lza_workbench.cli.output import print_error
 from lza_workbench.errors import LzaError
 
 

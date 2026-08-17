@@ -8,7 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from lza_workbench.cli import params
-from lza_workbench.cli.presentation import (
+from lza_workbench.cli.output import (
     console,
     print_info,
     print_kv,

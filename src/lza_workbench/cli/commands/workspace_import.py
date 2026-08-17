@@ -5,12 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from lza_workbench.cli import params
-from lza_workbench.cli.presentation import (
+from lza_workbench.cli.input import value_or_prompt
+from lza_workbench.cli.output import (
     console,
     print_dry_run_header,
     print_kv,
     print_success,
-    value_or_prompt,
 )
 from lza_workbench.workflows.workspace_import import (
     WorkspaceImportResult,

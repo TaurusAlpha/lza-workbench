@@ -6,7 +6,7 @@ from pathlib import Path
 
 from rich.panel import Panel
 
-from lza_workbench.cli.presentation import (
+from lza_workbench.cli.output import (
     console,
     print_info,
     print_kv,

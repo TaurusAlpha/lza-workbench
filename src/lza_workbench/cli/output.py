@@ -1,13 +1,10 @@
-"""Shared Rich CLI output helpers, prompts, and presentation primitives."""
+"""Shared Rich CLI output helpers and presentation primitives."""
 
 from __future__ import annotations
 
 from typing import Any
 
-import typer
 from rich.console import Console
-
-from lza_workbench.errors import LzaError
 
 console = Console()
 
@@ -81,16 +78,15 @@ def print_diff_summary(added: list[str], modified: list[str], removed: list[str]
         console.print(f"  [red]- {fname}[/red]")
 
 
-def value_or_prompt(
-    label: str, value: str | None, default: str | None = None, interactive: bool = True
-) -> str:
-    """Use an explicit value, prompt with a default, or use that default."""
-    if value:
-        return value
-    if interactive:
-        if default is not None:
-            return typer.prompt(label, default=default)
-        return typer.prompt(label)
-    if default is not None:
-        return default
-    raise LzaError(f"{label} is required.")
+__all__ = [
+    "console",
+    "print_diff_summary",
+    "print_dry_run_header",
+    "print_error",
+    "print_info",
+    "print_kv",
+    "print_notice",
+    "print_section",
+    "print_success",
+    "print_warning",
+]
