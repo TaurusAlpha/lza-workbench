@@ -45,7 +45,7 @@ def run_installer_plan(
     target_dir: Path | None = None,
 ) -> None:
     """Resolve installer config from workspace and show planned deployment actions."""
-    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CONFIGURED)
+    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.IMPORTED)
     workspace_dir, config = ctx.workspace_dir, ctx.config
 
     # Validate required installer configuration parameters in workspace

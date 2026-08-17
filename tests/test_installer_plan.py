@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
+from lza_workbench.commands.installer_deploy import run_installer_deploy
 from lza_workbench.commands.installer_plan import run_installer_plan
 from lza_workbench.core.errors import LzaError
 from lza_workbench.installer.planning import InstallerPlanResult
@@ -204,3 +205,44 @@ def test_installer_plan_cfn_update_detected(sample_workspace: Path) -> None:
             )
 
         mock_cfn.describe_stacks.assert_called_once_with(StackName="AWSAccelerator-InstallerStack")
+
+
+def test_installer_plan_imported_workspace_reports_missing_fields(tmp_path: Path) -> None:
+    """Imported workspace loads and reports specific missing installer fields during plan."""
+    ws_dir = tmp_path / "imported-ws"
+    ws_dir.mkdir(parents=True, exist_ok=True)
+    (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Imported Customer", slug="imported-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+    write_workspace_config(ws_dir, config)
+    write_workspace_state(ws_dir, WorkspaceState.from_config(config))
+
+    with pytest.raises(
+        LzaError, match="required parameter\\(s\\) missing from lza-workspace\\.yaml"
+    ):
+        run_installer_plan(target_dir=ws_dir)
+
+
+def test_installer_deploy_refuses_imported_workspace(tmp_path: Path) -> None:
+    """Installer deploy strictly enforces CONFIGURED readiness and refuses IMPORTED workspace."""
+    ws_dir = tmp_path / "imported-ws-deploy"
+    ws_dir.mkdir(parents=True, exist_ok=True)
+    (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Imported Customer", slug="imported-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+    write_workspace_config(ws_dir, config)
+    write_workspace_state(ws_dir, WorkspaceState.from_config(config))
+
+    with pytest.raises(LzaError, match="missing required installer configuration parameters"):
+        run_installer_deploy(target_dir=ws_dir)
+
