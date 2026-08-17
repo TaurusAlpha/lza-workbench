@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import typer
 
 from lza_workbench.cli import main
 from lza_workbench.commands.config_download import (
@@ -149,3 +150,75 @@ def test_cli_config_download_command(workspace_dir: Path, monkeypatch: pytest.Mo
     monkeypatch.chdir(workspace_dir)
     exit_code = main(["config", "download", "--dry-run"])
     assert exit_code == 0
+
+
+def test_run_download_config_interactive_declined(workspace_dir: Path) -> None:
+    cfg = load_workspace_config(workspace_dir)
+    cfg.configuration.repository.bucket = "my-test-bucket"
+    write_workspace_config(workspace_dir, cfg)
+
+    with patch("typer.confirm", return_value=False):
+        with pytest.raises(typer.Abort):
+            run_download_config(target_dir=workspace_dir, force=False, interactive=True)
+
+
+def test_run_download_config_interactive_confirmed(workspace_dir: Path) -> None:
+    cfg = load_workspace_config(workspace_dir)
+    cfg.configuration.repository.bucket = "my-test-bucket"
+    write_workspace_config(workspace_dir, cfg)
+
+    def fake_download(bucket: str, key: str, filename: str) -> None:
+        p = Path(filename)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(str(p), "w") as zf:
+            zf.writestr("aws-accelerator-config/global-config.yaml", "new content")
+
+    mock_s3 = MagicMock()
+    mock_s3.download_file.side_effect = fake_download
+
+    with patch("typer.confirm", return_value=True), patch("boto3.Session") as mock_session_cls:
+        mock_session_cls.return_value.client.return_value = mock_s3
+        path = run_download_config(target_dir=workspace_dir, force=False, interactive=True)
+
+    assert path == workspace_dir / "aws-accelerator-config"
+    assert (path / "global-config.yaml").read_text(encoding="utf-8") == "new content"
+
+
+def test_cli_config_download_command_fails_on_non_empty_without_force(
+    workspace_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = load_workspace_config(workspace_dir)
+    cfg.configuration.repository.bucket = "my-test-bucket"
+    write_workspace_config(workspace_dir, cfg)
+
+    monkeypatch.chdir(workspace_dir)
+    exit_code = main(["config", "download"])
+    assert exit_code == 1
+
+
+def test_cli_config_download_command_succeeds_with_force(
+    workspace_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cfg = load_workspace_config(workspace_dir)
+    cfg.configuration.repository.bucket = "my-test-bucket"
+    write_workspace_config(workspace_dir, cfg)
+
+    def fake_download(bucket: str, key: str, filename: str) -> None:
+        p = Path(filename)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(str(p), "w") as zf:
+            zf.writestr("aws-accelerator-config/global-config.yaml", "forced content")
+
+    mock_s3 = MagicMock()
+    mock_s3.download_file.side_effect = fake_download
+
+    monkeypatch.chdir(workspace_dir)
+    with patch("boto3.Session") as mock_session_cls:
+        mock_session_cls.return_value.client.return_value = mock_s3
+        exit_code = main(["config", "download", "--force"])
+
+    assert exit_code == 0
+    assert (workspace_dir / "aws-accelerator-config" / "global-config.yaml").read_text(
+        encoding="utf-8"
+    ) == "forced content"
+
