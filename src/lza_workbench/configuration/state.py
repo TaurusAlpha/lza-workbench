@@ -6,8 +6,8 @@ import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 
-from lza_workbench.config.archive import ConfigDiffResult, count_config_files
-from lza_workbench.workspace.models import WorkspaceState
+from lza_workbench.configuration.archive import ConfigDiffResult, count_config_files
+from lza_workbench.workspace.schema import WorkspaceState
 
 
 def record_config_upload(

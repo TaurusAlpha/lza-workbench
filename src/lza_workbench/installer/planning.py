@@ -7,7 +7,7 @@ from pathlib import Path
 
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult
 from lza_workbench.aws.codecommit import CodeCommitPlanResult
-from lza_workbench.workspace.models import WorkspaceConfig
+from lza_workbench.workspace.schema import WorkspaceConfig
 
 
 @dataclass(frozen=True)

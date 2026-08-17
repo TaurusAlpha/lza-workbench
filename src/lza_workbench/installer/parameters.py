@@ -1,7 +1,7 @@
 """Build CloudFormation parameters for the LZA installer stack."""
 
 from lza_workbench.installer.versions import version_to_branch
-from lza_workbench.workspace.models import WorkspaceConfig
+from lza_workbench.workspace.schema import WorkspaceConfig
 
 
 def build_installer_cfn_parameters(config: WorkspaceConfig) -> dict[str, str]:

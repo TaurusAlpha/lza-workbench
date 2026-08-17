@@ -9,7 +9,7 @@ import pytest
 from lza_workbench.cli.commands.workspace_import import (
     workspace_import_command as run_import,
 )
-from lza_workbench.config.templates import REQUIRED_TEMPLATE_FILES
+from lza_workbench.configuration.templates import REQUIRED_TEMPLATE_FILES
 from lza_workbench.errors import LzaError
 from lza_workbench.workflows.workspace_import import resolve_import_paths
 from lza_workbench.workspace.config import load_workspace_config

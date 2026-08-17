@@ -21,7 +21,7 @@ from lza_workbench.installer.deployment import (
     validate_cloudformation_plan,
 )
 from lza_workbench.workspace.config import write_workspace_config
-from lza_workbench.workspace.models import (
+from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,
     LzaConfig,

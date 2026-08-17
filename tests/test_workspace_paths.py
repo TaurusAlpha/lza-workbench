@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lza_workbench.workspace.models import (
+from lza_workbench.workspace.schema import (
     WorkspaceConfig,
     WorkspaceState,
 )

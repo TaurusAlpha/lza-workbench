@@ -4,7 +4,7 @@ from pydantic import ValidationError
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
-from lza_workbench.workspace.models import WorkspaceConfig
+from lza_workbench.workspace.schema import WorkspaceConfig
 
 WORKSPACE_CONFIG_FILE = Path("lza-workspace.yaml")
 

@@ -21,11 +21,12 @@ from lza_workbench.installer.deployment import (
     InstallerConfigValidationError,
     inspect_installer_source,
     prepare_installer_template,
-    update_successful_deployment_state,
     validate_cloudformation_plan,
     validate_deployment_preflight,
 )
+from lza_workbench.installer.state import record_installer_deployment
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
 
 @dataclass(frozen=True)
@@ -141,12 +142,14 @@ def deploy_installer_workflow(
             f"CloudFormation stack deployment failed with status ({status_name}){error_detail}"
         )
 
-    update_successful_deployment_state(
-        workspace_dir=workspace_dir,
+    state = load_workspace_state(workspace_dir)
+    record_installer_deployment(
+        state,
         aws_identity=aws_context.identity,
         stack_id=final_status.stack_id or stack_id,
         stack_status=final_status.stack_status or "CREATE_COMPLETE",
     )
+    write_workspace_state(workspace_dir, state)
 
     return InstallerDeployResult(
         workspace_dir=workspace_dir,

@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from lza_workbench.config.schema import ConfigurationRepositoryConfig
+from lza_workbench.configuration.schema import ConfigurationRepositoryConfig
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.versions import PACKAGED_INSTALLER_VERSION
 

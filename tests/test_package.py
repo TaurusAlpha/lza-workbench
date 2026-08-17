@@ -30,7 +30,7 @@ def test_cli_version_option(capsys) -> None:
 
 def test_domain_and_aws_modules_do_not_import_cli_presentation_frameworks() -> None:
     """Keep domain, workflow, and AWS layers independent from Typer and Rich."""
-    layer_directories = ("aws", "config", "installer", "workspace", "workflows")
+    layer_directories = ("aws", "configuration", "installer", "workspace", "workflows")
     forbidden_imports = {"rich", "typer"}
     violations: list[tuple[str, int, str]] = []
 
@@ -57,7 +57,7 @@ def test_domain_and_aws_modules_do_not_import_cli_presentation_frameworks() -> N
 
 def test_lower_layers_do_not_import_higher_layers() -> None:
     """Enforce strict dependency layering: cli -> workflows -> features/AWS."""
-    feature_and_aws_dirs = ("aws", "config", "installer", "workspace")
+    feature_and_aws_dirs = ("aws", "configuration", "installer", "workspace")
     forbidden_for_features = {"lza_workbench.cli", "lza_workbench.workflows"}
     forbidden_for_workflows = {"lza_workbench.cli"}
 

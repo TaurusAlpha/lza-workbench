@@ -3,7 +3,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from lza_workbench.workspace.models import WorkspaceState
+from lza_workbench.workspace.schema import WorkspaceState
 
 WORKSPACE_STATE_FILE = Path(".lza") / "state.json"
 

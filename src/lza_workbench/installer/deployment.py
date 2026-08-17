@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
 
 from lza_workbench.aws.client_factory import AwsClientFactory
@@ -21,8 +20,7 @@ from lza_workbench.installer.templates import (
     validate_parameters_against_schema,
 )
 from lza_workbench.installer.versions import version_to_branch
-from lza_workbench.workspace.models import WorkspaceConfig
-from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
+from lza_workbench.workspace.schema import WorkspaceConfig
 
 SAFE_EXISTING_STACK_STATUSES = {
     "CREATE_COMPLETE",
@@ -44,39 +42,37 @@ class InstallerConfigValidationError(LzaError):
         )
 
 
-def validate_deployment_preflight(config: WorkspaceConfig) -> InstallerConfigValidationResult:
-    """Validate configuration required before any AWS deployment activity."""
+def validate_deployment_preflight(config: WorkspaceConfig) -> None:
+    """Validate workspace installer settings before executing deployment mutations."""
     validation = validate_installer_configuration(config)
     if not validation.is_complete:
         raise InstallerConfigValidationError(validation)
-    return validation
 
 
 def prepare_installer_template(
     *, workspace_dir: Path, config: WorkspaceConfig, dry_run: bool
 ) -> tuple[Path, dict[str, str]]:
-    """Resolve the template and parameters, validating them before AWS mutation."""
+    """Resolve and validate the local template and its parameters against the schema."""
     template_path = resolve_installer_template(workspace_dir, config, dry_run=dry_run)
-    params_schema = inspect_template_parameters(template_path)
-    resolved_parameters = build_installer_cfn_parameters(config)
-    validate_parameters_against_schema(resolved_parameters, params_schema)
-    return template_path, resolved_parameters
+    schema = inspect_template_parameters(template_path)
+    parameters = build_installer_cfn_parameters(config)
+    validate_parameters_against_schema(parameters, schema)
+    return template_path, parameters
 
 
 def inspect_installer_source(
-    *, factory: AwsClientFactory, config: WorkspaceConfig, region: str
+    *,
+    factory: AwsClientFactory,
+    config: WorkspaceConfig,
+    region: str,
 ) -> CodeCommitPlanResult | None:
-    """Inspect the configured installer source and enforce its deployment prerequisite.
-
-    CodeCommit synchronization is deliberately a manual prerequisite. Creating an empty
-    repository cannot satisfy the installer pipeline, which needs the selected LZA branch.
-    """
+    """Validate required remote source preconditions for installer CloudFormation."""
     source = config.installer.source_code
     if source.repository_type == "codecommit":
         version_ref = version_to_branch(config.lza.version)
         plan = inspect_codecommit_repository(
             factory=factory,
-            repository_type=source.repository_type,
+            repository_type="codecommit",
             repository_name=source.repository_name,
             branch_name=source.branch,
             version_ref=version_ref,
@@ -114,20 +110,11 @@ def validate_cloudformation_plan(plan: CfnDeploymentPlanResult) -> str:
     )
 
 
-def update_successful_deployment_state(
-    *,
-    workspace_dir: Path,
-    aws_identity: dict[str, str],
-    stack_id: str,
-    stack_status: str,
-) -> None:
-    """Persist operational state only after a successful CloudFormation deployment."""
-    state = load_workspace_state(workspace_dir)
-    now = datetime.now(UTC)
-    state.management_account_id = aws_identity["account"]
-    state.caller_arn = aws_identity["arn"]
-    state.installer_stack_id = stack_id
-    state.installer_stack_status = stack_status
-    state.installer_stack_updated_at = now
-    state.updated_at = now
-    write_workspace_state(workspace_dir, state)
+__all__ = [
+    "InstallerConfigValidationError",
+    "SAFE_EXISTING_STACK_STATUSES",
+    "inspect_installer_source",
+    "prepare_installer_template",
+    "validate_cloudformation_plan",
+    "validate_deployment_preflight",
+]

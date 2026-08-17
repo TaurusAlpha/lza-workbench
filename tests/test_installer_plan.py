@@ -17,7 +17,7 @@ from lza_workbench.cli.commands.installer_plan import (
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.planning import InstallerPlanResult
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
-from lza_workbench.workspace.models import (
+from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,
     LzaConfig,

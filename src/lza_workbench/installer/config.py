@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from lza_workbench.workspace.models import WorkspaceConfig
+from lza_workbench.workspace.schema import WorkspaceConfig
 
 
 @dataclass(frozen=True)

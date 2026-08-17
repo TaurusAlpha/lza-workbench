@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.config.schema import ConfigurationConfig, ConfigurationTemplateConfig
-from lza_workbench.config.templates import validate_template
+from lza_workbench.configuration.schema import ConfigurationConfig, ConfigurationTemplateConfig
+from lza_workbench.configuration.templates import validate_template
 from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import (
     WORKSPACE_CONFIG_FILE,

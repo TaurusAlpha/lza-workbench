@@ -1,11 +1,11 @@
-"""Tests for split schema models in workspace, config, and installer packages."""
+"""Tests for split schema models in workspace, configuration, and installer packages."""
 
 from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
 
-from lza_workbench.config.schema import (
+from lza_workbench.configuration.schema import (
     ConfigurationConfig,
     ConfigurationRepositoryConfig,
 )
@@ -13,7 +13,6 @@ from lza_workbench.installer.schema import (
     InstallerOptionsConfig,
     LzaInstaller,
 )
-from lza_workbench.workspace.models import WorkspaceConfig as ReExportedWorkspaceConfig
 from lza_workbench.workspace.schema import (
     AwsConfig,
     CliConfig,
@@ -39,11 +38,6 @@ def test_workspace_schema_composition() -> None:
     assert config.installer.options.repository_source == "github"
     assert config.configuration.repository.type == "codecommit"
     assert config.schema_version == 2
-
-
-def test_compatibility_reexport_matches() -> None:
-    """Verify workspace.models re-exports the exact same WorkspaceConfig class."""
-    assert ReExportedWorkspaceConfig is WorkspaceConfig
 
 
 def test_forbids_extra_fields_across_submodels() -> None:

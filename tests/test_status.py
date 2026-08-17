@@ -28,7 +28,7 @@ from lza_workbench.workflows.status_installer import (
     sync_installer_state,
 )
 from lza_workbench.workspace.config import load_workspace_config
-from lza_workbench.workspace.models import (
+from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,
     WorkspaceConfig,

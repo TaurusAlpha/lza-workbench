@@ -5,7 +5,7 @@ from __future__ import annotations
 import zipfile
 from pathlib import Path
 
-from lza_workbench.config.archive import create_zip_archive, extract_zip_to_workspace
+from lza_workbench.configuration.archive import create_zip_archive, extract_zip_to_workspace
 
 
 def test_upload_and_download_apply_the_same_exclusions(tmp_path: Path) -> None:

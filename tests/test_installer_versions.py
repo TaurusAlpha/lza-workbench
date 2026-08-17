@@ -8,7 +8,7 @@ from lza_workbench.installer.versions import (
     normalize_lza_version,
     version_to_branch,
 )
-from lza_workbench.workspace.models import AwsConfig, CustomerConfig, WorkspaceConfig
+from lza_workbench.workspace.schema import AwsConfig, CustomerConfig, WorkspaceConfig
 
 
 @pytest.mark.parametrize(

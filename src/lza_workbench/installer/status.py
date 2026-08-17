@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from lza_workbench.installer.parameters import build_installer_cfn_parameters
 from lza_workbench.installer.versions import normalize_lza_version
-from lza_workbench.workspace.models import WorkspaceConfig, WorkspaceState
+from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
 
 @dataclass(frozen=True)

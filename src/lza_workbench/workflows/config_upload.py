@@ -8,13 +8,13 @@ from pathlib import Path
 
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.s3 import upload_s3_archive
-from lza_workbench.config.archive import (
+from lza_workbench.configuration.archive import (
     ConfigDiffResult,
     create_zip_archive,
 )
-from lza_workbench.config.state import record_config_upload
-from lza_workbench.config.templates import validate_template
-from lza_workbench.config.transfer import (
+from lza_workbench.configuration.state import record_config_upload
+from lza_workbench.configuration.templates import validate_template
+from lza_workbench.configuration.transfer import (
     resolve_configuration_archive_location,
 )
 from lza_workbench.errors import LzaError

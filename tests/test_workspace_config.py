@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.config.archive import count_config_files, is_path_excluded
+from lza_workbench.configuration.archive import count_config_files, is_path_excluded
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
-from lza_workbench.workspace.models import AwsConfig, CustomerConfig, WorkspaceConfig
+from lza_workbench.workspace.schema import AwsConfig, CustomerConfig, WorkspaceConfig
 
 WORKSPACE_EXAMPLES_DIR = (
     Path(__file__).parents[1] / "src" / "lza_workbench" / "resources" / "workspace_examples"

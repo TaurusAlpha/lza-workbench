@@ -13,7 +13,7 @@ from lza_workbench.workspace.context import (
     evaluate_workspace_readiness,
     load_workspace_context,
 )
-from lza_workbench.workspace.models import (
+from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,
     LzaConfig,

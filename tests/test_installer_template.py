@@ -15,7 +15,7 @@ from lza_workbench.installer.templates import (
     resolve_installer_template,
     validate_parameters_against_schema,
 )
-from lza_workbench.workspace.models import AwsConfig, CustomerConfig, LzaConfig, WorkspaceConfig
+from lza_workbench.workspace.schema import AwsConfig, CustomerConfig, LzaConfig, WorkspaceConfig
 
 
 def test_template_resolution_and_parameter_inspection(tmp_path: Path) -> None:

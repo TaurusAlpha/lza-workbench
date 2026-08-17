@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from lza_workbench.config.templates import resolve_template_source
+from lza_workbench.configuration.templates import resolve_template_source
 from lza_workbench.workflows.workspace_import import (
     WorkspaceImportResult,
     import_workspace_workflow,

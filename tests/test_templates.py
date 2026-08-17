@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.config.templates import (
+from lza_workbench.configuration.templates import (
     DEFAULT_TEMPLATE_SOURCE,
     REQUIRED_TEMPLATE_FILES,
     ResolvedTemplateSource,

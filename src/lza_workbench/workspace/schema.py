@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from lza_workbench.config.schema import ConfigurationConfig
+from lza_workbench.configuration.schema import ConfigurationConfig
 from lza_workbench.installer.schema import LzaInstaller, PipelineInstaller
 
 

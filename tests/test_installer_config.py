@@ -6,7 +6,7 @@ import pytest
 
 from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import build_installer_cfn_parameters
-from lza_workbench.workspace.models import AwsConfig, CustomerConfig, WorkspaceConfig
+from lza_workbench.workspace.schema import AwsConfig, CustomerConfig, WorkspaceConfig
 
 
 def complete_config() -> WorkspaceConfig:
