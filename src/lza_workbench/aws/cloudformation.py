@@ -8,6 +8,7 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
+from lza_workbench.errors import LzaError
 
 
 @dataclass
@@ -269,6 +270,7 @@ def stream_cloudformation_stack_events(
     client: Any | None = None,
     stack_name: str,
     poll_interval: float = 3.0,
+    max_consecutive_errors: int = 5,
     on_event: Any | None = None,
 ) -> CfnStackStatusResult:
     """Stream CloudFormation stack events in real-time until stack reaches terminal status."""
@@ -297,6 +299,9 @@ def stream_cloudformation_stack_events(
         "DELETE_FAILED",
     }
 
+    consecutive_errors = 0
+    last_error: Exception | str | None = None
+
     while True:
         try:
             events_resp = cfn.describe_stack_events(StackName=clean_stack_name)
@@ -312,18 +317,50 @@ def stream_cloudformation_stack_events(
                         on_event(evt)
 
             status_res = get_cloudformation_stack_status(client=cfn, stack_name=clean_stack_name)
-            curr_status = status_res.stack_status or ""
+            if status_res.error:
+                consecutive_errors += 1
+                last_error = status_res.error
+                if consecutive_errors >= max_consecutive_errors:
+                    raise LzaError(
+                        f"CloudFormation event monitoring failed for stack '{clean_stack_name}' "
+                        f"after {consecutive_errors} consecutive AWS errors: {last_error}"
+                    )
+            else:
+                consecutive_errors = 0
+                last_error = None
 
-            if curr_status in terminal_success or curr_status in terminal_failure:
-                return status_res
+                curr_status = status_res.stack_status or ""
+                if curr_status in terminal_success or curr_status in terminal_failure:
+                    return status_res
 
         except ClientError as exc:
             code = exc.response.get("Error", {}).get("Code", "")
             if code in {"ValidationError", "404"} or "does not exist" in str(exc):
-                # Stack might have finished deleting or not exist
-                return get_cloudformation_stack_status(client=cfn, stack_name=clean_stack_name)
-        except BotoCoreError:
-            pass
+                # Stack might have finished deleting or does not exist
+                status_res = get_cloudformation_stack_status(
+                    client=cfn, stack_name=clean_stack_name
+                )
+                if (
+                    not status_res.exists
+                    or status_res.stack_status in terminal_failure
+                    or status_res.stack_status in terminal_success
+                ):
+                    return status_res
+            consecutive_errors += 1
+            last_error = exc
+            if consecutive_errors >= max_consecutive_errors:
+                raise LzaError(
+                    f"CloudFormation event monitoring failed for stack '{clean_stack_name}' "
+                    f"after {consecutive_errors} consecutive AWS errors: {last_error}"
+                ) from exc
+        except BotoCoreError as exc:
+            consecutive_errors += 1
+            last_error = exc
+            if consecutive_errors >= max_consecutive_errors:
+                raise LzaError(
+                    f"CloudFormation event monitoring failed for stack '{clean_stack_name}' "
+                    f"after {consecutive_errors} consecutive AWS errors: {last_error}"
+                ) from exc
 
         time.sleep(poll_interval)
 
