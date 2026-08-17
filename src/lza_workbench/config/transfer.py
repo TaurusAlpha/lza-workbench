@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.aws.s3 import resolve_s3_archive_uri
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.workspace.models import ConfigurationRepositoryConfig
 
 

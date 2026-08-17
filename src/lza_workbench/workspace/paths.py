@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.utils.helpers import normalize_customer_slug
 from lza_workbench.workspace.config import WORKSPACE_CONFIG_FILE
 

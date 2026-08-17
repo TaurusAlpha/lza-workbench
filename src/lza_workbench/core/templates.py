@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.utils.output import print_warning
 
 DEFAULT_TEMPLATE_SOURCE = "default"

@@ -11,7 +11,7 @@ from lza_workbench.commands.workspace_init import (
     resolve_packaged_template,
     run_init,
 )
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.paths import resolve_init_workspace_dir
 from lza_workbench.workspace.state import load_workspace_state

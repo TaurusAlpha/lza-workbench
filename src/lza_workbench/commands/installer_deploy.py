@@ -17,7 +17,7 @@ from lza_workbench.aws.cloudformation import (
     stream_cloudformation_stack_events,
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.installer.deployment import (
     inspect_installer_source,
     prepare_installer_template,

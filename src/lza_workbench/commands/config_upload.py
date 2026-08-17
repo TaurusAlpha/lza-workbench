@@ -11,8 +11,8 @@ from lza_workbench.aws.s3 import upload_s3_archive
 from lza_workbench.config.archive import create_zip_archive
 from lza_workbench.config.state import record_config_upload
 from lza_workbench.config.transfer import resolve_configuration_archive_location
-from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import validate_template
+from lza_workbench.errors import LzaError
 from lza_workbench.utils.output import (
     print_diff_summary,
     print_dry_run_header,

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import boto3
 
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.utils.output import (
     print_info,
     print_warning,

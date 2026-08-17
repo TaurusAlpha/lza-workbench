@@ -16,7 +16,7 @@ from lza_workbench.commands.status.installer import (
 )
 from lza_workbench.commands.status.main import run_root_status
 from lza_workbench.commands.status.pipeline import run_pipeline_status
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.installer.status import (
     calculate_configuration_drift,
     calculate_state_alignment,

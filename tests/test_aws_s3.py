@@ -13,7 +13,7 @@ from lza_workbench.aws.s3 import (
     download_s3_archive,
     resolve_s3_archive_uri,
 )
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 
 
 def test_resolve_s3_archive_uri_with_prefix() -> None:

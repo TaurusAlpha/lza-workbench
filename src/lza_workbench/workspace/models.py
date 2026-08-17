@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 
 
 class WorkspaceModel(BaseModel):

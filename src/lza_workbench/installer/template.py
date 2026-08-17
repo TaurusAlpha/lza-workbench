@@ -7,12 +7,12 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
-from lza_workbench.core.errors import LzaError
 from lza_workbench.core.installer_template import (
     INSTALLER_TEMPLATE_FILENAME,
     PACKAGED_INSTALLER_VERSION,
     download_installer_template,
 )
+from lza_workbench.errors import LzaError
 from lza_workbench.installer.versions import normalize_lza_version
 from lza_workbench.utils.output import print_info, print_notice
 from lza_workbench.workspace.models import WorkspaceConfig

@@ -8,7 +8,7 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 
 DEFAULT_ZIP_FILENAME = "aws-accelerator-config.zip"
 

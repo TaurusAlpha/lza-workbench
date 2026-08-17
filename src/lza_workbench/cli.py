@@ -21,7 +21,7 @@ from lza_workbench.commands.status.main import run_root_status
 from lza_workbench.commands.status.pipeline import run_pipeline_status
 from lza_workbench.commands.workspace_import import run_import
 from lza_workbench.commands.workspace_init import run_init
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.utils.output import print_error
 
 app = typer.Typer(

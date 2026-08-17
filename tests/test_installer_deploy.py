@@ -13,7 +13,7 @@ from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackSt
 from lza_workbench.aws.codecommit import CodeCommitPlanResult
 from lza_workbench.aws.context import AwsExecutionContext
 from lza_workbench.commands.installer_deploy import run_installer_deploy
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.installer.deployment import (
     inspect_installer_source,
     validate_cloudformation_plan,

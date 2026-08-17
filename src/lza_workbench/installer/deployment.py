@@ -9,7 +9,7 @@ from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult
 from lza_workbench.aws.codecommit import CodeCommitPlanResult, inspect_codecommit_repository
 from lza_workbench.aws.s3 import inspect_s3_installer_source
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import (
     InstallerConfigValidationResult,
     validate_installer_configuration,

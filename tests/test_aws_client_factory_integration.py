@@ -10,7 +10,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 
 
 def test_no_direct_boto3_session_or_client_outside_factory() -> None:

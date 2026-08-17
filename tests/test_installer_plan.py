@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 
 from lza_workbench.commands.installer_deploy import run_installer_deploy
 from lza_workbench.commands.installer_plan import run_installer_plan
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.installer.planning import InstallerPlanResult
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.models import (

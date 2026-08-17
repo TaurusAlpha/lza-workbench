@@ -14,7 +14,7 @@ from lza_workbench.aws.codecommit import (
     inspect_codecommit_repository,
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import build_installer_cfn_parameters
 from lza_workbench.installer.planning import (

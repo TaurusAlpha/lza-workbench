@@ -12,7 +12,7 @@ from rich.table import Table
 
 from lza_workbench.aws.cloudformation import CfnStackStatusResult, get_cloudformation_stack_status
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.installer.status import (
     StateAlignment,
     calculate_configuration_drift,

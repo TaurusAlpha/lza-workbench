@@ -1,7 +1,7 @@
 import shutil
 from pathlib import Path
 
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import WORKSPACE_CONFIG_FILE, write_workspace_config
 from lza_workbench.workspace.models import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.paths import normalize_path

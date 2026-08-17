@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
 
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.models import WorkspaceConfig, WorkspaceState

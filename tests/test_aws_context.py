@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.workspace.models import AwsConfig
 
 

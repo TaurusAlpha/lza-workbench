@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from lza_workbench.commands.workspace_import import resolve_import_paths, run_import
-from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import REQUIRED_TEMPLATE_FILES
+from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.state import load_workspace_state
 

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.core.errors import LzaError
 from lza_workbench.core.installer_template import INSTALLER_TEMPLATE_FILENAME
+from lza_workbench.errors import LzaError
 from lza_workbench.installer.template import (
     inspect_template_parameters,
     resolve_installer_template,

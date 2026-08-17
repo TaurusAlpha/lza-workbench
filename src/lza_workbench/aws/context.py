@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from lza_workbench.aws.client_factory import AwsClientFactory
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.workspace.models import AwsConfig
 
 

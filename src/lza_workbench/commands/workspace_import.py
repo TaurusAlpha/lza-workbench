@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import validate_template
+from lza_workbench.errors import LzaError
 from lza_workbench.utils.helpers import normalize_customer_slug, value_or_prompt
 from lza_workbench.utils.output import (
     console,

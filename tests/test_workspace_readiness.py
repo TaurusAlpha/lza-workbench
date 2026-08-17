@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import (
     WorkspaceReadinessLevel,

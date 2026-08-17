@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.core.errors import LzaError
 from lza_workbench.core.templates import (
     DEFAULT_TEMPLATE_SOURCE,
     REQUIRED_TEMPLATE_FILES,
@@ -15,6 +14,7 @@ from lza_workbench.core.templates import (
     resolve_template_source,
     validate_template,
 )
+from lza_workbench.errors import LzaError
 
 
 def test_resolve_template_source_default() -> None:

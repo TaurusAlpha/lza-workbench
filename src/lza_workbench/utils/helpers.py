@@ -6,7 +6,7 @@ import re
 
 import typer
 
-from lza_workbench.core.errors import LzaError
+from lza_workbench.errors import LzaError
 
 
 def normalize_customer_slug(customer_name: str) -> str:
