@@ -54,7 +54,16 @@ Every implementation must leave the project in a releasable state.
 ### Maintainability
 
 - Write small, focused functions with a single responsibility.
-- Place new logic in the appropriate package (`core/`, `aws/`, `config/`, `utils/`) rather than in command handlers.
+- Place new logic in the appropriate feature package rather than in command handlers or generic
+  `core`/`utils` modules.
+- Keep Typer, Rich, prompting, confirmation, and terminal rendering in the CLI layer.
+- Implement reusable application use cases as workflows that return structured results.
+- Keep workspace, installer, configuration, and pipeline rules in their owning feature packages.
+- Keep AWS modules as thin boto3 adapters; pass resolved values into them instead of importing
+  workspace or feature policy.
+- Do not introduce generic `core`, `utils`, or `helpers` modules when a feature owner exists.
+- Preserve the dependency direction `cli -> workflows -> features/AWS`; lower layers must not
+  import CLI or workflows.
 - Extend existing modules when appropriate; create new modules when they improve organization.
 - Follow existing project structure and coding patterns.
 

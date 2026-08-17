@@ -10,8 +10,9 @@ The repository contains the application source code, bundled LZA templates, and 
 - `tests/` — Automated tests.
 - `src/lza_workbench/resources/` — Bundled installer templates, starter customer configuration,
   and workspace examples shipped with the CLI.
-- `PROJECT.md` — Long-term project vision, architecture, and design principles.
-- `TODO.md` — Feature backlog and implementation ideas.
+- [`PROJECT.md`](PROJECT.md) — Durable project vision, architecture, and design principles.
+- [`TODO.md`](TODO.md) — Active feature backlog and unresolved design work.
+- [`docs/DONE.md`](docs/DONE.md) — Concise history of completed milestones.
 
 ## Quick Start
 
@@ -116,8 +117,9 @@ pipelines:
 ```
 
 Defaults are defined by `WorkspaceConfig` in `src/lza_workbench/workspace/models.py`; YAML supplies
-explicit overrides. Unknown keys are rejected. See `src/lza_workbench/resources/workspace_examples/` for minimal,
-full, configuration-only, and installer-only examples.
+explicit overrides. Unknown keys are rejected. See
+`src/lza_workbench/resources/workspace_examples/` for minimal, full, configuration-only, and
+installer-only examples.
 
 ### AWS authentication
 
@@ -187,4 +189,4 @@ uv tool install --reinstall .
 
 ## Current Status
 
-The project is currently in the active development stage. Feature implementation is tracked in TODO.md.
+The project is in active development. Feature work is tracked in [`TODO.md`](TODO.md).

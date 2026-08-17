@@ -18,13 +18,26 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 - **`lza installer plan`**: Read installer parameters from `lza-workspace.yaml`, resolve templates, inspect AWS CodeCommit and deployment status, and generate non-mutating action plans.
 - **`lza installer deploy`**: Reconcile installer desired state with AWS CloudFormation, execute deployments, track events, and record deployment metadata in `.lza/state.json`.
 - **`lza config upload`**: Validate configuration placeholders, package customer `aws-accelerator-config`, upload to S3 configuration sources, and log upload state.
-- **`lza config download`**: Download customer configuration from S3 configuration sources with overwrite protection, `--force`, `--dry-run`, archive extraction (`--extract`), and atomic updates.
+- **`lza config download`**: Download customer configuration from S3 configuration sources with
+  `--dry-run`, optional archive extraction, and operational state updates.
 - **`lza status`**: Single read-only status dashboard for workspace state, installer details, configuration sources, and pipeline execution metadata.
 
 ### AWS Integration Architecture Refactoring
 - Centralized boto3 session and client creation into `AwsClientFactory` across all service modules, eliminating direct `boto3` calls outside the factory.
 
-### Refactor Phase 13: Compatibility and Dependency Review
-- Removed the remaining status-command compatibility re-exports; the CLI now imports each public status workflow directly.
-- Added architecture checks for presentation-framework imports in domain/AWS packages and cross-command imports.
-- Confirmed the shared AWS context resolver, installer configuration validator, and installer version conversion functions remain their single sources of truth.
+### Modular Refactor Milestones
+- Split workspace models, configuration/state persistence, setup, path handling, and readiness
+  into the `workspace` package and removed `core/workspace.py`.
+- Added shared installer modules for version conversion, configuration validation, parameter
+  mapping, template handling, planning, deployment stages, and status calculations.
+- Removed persisted AWS access keys, documented external authentication, and added a shared AWS
+  execution-context resolver with account checks for AWS-mutating workflows.
+- Decomposed installer deployment, rejected unsafe CloudFormation states, and made CodeCommit
+  population an explicit manual prerequisite.
+- Shared configuration archive, location, and state-update logic between upload and download.
+- Added structured status results, fixed pipeline execution-state field usage, and renamed status
+  modules to concise public names.
+- Moved packaged installer templates, workspace examples, and starter customer configuration into
+  the `resources` hierarchy.
+- Removed obsolete status compatibility modules and added architecture checks for direct
+  Typer/Rich imports and cross-command imports.

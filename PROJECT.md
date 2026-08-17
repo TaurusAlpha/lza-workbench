@@ -79,6 +79,31 @@ AWS SDK initialization is centralized.
 - AWS-specific behavior should remain separated from workspace/configuration logic where practical.
 - Customer-owned LZA configuration is independent from installer source-code management.
 
+### Package Responsibilities
+
+The application follows a feature-oriented structure with explicit interface and workflow
+boundaries:
+
+- `cli` owns command registration, parameters, prompting, confirmation, terminal rendering, and
+  translation of application errors into process results.
+- `workflows` own reusable application use cases. They coordinate workspace loading, feature
+  rules, AWS adapters, mutation, and structured results without depending on Typer or Rich.
+- `workspace` owns workspace schema composition, runtime state, persistence, paths, readiness,
+  and workspace lifecycle.
+- `installer`, `configuration`, and `pipeline` own their respective schemas and business rules.
+- `aws` contains thin service adapters that accept resolved inputs, call boto3, and return
+  structured results without deriving feature policy.
+- `resources` contains packaged data only; customer-owned workspaces and configuration remain
+  outside the package.
+
+Dependencies point from interfaces toward workflows and from workflows toward feature packages
+and AWS adapters. Feature and AWS packages must not import CLI or workflow modules. AWS adapters
+must not import workspace or feature policy. Shared behavior belongs to the feature that owns the
+rule rather than generic `core`, `utils`, or `helpers` modules.
+
+Future CLI, API, worker, or MCP interfaces should reuse the same workflows instead of duplicating
+business logic.
+
 ### Error Handling
 
 Application errors must remain independent of presentation and execution interfaces.
@@ -121,7 +146,8 @@ The project evolves rapidly.
 Documentation therefore has intentionally separate responsibilities:
 
 - `PROJECT.md` defines durable project identity and architectural invariants.
-- `TODO.md` contains active feature design, backlog, technical debt, refactoring tasks, and unresolved decisions.
+- `TODO.md` contains active feature design, backlog, non-refactor technical debt, and unresolved
+  decisions.
 - `docs/DONE.md` logs completed features and refactoring milestones.
 - `AGENTS.md` defines the current implementation and coding baseline for AI-assisted development.
 - `README.md` documents current user-facing and development usage.
@@ -167,8 +193,8 @@ Natural areas of future development include:
 - config diff/reporting;
 - configuration generators;
 - security and policy pack integration;
-- optional LZA-focused MCP/AI assistance.
-- Server-side or multi-user operation.
+- optional LZA-focused MCP/AI assistance;
+- server-side or multi-user operation.
 
 Detailed planning and prioritization belong in `TODO.md`.
 
