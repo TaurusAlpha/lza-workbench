@@ -10,8 +10,10 @@ from typing import Any
 from lza_workbench.core.errors import LzaError
 from lza_workbench.core.installer_template import (
     INSTALLER_TEMPLATE_FILENAME,
+    PACKAGED_INSTALLER_VERSION,
     download_installer_template,
 )
+from lza_workbench.installer.versions import normalize_lza_version
 from lza_workbench.utils.output import print_info, print_notice
 from lza_workbench.workspace.models import WorkspaceConfig
 
@@ -36,7 +38,11 @@ def resolve_installer_template(
                     / INSTALLER_TEMPLATE_FILENAME
                 )
             )
-            if packaged.exists():
+            if (
+                normalize_lza_version(config.lza.version)
+                == normalize_lza_version(PACKAGED_INSTALLER_VERSION)
+                and packaged.exists()
+            ):
                 return packaged
             return template_path
 

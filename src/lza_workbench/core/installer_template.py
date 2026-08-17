@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from lza_workbench.core.errors import LzaError
+from lza_workbench.installer.versions import normalize_lza_version
 from lza_workbench.utils.output import print_info
 
 PACKAGED_INSTALLER_VERSION = "v1.16.0"
@@ -45,11 +46,25 @@ def resolve_installer_template(
         with urllib.request.urlopen(req, timeout=15) as response:
             return response.read().decode("utf-8")
     except Exception as exc:
-        if fallback_version is not None and fallback_path is not None and fallback_path.is_file():
-            return fallback_path.read_text(encoding="utf-8")
+        if fallback_version is not None:
+            norm_requested = normalize_lza_version(fallback_version)
+            norm_packaged = normalize_lza_version(PACKAGED_INSTALLER_VERSION)
+            if norm_requested == norm_packaged:
+                if fallback_path is not None and fallback_path.is_file():
+                    return fallback_path.read_text(encoding="utf-8")
+                raise LzaError(
+                    f"Unable to download installer template from {url} and packaged fallback "
+                    f"template for version {fallback_version} was not found at {fallback_path}."
+                ) from exc
+
+            raise LzaError(
+                f"Unable to download installer template for {fallback_version} from {url} and no "
+                f"local fallback template is available for this version (packaged version: "
+                f"{PACKAGED_INSTALLER_VERSION})."
+            ) from exc
 
         raise LzaError(
-            f"Unable to download installer template from {url} and no local template was found."
+            f"Unable to download installer template from {url} and fallback is disabled."
         ) from exc
 
 

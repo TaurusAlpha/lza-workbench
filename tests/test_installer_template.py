@@ -47,3 +47,76 @@ def test_parameter_validation_uses_template_allowed_values() -> None:
             {"RepositorySource": "s3"},
             {"RepositorySource": {"AllowedValues": ["github", "codecommit"]}},
         )
+
+
+def test_core_resolve_installer_template_matching_fallback(tmp_path: Path) -> None:
+    """When download fails and requested version matches packaged version, fallback is used."""
+    from lza_workbench.core.installer_template import resolve_installer_template as core_resolve
+
+    fake_fallback = tmp_path / "fallback.template"
+    fake_fallback.write_text('{"Description": "Packaged v1.16.0"}', encoding="utf-8")
+
+    content = core_resolve(
+        url="http://invalid.invalid/template",
+        fallback_version="v1.16.0",
+        fallback_path=fake_fallback,
+    )
+    assert content == '{"Description": "Packaged v1.16.0"}'
+
+
+def test_core_resolve_installer_template_mismatched_fallback(tmp_path: Path) -> None:
+    """When download fails and requested version differs from packaged version, error is raised."""
+    from lza_workbench.core.installer_template import resolve_installer_template as core_resolve
+
+    fake_fallback = tmp_path / "fallback.template"
+    fake_fallback.write_text('{"Description": "Packaged v1.16.0"}', encoding="utf-8")
+
+    with pytest.raises(LzaError, match="no local fallback template is available for this version"):
+        core_resolve(
+            url="http://invalid.invalid/template",
+            fallback_version="v1.15.5",
+            fallback_path=fake_fallback,
+        )
+
+
+def test_core_resolve_installer_template_unavailable_fallback(tmp_path: Path) -> None:
+    """When download fails, version matches, but fallback file is missing, error is raised."""
+    from lza_workbench.core.installer_template import resolve_installer_template as core_resolve
+
+    non_existent = tmp_path / "does_not_exist.template"
+
+    with pytest.raises(
+        LzaError, match="packaged fallback template for version v1.16.0 was not found"
+    ):
+        core_resolve(
+            url="http://invalid.invalid/template",
+            fallback_version="v1.16.0",
+            fallback_path=non_existent,
+        )
+
+
+def test_core_resolve_installer_template_disabled_fallback() -> None:
+    """When fallback_version is None, download failure raises error without checking fallback."""
+    from lza_workbench.core.installer_template import resolve_installer_template as core_resolve
+
+    with pytest.raises(LzaError, match="fallback is disabled"):
+        core_resolve(
+            url="http://invalid.invalid/template",
+            fallback_version=None,
+        )
+
+
+def test_resolve_installer_template_dry_run_mismatched_version(tmp_path: Path) -> None:
+    """In dry run, when local template is missing and version differs, do not return packaged."""
+    workspace_dir = tmp_path / "example"
+    (workspace_dir / "aws-accelerator-installer").mkdir(parents=True)
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Example", slug="example"),
+        aws=AwsConfig(profile="example", region="us-east-1"),
+        lza=LzaConfig(version="v1.15.5"),
+    )
+
+    resolved = resolve_installer_template(workspace_dir, config, dry_run=True)
+    assert not resolved.exists()
+    assert resolved.name == INSTALLER_TEMPLATE_FILENAME
+
