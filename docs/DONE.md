@@ -25,19 +25,14 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 ### AWS Integration Architecture Refactoring
 - Centralized boto3 session and client creation into `AwsClientFactory` across all service modules, eliminating direct `boto3` calls outside the factory.
 
-### Modular Refactor Milestones
-- Split workspace models, configuration/state persistence, setup, path handling, and readiness
-  into the `workspace` package and removed `core/workspace.py`.
-- Added shared installer modules for version conversion, configuration validation, parameter
-  mapping, template handling, planning, deployment stages, and status calculations.
-- Removed persisted AWS access keys, documented external authentication, and added a shared AWS
-  execution-context resolver with account checks for AWS-mutating workflows.
-- Decomposed installer deployment, rejected unsafe CloudFormation states, and made CodeCommit
-  population an explicit manual prerequisite.
-- Shared configuration archive, location, and state-update logic between upload and download.
-- Added structured status results, fixed pipeline execution-state field usage, and renamed status
-  modules to concise public names.
-- Moved packaged installer templates, workspace examples, and starter customer configuration into
-  the `resources` hierarchy.
-- Removed obsolete status compatibility modules and added architecture checks for direct
-  Typer/Rich imports and cross-command imports.
+### Modular Architecture Refactoring (v0.14.0)
+- **Layering & Separation**: Established strict unidirectional architecture `cli -> workflows -> features/AWS`. Workflows and domain modules are completely decoupled from CLI/presentation frameworks (`rich`, `typer`).
+- **Workflows Extraction**: Extracted pure, typed workflows returning structured results for workspace initialization (`workflows/workspace_init.py`), workspace import (`workflows/workspace_import.py`), configuration operations (`workflows/config_download.py`, `workflows/config_upload.py`), installer operations (`workflows/installer_plan.py`, `workflows/installer_deploy.py`), and status queries (`workflows/status_*.py`).
+- **CLI Package**: Consolidated interactive prompting, confirmation handlers, Rich panel/table rendering, and CLI command definitions under `lza_workbench.cli`.
+- **Durable Error Ownership**: Consolidated application error definitions in `errors.py`.
+- **Feature Packages**: Reorganized domain models and schemas into owning packages (`workspace`, `installer`, `config`, `aws`).
+- **Safe Defaults & Fixes**: Restored safe config download archive defaults, honored exact configuration archive keys, ensured proper installer-plan readiness, restricted installer template fallback by version, failed closed on unexpected CodeCommit errors, and primed source credentials before role assumption.
+- **Architectural Tests**: Added AST-based test suite verifying strict layer boundaries and preventing domain/workflow modules from importing presentation frameworks or higher layers.
+- **Removed Legacy Layers**: Deleted deprecated `commands/`, `core/`, `utils/`, and root shim modules.
+
+
