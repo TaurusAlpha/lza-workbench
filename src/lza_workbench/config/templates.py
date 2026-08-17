@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 
 from lza_workbench.errors import LzaError
-from lza_workbench.utils.output import print_warning
 
 DEFAULT_TEMPLATE_SOURCE = "default"
 REQUIRED_TEMPLATE_FILES = (
@@ -53,7 +53,9 @@ def resolve_template_source(template_source: str) -> ResolvedTemplateSource:
     )
 
 
-def validate_template(template_config_dir: Path) -> None:
+def validate_template(
+    template_config_dir: Path, *, on_warning: Callable[[str], None] | None = None
+) -> None:
     """Validate that an aws-accelerator-config template has required files."""
     if not template_config_dir.is_dir():
         raise LzaError(f"Template directory does not exist: {template_config_dir}")
@@ -68,9 +70,9 @@ def validate_template(template_config_dir: Path) -> None:
     if missing_required:
         missing_list = ", ".join(missing_required)
         raise LzaError(f"Template is missing required files: {missing_list}")
-    if missing_optional:
+    if missing_optional and on_warning is not None:
         missing_list = ", ".join(missing_optional)
-        print_warning(f"Template is missing optional files: {missing_list}")
+        on_warning(f"Template is missing optional files: {missing_list}")
 
 
 def _bundled_default_template_dir() -> Path:

@@ -7,15 +7,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.installer.planning import InstallerPlanResult
 from lza_workbench.workflows.installer_plan import plan_installer_workflow
+from lza_workbench.workflows.workspace_init import init_workspace_workflow
 
 
 @pytest.fixture
 def sample_workspace(tmp_path: Path) -> Path:
     ws_dir = tmp_path / "sample"
-    run_init(
+    init_workspace_workflow(
         customer_name="Sample Corp",
         workspace_dir=ws_dir,
         aws_profile="dev-profile",
@@ -23,7 +23,6 @@ def sample_workspace(tmp_path: Path) -> Path:
         skip_aws_check=True,
         dry_run=False,
         force=False,
-        interactive=False,
     )
     from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 

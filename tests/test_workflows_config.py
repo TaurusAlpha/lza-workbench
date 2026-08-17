@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.errors import LzaError
 from lza_workbench.workflows.config_download import (
     ConfigDownloadResult,
@@ -16,20 +15,20 @@ from lza_workbench.workflows.config_upload import (
     ConfigUploadResult,
     upload_configuration_workflow,
 )
+from lza_workbench.workflows.workspace_init import init_workspace_workflow
 
 
 @pytest.fixture
 def initialized_workspace(tmp_path: Path) -> Path:
     ws_dir = tmp_path / "acme"
-    run_init(
+    init_workspace_workflow(
         customer_name="Acme",
         workspace_dir=ws_dir,
-        aws_profile="test-profile",
+        aws_profile="dev-profile",
         aws_region="us-east-1",
         skip_aws_check=True,
         dry_run=False,
         force=False,
-        interactive=False,
     )
     from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 

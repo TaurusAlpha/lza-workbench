@@ -15,6 +15,7 @@ from lza_workbench.cli.presentation import (
 )
 from lza_workbench.workflows.status_pipeline import (
     PipelineStatusResult,
+    get_pipeline_status_workflow,
 )
 
 
@@ -62,6 +63,5 @@ def status_pipeline_command(
     target_dir: Path | None = None,
 ) -> None:
     """Query AWS CodePipeline state for current workspace pipelines."""
-    from lza_workbench.commands.status.pipeline import run_pipeline_status
-
-    run_pipeline_status(target_dir=target_dir)
+    result = get_pipeline_status_workflow(target_dir=target_dir)
+    render_pipeline_status(result, has_state=result.has_state)

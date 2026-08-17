@@ -12,7 +12,9 @@ from pydantic import ValidationError
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackStatusResult
 from lza_workbench.aws.codecommit import CodeCommitPlanResult
 from lza_workbench.aws.context import AwsExecutionContext
-from lza_workbench.commands.installer_deploy import run_installer_deploy
+from lza_workbench.cli.commands.installer_deploy import (
+    installer_deploy_command as run_installer_deploy,
+)
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.deployment import (
     inspect_installer_source,
@@ -102,8 +104,8 @@ def test_missing_required_params_failure(tmp_path: Path) -> None:
         run_installer_deploy(target_dir=ws_dir)
 
 
-@patch("lza_workbench.commands.installer_deploy.resolve_aws_execution_context")
-@patch("lza_workbench.commands.installer_deploy.inspect_cloudformation_stack")
+@patch("lza_workbench.workflows.installer_deploy.resolve_aws_execution_context")
+@patch("lza_workbench.workflows.installer_deploy.inspect_cloudformation_stack")
 def test_installer_deploy_dry_run(
     mock_inspect_cfn: MagicMock,
     mock_resolve_context: MagicMock,
@@ -134,11 +136,11 @@ def test_installer_deploy_dry_run(
     assert state.installer_stack_id is None
 
 
-@patch("lza_workbench.commands.installer_deploy.stream_cloudformation_stack_events")
-@patch("lza_workbench.commands.installer_deploy.deploy_cloudformation_stack")
-@patch("lza_workbench.commands.installer_deploy.inspect_cloudformation_stack")
+@patch("lza_workbench.workflows.installer_deploy.stream_cloudformation_stack_events")
+@patch("lza_workbench.workflows.installer_deploy.deploy_cloudformation_stack")
+@patch("lza_workbench.workflows.installer_deploy.inspect_cloudformation_stack")
 @patch("lza_workbench.installer.deployment.inspect_codecommit_repository")
-@patch("lza_workbench.commands.installer_deploy.resolve_aws_execution_context")
+@patch("lza_workbench.workflows.installer_deploy.resolve_aws_execution_context")
 def test_installer_deploy_success(
     mock_resolve_context: MagicMock,
     mock_inspect_cc: MagicMock,
@@ -198,7 +200,7 @@ def test_installer_deploy_success(
 
 
 @patch("lza_workbench.installer.deployment.inspect_codecommit_repository")
-@patch("lza_workbench.commands.installer_deploy.resolve_aws_execution_context")
+@patch("lza_workbench.workflows.installer_deploy.resolve_aws_execution_context")
 def test_installer_deploy_requires_manually_synchronized_codecommit_source(
     mock_resolve_context: MagicMock,
     mock_inspect_cc: MagicMock,

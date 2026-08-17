@@ -11,11 +11,11 @@ import pytest
 import typer
 
 from lza_workbench.cli import main
-from lza_workbench.commands.config_download import (
-    run_download_config,
+from lza_workbench.cli.commands.config_download import (
+    config_download_command as run_download_config,
 )
-from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.errors import LzaError
+from lza_workbench.workflows.workspace_init import init_workspace_workflow
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.paths import resolve_workspace_dir
 from lza_workbench.workspace.state import load_workspace_state
@@ -24,7 +24,7 @@ from lza_workbench.workspace.state import load_workspace_state
 @pytest.fixture
 def workspace_dir(tmp_path: Path) -> Path:
     target = tmp_path / "test-customer"
-    run_init(
+    init_workspace_workflow(
         customer_name="Test Customer",
         workspace_dir=target,
         aws_profile="test-profile",
@@ -33,7 +33,6 @@ def workspace_dir(tmp_path: Path) -> Path:
         dry_run=False,
         force=False,
         skip_aws_check=True,
-        interactive=False,
     )
     config = load_workspace_config(target)
     config.configuration.repository.type = "s3"

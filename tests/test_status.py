@@ -8,18 +8,24 @@ from typer.testing import CliRunner
 from lza_workbench.aws.cloudformation import CfnStackStatusResult
 from lza_workbench.aws.context import AwsExecutionContext
 from lza_workbench.cli import app
-from lza_workbench.commands.status.config import run_config_status
-from lza_workbench.commands.status.installer import (
-    prepare_installer_status,
-    sync_installer_config,
-    sync_installer_state,
+from lza_workbench.cli.commands.status_config import (
+    status_config_command as run_config_status,
 )
-from lza_workbench.commands.status.main import run_root_status
-from lza_workbench.commands.status.pipeline import run_pipeline_status
+from lza_workbench.cli.commands.status_pipeline import (
+    status_pipeline_command as run_pipeline_status,
+)
+from lza_workbench.cli.commands.status_root import (
+    status_root_command as run_root_status,
+)
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.status import (
     calculate_configuration_drift,
     calculate_state_alignment,
+)
+from lza_workbench.workflows.status_installer import (
+    prepare_installer_status,
+    sync_installer_config,
+    sync_installer_state,
 )
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.models import (
@@ -208,11 +214,11 @@ def test_pipeline_status_displays_separate_execution_ids(tmp_path, monkeypatch):
         region="us-east-1", factory=MagicMock(), identity=None, error="No credentials"
     )
     monkeypatch.setattr(
-        "lza_workbench.commands.status.pipeline.load_workspace_context",
+        "lza_workbench.workflows.status_pipeline.load_workspace_context",
         lambda *_args, **_kwargs: mock_ctx,
     )
     monkeypatch.setattr(
-        "lza_workbench.commands.status.pipeline.resolve_aws_execution_context",
+        "lza_workbench.workflows.status_pipeline.resolve_aws_execution_context",
         lambda _: aws_context,
     )
 
@@ -223,8 +229,8 @@ def test_pipeline_status_displays_separate_execution_ids(tmp_path, monkeypatch):
     assert "config-execution" in result.output
 
 
-@patch("lza_workbench.commands.status.main.get_cloudformation_stack_status")
-@patch("lza_workbench.commands.status.main.resolve_aws_execution_context")
+@patch("lza_workbench.workflows.status_root.get_cloudformation_stack_status")
+@patch("lza_workbench.workflows.status_root.resolve_aws_execution_context")
 def test_run_root_status(mock_resolve_context, mock_get_cfn, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "lza-workspace.yaml").write_text(
@@ -244,7 +250,7 @@ def test_run_root_status(mock_resolve_context, mock_get_cfn, tmp_path, monkeypat
     run_root_status(target_dir=tmp_path)
 
 
-@patch("lza_workbench.commands.status.config.load_workspace_context")
+@patch("lza_workbench.workflows.status_config.load_workspace_context")
 def test_run_config_status(mock_load_ctx, tmp_path):
     config = WorkspaceConfig(
         customer=CustomerConfig(name="Test Customer", slug="test-customer"),
@@ -260,7 +266,7 @@ def test_run_config_status(mock_load_ctx, tmp_path):
     run_config_status(target_dir=tmp_path)
 
 
-@patch("lza_workbench.commands.status.pipeline.resolve_aws_execution_context")
+@patch("lza_workbench.workflows.status_pipeline.resolve_aws_execution_context")
 def test_run_pipeline_status(mock_resolve_context, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "lza-workspace.yaml").write_text(
@@ -277,10 +283,10 @@ def test_run_pipeline_status(mock_resolve_context, tmp_path, monkeypatch):
     run_pipeline_status(target_dir=tmp_path)
 
 
-@patch("lza_workbench.commands.status.installer.get_cloudformation_stack_status")
-@patch("lza_workbench.commands.status.installer.resolve_aws_execution_context")
-@patch("lza_workbench.commands.status.main.resolve_aws_execution_context")
-@patch("lza_workbench.commands.status.pipeline.resolve_aws_execution_context")
+@patch("lza_workbench.workflows.status_installer.get_cloudformation_stack_status")
+@patch("lza_workbench.workflows.status_installer.resolve_aws_execution_context")
+@patch("lza_workbench.workflows.status_root.resolve_aws_execution_context")
+@patch("lza_workbench.workflows.status_pipeline.resolve_aws_execution_context")
 def test_cli_status_commands(
     mock_pipeline_context,
     mock_main_context,

@@ -6,12 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.commands.workspace_init import (
-    build_workspace_config,
-    resolve_packaged_template,
-    run_init,
+from lza_workbench.cli.commands.workspace_init import (
+    workspace_init_command as run_init,
 )
 from lza_workbench.errors import LzaError
+from lza_workbench.workflows.workspace_init import (
+    build_workspace_config,
+    resolve_packaged_template,
+)
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.paths import resolve_init_workspace_dir
 from lza_workbench.workspace.state import load_workspace_state

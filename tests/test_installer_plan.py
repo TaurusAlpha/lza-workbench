@@ -8,8 +8,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
-from lza_workbench.commands.installer_deploy import run_installer_deploy
-from lza_workbench.commands.installer_plan import run_installer_plan
+from lza_workbench.cli.commands.installer_deploy import (
+    installer_deploy_command as run_installer_deploy,
+)
+from lza_workbench.cli.commands.installer_plan import (
+    installer_plan_command as run_installer_plan,
+)
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.planning import InstallerPlanResult
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
@@ -111,7 +115,9 @@ def test_installer_plan_prepares_result_before_rendering(sample_workspace: Path)
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.commands.installer_plan._render_plan_report") as mock_render,
+        patch(
+            "lza_workbench.cli.commands.installer_plan.render_installer_plan_report"
+        ) as mock_render,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()

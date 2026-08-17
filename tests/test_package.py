@@ -29,8 +29,8 @@ def test_cli_version_option(capsys) -> None:
 
 
 def test_domain_and_aws_modules_do_not_import_cli_presentation_frameworks() -> None:
-    """Keep domain and AWS layers independent from Typer and Rich."""
-    layer_directories = ("aws", "core", "installer", "workspace")
+    """Keep domain, workflow, and AWS layers independent from Typer and Rich."""
+    layer_directories = ("aws", "config", "installer", "workspace", "workflows")
     forbidden_imports = {"rich", "typer"}
     violations: list[tuple[str, int, str]] = []
 
@@ -50,21 +50,38 @@ def test_domain_and_aws_modules_do_not_import_cli_presentation_frameworks() -> N
                             (str(path.relative_to(PROJECT_ROOT)), node.lineno, node.module)
                         )
 
-    assert not violations, f"Domain/AWS modules import presentation frameworks: {violations}"
+    assert (
+        not violations
+    ), f"Domain/AWS/Workflow modules import presentation frameworks: {violations}"
 
 
-def test_command_modules_do_not_import_other_command_modules() -> None:
-    """Keep command workflows independent rather than sharing private command helpers."""
+def test_lower_layers_do_not_import_higher_layers() -> None:
+    """Enforce strict dependency layering: cli -> workflows -> features/AWS."""
+    feature_and_aws_dirs = ("aws", "config", "installer", "workspace")
+    forbidden_for_features = {"lza_workbench.cli", "lza_workbench.workflows"}
+    forbidden_for_workflows = {"lza_workbench.cli"}
+
     violations: list[tuple[str, int, str]] = []
-    commands_dir = SOURCE_ROOT / "commands"
 
-    for path in commands_dir.rglob("*.py"):
+    for directory in feature_and_aws_dirs:
+        for path in (SOURCE_ROOT / directory).glob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    for forbidden in forbidden_for_features:
+                        if node.module == forbidden or node.module.startswith(f"{forbidden}."):
+                            violations.append(
+                                (str(path.relative_to(PROJECT_ROOT)), node.lineno, node.module)
+                            )
+
+    for path in (SOURCE_ROOT / "workflows").glob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module:
-                if node.module.startswith("lza_workbench.commands."):
-                    violations.append(
-                        (str(path.relative_to(PROJECT_ROOT)), node.lineno, node.module)
-                    )
+                for forbidden in forbidden_for_workflows:
+                    if node.module == forbidden or node.module.startswith(f"{forbidden}."):
+                        violations.append(
+                            (str(path.relative_to(PROJECT_ROOT)), node.lineno, node.module)
+                        )
 
-    assert not violations, f"Command modules import other command modules: {violations}"
+    assert not violations, f"Layering violations detected: {violations}"

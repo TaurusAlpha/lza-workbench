@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lza_workbench.aws.cloudformation import CfnStackStatusResult
-from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.workflows.status_config import (
     ConfigurationStatusResult,
     get_config_status_workflow,
@@ -25,12 +24,13 @@ from lza_workbench.workflows.status_root import (
     RootStatusResult,
     get_root_status_workflow,
 )
+from lza_workbench.workflows.workspace_init import init_workspace_workflow
 
 
 @pytest.fixture
 def status_workspace(tmp_path: Path) -> Path:
     ws_dir = tmp_path / "status-corp"
-    run_init(
+    init_workspace_workflow(
         customer_name="Status Corp",
         workspace_dir=ws_dir,
         aws_profile="status-profile",
@@ -38,7 +38,6 @@ def status_workspace(tmp_path: Path) -> Path:
         skip_aws_check=True,
         dry_run=False,
         force=False,
-        interactive=False,
     )
     return ws_dir
 
