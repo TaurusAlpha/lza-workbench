@@ -7,8 +7,6 @@ from pathlib import Path
 from lza_workbench.aws.cloudformation import inspect_cloudformation_stack
 from lza_workbench.aws.codecommit import inspect_codecommit_repository
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.errors import LzaError
-from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import build_installer_cfn_parameters
 from lza_workbench.installer.planning import (
     InstallerPlanResult,
@@ -27,6 +25,10 @@ from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_worksp
 def plan_installer_workflow(
     *,
     target_dir: Path | None = None,
+    management_account_email: str | None = None,
+    log_archive_account_email: str | None = None,
+    audit_account_email: str | None = None,
+    accelerator_prefix: str | None = None,
     dry_run: bool = False,
     no_save: bool = False,
 ) -> InstallerPlanResult:
@@ -34,14 +36,15 @@ def plan_installer_workflow(
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.IMPORTED)
     workspace_dir, config = ctx.workspace_dir, ctx.config
 
-    # Validate required installer configuration parameters in workspace
-    validation = validate_installer_configuration(config)
-    if not validation.is_complete:
-        raise LzaError(
-            f"{len(validation.missing_fields)} required parameter(s) missing from "
-            "lza-workspace.yaml. "
-            "Update lza-workspace.yaml with required values."
-        )
+    # Apply any explicit installer option overrides
+    if management_account_email is not None:
+        config.installer.options.management_account_email = management_account_email
+    if log_archive_account_email is not None:
+        config.installer.options.log_archive_account_email = log_archive_account_email
+    if audit_account_email is not None:
+        config.installer.options.audit_account_email = audit_account_email
+    if accelerator_prefix is not None:
+        config.lza.accelerator_prefix = accelerator_prefix
 
     # Save accepted installer settings if requested and not dry run
     if not no_save and not dry_run:

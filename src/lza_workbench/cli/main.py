@@ -69,13 +69,20 @@ status_app = typer.Typer(
 
 @installer_app.command("plan")
 def installer_plan_command(
+    management_account_email: params.ManagementAccountEmail = None,
+    log_archive_account_email: params.LogArchiveAccountEmail = None,
+    audit_account_email: params.AuditAccountEmail = None,
     dry_run: params.DryRun = False,
     no_save: bool = False,
 ) -> None:
     """Resolve and persist installer configuration, then show the actions required to deploy."""
     run_cli_installer_plan(
+        management_account_email=management_account_email,
+        log_archive_account_email=log_archive_account_email,
+        audit_account_email=audit_account_email,
         dry_run=dry_run,
         no_save=no_save,
+        interactive=_is_interactive(),
     )
 
 

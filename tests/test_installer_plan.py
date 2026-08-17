@@ -66,12 +66,13 @@ def sample_workspace(tmp_path: Path) -> Path:
     return ws_dir
 
 
-def test_missing_parameters_graceful_failure(tmp_path: Path) -> None:
-    """Test that missing required parameters fail gracefully with a clear error."""
+def test_installer_plan_succeeds_with_core_defaults(tmp_path: Path) -> None:
+    """Test that lza installer plan succeeds using core workspace defaults."""
     ws_dir = tmp_path / "incomplete-ws"
     ws_dir.mkdir(parents=True, exist_ok=True)
     (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
     (ws_dir / "aws-accelerator-installer").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
 
     config = WorkspaceConfig(
         customer=CustomerConfig(name="Incomplete", slug="incomplete"),
@@ -84,14 +85,78 @@ def test_missing_parameters_graceful_failure(tmp_path: Path) -> None:
     template_file = ws_dir / "aws-accelerator-installer" / "AWSAccelerator-InstallerStack.template"
     template_file.write_text('{"Description": "Installer", "Parameters": {}}', encoding="utf-8")
 
-    with pytest.raises(LzaError) as exc_info:
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = MagicMock()
         run_installer_plan(
-            dry_run=False,
-            no_save=False,
+            dry_run=True,
+            no_save=True,
             target_dir=ws_dir,
+            interactive=False,
+            management_account_email="mgmt@example.com",
+            log_archive_account_email="log@example.com",
+            audit_account_email="audit@example.com",
         )
 
-    assert "missing" in str(exc_info.value).lower()
+
+def test_installer_plan_prompts_and_updates_workspace_config(tmp_path: Path) -> None:
+    """Installer plan prompts/receives missing required parameters and updates config."""
+    ws_dir = tmp_path / "prompt-ws"
+    ws_dir.mkdir(parents=True, exist_ok=True)
+    (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-installer").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Prompt Customer", slug="prompt-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+    write_workspace_config(ws_dir, config)
+    write_workspace_state(ws_dir, WorkspaceState.from_config(config))
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = MagicMock()
+        run_installer_plan(
+            target_dir=ws_dir,
+            management_account_email="mgmt@prompted.com",
+            log_archive_account_email="log@prompted.com",
+            audit_account_email="audit@prompted.com",
+            dry_run=False,
+            no_save=False,
+            interactive=True,
+        )
+
+    updated_config = load_workspace_config(ws_dir)
+    assert updated_config.installer.options.management_account_email == "mgmt@prompted.com"
+    assert updated_config.installer.options.log_archive_account_email == "log@prompted.com"
+    assert updated_config.installer.options.audit_account_email == "audit@prompted.com"
+
+
+def test_installer_plan_non_interactive_raises_on_missing_required(tmp_path: Path) -> None:
+    """Non-interactive installer plan raises an error if required parameters are missing."""
+    ws_dir = tmp_path / "non-interactive-ws"
+    ws_dir.mkdir(parents=True, exist_ok=True)
+    (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Non Interactive", slug="non-interactive"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+    write_workspace_config(ws_dir, config)
+    write_workspace_state(ws_dir, WorkspaceState.from_config(config))
+
+    with pytest.raises(LzaError, match="Management Account Email is required"):
+        run_installer_plan(target_dir=ws_dir, interactive=False)
 
 
 def test_installer_plan_no_save(sample_workspace: Path) -> None:
@@ -213,8 +278,8 @@ def test_installer_plan_cfn_update_detected(sample_workspace: Path) -> None:
         mock_cfn.describe_stacks.assert_called_once_with(StackName="AWSAccelerator-InstallerStack")
 
 
-def test_installer_plan_imported_workspace_reports_missing_fields(tmp_path: Path) -> None:
-    """Imported workspace loads and reports specific missing installer fields during plan."""
+def test_installer_plan_imported_workspace_succeeds(tmp_path: Path) -> None:
+    """Imported workspace loads and executes installer plan using core workspace parameters."""
     ws_dir = tmp_path / "imported-ws"
     ws_dir.mkdir(parents=True, exist_ok=True)
     (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
@@ -228,10 +293,20 @@ def test_installer_plan_imported_workspace_reports_missing_fields(tmp_path: Path
     write_workspace_config(ws_dir, config)
     write_workspace_state(ws_dir, WorkspaceState.from_config(config))
 
-    with pytest.raises(
-        LzaError, match="required parameter\\(s\\) missing from lza-workspace\\.yaml"
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
     ):
-        run_installer_plan(target_dir=ws_dir)
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = MagicMock()
+        run_installer_plan(
+            target_dir=ws_dir,
+            management_account_email="mgmt@example.com",
+            log_archive_account_email="log@example.com",
+            audit_account_email="audit@example.com",
+            dry_run=True,
+            no_save=True,
+        )
 
 
 def test_installer_deploy_refuses_imported_workspace(tmp_path: Path) -> None:

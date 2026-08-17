@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from lza_workbench.cli import params
+from lza_workbench.cli.input import value_or_prompt
 from lza_workbench.cli.output import (
     console,
     print_info,
@@ -20,6 +21,7 @@ from lza_workbench.workflows.installer_plan import (
     InstallerPlanResult,
     plan_installer_workflow,
 )
+from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 
 
 def render_installer_plan_report(plan: InstallerPlanResult) -> None:
@@ -105,16 +107,45 @@ def render_installer_plan_report(plan: InstallerPlanResult) -> None:
 
 
 def installer_plan_command(
+    management_account_email: str | None = None,
+    log_archive_account_email: str | None = None,
+    audit_account_email: str | None = None,
     dry_run: params.DryRun = False,
     no_save: bool = False,
     target_dir: Path | None = None,
+    interactive: bool = True,
 ) -> None:
     """Resolve installer config from workspace and show planned deployment actions."""
+    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.IMPORTED)
+    config = ctx.config
+
+    resolved_mgmt_email = value_or_prompt(
+        "Management Account Email",
+        management_account_email or config.installer.options.management_account_email,
+        default=None,
+        interactive=interactive,
+    )
+    resolved_log_email = value_or_prompt(
+        "Log Archive Account Email",
+        log_archive_account_email or config.installer.options.log_archive_account_email,
+        default=None,
+        interactive=interactive,
+    )
+    resolved_audit_email = value_or_prompt(
+        "Audit Account Email",
+        audit_account_email or config.installer.options.audit_account_email,
+        default=None,
+        interactive=interactive,
+    )
+
     if not no_save and not dry_run:
         print_info("Installer configuration verified in lza-workspace.yaml", dim=True)
 
     plan_result = plan_installer_workflow(
         target_dir=target_dir,
+        management_account_email=resolved_mgmt_email,
+        log_archive_account_email=resolved_log_email,
+        audit_account_email=resolved_audit_email,
         dry_run=dry_run,
         no_save=no_save,
     )

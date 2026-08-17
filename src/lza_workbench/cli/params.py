@@ -134,3 +134,30 @@ SyncConfig = Annotated[
         help="Synchronize lza-workspace.yaml with deployed CloudFormation installer configuration.",
     ),
 ]
+
+ManagementAccountEmail = Annotated[
+    str | None,
+    typer.Option(
+        "--management-account-email",
+        "-m",
+        help="Management (primary) account email address.",
+    ),
+]
+
+LogArchiveAccountEmail = Annotated[
+    str | None,
+    typer.Option(
+        "--log-archive-account-email",
+        "-l",
+        help="Log Archive account email address.",
+    ),
+]
+
+AuditAccountEmail = Annotated[
+    str | None,
+    typer.Option(
+        "--audit-account-email",
+        "-a",
+        help="Security Audit account email address.",
+    ),
+]
