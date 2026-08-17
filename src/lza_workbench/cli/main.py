@@ -23,13 +23,17 @@ from lza_workbench.cli.commands.installer_deploy import (
 from lza_workbench.cli.commands.installer_plan import (
     installer_plan_command as run_cli_installer_plan,
 )
+from lza_workbench.cli.commands.workspace_import import (
+    workspace_import_command as run_cli_workspace_import,
+)
+from lza_workbench.cli.commands.workspace_init import (
+    workspace_init_command as run_cli_workspace_init,
+)
 from lza_workbench.cli.presentation import print_error
 from lza_workbench.commands.status.config import run_config_status
 from lza_workbench.commands.status.installer import run_installer_status
 from lza_workbench.commands.status.main import run_root_status
 from lza_workbench.commands.status.pipeline import run_pipeline_status
-from lza_workbench.commands.workspace_import import run_import
-from lza_workbench.commands.workspace_init import run_init
 from lza_workbench.errors import LzaError
 
 app = typer.Typer(
@@ -152,12 +156,12 @@ def init_command(
 ) -> None:
     """Create a new customer-specific LZA workspace."""
 
-    run_init(
+    run_cli_workspace_init(
         customer_name=customer_name,
         workspace_dir=workspace_dir,
         aws_auth_type=aws_auth_type,
-        aws_profile=aws_profile or None,
-        aws_region=aws_region or None,
+        aws_profile=aws_profile,
+        aws_region=aws_region,
         lza_version=lza_version,
         dry_run=dry_run,
         force=force,
@@ -181,13 +185,13 @@ def import_command(
 ) -> None:
     """Adopt an existing customer-owned LZA configuration."""
 
-    run_import(
+    run_cli_workspace_import(
         customer_name=customer_name,
         workspace_dir=workspace_dir,
         config_dir=config_dir,
         aws_auth_type=aws_auth_type,
-        aws_profile=aws_profile or None,
-        aws_region=aws_region or None,
+        aws_profile=aws_profile,
+        aws_region=aws_region,
         lza_version=lza_version,
         dry_run=dry_run,
         force=force,
