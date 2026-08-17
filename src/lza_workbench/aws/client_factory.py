@@ -7,10 +7,6 @@ from typing import TYPE_CHECKING, Any
 import boto3
 
 from lza_workbench.errors import LzaError
-from lza_workbench.utils.output import (
-    print_info,
-    print_warning,
-)
 
 if TYPE_CHECKING:
     from lza_workbench.workspace.models import AwsConfig
@@ -113,16 +109,10 @@ class AwsClientFactory:
                 "user_id": str(response.get("UserId", "")),
             }
         except Exception as exc:
-            print_warning(
-                f"AWS authentication validation failed for '{auth_descr}'. "
-                "AWS operations might be limited."
-            )
+            msg = f"AWS authentication validation failed for '{auth_descr}': {exc}."
             if self.profile:
-                print_info(
-                    message="Run the following command to authenticate:\n"
-                    f"  aws sso login --profile {self.profile}"
-                )
-            raise LzaError(f"AWS authentication validation failed for {auth_descr}: {exc}") from exc
+                msg += f" Run 'aws sso login --profile {self.profile}' to authenticate."
+            raise LzaError(msg) from exc
 
     def get_client(self, service_name: str) -> Any:
         """Create a boto3 client for the specified AWS service."""

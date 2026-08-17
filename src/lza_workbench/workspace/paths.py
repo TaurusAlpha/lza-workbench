@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from lza_workbench.errors import LzaError
-from lza_workbench.utils.helpers import normalize_customer_slug
 from lza_workbench.workspace.config import WORKSPACE_CONFIG_FILE
+
+
+def normalize_customer_slug(customer_name: str) -> str:
+    """Normalize a customer name into a filesystem-safe slug."""
+    slug = customer_name.strip().lower()
+    slug = re.sub(r"[\s_]+", "-", slug)
+    slug = re.sub(r"[^a-z0-9-]+", "", slug)
+    slug = re.sub(r"-+", "-", slug).strip("-")
+    if not slug:
+        raise ValueError("Customer name does not produce a valid workspace slug.")
+    return slug
 
 
 def normalize_path(path: Path) -> Path:
