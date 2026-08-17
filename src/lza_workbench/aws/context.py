@@ -26,11 +26,14 @@ def resolve_aws_execution_context(
     validate_identity: bool = True,
     require_identity: bool = False,
     require_expected_account: bool = False,
+    prime_credentials: bool = False,
 ) -> AwsExecutionContext:
     """Resolve profile/role/region once and optionally validate the target account."""
     profile = (profile_override or aws_config.profile or "").strip() or None
     resolved_config = aws_config.model_copy(update={"profile": profile})
-    factory = AwsClientFactory.from_aws_config(resolved_config)
+    factory = AwsClientFactory.from_aws_config(
+        resolved_config, prime_credentials=prime_credentials
+    )
     identity: dict[str, str] | None = None
     error: str | None = None
 

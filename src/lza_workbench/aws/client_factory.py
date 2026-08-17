@@ -24,36 +24,66 @@ class AwsClientFactory:
         profile: str | None = None,
         region: str | None = None,
         role_arn: str | None = None,
+        prime_credentials: bool = False,
     ) -> None:
         self.profile = (profile or "").strip() or None
         self.region = (region or "").strip() or "us-east-1"
         self.role_arn = (role_arn or "").strip() or None
+        self.prime_credentials = prime_credentials
         self._session: boto3.Session | None = None
         self._source_session: boto3.Session | None = None
         self._primed: bool = False
 
     @classmethod
-    def from_aws_config(cls, aws_config: AwsConfig) -> AwsClientFactory:
+    def from_aws_config(
+        cls, aws_config: AwsConfig, prime_credentials: bool = False
+    ) -> AwsClientFactory:
         """Create factory instance from an AwsConfig model."""
         return cls(
             profile=aws_config.profile,
             region=aws_config.region,
             role_arn=aws_config.role_arn,
+            prime_credentials=prime_credentials,
         )
 
-    def get_session(self) -> boto3.Session:
-        """Get or create the cached boto3 Session."""
-        if self._session is None:
+    def _get_source_session(self) -> boto3.Session:
+        """Get or create the source session before any role assumption."""
+        if self._source_session is None:
             kwargs: dict[str, Any] = {}
             if self.profile:
                 kwargs["profile_name"] = self.profile
             if self.region:
                 kwargs["region_name"] = self.region
             self._source_session = boto3.Session(**kwargs)
+        return self._source_session
+
+    def _prime_source_credentials(self) -> None:
+        """Optionally prime source session credentials using global us-east-1 STS.
+
+        Opt-in regional STS endpoints (e.g. il-central-1) can fail to assume roles directly
+        from SSO tokens unless credentials are primed first via global STS (us-east-1).
+        """
+        if self._primed or not self.prime_credentials:
+            return
+        source_session = self._get_source_session()
+        try:
+            sts_global = source_session.client("sts", region_name="us-east-1")
+            sts_global.get_caller_identity()
+            self._primed = True
+        except Exception:
+            # Fall back if us-east-1 priming fails
+            pass
+
+    def get_session(self) -> boto3.Session:
+        """Get or create the cached boto3 Session."""
+        if self._session is None:
+            source_session = self._get_source_session()
             if not self.role_arn:
-                self._session = self._source_session
+                self._session = source_session
             else:
-                sts = self._source_session.client("sts", region_name=self.region)
+                if self.prime_credentials:
+                    self._prime_source_credentials()
+                sts = source_session.client("sts", region_name=self.region)
                 response = sts.assume_role(
                     RoleArn=self.role_arn,
                     RoleSessionName="lza-workbench",
@@ -68,28 +98,12 @@ class AwsClientFactory:
 
         return self._session
 
-    def _prime_session_credentials(self) -> None:
-        """Warm up assumed-role session credentials using global us-east-1 STS.
-
-        Opt-in regional STS endpoints (e.g. il-central-1) can fail to assume roles directly
-        from SSO tokens unless credentials are primed first via global STS (us-east-1).
-        """
-        if self._primed:
-            return
-        session = self.get_session()
-        try:
-            sts_global = session.client("sts", region_name="us-east-1")
-            sts_global.get_caller_identity()
-            self._primed = True
-        except Exception:
-            # Fall back if us-east-1 fails
-            pass
-
     def validate_identity(self) -> dict[str, str]:
         """Validate AWS caller identity using STS GetCallerIdentity."""
         auth_descr = self.role_arn or self.profile or "default"
         try:
-            self._prime_session_credentials()
+            if not self.role_arn and self.prime_credentials:
+                self._prime_source_credentials()
             session = self.get_session()
             sts = session.client("sts", region_name=self.region)
             response = sts.get_caller_identity()
@@ -112,6 +126,5 @@ class AwsClientFactory:
 
     def get_client(self, service_name: str) -> Any:
         """Create a boto3 client for the specified AWS service."""
-        self._prime_session_credentials()
         session = self.get_session()
         return session.client(service_name, region_name=self.region)

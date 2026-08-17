@@ -90,10 +90,7 @@ def test_aws_client_factory_reuses_session_across_sts_and_services() -> None:
 
 def test_validate_identity_success() -> None:
     """Verify that caller identity is returned on success."""
-    with (
-        patch("boto3.Session") as mock_session_cls,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory._prime_session_credentials"),
-    ):
+    with patch("boto3.Session") as mock_session_cls:
         mock_session_instance = MagicMock()
         mock_session_cls.return_value = mock_session_instance
 
@@ -114,10 +111,7 @@ def test_validate_identity_success() -> None:
 
 def test_validate_identity_failure_prints_warning_and_command() -> None:
     """Verify that identity check failure prints warning, command, and raises LzaError."""
-    with (
-        patch("boto3.Session") as mock_session_cls,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory._prime_session_credentials"),
-    ):
+    with patch("boto3.Session") as mock_session_cls:
         mock_session_instance = MagicMock()
         mock_session_cls.return_value = mock_session_instance
 
@@ -134,3 +128,95 @@ def test_validate_identity_failure_prints_warning_and_command() -> None:
             factory.validate_identity()
 
         assert "test-profile" in str(excinfo.value)
+
+
+def test_role_assumption_with_prime_credentials_calls_global_sts_first() -> None:
+    """When prime_credentials=True, global STS GetCallerIdentity is called before assume_role."""
+    call_order: list[str] = []
+
+    source_session = MagicMock()
+    assumed_session = MagicMock()
+
+    def session_factory(*args, **kwargs):
+        if "aws_access_key_id" in kwargs:
+            return assumed_session
+        return source_session
+
+    mock_sts_global = MagicMock()
+    mock_sts_regional = MagicMock()
+
+    def get_client(service_name: str, region_name: str | None = None):
+        if service_name == "sts" and region_name == "us-east-1":
+            return mock_sts_global
+        if service_name == "sts":
+            return mock_sts_regional
+        return MagicMock()
+
+    source_session.client.side_effect = get_client
+
+    def global_get_caller_identity():
+        call_order.append("global_sts_get_caller_identity")
+        return {"Account": "111111111111"}
+
+    mock_sts_global.get_caller_identity.side_effect = global_get_caller_identity
+
+    def regional_assume_role(**kwargs):
+        call_order.append(f"assume_role_{kwargs.get('RoleArn')}")
+        return {
+            "Credentials": {
+                "AccessKeyId": "ASIAKEY",
+                "SecretAccessKey": "SECRET",
+                "SessionToken": "TOKEN",
+            }
+        }
+
+    mock_sts_regional.assume_role.side_effect = regional_assume_role
+
+    with patch("boto3.Session", side_effect=session_factory):
+        factory = AwsClientFactory(
+            profile="test-profile",
+            region="il-central-1",
+            role_arn="arn:aws:iam::123456789012:role/Deployer",
+            prime_credentials=True,
+        )
+        session = factory.get_session()
+        assert session == assumed_session
+
+    assert call_order == [
+        "global_sts_get_caller_identity",
+        "assume_role_arn:aws:iam::123456789012:role/Deployer",
+    ]
+
+
+def test_role_assumption_without_prime_credentials_skips_global_sts() -> None:
+    """When prime_credentials=False (default), global STS priming is skipped."""
+    source_session = MagicMock()
+    assumed_session = MagicMock()
+
+    def session_factory(*args, **kwargs):
+        if "aws_access_key_id" in kwargs:
+            return assumed_session
+        return source_session
+
+    mock_sts_regional = MagicMock()
+    mock_sts_regional.assume_role.return_value = {
+        "Credentials": {
+            "AccessKeyId": "ASIAKEY",
+            "SecretAccessKey": "SECRET",
+            "SessionToken": "TOKEN",
+        }
+    }
+    source_session.client.return_value = mock_sts_regional
+
+    with patch("boto3.Session", side_effect=session_factory):
+        factory = AwsClientFactory(
+            profile="test-profile",
+            region="il-central-1",
+            role_arn="arn:aws:iam::123456789012:role/Deployer",
+            prime_credentials=False,
+        )
+        session = factory.get_session()
+        assert session == assumed_session
+
+    source_session.client.assert_called_once_with("sts", region_name="il-central-1")
+

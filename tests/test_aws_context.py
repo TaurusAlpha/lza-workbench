@@ -56,3 +56,18 @@ def test_mutating_resolver_rejects_unexpected_account(mock_from_config: MagicMoc
             require_identity=True,
             require_expected_account=True,
         )
+
+
+@patch("lza_workbench.aws.context.AwsClientFactory.from_aws_config")
+def test_resolver_passes_prime_credentials_flag(mock_from_config: MagicMock) -> None:
+    factory = MagicMock()
+    mock_from_config.return_value = factory
+
+    resolve_aws_execution_context(
+        AwsConfig(profile="selected", region="eu-west-1"),
+        validate_identity=False,
+        prime_credentials=True,
+    )
+
+    assert mock_from_config.call_args.kwargs["prime_credentials"] is True
+
