@@ -17,6 +17,7 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 - **`lza import`**: Adopt existing local `aws-accelerator-config` without modifying customer files, validating layout and generating workspace metadata.
 - **`lza installer init` and `lza installer plan`**: `installer init` collects and persists every parameter in the selected installer template; `installer plan` reuses that configuration to inspect AWS CodeCommit and CloudFormation without modifying AWS resources.
 - **`lza installer deploy`**: Reconcile installer desired state with AWS CloudFormation, execute deployments, track events, and record deployment metadata in `.lza/state.json`.
+- **`lza bootstrap`**: Create or validate AWS prerequisite resources required by LZA Workbench. Idempotently creates/validates the versioned, KMS-encrypted Workbench assets S3 bucket (`s3-lza-workbench-assets-<account-id>-<region>`), presenting planned actions and confirmation, updating `lza-workspace.yaml` and `.lza/state.json`.
 - **`lza config upload`**: Validate configuration placeholders, package customer `aws-accelerator-config`, upload to S3 configuration sources, and log upload state.
 - **`lza config download`**: Download customer configuration from S3 configuration sources with `--dry-run`, optional archive extraction, and operational state updates.
 - **`lza status`**: Single read-only status dashboard for workspace state, installer details, configuration sources, and pipeline execution metadata.

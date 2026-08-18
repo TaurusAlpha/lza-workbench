@@ -8,10 +8,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from lza_workbench.cli import main
 from lza_workbench.cli.commands.config_upload import (
     config_upload_command as run_upload_config,
 )
+from lza_workbench.cli.main import main
 from lza_workbench.errors import LzaError
 from lza_workbench.workflows.workspace_init import init_workspace_workflow
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config

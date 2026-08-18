@@ -189,3 +189,195 @@ def inspect_s3_installer_source(
                 f"Access denied to installer source: s3://{bucket_name}/{object_key}"
             ) from exc
         raise LzaError(f"Unable to inspect installer source: {exc}") from exc
+
+
+def get_workbench_assets_bucket_name(account_id: str, region: str) -> str:
+    """Derive standard LZA Workbench assets bucket name."""
+    clean_account = account_id.strip()
+    clean_region = region.strip()
+    return f"s3-lza-workbench-assets-{clean_account}-{clean_region}"
+
+
+def inspect_s3_bucket(
+    *,
+    client: Any,
+    bucket_name: str,
+) -> dict[str, Any]:
+    """Inspect S3 bucket existence, accessibility, versioning, and server-side encryption."""
+    clean_bucket = bucket_name.strip()
+    try:
+        client.head_bucket(Bucket=clean_bucket)
+    except ClientError as exc:
+        error = exc.response.get("Error", {})
+        code = error.get("Code", "Unknown")
+        if code in {"404", "NoSuchBucket", "NotFound"}:
+            return {
+                "exists": False,
+                "accessible": False,
+                "versioning_enabled": False,
+                "encryption_enabled": False,
+                "kms_encrypted": False,
+            }
+        if code in {"403", "AccessDenied"}:
+            raise LzaError(
+                f"Access denied to S3 bucket '{clean_bucket}'. Check your AWS permissions."
+            ) from exc
+        raise LzaError(f"AWS S3 inspection error on bucket '{clean_bucket}': {exc}") from exc
+    except BotoCoreError as exc:
+        raise LzaError(f"AWS connection/client failure: {exc}") from exc
+
+    versioning_enabled = False
+    try:
+        ver_resp = client.get_bucket_versioning(Bucket=clean_bucket)
+        versioning_enabled = ver_resp.get("Status") == "Enabled"
+    except ClientError:
+        pass
+
+    encryption_enabled = False
+    kms_encrypted = False
+    try:
+        enc_resp = client.get_bucket_encryption(Bucket=clean_bucket)
+        rules = (
+            enc_resp.get("ServerSideEncryptionConfiguration", {}).get("Rules", [])
+        )
+        if rules:
+            encryption_enabled = True
+            for rule in rules:
+                algo = (
+                    rule.get("ApplyServerSideEncryptionByDefault", {}).get("SSEAlgorithm")
+                )
+                if algo == "aws:kms":
+                    kms_encrypted = True
+                    break
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        if code not in {
+            "ServerSideEncryptionConfigurationNotFoundError",
+            "NoSuchServerSideEncryptionRule",
+            "404",
+            "NotFound",
+        }:
+            raise LzaError(
+                f"Failed to check encryption on S3 bucket '{clean_bucket}': {exc}"
+            ) from exc
+
+    return {
+        "exists": True,
+        "accessible": True,
+        "versioning_enabled": versioning_enabled,
+        "encryption_enabled": encryption_enabled,
+        "kms_encrypted": kms_encrypted,
+    }
+
+
+def create_s3_bucket(
+    *,
+    client: Any,
+    bucket_name: str,
+    region: str,
+) -> None:
+    """Create an S3 bucket in the specified region."""
+    clean_bucket = bucket_name.strip()
+    kwargs: dict[str, Any] = {"Bucket": clean_bucket}
+    if region and region != "us-east-1":
+        kwargs["CreateBucketConfiguration"] = {"LocationConstraint": region}
+
+    try:
+        client.create_bucket(**kwargs)
+    except ClientError as exc:
+        error = exc.response.get("Error", {})
+        code = error.get("Code", "Unknown")
+        message = error.get("Message", str(exc))
+        if code == "BucketAlreadyOwnedByYou":
+            return
+        if code == "BucketAlreadyExists":
+            raise LzaError(
+                f"S3 bucket '{clean_bucket}' already exists in another account or region: {message}"
+            ) from exc
+        if code in {"403", "AccessDenied"}:
+            raise LzaError(
+                f"Access denied creating S3 bucket '{clean_bucket}'. Check your AWS permissions."
+            ) from exc
+        raise LzaError(
+            f"AWS connection failure while creating S3 bucket '{clean_bucket}': {exc}"
+        ) from exc
+
+
+def put_s3_bucket_versioning(
+    *,
+    client: Any,
+    bucket_name: str,
+    enabled: bool = True,
+) -> None:
+    """Configure bucket versioning status."""
+    clean_bucket = bucket_name.strip()
+    status = "Enabled" if enabled else "Suspended"
+    try:
+        client.put_bucket_versioning(
+            Bucket=clean_bucket,
+            VersioningConfiguration={"Status": status},
+        )
+    except (ClientError, BotoCoreError) as exc:
+        raise LzaError(
+            f"Failed to configure versioning on S3 bucket '{clean_bucket}': {exc}"
+        ) from exc
+
+
+def put_s3_bucket_encryption(
+    *,
+    client: Any,
+    bucket_name: str,
+    kms_key_id: str | None = None,
+) -> None:
+    """Configure default AWS KMS encryption on an S3 bucket."""
+    clean_bucket = bucket_name.strip()
+    rule_config: dict[str, Any] = {
+        "SSEAlgorithm": "aws:kms",
+    }
+    if kms_key_id:
+        rule_config["KMSMasterKeyID"] = kms_key_id
+
+    try:
+        client.put_bucket_encryption(
+            Bucket=clean_bucket,
+            ServerSideEncryptionConfiguration={
+                "Rules": [
+                    {
+                        "ApplyServerSideEncryptionByDefault": rule_config,
+                        "BucketKeyEnabled": True,
+                    }
+                ]
+            },
+        )
+    except (ClientError, BotoCoreError) as exc:
+        raise LzaError(
+            f"Failed to configure KMS encryption on S3 bucket '{clean_bucket}': {exc}"
+        ) from exc
+
+
+def ensure_s3_workbench_assets_bucket(
+    *,
+    client: Any,
+    bucket_name: str,
+    region: str,
+) -> list[str]:
+    """Ensure the Workbench assets bucket exists, is versioned, and KMS encrypted."""
+    actions_taken: list[str] = []
+    insp = inspect_s3_bucket(client=client, bucket_name=bucket_name)
+
+    if not insp["exists"]:
+        create_s3_bucket(client=client, bucket_name=bucket_name, region=region)
+        actions_taken.append(f"Created S3 bucket '{bucket_name}' in region '{region}'")
+
+    if not insp["versioning_enabled"]:
+        put_s3_bucket_versioning(client=client, bucket_name=bucket_name, enabled=True)
+        actions_taken.append(f"Enabled versioning on S3 bucket '{bucket_name}'")
+
+    if not insp["kms_encrypted"]:
+        put_s3_bucket_encryption(client=client, bucket_name=bucket_name)
+        actions_taken.append(f"Enabled AWS-managed KMS encryption on S3 bucket '{bucket_name}'")
+
+    if not actions_taken:
+        actions_taken.append(f"Reused existing S3 assets bucket '{bucket_name}'")
+
+    return actions_taken

@@ -82,6 +82,7 @@ class WorkspaceConfig(WorkspaceModel):
     schema_version: int = 2
     customer: CustomerConfig
     aws: AwsConfig
+    assets_bucket: str | None = None
     lza: LzaConfig = Field(default_factory=LzaConfig)
     installer: LzaInstaller = Field(default_factory=LzaInstaller)
     configuration: ConfigurationConfig = Field(default_factory=ConfigurationConfig)
@@ -115,8 +116,10 @@ class WorkspaceState(WorkspaceModel):
 
     initialized_at: datetime | None = None
     updated_at: datetime | None = None
+    bootstrapped_at: datetime | None = None
     management_account_id: str | None = None
     caller_arn: str | None = None
+    assets_bucket_name: str | None = None
     installer_stack_id: str | None = None
     installer_stack_status: str | None = None
     installer_stack_updated_at: datetime | None = None

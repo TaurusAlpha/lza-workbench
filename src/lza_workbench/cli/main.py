@@ -38,6 +38,9 @@ from lza_workbench.cli.commands.status_pipeline import (
 from lza_workbench.cli.commands.status_root import (
     status_root_command as run_cli_status_root,
 )
+from lza_workbench.cli.commands.workspace_bootstrap import (
+    workspace_bootstrap_command as run_cli_workspace_bootstrap,
+)
 from lza_workbench.cli.commands.workspace_import import (
     workspace_import_command as run_cli_workspace_import,
 )
@@ -222,6 +225,19 @@ def import_command(
         dry_run=dry_run,
         force=force,
         skip_aws_check=skip_aws_check,
+        interactive=_is_interactive(),
+    )
+
+
+@app.command("bootstrap")
+def bootstrap_command(
+    dry_run: params.DryRun = False,
+    force: params.Force = False,
+) -> None:
+    """Create or validate AWS prerequisite resources required by LZA Workbench."""
+    run_cli_workspace_bootstrap(
+        dry_run=dry_run,
+        force=force,
         interactive=_is_interactive(),
     )
 

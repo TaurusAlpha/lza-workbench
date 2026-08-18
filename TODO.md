@@ -11,6 +11,92 @@ unresolved design decisions, and technical debt.
 - [ ] `lza pipeline watch`
 - [ ] `lza doctor`
 - [ ] `lza installer init`
+- [x] `lza bootstrap`
+
+### `lza bootstrap`
+
+Create or validate AWS prerequisite resources required by LZA Workbench.
+The command can be run at any time after workspace creation and is idempotent.
+Bootstrap is create/validate only. It must never delete resources.
+
+Implementation checklist:
+
+---
+
+Implementation notes:
+
+- The Workbench assets bucket is owned by LZA Workbench.
+- It may be created for both newly initialized and imported workspaces.
+- The bucket may later store installer templates, state, workspace configuration, and other Workbench-managed assets.
+- Bootstrap never deletes or cleans up AWS resources.
+
+### Future `lza bootstrap` enhancements
+
+Bootstrap installer and configuration prerequisites based on the current installer configuration in `lza-workspace.yaml`.
+
+The future implementation should preserve the following behavior:
+
+#### Installer source
+
+- [] `RepositorySource=github`
+  - On init or changed configuration:
+    - Do not create repository resources.
+    - Validate the `accelerator/github-token` secret.
+    - Validate that the configured repository is accessible using the token.
+  - On import:
+    - Validate the retrieved installer parameters.
+    - Validate the secret and repository accessibility.
+    - Do not create resources.
+
+- [] `RepositorySource=codecommit`
+  - On init or changed configuration:
+    - Create or validate the `lza-installer-source` CodeCommit repository in the management account.
+  - On import:
+    - Validate that the configured repository exists and is accessible.
+    - Do not recreate missing imported resources automatically.
+
+- [] `RepositorySource=s3`
+  - On init or changed configuration:
+    - Create or validate the versioned
+      `s3-lza-installer-source-<account-id>-<region>` bucket.
+  - On import:
+    - Validate that the configured bucket exists and is accessible.
+    - Do not recreate missing imported resources automatically.
+  - Keep installer source packaging, upload, and S3-specific installer template synthesis outside bootstrap.
+
+#### Configuration repository
+
+- [] `ConfigurationRepositoryLocation=codecommit`
+  - On init or changed configuration:
+    - Default `UseExistingConfigRepo=true`.
+    - Create or validate the `lza-config-source` CodeCommit repository in the management account.
+    - Default `ExistingConfigRepositoryBranchName` to `main`.
+    - The installer workflow may then push the initial/basic LZA configuration before installer deployment.
+  - On import:
+    - Validate that the configured repository and branch exist and are accessible.
+    - Do not recreate missing imported resources automatically.
+
+- [] `ConfigurationRepositoryLocation=codeconnection`
+  - On init, changed configuration, and import:
+    - Require `ConfigCodeConnectionArn`.
+    - Require the configured repository owner, name, and branch.
+    - Validate that the CodeConnections connection exists and is accessible.
+    - Validate repository accessibility where possible.
+    - Do not create CodeConnections or external repository resources.
+
+- [] `ConfigurationRepositoryLocation=s3`
+  - Treat as a separate LZA-specific configuration workflow.
+  - Do not currently create the LZA-managed
+    `aws-accelerator-config-<account-id>-<region>` bucket during bootstrap.
+  - When importing an existing deployment, validate the discovered bucket and access.
+  - Revisit exact bootstrap behavior when S3 configuration deployment support is implemented.
+
+#### Import and change semantics
+
+- [] Treat resources discovered through `lza installer import` as existing deployment resources.
+- [] Imported resources are validation-only; bootstrap must not recreate or replace them automatically.
+- [] If the user later explicitly changes installer or configuration source settings, treat the new desired resources as newly configured resources and apply the corresponding init/create behavior.
+- [] Bootstrap must never delete old repositories, buckets, branches, connections, or other resources after configuration changes.
 
 ### `lza init`
 
