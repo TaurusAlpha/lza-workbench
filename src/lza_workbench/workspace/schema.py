@@ -42,7 +42,7 @@ class AwsConfig(WorkspaceModel):
 class LzaConfig(WorkspaceModel):
     """Landing Zone Accelerator settings stored in lza-workspace.yaml."""
 
-    version: str = "v1.15.5"
+    version: str = "1.15.5"
     accelerator_prefix: str = Field(
         default="AWSAccelerator",
         max_length=15,

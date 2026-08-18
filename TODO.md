@@ -10,6 +10,7 @@ unresolved design decisions, and technical debt.
 - [ ] `lza pipeline start`
 - [ ] `lza pipeline watch`
 - [ ] `lza doctor`
+- [ ] `lza installer init`
 
 ### `lza init`
 
@@ -27,6 +28,10 @@ Adopt an existing local LZA configuration without modifying customer-owned files
 - [ ] Parse and validate imported YAML content.
 - [ ] Integrate version-aware official LZA schema validation.
 - [ ] Record or resolve remote/Git template provenance.
+
+### `lza installer init`
+
+- [ ] Add support for different parameters according to chosen options
 
 ### `lza installer deploy`
 

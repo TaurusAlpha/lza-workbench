@@ -117,7 +117,7 @@ def test_installer_init_updates_workspace_config(tmp_path: Path) -> None:
     config = WorkspaceConfig(
         customer=CustomerConfig(name="Prompt Customer", slug="prompt-customer"),
         aws=AwsConfig(profile="test-profile", region="us-east-1"),
-        lza=LzaConfig(version="v1.16.0"),
+        lza=LzaConfig(version="1.16.0"),
     )
     write_workspace_config(ws_dir, config)
     write_workspace_state(ws_dir, WorkspaceState.from_config(config))
@@ -471,10 +471,10 @@ def test_installer_init_resolves_branch_default_after_source_selection(tmp_path:
     write_workspace_config(ws_dir, config)
     write_workspace_state(ws_dir, WorkspaceState.from_config(config))
     (installer_dir / "AWSAccelerator-InstallerStack.template").write_text(
-        '''{"Parameters": {
+        """{"Parameters": {
           "RepositorySource": {"Type": "String"},
           "RepositoryBranchName": {"Type": "String"}
-        }}''',
+        }}""",
         encoding="utf-8",
     )
     prompts: list[tuple[str, str | None]] = []

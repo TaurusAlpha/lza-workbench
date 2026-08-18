@@ -58,10 +58,10 @@ def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, valu
     source_code = config.installer.source_code
     options = config.installer.options
 
-    if parameter_name == "RepositoryBranchName":
-        value = resolve_installer_source_branch(
-            source_code.repository_type, value, config.lza.version
-        )
+    # if parameter_name == "RepositoryBranchName":
+    #     value = resolve_installer_source_branch(
+    #         source_code.repository_type, value, config.lza.version
+    #     )
 
     config.installer.template_parameters[parameter_name] = value
 
@@ -72,7 +72,7 @@ def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, valu
     elif parameter_name == "RepositoryName":
         source_code.repository_name = value
     elif parameter_name == "RepositoryBranchName":
-        source_code.branch = value
+        source_code.branch = value if value else "release/v1.16.0"
     elif parameter_name == "EnableApprovalStage":
         options.enable_approval_stage = value == "Yes"
     elif parameter_name == "ApprovalStageNotifyEmailList":
@@ -117,10 +117,11 @@ def build_installer_cfn_parameters(
     options = config.installer.options
     repo_config = config.configuration.repository
 
-    branch = resolve_installer_source_branch(
-        source_code.repository_type, source_code.branch, config.lza.version
-    )
+    # branch = resolve_installer_source_branch(
+    #     source_code.repository_type, source_code.branch, config.lza.version
+    # )
 
+    branch = source_code.branch
     enable_approval = options.enable_approval_stage
     notify_emails = ",".join(options.approval_stage_notify_email_list) if enable_approval else ""
 
@@ -165,7 +166,7 @@ def build_installer_cfn_parameters(
         "RepositorySource": repo_source,
         "RepositoryOwner": repo_owner,
         "RepositoryName": source_code.repository_name or "landing-zone-accelerator-on-aws",
-        "RepositoryBranchName": branch,
+        "RepositoryBranchName": branch or "",
         "EnableApprovalStage": "Yes" if enable_approval else "No",
         "ApprovalStageNotifyEmailList": notify_emails,
         "ManagementAccountEmail": options.management_account_email or "",

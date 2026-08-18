@@ -63,7 +63,7 @@ def inspect_cloudformation_stack(
         "RepositorySource": "installer.source_code.repository_type",
         "RepositoryOwner": "installer.source_code.owner",
         "RepositoryName": "installer.source_code.repository_name",
-        "RepositoryBranchName": "installer.source_code.branch / lza.version",
+        "RepositoryBranchName": "installer.source_code.branch",
         "ManagementAccountEmail": "installer.options.management_account_email",
         "LogArchiveAccountEmail": "installer.options.log_archive_account_email",
         "AuditAccountEmail": "installer.options.audit_account_email",
@@ -363,4 +363,3 @@ def stream_cloudformation_stack_events(
                 ) from exc
 
         time.sleep(poll_interval)
-

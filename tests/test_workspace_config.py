@@ -40,7 +40,7 @@ def test_minimal_workspace_uses_nested_defaults(tmp_path: Path) -> None:
     workspace_dir = _create_test_workspace(tmp_path, "minimal.yaml")
     config = load_workspace_config(workspace_dir)
 
-    assert config.lza.version == "v1.15.5"
+    assert config.lza.version == "1.15.5"
     assert config.installer.local_path == "aws-accelerator-installer"
     assert config.configuration.template.source == "packaged"
     assert config.pipelines.configuration.name == "AWSAccelerator-Pipeline"
