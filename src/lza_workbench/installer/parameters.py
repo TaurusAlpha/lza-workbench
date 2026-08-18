@@ -42,11 +42,28 @@ def persist_template_defaults(config: WorkspaceConfig, schema: dict[str, dict[st
     return changed
 
 
+def resolve_installer_source_branch(
+    repository_type: str, branch: str | None, lza_version: str | None
+) -> str:
+    """Return the configured source branch or the source-specific default."""
+    if configured_branch := (branch or "").strip():
+        return configured_branch
+    if repository_type == "github":
+        return version_to_branch(lza_version)
+    return "main"
+
+
 def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, value: str) -> None:
     """Persist an accepted template parameter in its owning workspace setting."""
-    config.installer.template_parameters[parameter_name] = value
     source_code = config.installer.source_code
     options = config.installer.options
+
+    if parameter_name == "RepositoryBranchName":
+        value = resolve_installer_source_branch(
+            source_code.repository_type, value, config.lza.version
+        )
+
+    config.installer.template_parameters[parameter_name] = value
 
     if parameter_name == "RepositorySource":
         source_code.repository_type = value  # type: ignore[assignment]
@@ -100,9 +117,9 @@ def build_installer_cfn_parameters(
     options = config.installer.options
     repo_config = config.configuration.repository
 
-    branch = (source_code.branch or "").strip()
-    if not branch:
-        branch = version_to_branch(config.lza.version)
+    branch = resolve_installer_source_branch(
+        source_code.repository_type, source_code.branch, config.lza.version
+    )
 
     enable_approval = options.enable_approval_stage
     notify_emails = ",".join(options.approval_stage_notify_email_list) if enable_approval else ""

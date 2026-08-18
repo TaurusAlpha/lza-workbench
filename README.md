@@ -48,6 +48,24 @@ Use `--dry-run` to preview the file operations without writing anything:
 uv run lza init comm-it --dry-run --skip-aws-check
 ```
 
+## Installer Setup and Planning
+
+Initialize the installer configuration first. The command prompts for every parameter exposed by
+the selected CloudFormation installer template and saves accepted values to `lza-workspace.yaml`:
+
+```bash
+lza installer init
+```
+
+Then inspect the non-mutating AWS deployment plan using the saved configuration:
+
+```bash
+lza installer plan
+```
+
+Use `--dry-run` with either command to avoid local writes. `lza installer plan` never modifies AWS
+resources.
+
 ## Import an Existing Workspace
 
 Adopt an existing customer-owned LZA configuration by directory:

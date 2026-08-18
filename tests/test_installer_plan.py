@@ -13,6 +13,9 @@ from lza_workbench.cli.commands.installer_deploy import (
     installer_deploy_command as run_installer_deploy,
 )
 from lza_workbench.cli.commands.installer_plan import (
+    installer_init_command as run_installer_init,
+)
+from lza_workbench.cli.commands.installer_plan import (
     installer_plan_command as run_installer_plan,
 )
 from lza_workbench.errors import LzaError
@@ -67,8 +70,8 @@ def sample_workspace(tmp_path: Path) -> Path:
     return ws_dir
 
 
-def test_installer_plan_succeeds_with_core_defaults(tmp_path: Path) -> None:
-    """Test that lza installer plan succeeds using core workspace defaults."""
+def test_installer_init_succeeds_with_core_defaults(tmp_path: Path) -> None:
+    """Installer initialization accepts explicit required values."""
     ws_dir = tmp_path / "incomplete-ws"
     ws_dir.mkdir(parents=True, exist_ok=True)
     (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
@@ -92,7 +95,7 @@ def test_installer_plan_succeeds_with_core_defaults(tmp_path: Path) -> None:
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
-        run_installer_plan(
+        run_installer_init(
             dry_run=True,
             no_save=True,
             target_dir=ws_dir,
@@ -103,8 +106,8 @@ def test_installer_plan_succeeds_with_core_defaults(tmp_path: Path) -> None:
         )
 
 
-def test_installer_plan_prompts_and_updates_workspace_config(tmp_path: Path) -> None:
-    """Installer plan prompts/receives missing required parameters and updates config."""
+def test_installer_init_updates_workspace_config(tmp_path: Path) -> None:
+    """Installer initialization receives required parameters and updates config."""
     ws_dir = tmp_path / "prompt-ws"
     ws_dir.mkdir(parents=True, exist_ok=True)
     (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
@@ -125,7 +128,7 @@ def test_installer_plan_prompts_and_updates_workspace_config(tmp_path: Path) -> 
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
-        run_installer_plan(
+        run_installer_init(
             target_dir=ws_dir,
             management_account_email="mgmt@prompted.com",
             log_archive_account_email="log@prompted.com",
@@ -141,8 +144,8 @@ def test_installer_plan_prompts_and_updates_workspace_config(tmp_path: Path) -> 
     assert updated_config.installer.options.audit_account_email == "audit@prompted.com"
 
 
-def test_installer_plan_non_interactive_rejects_missing_emails(tmp_path: Path) -> None:
-    """Non-interactive planning rejects incomplete installer configuration."""
+def test_installer_init_non_interactive_rejects_missing_emails(tmp_path: Path) -> None:
+    """Non-interactive initialization rejects incomplete installer configuration."""
     ws_dir = tmp_path / "non-interactive-ws"
     ws_dir.mkdir(parents=True, exist_ok=True)
     (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
@@ -157,16 +160,16 @@ def test_installer_plan_non_interactive_rejects_missing_emails(tmp_path: Path) -
     write_workspace_state(ws_dir, WorkspaceState.from_config(config))
 
     with pytest.raises(LzaError, match="required configuration is missing"):
-        run_installer_plan(target_dir=ws_dir, interactive=False, dry_run=True, no_save=True)
+        run_installer_init(target_dir=ws_dir, interactive=False, dry_run=True, no_save=True)
 
 
-def test_installer_plan_no_save(sample_workspace: Path) -> None:
-    """Test that --no-save executes plan successfully without errors."""
+def test_installer_init_no_save(sample_workspace: Path) -> None:
+    """Initialization accepts --no-save without modifying workspace configuration."""
     with patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val:
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         with patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client:
             mock_client.return_value = MagicMock()
-            run_installer_plan(
+            run_installer_init(
                 dry_run=False,
                 no_save=True,
                 target_dir=sample_workspace,
@@ -191,9 +194,7 @@ def test_installer_plan_prepares_result_before_rendering(sample_workspace: Path)
 
         run_installer_plan(
             dry_run=False,
-            no_save=True,
             target_dir=sample_workspace,
-            interactive=False,
         )
 
     rendered_plan = mock_render.call_args.args[0]
@@ -228,9 +229,7 @@ def test_installer_plan_codecommit_missing(sample_workspace: Path) -> None:
         ):
             run_installer_plan(
                 dry_run=False,
-                no_save=False,
                 target_dir=sample_workspace,
-                interactive=False,
             )
 
         mock_cc.get_repository.assert_called_once_with(repositoryName="aws-accelerator-codecommit")
@@ -279,16 +278,14 @@ def test_installer_plan_cfn_update_detected(sample_workspace: Path) -> None:
         ):
             run_installer_plan(
                 dry_run=False,
-                no_save=False,
                 target_dir=sample_workspace,
-                interactive=False,
             )
 
         mock_cfn.describe_stacks.assert_called_once_with(StackName="AWSAccelerator-InstallerStack")
 
 
-def test_installer_plan_imported_workspace_succeeds(tmp_path: Path) -> None:
-    """Imported workspace loads and executes installer plan using core workspace parameters."""
+def test_installer_init_imported_workspace_succeeds(tmp_path: Path) -> None:
+    """Imported workspace can initialize installer configuration with explicit values."""
     ws_dir = tmp_path / "imported-ws"
     ws_dir.mkdir(parents=True, exist_ok=True)
     (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
@@ -308,7 +305,7 @@ def test_installer_plan_imported_workspace_succeeds(tmp_path: Path) -> None:
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
-        run_installer_plan(
+        run_installer_init(
             target_dir=ws_dir,
             management_account_email="mgmt@example.com",
             log_archive_account_email="log@example.com",
@@ -362,9 +359,9 @@ def test_build_installer_cfn_parameters_conditional_filtering() -> None:
     assert params["CustomParam"] == "CustomValue"
 
 
-def test_installer_plan_persists_new_template_defaults(tmp_path: Path) -> None:
+def test_installer_init_persists_new_template_defaults(tmp_path: Path) -> None:
     """Defaults from a newer template are retained for later deployments."""
-    from lza_workbench.workflows.installer_plan import plan_installer_workflow
+    from lza_workbench.workflows.installer_init import initialize_installer_workflow
 
     ws_dir = tmp_path / "template-default-ws"
     ws_dir.mkdir()
@@ -392,15 +389,15 @@ def test_installer_plan_persists_new_template_defaults(tmp_path: Path) -> None:
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
-        plan_installer_workflow(target_dir=ws_dir)
+        initialize_installer_workflow(target_dir=ws_dir)
 
     persisted = load_workspace_config(ws_dir)
     assert persisted.installer.template_parameters == {"NewDefault": "accepted"}
 
 
-def test_installer_plan_prompts_for_every_selected_template_parameter(tmp_path: Path) -> None:
-    """Interactive planning collects mandatory and optional template parameters."""
-    from lza_workbench.workflows.installer_plan import plan_installer_workflow
+def test_installer_init_prompts_for_every_selected_template_parameter(tmp_path: Path) -> None:
+    """Interactive initialization collects mandatory and optional template parameters."""
+    from lza_workbench.workflows.installer_init import initialize_installer_workflow
 
     ws_dir = tmp_path / "template-prompts-ws"
     ws_dir.mkdir()
@@ -439,7 +436,7 @@ def test_installer_plan_prompts_for_every_selected_template_parameter(tmp_path: 
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
-        plan_installer_workflow(target_dir=ws_dir, prompter=prompter)
+        initialize_installer_workflow(target_dir=ws_dir, prompter=prompter)
 
     assert prompts == [
         ("MandatoryNewParameter: Required setting", None),
@@ -450,6 +447,48 @@ def test_installer_plan_prompts_for_every_selected_template_parameter(tmp_path: 
         "MandatoryNewParameter": "mandatory-value",
         "OptionalNewParameter": "accepted-optional-value",
     }
+
+
+def test_installer_init_resolves_branch_default_after_source_selection(tmp_path: Path) -> None:
+    """The branch prompt follows the repository source selected earlier in the form."""
+    from lza_workbench.workflows.installer_init import initialize_installer_workflow
+
+    ws_dir = tmp_path / "branch-default-ws"
+    ws_dir.mkdir()
+    (ws_dir / ".lza").mkdir()
+    installer_dir = ws_dir / "aws-accelerator-installer"
+    installer_dir.mkdir()
+    (ws_dir / "aws-accelerator-config").mkdir()
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Branch Default", slug="branch-default"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+    config.installer.options.management_account_email = "mgmt@example.com"
+    config.installer.options.log_archive_account_email = "log@example.com"
+    config.installer.options.audit_account_email = "audit@example.com"
+    config.installer.source_code.repository_type = "codecommit"
+    write_workspace_config(ws_dir, config)
+    write_workspace_state(ws_dir, WorkspaceState.from_config(config))
+    (installer_dir / "AWSAccelerator-InstallerStack.template").write_text(
+        '''{"Parameters": {
+          "RepositorySource": {"Type": "String"},
+          "RepositoryBranchName": {"Type": "String"}
+        }}''',
+        encoding="utf-8",
+    )
+    prompts: list[tuple[str, str | None]] = []
+
+    def prompter(label: str, default: str | None) -> str:
+        prompts.append((label, default))
+        return "github" if label.startswith("RepositorySource:") else default or ""
+
+    initialize_installer_workflow(target_dir=ws_dir, prompter=prompter)
+
+    assert prompts == [
+        ("RepositorySource: RepositorySource", "codecommit"),
+        ("RepositoryBranchName: RepositoryBranchName", "release/v1.16.0"),
+    ]
 
 
 def test_installer_plan_github_secret_check(tmp_path: Path) -> None:
@@ -490,7 +529,7 @@ def test_installer_plan_github_secret_check(tmp_path: Path) -> None:
         ),
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
-        plan_res = plan_installer_workflow(target_dir=ws_dir, dry_run=True, no_save=True)
+        plan_res = plan_installer_workflow(target_dir=ws_dir, dry_run=True)
 
     assert plan_res.github_secret_warning is not None
     assert "accelerator/github-token" in plan_res.github_secret_warning

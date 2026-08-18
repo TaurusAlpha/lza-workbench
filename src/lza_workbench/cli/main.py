@@ -21,6 +21,9 @@ from lza_workbench.cli.commands.installer_deploy import (
     installer_deploy_command as run_cli_installer_deploy,
 )
 from lza_workbench.cli.commands.installer_plan import (
+    installer_init_command as run_cli_installer_init,
+)
+from lza_workbench.cli.commands.installer_plan import (
     installer_plan_command as run_cli_installer_plan,
 )
 from lza_workbench.cli.commands.status_config import (
@@ -67,16 +70,16 @@ status_app = typer.Typer(
 )
 
 
-@installer_app.command("plan")
-def installer_plan_command(
+@installer_app.command("init")
+def installer_init_command(
     management_account_email: params.ManagementAccountEmail = None,
     log_archive_account_email: params.LogArchiveAccountEmail = None,
     audit_account_email: params.AuditAccountEmail = None,
     dry_run: params.DryRun = False,
-    no_save: bool = False,
+    no_save: bool = typer.Option(False, "--no-save", help="Do not save accepted parameters."),
 ) -> None:
-    """Resolve and persist installer configuration, then show the actions required to deploy."""
-    run_cli_installer_plan(
+    """Collect and persist installer configuration from the selected template."""
+    run_cli_installer_init(
         management_account_email=management_account_email,
         log_archive_account_email=log_archive_account_email,
         audit_account_email=audit_account_email,
@@ -84,6 +87,14 @@ def installer_plan_command(
         no_save=no_save,
         interactive=_is_interactive(),
     )
+
+
+@installer_app.command("plan")
+def installer_plan_command(
+    dry_run: params.DryRun = False,
+) -> None:
+    """Show the AWS actions required to deploy initialized installer configuration."""
+    run_cli_installer_plan(dry_run=dry_run)
 
 
 @installer_app.command("deploy")

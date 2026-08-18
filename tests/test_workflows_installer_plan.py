@@ -44,7 +44,6 @@ def test_plan_installer_workflow_returns_structured_result(sample_workspace: Pat
             result = plan_installer_workflow(
                 target_dir=sample_workspace,
                 dry_run=True,
-                no_save=True,
             )
             assert isinstance(result, InstallerPlanResult)
             assert result.workspace_dir == sample_workspace

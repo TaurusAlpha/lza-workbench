@@ -11,11 +11,14 @@ from lza_workbench.cli import params
 from lza_workbench.cli.input import value_or_prompt
 from lza_workbench.cli.output import (
     console,
-    print_info,
     print_kv,
     print_notice,
     print_section,
     print_warning,
+)
+from lza_workbench.workflows.installer_init import (
+    InstallerInitResult,
+    initialize_installer_workflow,
 )
 from lza_workbench.workflows.installer_plan import (
     InstallerPlanResult,
@@ -110,6 +113,32 @@ def render_installer_plan_report(plan: InstallerPlanResult) -> None:
 
 
 def installer_plan_command(
+    dry_run: params.DryRun = False,
+    target_dir: Path | None = None,
+) -> None:
+    """Show a non-mutating AWS plan for persisted installer configuration."""
+    plan_result = plan_installer_workflow(target_dir=target_dir, dry_run=dry_run)
+    render_installer_plan_report(plan_result)
+
+
+def render_installer_init_report(result: InstallerInitResult) -> None:
+    """Render the local initialization result without inspecting AWS resources."""
+    title = f"[bold cyan]LZA Installer Initialization - {result.config.customer.name}[/bold cyan]"
+    if result.dry_run:
+        title += " [yellow](Dry Run)[/yellow]"
+    console.print(Panel(title, expand=False))
+    print_kv("Workspace", result.workspace_dir, bold_value=True)
+    print_kv("Template", result.template_path)
+    print_kv("Resolved Parameters", len(result.resolved_parameters))
+    if result.dry_run:
+        print_notice("Dry run: installer configuration was not saved.")
+    else:
+        print_notice(
+            "Installer configuration saved. Run `lza installer plan` to inspect AWS actions."
+        )
+
+
+def installer_init_command(
     management_account_email: str | None = None,
     log_archive_account_email: str | None = None,
     audit_account_email: str | None = None,
@@ -118,10 +147,7 @@ def installer_plan_command(
     target_dir: Path | None = None,
     interactive: bool = True,
 ) -> None:
-    """Resolve installer config from workspace and show planned deployment actions."""
-    if not no_save and not dry_run:
-        print_info("Installer configuration verified in lza-workspace.yaml", dim=True)
-
+    """Collect and persist installer configuration from the selected template."""
     def prompter(label: str, default: str | None) -> str:
         return value_or_prompt(
             label=label,
@@ -130,7 +156,7 @@ def installer_plan_command(
             interactive=interactive,
         )
 
-    plan_result = plan_installer_workflow(
+    result = initialize_installer_workflow(
         target_dir=target_dir,
         management_account_email=management_account_email,
         log_archive_account_email=log_archive_account_email,
@@ -139,4 +165,4 @@ def installer_plan_command(
         dry_run=dry_run,
         no_save=no_save,
     )
-    render_installer_plan_report(plan_result)
+    render_installer_init_report(result)

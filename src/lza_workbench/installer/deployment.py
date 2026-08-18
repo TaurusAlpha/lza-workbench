@@ -14,13 +14,15 @@ from lza_workbench.installer.config import (
     InstallerConfigValidationResult,
     validate_installer_configuration,
 )
-from lza_workbench.installer.parameters import build_installer_cfn_parameters
+from lza_workbench.installer.parameters import (
+    build_installer_cfn_parameters,
+    resolve_installer_source_branch,
+)
 from lza_workbench.installer.templates import (
     inspect_template_parameters,
     resolve_installer_template,
     validate_parameters_against_schema,
 )
-from lza_workbench.installer.versions import version_to_branch
 from lza_workbench.workspace.schema import WorkspaceConfig
 
 SAFE_EXISTING_STACK_STATUSES = {
@@ -70,7 +72,9 @@ def inspect_installer_source(
     """Validate required remote source preconditions for installer CloudFormation."""
     source = config.installer.source_code
     if source.repository_type == "codecommit":
-        version_ref = version_to_branch(config.lza.version)
+        version_ref = resolve_installer_source_branch(
+            source.repository_type, source.branch, config.lza.version
+        )
         plan = inspect_codecommit_repository(
             factory=factory,
             repository_type="codecommit",

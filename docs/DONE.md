@@ -15,7 +15,7 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 ### Core CLI Workflow Commands
 - **`lza init`**: Customer workspace initialization with slug normalization, configuration copy, AWS profile validation, non-interactive execution, and dry-run support.
 - **`lza import`**: Adopt existing local `aws-accelerator-config` without modifying customer files, validating layout and generating workspace metadata.
-- **`lza installer plan`**: Read installer parameters from `lza-workspace.yaml`, resolve templates, inspect AWS CodeCommit and deployment status, and generate non-mutating action plans.
+- **`lza installer init` and `lza installer plan`**: `installer init` collects and persists every parameter in the selected installer template; `installer plan` reuses that configuration to inspect AWS CodeCommit and CloudFormation without modifying AWS resources.
 - **`lza installer deploy`**: Reconcile installer desired state with AWS CloudFormation, execute deployments, track events, and record deployment metadata in `.lza/state.json`.
 - **`lza config upload`**: Validate configuration placeholders, package customer `aws-accelerator-config`, upload to S3 configuration sources, and log upload state.
 - **`lza config download`**: Download customer configuration from S3 configuration sources with `--dry-run`, optional archive extraction, and operational state updates.
