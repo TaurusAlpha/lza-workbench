@@ -40,6 +40,7 @@ class InstallerSourceCodeConfig(BaseModel):
 
     repository_type: Literal["github", "codecommit", "s3", "codeconnection"] = "github"
     owner: str = "awslabs"
+    github_secret_name: Literal["accelerator/github-token"] = "accelerator/github-token"
     repository_name: str | None = "landing-zone-accelerator-on-aws"
     branch: str | None = None
     bucket: str | None = None

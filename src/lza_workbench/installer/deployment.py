@@ -8,6 +8,7 @@ from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult
 from lza_workbench.aws.codecommit import CodeCommitPlanResult, inspect_codecommit_repository
 from lza_workbench.aws.s3 import inspect_s3_installer_source
+from lza_workbench.aws.secrets_manager import inspect_github_secret_token
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import (
     InstallerConfigValidationResult,
@@ -92,6 +93,9 @@ def inspect_installer_source(
             bucket_name=source.bucket or "",
             object_key=source.key or "",
         )
+    elif source.repository_type == "github":
+        inspect_github_secret_token(factory=factory, secret_name=source.github_secret_name)
+        return None
     return None
 
 

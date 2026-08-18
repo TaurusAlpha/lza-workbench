@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from botocore.exceptions import ClientError
-from pydantic import ValidationError
 
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackStatusResult
 from lza_workbench.aws.codecommit import CodeCommitPlanResult
@@ -73,7 +72,7 @@ def test_missing_aws_profile_failure(tmp_path: Path) -> None:
     ws_dir = tmp_path / "no-aws"
     ws_dir.mkdir(parents=True, exist_ok=True)
     with pytest.raises(
-        (LzaError, ValueError, ValidationError),
+        (LzaError, ValueError),
         match="missing required core configuration|profile|AWS configuration requires",
     ):
         config = WorkspaceConfig(
@@ -298,4 +297,3 @@ def test_inspect_installer_source_codecommit_inaccessible_fails_closed() -> None
             config=config,
             region="us-east-1",
         )
-

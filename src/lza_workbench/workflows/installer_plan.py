@@ -8,6 +8,7 @@ from pathlib import Path
 from lza_workbench.aws.cloudformation import inspect_cloudformation_stack
 from lza_workbench.aws.codecommit import inspect_codecommit_repository
 from lza_workbench.aws.context import resolve_aws_execution_context
+from lza_workbench.aws.secrets_manager import inspect_github_secret_token
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import (
@@ -120,7 +121,7 @@ def plan_installer_workflow(
     if resolved_params.get("RepositorySource") == "github" and aws_identity:
         sm_client = factory.get_client("secretsmanager")
         if sm_client:
-            github_secret_warning = _check_github_token_secret(sm_client)
+            github_secret_warning = inspect_github_secret_token(client=sm_client)
 
     # Step 5: CloudFormation Deployment Planning
     stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
@@ -143,29 +144,6 @@ def plan_installer_workflow(
         dry_run=dry_run,
         github_secret_warning=github_secret_warning,
     )
-
-
-def _check_github_token_secret(sm_client: object) -> str | None:
-    """Verify if GitHub token secret exists in AWS Secrets Manager."""
-    from botocore.exceptions import ClientError
-
-    secret_name = "accelerator/github-token"
-    try:
-        sm_client.describe_secret(SecretId=secret_name)  # type: ignore[attr-defined]
-        return None
-    except ClientError as err:
-        code = err.response.get("Error", {}).get("Code")
-        if code != "ResourceNotFoundException":
-            return f"Secrets Manager check for '{secret_name}' returned: {err}"
-    except Exception as exc:
-        return f"Secrets Manager check for '{secret_name}' failed: {exc}"
-
-    return (
-        "GitHub source selected, but AWS Secrets Manager secret 'accelerator/github-token' "
-        "was not found in account/region. "
-        "AWS LZA requires a GitHub token stored in Secrets Manager."
-    )
-
 
 
 __all__ = [

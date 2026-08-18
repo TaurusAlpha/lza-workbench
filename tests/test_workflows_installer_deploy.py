@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult
+from lza_workbench.installer.versions import PACKAGED_INSTALLER_VERSION
 from lza_workbench.workflows.installer_deploy import (
     InstallerDeployResult,
     deploy_installer_workflow,
@@ -23,6 +24,7 @@ def deployed_workspace(tmp_path: Path) -> Path:
         workspace_dir=ws_dir,
         aws_profile="dev-profile",
         aws_region="us-east-1",
+        lza_version=PACKAGED_INSTALLER_VERSION,
         skip_aws_check=True,
         dry_run=False,
         force=False,

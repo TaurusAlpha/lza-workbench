@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from botocore.exceptions import ClientError
 
+from lza_workbench.aws.secrets_manager import inspect_github_secret_token
 from lza_workbench.cli.commands.installer_deploy import (
     installer_deploy_command as run_installer_deploy,
 )
@@ -497,14 +498,13 @@ def test_installer_plan_github_secret_check(tmp_path: Path) -> None:
 
 def test_installer_plan_github_secret_check_requires_exact_name(tmp_path: Path) -> None:
     """Only the documented GitHub token secret name satisfies the prerequisite."""
-    from lza_workbench.workflows.installer_plan import _check_github_token_secret
 
     mock_sm = MagicMock()
     mock_sm.describe_secret.side_effect = ClientError(
         {"Error": {"Code": "ResourceNotFoundException"}}, "DescribeSecret"
     )
 
-    warning = _check_github_token_secret(mock_sm)
+    warning = inspect_github_secret_token(mock_sm)
 
     assert warning is not None
     mock_sm.describe_secret.assert_called_once_with(SecretId="accelerator/github-token")
