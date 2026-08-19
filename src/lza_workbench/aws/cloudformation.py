@@ -110,7 +110,7 @@ def inspect_cloudformation_stack(
 
         return CfnDeploymentPlanResult(
             stack_name=clean_stack_name,
-            operation=operation,
+            operation=operation if stack_status != "ROLLBACK_COMPLETE" else "CREATE",
             stack_status=stack_status,
             resolved_parameters=resolved_parameters,
             parameter_diffs=diffs,
@@ -228,7 +228,8 @@ def deploy_cloudformation_stack(
     factory: AwsClientFactory | None = None,
     client: Any | None = None,
     stack_name: str,
-    template_body: str,
+    template_body: str | None = None,
+    template_url: str | None = None,
     parameters: dict[str, str],
     operation: str,
 ) -> str:
@@ -241,24 +242,29 @@ def deploy_cloudformation_stack(
     if cfn is None:
         raise ValueError("AWS CloudFormation client is not available")
 
+    if not template_body and not template_url:
+        raise ValueError(
+            "Either template_body or template_url must be provided for CloudFormation deployment."
+        )
+
     cfn_params = [{"ParameterKey": k, "ParameterValue": v} for k, v in parameters.items()]
     capabilities = ["CAPABILITY_NAMED_IAM", "CAPABILITY_AUTO_EXPAND"]
 
+    kwargs: dict[str, Any] = {
+        "StackName": clean_stack_name,
+        "Parameters": cfn_params,
+        "Capabilities": capabilities,
+    }
+    if template_url:
+        kwargs["TemplateURL"] = template_url
+    elif template_body:
+        kwargs["TemplateBody"] = template_body
+
     if operation == "CREATE":
-        response = cfn.create_stack(
-            StackName=clean_stack_name,
-            TemplateBody=template_body,
-            Parameters=cfn_params,
-            Capabilities=capabilities,
-        )
+        response = cfn.create_stack(**kwargs)
         return str(response.get("StackId", clean_stack_name))
     elif operation == "UPDATE":
-        response = cfn.update_stack(
-            StackName=clean_stack_name,
-            TemplateBody=template_body,
-            Parameters=cfn_params,
-            Capabilities=capabilities,
-        )
+        response = cfn.update_stack(**kwargs)
         return str(response.get("StackId", clean_stack_name))
     else:
         raise ValueError(f"Unsupported deployment operation: {operation}")
@@ -363,3 +369,14 @@ def stream_cloudformation_stack_events(
                 ) from exc
 
         time.sleep(poll_interval)
+
+
+def delete_cloudformation_stack(*, client, stack_name: str) -> None:
+    try:
+        waiter = client.get_waiter("stack_delete_complete")
+        client.delete_stack(StackName=stack_name)
+        waiter.wait(StackName=stack_name)
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        if code not in {"ValidationError", "404"} and "does not exist" not in str(exc):
+            raise LzaError(f"Failed to delete CloudFormation stack '{stack_name}': {exc}") from exc

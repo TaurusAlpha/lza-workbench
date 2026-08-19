@@ -10,11 +10,13 @@ from typing import Any
 from lza_workbench.aws.cloudformation import (
     CfnDeploymentPlanResult,
     CfnStackStatusResult,
+    delete_cloudformation_stack,
     deploy_cloudformation_stack,
     inspect_cloudformation_stack,
     stream_cloudformation_stack_events,
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
+from lza_workbench.aws.s3 import get_s3_https_url, inspect_s3_bucket, upload_s3_file
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import InstallerConfigValidationResult
 from lza_workbench.installer.deployment import (
@@ -120,11 +122,36 @@ def deploy_installer_workflow(
             region=aws_context.region,
             account_id=account_id,
         )
+    if operation == "CREATE" and cfn_plan.stack_status == "ROLLBACK_COMPLETE":
+        delete_cloudformation_stack(
+            client=aws_context.factory.get_client("cloudformation"),
+            stack_name=stack_name,
+        )
+
+    s3_client = aws_context.factory.get_client("s3")
+    bucket_name = (config.assets_bucket or "").strip()
+    insp = inspect_s3_bucket(client=s3_client, bucket_name=bucket_name)
+    if not insp["exists"]:
+        raise LzaError(
+            f"Configured assets bucket '{bucket_name}' does not exist in AWS. "
+            "Run 'lza bootstrap' to create and configure the required AWS resources."
+        )
+
+    s3_key = f"installer-templates/{config.lza.version}/AWSAccelerator-InstallerStack.template"
+    upload_s3_file(
+        client=s3_client,
+        file_path=template_path,
+        bucket_name=bucket_name,
+        object_key=s3_key,
+    )
+    template_url = get_s3_https_url(
+        bucket_name=bucket_name, object_key=s3_key, region=aws_context.region
+    )
 
     stack_id = deploy_cloudformation_stack(
         client=aws_context.factory.get_client("cloudformation"),
         stack_name=stack_name,
-        template_body=template_path.read_text(encoding="utf-8"),
+        template_url=template_url,
         parameters=resolved_parameters,
         operation=operation,
     )

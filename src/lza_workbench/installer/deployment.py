@@ -7,7 +7,7 @@ from pathlib import Path
 from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult
 from lza_workbench.aws.codecommit import CodeCommitPlanResult, inspect_codecommit_repository
-from lza_workbench.aws.s3 import inspect_s3_installer_source
+from lza_workbench.aws.s3 import inspect_s3_object
 from lza_workbench.aws.secrets_manager import inspect_github_secret_token
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import (
@@ -29,7 +29,10 @@ SAFE_EXISTING_STACK_STATUSES = {
     "CREATE_COMPLETE",
     "UPDATE_COMPLETE",
     "UPDATE_ROLLBACK_COMPLETE",
+    "ROLLBACK_COMPLETE",
 }
+
+SAFE_CREATE_STACK_STATUSES = {"ROLLBACK_COMPLETE", "DELETE_COMPLETE", None}
 
 
 class InstallerConfigValidationError(LzaError):
@@ -50,6 +53,12 @@ def validate_deployment_preflight(config: WorkspaceConfig) -> None:
     validation = validate_installer_configuration(config)
     if not validation.is_complete:
         raise InstallerConfigValidationError(validation)
+    if not (config.assets_bucket or "").strip():
+        raise LzaError(
+            "Workbench assets bucket is not configured in lza-workspace.yaml. "
+            "Run 'lza bootstrap' to create and configure the required assets bucket "
+            "before deploying the installer."
+        )
 
 
 def prepare_installer_template(
@@ -92,8 +101,8 @@ def inspect_installer_source(
         return plan
 
     if source.repository_type == "s3":
-        inspect_s3_installer_source(
-            factory=factory,
+        inspect_s3_object(
+            client=factory.get_client("s3"),
             bucket_name=source.bucket or "",
             object_key=source.key or "",
         )
@@ -105,7 +114,10 @@ def inspect_installer_source(
 
 def validate_cloudformation_plan(plan: CfnDeploymentPlanResult) -> str:
     """Return a safe mutation operation or reject an unknown/unsafe stack state."""
-    if plan.operation == "CREATE" and plan.stack_status is None:
+    if (
+        plan.operation in {"CREATE", "NO_CHANGE"}
+        and plan.stack_status in SAFE_CREATE_STACK_STATUSES
+    ):
         return "CREATE"
     if (
         plan.operation in {"UPDATE", "NO_CHANGE"}
