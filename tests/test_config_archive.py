@@ -123,3 +123,43 @@ def test_extract_zip_failure_during_replacement_restores_original_workspace(
     assert (target_dir / ".git" / "config").read_text(encoding="utf-8") == "git config"
     assert not (target_dir / "incoming.yaml").exists()
 
+
+def test_resolve_s3_archive_uri_with_prefix() -> None:
+    from lza_workbench.configuration.transfer import (
+        DEFAULT_ZIP_FILENAME,
+        resolve_s3_archive_uri,
+    )
+
+    bucket, key, zip_name = resolve_s3_archive_uri("my-bucket", "config-prefix")
+    assert bucket == "my-bucket"
+    assert key == "config-prefix/aws-accelerator-config.zip"
+    assert zip_name == DEFAULT_ZIP_FILENAME
+
+
+def test_resolve_s3_archive_uri_with_zip_bucket() -> None:
+    from lza_workbench.configuration.transfer import resolve_s3_archive_uri
+
+    bucket, key, zip_name = resolve_s3_archive_uri("my-bucket/custom.zip", "prefix")
+    assert bucket == "my-bucket"
+    assert key == "custom.zip"
+    assert zip_name == "custom.zip"
+
+
+def test_resolve_s3_archive_uri_with_prefix_and_key() -> None:
+    from lza_workbench.configuration.transfer import resolve_s3_archive_uri
+
+    bucket, key, zip_name = resolve_s3_archive_uri("my-bucket", "zipped/", "custom-config.zip")
+    assert bucket == "my-bucket"
+    assert key == "zipped/custom-config.zip"
+    assert zip_name == "custom-config.zip"
+
+
+def test_resolve_s3_archive_uri_with_key_only() -> None:
+    from lza_workbench.configuration.transfer import resolve_s3_archive_uri
+
+    bucket, key, zip_name = resolve_s3_archive_uri("my-bucket", "", "custom-config.zip")
+    assert bucket == "my-bucket"
+    assert key == "custom-config.zip"
+    assert zip_name == "custom-config.zip"
+
+

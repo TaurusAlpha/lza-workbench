@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.aws.s3 import upload_s3_archive
+from lza_workbench.aws.s3 import upload_s3_file
 from lza_workbench.configuration.archive import (
     ConfigDiffResult,
     create_zip_archive,
@@ -101,11 +101,12 @@ def upload_configuration_workflow(
         require_identity=True,
         require_expected_account=True,
     )
-    etag, version_id = upload_s3_archive(
-        zip_path=zip_path,
-        s3_bucket=archive_location.bucket,
-        s3_key=archive_location.key,
-        factory=aws_context.factory,
+    s3_client = aws_context.factory.get_client("s3")
+    etag, version_id = upload_s3_file(
+        client=s3_client,
+        file_path=zip_path,
+        bucket_name=archive_location.bucket,
+        object_key=archive_location.key,
     )
     record_config_upload(
         state,

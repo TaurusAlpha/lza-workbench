@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.aws.s3 import download_s3_archive
+from lza_workbench.aws.s3 import download_s3_file
 from lza_workbench.configuration.archive import (
     ConfigDiffResult,
     extract_zip_to_workspace,
@@ -93,11 +93,12 @@ def download_configuration_workflow(
         expected_account_id=config.aws.account_id,
         require_identity=True,
     )
-    download_s3_archive(
-        s3_bucket=archive_location.bucket,
-        s3_key=archive_location.key,
-        zip_path=zip_path,
-        factory=aws_context.factory,
+    s3_client = aws_context.factory.get_client("s3")
+    download_s3_file(
+        client=s3_client,
+        bucket_name=archive_location.bucket,
+        object_key=archive_location.key,
+        file_path=zip_path,
     )
 
     if extract:

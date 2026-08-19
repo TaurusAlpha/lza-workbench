@@ -5,18 +5,55 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.s3 import (
-    ensure_s3_workbench_assets_bucket,
-    get_workbench_assets_bucket_name,
+    create_s3_bucket,
     inspect_s3_bucket,
+    put_s3_bucket_encryption,
+    put_s3_bucket_versioning,
 )
 from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig
 from lza_workbench.workspace.state import write_workspace_state
+
+
+def get_workbench_assets_bucket_name(account_id: str, region: str) -> str:
+    """Derive standard LZA Workbench assets bucket name."""
+    clean_account = account_id.strip()
+    clean_region = region.strip()
+    return f"s3-lza-workbench-assets-{clean_account}-{clean_region}"
+
+
+def ensure_s3_workbench_assets_bucket(
+    *,
+    client: Any,
+    bucket_name: str,
+    region: str,
+) -> list[str]:
+    """Ensure the Workbench assets bucket exists, is versioned, and KMS encrypted."""
+    actions_taken: list[str] = []
+    insp = inspect_s3_bucket(client=client, bucket_name=bucket_name)
+
+    if not insp["exists"]:
+        create_s3_bucket(client=client, bucket_name=bucket_name, region=region)
+        actions_taken.append(f"Created S3 bucket '{bucket_name}' in region '{region}'")
+
+    if not insp["versioning_enabled"]:
+        put_s3_bucket_versioning(client=client, bucket_name=bucket_name, enabled=True)
+        actions_taken.append(f"Enabled versioning on S3 bucket '{bucket_name}'")
+
+    if not insp["kms_encrypted"]:
+        put_s3_bucket_encryption(client=client, bucket_name=bucket_name)
+        actions_taken.append(f"Enabled AWS-managed KMS encryption on S3 bucket '{bucket_name}'")
+
+    if not actions_taken:
+        actions_taken.append(f"Reused existing S3 assets bucket '{bucket_name}'")
+
+    return actions_taken
 
 
 @dataclass(frozen=True)
@@ -193,5 +230,7 @@ __all__ = [
     "BootstrapPlanResult",
     "WorkspaceBootstrapResult",
     "bootstrap_workspace_workflow",
+    "ensure_s3_workbench_assets_bucket",
+    "get_workbench_assets_bucket_name",
     "plan_bootstrap_workflow",
 ]

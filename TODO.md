@@ -5,13 +5,22 @@ unresolved design decisions, and technical debt.
 
 ## CLI Commands
 
+Keep for reference. Do not delete commands from this list even if they are implemented.
+
+- [ ] `lza init`
+- [ ] `lza import`
+- [ ] `lza bootstrap`
 - [ ] `lza uninstall`
+- [ ] `lza installer init`
+- [ ] `lza installer plan`
+- [ ] `lza installer deploy`
+- [ ] `lza status`
+- [ ] `lza config download`
+- [ ] `lza config upload`
 - [ ] `lza config deploy`
 - [ ] `lza pipeline start`
 - [ ] `lza pipeline watch`
 - [ ] `lza doctor`
-- [ ] `lza installer init`
-- [x] `lza bootstrap`
 
 ### `lza bootstrap`
 
@@ -117,15 +126,13 @@ Adopt an existing local LZA configuration without modifying customer-owned files
 
 ### `lza installer init`
 
-- [ ] Add support for different parameters according to chosen options
+- [ ] Add support to ask for different parameters according to chosen options. For example don't ask for codeconnection arn if github was chosen as source. Don't ask for github token if codeconnection was chosen as source.
 
 ### `lza installer deploy`
 
-Reconcile the locally configured installer desired state with AWS for both initial deployment and later updates.
+Future design decision:
 
 - [ ] Prepare and synchronize installer source code across Amazon S3, AWS CodeCommit, and the official AWS GitHub repository when the configured LZA version or source settings require it.
-- [ ] Define provider-specific prerequisites, version/ref resolution, packaging, upload, and drift detection.
-- [ ] Keep source preparation separate from customer `aws-accelerator-config` management.
 - [ ] Follow the AWS source-location requirements for S3 packaging and synthesized installer parameters: <https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/source-code-location.html>.
 
 ### `lza uninstall`

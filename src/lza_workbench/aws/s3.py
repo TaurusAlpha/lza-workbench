@@ -1,4 +1,4 @@
-"""AWS S3 integration utilities for LZA configuration archives."""
+"""AWS S3 service adapter for generic object and bucket operations."""
 
 from __future__ import annotations
 
@@ -7,195 +7,24 @@ from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 
-from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.errors import LzaError
 
-DEFAULT_ZIP_FILENAME = "aws-accelerator-config.zip"
 
-
-def resolve_s3_archive_uri(
-    bucket: str,
-    prefix: str = "",
-    key: str | None = None,
-) -> tuple[str, str, str]:
-    """Resolve bucket name, object key, and local zip file name.
-
-    Returns a tuple of (s3_bucket, s3_key, zip_name).
-    """
-    clean_bucket = bucket.strip().rstrip("/")
-    if clean_bucket.endswith(".zip"):
-        parts = clean_bucket.split("/", 1)
-        s3_bucket = parts[0]
-        s3_key = (
-            parts[1]
-            if len(parts) > 1
-            else (key.strip().lstrip("/") if key and key.strip() else DEFAULT_ZIP_FILENAME)
-        )
-        zip_name = Path(s3_key).name
-        return s3_bucket, s3_key, zip_name
-
-    s3_bucket = clean_bucket
-    key_filename = key.strip().lstrip("/") if key and key.strip() else DEFAULT_ZIP_FILENAME
-    prefix_clean = prefix.strip().strip("/") if prefix else ""
-    if prefix_clean:
-        s3_key = f"{prefix_clean}/{key_filename}"
-    else:
-        s3_key = key_filename
-    zip_name = Path(key_filename).name
-    return s3_bucket, s3_key, zip_name
-
-
-def download_s3_archive(
-    *,
-    s3_bucket: str,
-    s3_key: str,
-    zip_path: Path,
-    prefix: str | None = None,
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
-) -> None:
-    """Fetch zip archive file from S3 using AwsClientFactory."""
-    try:
-        if client is not None:
-            s3 = client
-        elif factory is not None:
-            s3 = factory.get_client("s3")
-        else:
-            raise ValueError("An AWS client or AwsClientFactory is required.")
-
-        s3.download_file(s3_bucket, s3_key, str(zip_path))
-
-    except ClientError as exc:
-        error = exc.response.get("Error", {})
-        error_code = error.get("Code", "Unknown")
-        error_message = error.get("Message", str(exc))
-
-        if error_code in {"404", "NoSuchKey", "NoSuchBucket", "NotFound"}:
-            raise LzaError(f"S3 path not found: s3://{s3_bucket}/{s3_key}") from exc
-
-        if error_code in {"403", "AccessDenied"}:
-            raise LzaError(
-                f"Access denied to s3://{s3_bucket}/{s3_key}. Check your AWS permissions."
-            ) from exc
-
-        raise LzaError(f"AWS S3 error [{error_code}]: {error_message}") from exc
-
-    except BotoCoreError as exc:
-        raise LzaError(f"AWS connection/client failure: {exc}") from exc
-
-
-def upload_s3_archive(
-    *,
-    zip_path: Path,
-    s3_bucket: str,
-    s3_key: str,
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
-) -> tuple[str | None, str | None]:
-    """Upload local zip archive to S3 bucket and return object (etag, version_id)."""
-    try:
-        if client is not None:
-            s3 = client
-        elif factory is not None:
-            s3 = factory.get_client("s3")
-        else:
-            raise ValueError("An AWS client or AwsClientFactory is required.")
-
-        s3.upload_file(str(zip_path), s3_bucket, s3_key)
-
-        etag: str | None = None
-        version_id: str | None = None
-        try:
-            head = s3.head_object(Bucket=s3_bucket, Key=s3_key)
-            etag = head.get("ETag", "").strip('"') or None
-            version_id = head.get("VersionId") or None
-        except Exception:
-            pass
-
-        return etag, version_id
-
-    except ClientError as exc:
-        error = exc.response.get("Error", {})
-        error_code = error.get("Code", "Unknown")
-        error_message = error.get("Message", str(exc))
-
-        if error_code in {"404", "NoSuchBucket"}:
-            raise LzaError(f"Target S3 bucket does not exist: s3://{s3_bucket}") from exc
-
-        if error_code in {"403", "AccessDenied"}:
-            raise LzaError(
-                f"Access denied to s3://{s3_bucket}/{s3_key}. Check AWS permissions."
-            ) from exc
-
-        raise LzaError(f"AWS S3 upload error [{error_code}]: {error_message}") from exc
-
-    except BotoCoreError as exc:
-        raise LzaError(f"AWS connection/client failure: {exc}") from exc
-
-
-def ensure_s3_installer_source(
-    *,
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
-    bucket_name: str,
-    region: str | None = None,
-) -> None:
-    """Ensure S3 bucket for installer source exists, creating it if required."""
-    s3_client = (
-        client
-        if client is not None
-        else (factory.get_client("s3") if factory else None)
-    )
-    if s3_client is None:
-        raise ValueError("AWS S3 client is not available")
-
+def get_s3_https_url(bucket_name: str, object_key: str, region: str = "us-east-1") -> str:
+    """Return standard HTTPS URL for an S3 object."""
     clean_bucket = bucket_name.strip()
-    try:
-        s3_client.head_bucket(Bucket=clean_bucket)
-    except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "")
-        if code in {"404", "NoSuchBucket", "NotFound"}:
-            kwargs: dict[str, Any] = {"Bucket": clean_bucket}
-            if region and region != "us-east-1":
-                kwargs["CreateBucketConfiguration"] = {"LocationConstraint": region}
-            s3_client.create_bucket(**kwargs)
-        else:
-            raise
-
-
-def inspect_s3_installer_source(
-    *,
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
-    bucket_name: str,
-    object_key: str,
-) -> None:
-    """Verify that the configured installer source object is accessible without mutation."""
-    s3_client = client if client is not None else (factory.get_client("s3") if factory else None)
-    if s3_client is None:
-        raise ValueError("AWS S3 client is not available")
-
-    try:
-        s3_client.head_object(Bucket=bucket_name.strip(), Key=object_key.strip())
-    except ClientError as exc:
-        error = exc.response.get("Error", {})
-        code = error.get("Code", "Unknown")
-        if code in {"404", "NoSuchKey", "NoSuchBucket", "NotFound"}:
-            raise LzaError(
-                f"Installer source object not found: s3://{bucket_name}/{object_key}"
-            ) from exc
-        if code in {"403", "AccessDenied"}:
-            raise LzaError(
-                f"Access denied to installer source: s3://{bucket_name}/{object_key}"
-            ) from exc
-        raise LzaError(f"Unable to inspect installer source: {exc}") from exc
-
-
-def get_workbench_assets_bucket_name(account_id: str, region: str) -> str:
-    """Derive standard LZA Workbench assets bucket name."""
-    clean_account = account_id.strip()
+    clean_key = object_key.strip().lstrip("/")
     clean_region = region.strip()
-    return f"s3-lza-workbench-assets-{clean_account}-{clean_region}"
+    if clean_region == "us-east-1":
+        return f"https://s3.amazonaws.com/{clean_bucket}/{clean_key}"
+    return f"https://s3.{clean_region}.amazonaws.com/{clean_bucket}/{clean_key}"
+
+
+def get_s3_uri(bucket_name: str, object_key: str) -> str:
+    """Return s3:// URI for an S3 object."""
+    clean_bucket = bucket_name.strip()
+    clean_key = object_key.strip().lstrip("/")
+    return f"s3://{clean_bucket}/{clean_key}"
 
 
 def inspect_s3_bucket(
@@ -237,15 +66,11 @@ def inspect_s3_bucket(
     kms_encrypted = False
     try:
         enc_resp = client.get_bucket_encryption(Bucket=clean_bucket)
-        rules = (
-            enc_resp.get("ServerSideEncryptionConfiguration", {}).get("Rules", [])
-        )
+        rules = enc_resp.get("ServerSideEncryptionConfiguration", {}).get("Rules", [])
         if rules:
             encryption_enabled = True
             for rule in rules:
-                algo = (
-                    rule.get("ApplyServerSideEncryptionByDefault", {}).get("SSEAlgorithm")
-                )
+                algo = rule.get("ApplyServerSideEncryptionByDefault", {}).get("SSEAlgorithm")
                 if algo == "aws:kms":
                     kms_encrypted = True
                     break
@@ -355,29 +180,120 @@ def put_s3_bucket_encryption(
         ) from exc
 
 
-def ensure_s3_workbench_assets_bucket(
+def inspect_s3_object(
     *,
     client: Any,
     bucket_name: str,
-    region: str,
-) -> list[str]:
-    """Ensure the Workbench assets bucket exists, is versioned, and KMS encrypted."""
-    actions_taken: list[str] = []
-    insp = inspect_s3_bucket(client=client, bucket_name=bucket_name)
+    object_key: str,
+) -> dict[str, Any]:
+    """Inspect S3 object existence and metadata."""
+    clean_bucket = bucket_name.strip()
+    clean_key = object_key.strip().lstrip("/")
+    try:
+        return client.head_object(Bucket=clean_bucket, Key=clean_key)
+    except ClientError as exc:
+        error = exc.response.get("Error", {})
+        code = error.get("Code", "Unknown")
+        if code in {"404", "NoSuchKey", "NoSuchBucket", "NotFound"}:
+            raise LzaError(f"S3 object not found: s3://{clean_bucket}/{clean_key}") from exc
+        if code in {"403", "AccessDenied"}:
+            raise LzaError(
+                f"Access denied to S3 object: s3://{clean_bucket}/{clean_key}"
+            ) from exc
+        raise LzaError(
+            f"AWS S3 inspection error on object 's3://{clean_bucket}/{clean_key}': {exc}"
+        ) from exc
+    except BotoCoreError as exc:
+        raise LzaError(f"AWS connection/client failure: {exc}") from exc
 
-    if not insp["exists"]:
-        create_s3_bucket(client=client, bucket_name=bucket_name, region=region)
-        actions_taken.append(f"Created S3 bucket '{bucket_name}' in region '{region}'")
 
-    if not insp["versioning_enabled"]:
-        put_s3_bucket_versioning(client=client, bucket_name=bucket_name, enabled=True)
-        actions_taken.append(f"Enabled versioning on S3 bucket '{bucket_name}'")
+def upload_s3_file(
+    *,
+    client: Any,
+    file_path: Path,
+    bucket_name: str,
+    object_key: str,
+    extra_args: dict[str, Any] | None = None,
+) -> tuple[str | None, str | None]:
+    """Upload any local file to S3 bucket and return object (etag, version_id)."""
+    clean_bucket = bucket_name.strip()
+    clean_key = object_key.strip().lstrip("/")
+    try:
+        kwargs: dict[str, Any] = {}
+        if extra_args:
+            kwargs["ExtraArgs"] = extra_args
 
-    if not insp["kms_encrypted"]:
-        put_s3_bucket_encryption(client=client, bucket_name=bucket_name)
-        actions_taken.append(f"Enabled AWS-managed KMS encryption on S3 bucket '{bucket_name}'")
+        client.upload_file(str(file_path), clean_bucket, clean_key, **kwargs)
 
-    if not actions_taken:
-        actions_taken.append(f"Reused existing S3 assets bucket '{bucket_name}'")
+        etag: str | None = None
+        version_id: str | None = None
+        try:
+            head = client.head_object(Bucket=clean_bucket, Key=clean_key)
+            etag = head.get("ETag", "").strip('"') or None
+            version_id = head.get("VersionId") or None
+        except Exception:
+            pass
 
-    return actions_taken
+        return etag, version_id
+
+    except ClientError as exc:
+        error = exc.response.get("Error", {})
+        error_code = error.get("Code", "Unknown")
+        error_message = error.get("Message", str(exc))
+
+        if error_code in {"404", "NoSuchBucket"}:
+            raise LzaError(f"Target S3 bucket does not exist: s3://{clean_bucket}") from exc
+
+        if error_code in {"403", "AccessDenied"}:
+            raise LzaError(
+                f"Access denied to s3://{clean_bucket}/{clean_key}. Check AWS permissions."
+            ) from exc
+
+        raise LzaError(f"AWS S3 upload error [{error_code}]: {error_message}") from exc
+
+    except BotoCoreError as exc:
+        raise LzaError(f"AWS connection/client failure: {exc}") from exc
+
+
+def download_s3_file(
+    *,
+    client: Any,
+    bucket_name: str,
+    object_key: str,
+    file_path: Path,
+) -> None:
+    """Download an S3 object to a local file."""
+    clean_bucket = bucket_name.strip()
+    clean_key = object_key.strip().lstrip("/")
+    try:
+        client.download_file(clean_bucket, clean_key, str(file_path))
+    except ClientError as exc:
+        error = exc.response.get("Error", {})
+        error_code = error.get("Code", "Unknown")
+        error_message = error.get("Message", str(exc))
+
+        if error_code in {"404", "NoSuchKey", "NoSuchBucket", "NotFound"}:
+            raise LzaError(f"S3 path not found: s3://{clean_bucket}/{clean_key}") from exc
+
+        if error_code in {"403", "AccessDenied"}:
+            raise LzaError(
+                f"Access denied to s3://{clean_bucket}/{clean_key}. Check your AWS permissions."
+            ) from exc
+
+        raise LzaError(f"AWS S3 error [{error_code}]: {error_message}") from exc
+
+    except BotoCoreError as exc:
+        raise LzaError(f"AWS connection/client failure: {exc}") from exc
+
+
+__all__ = [
+    "create_s3_bucket",
+    "download_s3_file",
+    "get_s3_https_url",
+    "get_s3_uri",
+    "inspect_s3_bucket",
+    "inspect_s3_object",
+    "put_s3_bucket_encryption",
+    "put_s3_bucket_versioning",
+    "upload_s3_file",
+]

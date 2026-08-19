@@ -11,8 +11,6 @@ from typer.testing import CliRunner
 
 from lza_workbench.aws.s3 import (
     create_s3_bucket,
-    ensure_s3_workbench_assets_bucket,
-    get_workbench_assets_bucket_name,
     inspect_s3_bucket,
     put_s3_bucket_encryption,
     put_s3_bucket_versioning,
@@ -21,6 +19,8 @@ from lza_workbench.cli.main import app
 from lza_workbench.errors import LzaError
 from lza_workbench.workflows.workspace_bootstrap import (
     bootstrap_workspace_workflow,
+    ensure_s3_workbench_assets_bucket,
+    get_workbench_assets_bucket_name,
     plan_bootstrap_workflow,
 )
 from lza_workbench.workflows.workspace_init import init_workspace_workflow

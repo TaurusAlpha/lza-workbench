@@ -42,6 +42,7 @@ def sample_workspace(tmp_path: Path) -> Path:
     config = WorkspaceConfig(
         customer=CustomerConfig(name="Comm IT", slug="comm-it"),
         aws=AwsConfig(profile="test-profile", region="us-east-1"),
+        assets_bucket="s3-lza-workbench-assets-123456789012-us-east-1",
         lza=LzaConfig(version="v1.16.0", accelerator_prefix="AWSAccelerator"),
     )
     config.installer.source_code.repository_type = "codecommit"
@@ -297,3 +298,130 @@ def test_inspect_installer_source_codecommit_inaccessible_fails_closed() -> None
             config=config,
             region="us-east-1",
         )
+
+
+def test_missing_assets_bucket_failure(sample_workspace: Path) -> None:
+    """Test that missing assets_bucket in lza-workspace.yaml fails preflight."""
+    from lza_workbench.workspace.config import load_workspace_config
+
+    config = load_workspace_config(sample_workspace)
+    config.assets_bucket = None
+    write_workspace_config(sample_workspace, config)
+
+    with pytest.raises(LzaError, match="Workbench assets bucket is not configured"):
+        run_installer_deploy(target_dir=sample_workspace)
+
+
+@patch("lza_workbench.workflows.installer_deploy.inspect_cloudformation_stack")
+@patch("lza_workbench.installer.deployment.inspect_codecommit_repository")
+@patch("lza_workbench.workflows.installer_deploy.inspect_s3_bucket")
+@patch("lza_workbench.workflows.installer_deploy.resolve_aws_execution_context")
+def test_assets_bucket_not_existing_in_aws_failure(
+    mock_resolve_context: MagicMock,
+    mock_inspect_s3: MagicMock,
+    mock_inspect_cc: MagicMock,
+    mock_inspect_cfn: MagicMock,
+    sample_workspace: Path,
+) -> None:
+    """Test that non-existing assets bucket in AWS stops deployment with bootstrap guidance."""
+    mock_resolve_context.return_value = AwsExecutionContext(
+        region="us-east-1",
+        factory=MagicMock(),
+        identity={
+            "account": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/admin",
+            "user_id": "ADMIN",
+        },
+        error=None,
+    )
+    mock_inspect_cc.return_value = CodeCommitPlanResult(
+        repository_name="aws-accelerator-codecommit",
+        branch_name="release/v1.16.0",
+        status="INITIALIZED",
+        creation_required=False,
+        sync_required=False,
+        official_repo_url="",
+        official_version_ref="",
+    )
+    mock_inspect_cfn.return_value = CfnDeploymentPlanResult(
+        stack_name="AWSAccelerator-InstallerStack",
+        operation="CREATE",
+        stack_status=None,
+        resolved_parameters={},
+    )
+    mock_inspect_s3.return_value = {"exists": False}
+
+    with pytest.raises(LzaError, match="does not exist in AWS"):
+        run_installer_deploy(force=True, target_dir=sample_workspace)
+
+
+def test_deploy_cloudformation_stack_template_url() -> None:
+    """Test that deploy_cloudformation_stack uses TemplateURL when provided."""
+    from lza_workbench.aws.cloudformation import deploy_cloudformation_stack
+
+    mock_cfn = MagicMock()
+    mock_cfn.create_stack.return_value = {"StackId": "arn:aws:cloudformation:stack-123"}
+    mock_cfn.update_stack.return_value = {"StackId": "arn:aws:cloudformation:stack-123"}
+
+    stack_id = deploy_cloudformation_stack(
+        client=mock_cfn,
+        stack_name="MyStack",
+        template_url="https://s3.amazonaws.com/my-bucket/template.json",
+        parameters={"Param1": "Val1"},
+        operation="CREATE",
+    )
+    assert stack_id == "arn:aws:cloudformation:stack-123"
+    mock_cfn.create_stack.assert_called_once_with(
+        StackName="MyStack",
+        TemplateURL="https://s3.amazonaws.com/my-bucket/template.json",
+        Parameters=[{"ParameterKey": "Param1", "ParameterValue": "Val1"}],
+        Capabilities=["CAPABILITY_NAMED_IAM", "CAPABILITY_AUTO_EXPAND"],
+    )
+
+    # Test UPDATE
+    stack_id_update = deploy_cloudformation_stack(
+        client=mock_cfn,
+        stack_name="MyStack",
+        template_url="https://s3.amazonaws.com/my-bucket/template.json",
+        parameters={"Param1": "Val1"},
+        operation="UPDATE",
+    )
+    assert stack_id_update == "arn:aws:cloudformation:stack-123"
+    mock_cfn.update_stack.assert_called_once_with(
+        StackName="MyStack",
+        TemplateURL="https://s3.amazonaws.com/my-bucket/template.json",
+        Parameters=[{"ParameterKey": "Param1", "ParameterValue": "Val1"}],
+        Capabilities=["CAPABILITY_NAMED_IAM", "CAPABILITY_AUTO_EXPAND"],
+    )
+
+
+def test_s3_upload_file_and_urls(tmp_path: Path) -> None:
+    """Test upload_s3_file and URL generation functions."""
+    from lza_workbench.aws.s3 import get_s3_https_url, get_s3_uri, upload_s3_file
+
+    sample_file = tmp_path / "test.template"
+    sample_file.write_text("{}", encoding="utf-8")
+
+    mock_s3 = MagicMock()
+    mock_s3.head_object.return_value = {"ETag": '"abc123etag"', "VersionId": "v1"}
+
+    etag, ver = upload_s3_file(
+        client=mock_s3,
+        file_path=sample_file,
+        bucket_name="my-bucket",
+        object_key="path/test.template",
+    )
+    assert etag == "abc123etag"
+    assert ver == "v1"
+    mock_s3.upload_file.assert_called_once_with(str(sample_file), "my-bucket", "path/test.template")
+
+    assert (
+        get_s3_https_url("my-bucket", "path/test.template", "us-east-1")
+        == "https://s3.amazonaws.com/my-bucket/path/test.template"
+    )
+    assert (
+        get_s3_https_url("my-bucket", "path/test.template", "eu-west-1")
+        == "https://s3.eu-west-1.amazonaws.com/my-bucket/path/test.template"
+    )
+    assert get_s3_uri("my-bucket", "path/test.template") == "s3://my-bucket/path/test.template"
+

@@ -32,6 +32,7 @@ def deployed_workspace(tmp_path: Path) -> Path:
     from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 
     config = load_workspace_config(ws_dir)
+    config.assets_bucket = "s3-lza-workbench-assets-123456789012-us-east-1"
     config.installer.options.management_account_email = "mgmt@example.com"
     config.installer.options.log_archive_account_email = "log@example.com"
     config.installer.options.audit_account_email = "audit@example.com"
