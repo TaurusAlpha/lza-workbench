@@ -13,6 +13,8 @@ def record_installer_deployment(
     aws_identity: dict[str, str],
     stack_id: str,
     stack_status: str,
+    template_version: str,
+    downloaded_at: datetime | None = None,
 ) -> None:
     """Update operational state after a successful CloudFormation deployment."""
     now = datetime.now(UTC)
@@ -20,6 +22,9 @@ def record_installer_deployment(
     state.caller_arn = aws_identity.get("arn")
     state.installer_stack_id = stack_id
     state.installer_stack_status = stack_status
+    state.installer_template_version = template_version
+    if downloaded_at:
+        state.installer_downloaded_at = downloaded_at
     state.installer_stack_updated_at = now
     state.updated_at = now
 

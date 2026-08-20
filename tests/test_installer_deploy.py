@@ -425,3 +425,29 @@ def test_s3_upload_file_and_urls(tmp_path: Path) -> None:
     )
     assert get_s3_uri("my-bucket", "path/test.template") == "s3://my-bucket/path/test.template"
 
+
+def test_record_installer_deployment_sets_version_and_downloaded_at() -> None:
+    """Test that record_installer_deployment populates template version and downloaded_at."""
+    from datetime import UTC, datetime
+
+    from lza_workbench.installer.state import record_installer_deployment
+    from lza_workbench.workspace.schema import WorkspaceState
+
+    state = WorkspaceState()
+    now = datetime.now(UTC)
+    record_installer_deployment(
+        state,
+        aws_identity={"account": "123456789012", "arn": "arn:aws:iam::123:user/test"},
+        stack_id="arn:aws:cloudformation:stack/123",
+        stack_status="CREATE_COMPLETE",
+        template_version="v1.16.0",
+        downloaded_at=now,
+    )
+
+    assert state.installer_stack_id == "arn:aws:cloudformation:stack/123"
+    assert state.installer_stack_status == "CREATE_COMPLETE"
+    assert state.installer_template_version == "v1.16.0"
+    assert state.installer_downloaded_at == now
+    assert state.management_account_id == "123456789012"
+
+

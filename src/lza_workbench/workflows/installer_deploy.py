@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -170,11 +171,18 @@ def deploy_installer_workflow(
         )
 
     state = load_workspace_state(workspace_dir)
+    downloaded_at = (
+        datetime.fromtimestamp(template_path.stat().st_mtime, tz=UTC)
+        if template_path.exists()
+        else None
+    )
     record_installer_deployment(
         state,
         aws_identity=aws_context.identity,
         stack_id=final_status.stack_id or stack_id,
         stack_status=final_status.stack_status or "CREATE_COMPLETE",
+        template_version=config.lza.version,
+        downloaded_at=downloaded_at,
     )
     write_workspace_state(workspace_dir, state)
 

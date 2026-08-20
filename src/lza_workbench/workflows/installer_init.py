@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from lza_workbench.errors import LzaError
@@ -21,6 +22,7 @@ from lza_workbench.installer.templates import (
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig
+from lza_workbench.workspace.state import write_workspace_state
 
 
 @dataclass(frozen=True)
@@ -86,6 +88,13 @@ def initialize_installer_workflow(
 
     if not no_save and not dry_run:
         write_workspace_config(workspace_dir, config)
+        if ctx.state:
+            ctx.state.installer_template_version = config.lza.version
+            if template_path.exists():
+                ctx.state.installer_downloaded_at = datetime.fromtimestamp(
+                    template_path.stat().st_mtime, tz=UTC
+                )
+            write_workspace_state(workspace_dir, ctx.state)
 
     return InstallerInitResult(
         workspace_dir=workspace_dir,
