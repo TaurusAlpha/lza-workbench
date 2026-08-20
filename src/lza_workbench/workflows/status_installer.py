@@ -11,6 +11,10 @@ from lza_workbench.aws.cloudformation import (
     CfnStackStatusResult,
     get_cloudformation_stack_status,
 )
+from lza_workbench.aws.codepipeline import (
+    PipelineStateResult,
+    get_pipeline_state,
+)
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.status import (
@@ -41,7 +45,7 @@ class InstallerStatusResult:
     configuration_drift: dict[str, tuple[str, str]]
     state_alignment: StateAlignment | None
     installer_pipeline_name: str
-    config_pipeline_name: str
+    pipeline_state: PipelineStateResult | None = None
     state_synced: bool = False
     config_synced: bool = False
 
@@ -56,6 +60,7 @@ def prepare_installer_status(
     aws_identity: dict[str, str] | None,
     aws_error: str | None,
     cfn_status: CfnStackStatusResult,
+    pipeline_state: PipelineStateResult | None = None,
     state_synced: bool = False,
     config_synced: bool = False,
 ) -> InstallerStatusResult:
@@ -79,6 +84,12 @@ def prepare_installer_status(
         else None
     )
     prefix = config.lza.accelerator_prefix or "AWSAccelerator"
+    installer_pipeline_name = config.pipelines.installer.name or f"{prefix}-Installer"
+    resolved_pipeline_state = pipeline_state or PipelineStateResult(
+        pipeline_name=installer_pipeline_name,
+        exists=False,
+        status="NOT_CHECKED",
+    )
     return InstallerStatusResult(
         workspace_dir=workspace_dir,
         config=config,
@@ -91,8 +102,8 @@ def prepare_installer_status(
         deployed_version=deployed_version,
         configuration_drift=drift,
         state_alignment=alignment,
-        installer_pipeline_name=config.pipelines.installer.name or f"{prefix}-Installer",
-        config_pipeline_name=config.pipelines.configuration.name or f"{prefix}-Pipeline",
+        installer_pipeline_name=installer_pipeline_name,
+        pipeline_state=resolved_pipeline_state,
         state_synced=state_synced,
         config_synced=config_synced,
     )
@@ -201,6 +212,15 @@ def get_installer_status_workflow(
         cfn_status.deployed_parameters.get("RepositoryBranchName", "") if cfn_status.exists else ""
     )
 
+    prefix = config.lza.accelerator_prefix or "AWSAccelerator"
+    installer_pipeline_name = config.pipelines.installer.name or f"{prefix}-Installer"
+    codepipeline_client = (
+        aws_context.factory.get_client("codepipeline") if aws_context.identity else None
+    )
+    pipeline_state = get_pipeline_state(
+        client=codepipeline_client, pipeline_name=installer_pipeline_name
+    )
+
     state_synced = False
     config_synced = False
 
@@ -228,6 +248,7 @@ def get_installer_status_workflow(
         aws_identity=aws_context.identity,
         aws_error=aws_context.error,
         cfn_status=cfn_status,
+        pipeline_state=pipeline_state,
         state_synced=state_synced,
         config_synced=config_synced,
     )

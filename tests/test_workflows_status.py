@@ -84,6 +84,7 @@ def test_get_installer_status_workflow(status_workspace: Path) -> None:
         patch(
             "lza_workbench.workflows.status_installer.get_cloudformation_stack_status"
         ) as mock_st,
+        patch("lza_workbench.workflows.status_installer.get_pipeline_state") as mock_pipe,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -95,7 +96,12 @@ def test_get_installer_status_workflow(status_workspace: Path) -> None:
             deployed_parameters={"RepositoryBranchName": "release/v1.16.0"},
             outputs={"OutputKey": "OutputVal"},
         )
+        mock_pipe.return_value = MagicMock(
+            pipeline_name="AWSAccelerator-Installer", exists=True, status="Succeeded"
+        )
         result = get_installer_status_workflow(target_dir=status_workspace)
         assert isinstance(result, InstallerStatusResult)
         assert result.cfn_status.exists is True
         assert result.deployed_version == "v1.16.0"
+        assert result.pipeline_state is not None
+        assert result.pipeline_state.status == "Succeeded"

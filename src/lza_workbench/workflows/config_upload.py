@@ -14,15 +14,14 @@ from lza_workbench.configuration.archive import (
 )
 from lza_workbench.configuration.state import record_config_upload
 from lza_workbench.configuration.templates import validate_template
-from lza_workbench.configuration.transfer import (
-    resolve_configuration_archive_location,
-)
 from lza_workbench.errors import LzaError
 from lza_workbench.workspace.context import (
     WorkspaceReadinessLevel,
     load_workspace_context,
 )
 from lza_workbench.workspace.state import write_workspace_state
+
+CONFIG_ARCHIVE_KEY = "aws-accelerator-config.zip"
 
 
 @dataclass(frozen=True)
@@ -59,12 +58,7 @@ def upload_configuration_workflow(
 
     validate_template(config_dir)
 
-    archive_location = resolve_configuration_archive_location(
-        workspace_dir=workspace_dir,
-        repository=config.configuration.repository,
-        prompt_for_bucket=bucket_resolver,
-    )
-    zip_path = archive_location.zip_path
+    zip_path = workspace_dir / "aws-accelerator-config.zip"
     profile = config.aws.profile or ""
     region = config.aws.region
 
@@ -73,8 +67,8 @@ def upload_configuration_workflow(
             workspace_dir=workspace_dir,
             config_dir=config_dir,
             zip_path=zip_path,
-            s3_bucket=archive_location.bucket,
-            s3_key=archive_location.key,
+            s3_bucket=config.configuration.repository.bucket or "",
+            s3_key=CONFIG_ARCHIVE_KEY,
             aws_profile=profile,
             aws_region=region,
             diff_result=ConfigDiffResult(added=[], modified=[], removed=[]),
@@ -105,8 +99,8 @@ def upload_configuration_workflow(
     etag, version_id = upload_s3_file(
         client=s3_client,
         file_path=zip_path,
-        bucket_name=archive_location.bucket,
-        object_key=archive_location.key,
+        bucket_name=config.configuration.repository.bucket or "",
+        object_key=CONFIG_ARCHIVE_KEY,
     )
     record_config_upload(
         state,
@@ -123,8 +117,8 @@ def upload_configuration_workflow(
         workspace_dir=workspace_dir,
         config_dir=config_dir,
         zip_path=zip_path,
-        s3_bucket=archive_location.bucket,
-        s3_key=archive_location.key,
+        s3_bucket=config.configuration.repository.bucket or "",
+        s3_key=CONFIG_ARCHIVE_KEY,
         aws_profile=profile,
         aws_region=region,
         diff_result=diff_result,

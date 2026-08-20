@@ -25,7 +25,7 @@ from lza_workbench.workflows.status_installer import (
 
 def _render_resources(result: InstallerStatusResult) -> None:
     console.print()
-    print_section(1, "CloudFormation Stack & Pipeline Resources")
+    print_section(1, "CloudFormation Stack & Installer Pipeline Resources")
     status = result.cfn_status.stack_status or "UNKNOWN"
     account_id = result.aws_identity["account"] if result.aws_identity else "UNKNOWN_ACCOUNT"
     stack_name = result.config.installer.stack_name or "AWSAccelerator-InstallerStack"
@@ -46,16 +46,49 @@ def _render_resources(result: InstallerStatusResult) -> None:
     print_kv("Installer CloudFormation Stack", stack_name, bold_value=True)
     print_kv("Installer Stack ARN", stack_arn, style="dim")
     console.print(f"Installer Stack Status: [{color}][bold]{status}[/bold][/{color}]")
-    for label, name in (
-        ("Installer", result.installer_pipeline_name),
-        ("Config", result.config_pipeline_name),
-    ):
-        print_kv(f"{label} Pipeline Name", name, bold_value=True)
-        print_kv(
-            f"{label} Pipeline ARN",
-            f"arn:aws:codepipeline:{result.region}:{account_id}:{name}",
-            style="dim",
+    print_kv("Installer Pipeline Name", result.installer_pipeline_name, bold_value=True)
+    print_kv(
+        "Installer Pipeline ARN",
+        f"arn:aws:codepipeline:{result.region}:{account_id}:{result.installer_pipeline_name}",
+        style="dim",
+    )
+    if result.pipeline_state:
+        pipe_status = result.pipeline_state.status or "UNKNOWN"
+        p_color = (
+            "green"
+            if pipe_status == "Succeeded"
+            else "yellow"
+            if pipe_status == "InProgress"
+            else "red"
+            if pipe_status in {"Failed", "Cancelled"}
+            else "dim"
         )
+        console.print(
+            f"Installer Pipeline Status: [{p_color}][bold]{pipe_status}[/bold][/{p_color}]"
+        )
+        if result.pipeline_state.latest_execution_id:
+            print_kv(
+                "Latest Pipeline Execution ID",
+                result.pipeline_state.latest_execution_id,
+                style="dim",
+            )
+        if result.pipeline_state.stage_states:
+            stage_parts = []
+            for s in result.pipeline_state.stage_states:
+                s_status = s.status or "Unknown"
+                s_col = (
+                    "green"
+                    if s_status == "Succeeded"
+                    else "yellow"
+                    if s_status == "InProgress"
+                    else "red"
+                    if s_status == "Failed"
+                    else "dim"
+                )
+                stage_parts.append(f"{s.stage_name} ([{s_col}]{s_status}[/{s_col}])")
+            print_kv("Pipeline Stages", " -> ".join(stage_parts))
+        if result.pipeline_state.error:
+            print_notice(f"Pipeline Query Notice: {result.pipeline_state.error}")
     if result.cfn_status.creation_time:
         print_kv("Stack Creation Time", result.cfn_status.creation_time)
     if result.cfn_status.last_updated_time:
@@ -120,23 +153,9 @@ def _render_drift(result: InstallerStatusResult) -> None:
     console.print(table)
 
 
-def _render_outputs(result: InstallerStatusResult) -> None:
-    console.print()
-    print_section(4, "Stack Outputs")
-    if not result.cfn_status.outputs:
-        print_info("No stack outputs available.", dim=True)
-        return
-    table = Table(title="CloudFormation Outputs", show_header=True)
-    table.add_column("Output Key", style="cyan")
-    table.add_column("Output Value", style="white")
-    for key, value in sorted(result.cfn_status.outputs.items()):
-        table.add_row(key, value)
-    console.print(table)
-
-
 def _render_state_alignment(result: InstallerStatusResult) -> None:
     console.print()
-    print_section(5, "Local State Metadata (.lza/state.json)")
+    print_section(4, "Local State Metadata (.lza/state.json)")
     if not result.state:
         print_info("No local state file found.", dim=True)
         return
@@ -202,7 +221,6 @@ def render_installer_status(result: InstallerStatusResult) -> None:
     _render_resources(result)
     _render_deployed_details(result)
     _render_drift(result)
-    _render_outputs(result)
     _render_state_alignment(result)
     _render_recommendations(result)
 

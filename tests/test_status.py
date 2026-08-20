@@ -318,10 +318,20 @@ def test_cli_status_commands(
 
     res_installer = runner.invoke(app, ["status", "installer"])
     assert res_installer.exit_code == 0
+    assert "Config Pipeline Name" not in res_installer.output
+    assert "Config Pipeline ARN" not in res_installer.output
+    assert "Stack Outputs" not in res_installer.output
+    assert "No stack outputs available" not in res_installer.output
+    assert "Installer Pipeline Status" in res_installer.output
 
     # Test lza installer status alias
     res_installer_alias = runner.invoke(app, ["installer", "status"])
     assert res_installer_alias.exit_code == 0
+    assert "Config Pipeline Name" not in res_installer_alias.output
+    assert "Config Pipeline ARN" not in res_installer_alias.output
+    assert "Stack Outputs" not in res_installer_alias.output
+    assert "No stack outputs available" not in res_installer_alias.output
+    assert "Installer Pipeline Status" in res_installer_alias.output
 
     res_config = runner.invoke(app, ["status", "config"])
     assert res_config.exit_code == 0

@@ -47,7 +47,7 @@ def test_download_configuration_workflow_dry_run(initialized_workspace: Path) ->
     assert isinstance(result, ConfigDownloadResult)
     assert result.dry_run is True
     assert result.workspace_dir == initialized_workspace
-    assert result.s3_key == "zipped/aws-accelerator-config.zip"
+    assert result.s3_key == "aws-accelerator-config.zip"
 
 
 def test_upload_configuration_workflow_dry_run(initialized_workspace: Path) -> None:

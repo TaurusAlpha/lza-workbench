@@ -69,7 +69,7 @@ def render_root_status(result: RootStatusResult) -> None:
     console.print("[bold cyan]Subcommands available for filtered status details:[/bold cyan]")
     console.print(
         "  [bold green]lza status installer[/bold green]  "
-        "[dim](Detailed stack status, drift, outputs & sync)[/dim]"
+        "[dim](Detailed stack & pipeline status, drift & sync)[/dim]"
     )
     console.print(
         "  [bold green]lza status config[/bold green]     "
