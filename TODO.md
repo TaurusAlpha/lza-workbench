@@ -164,33 +164,6 @@ Implementation notes:
 
 Initialize the local `aws-accelerator-config` in the current workspace from a packaged configuration template.
 
-Implementation checklist:
-
-- [ ] Require an initialized workspace configuration context.
-- [ ] Resolve the configured `configuration.local_path`.
-- [ ] Select the packaged configuration template.
-  - Use the configured/default template when only one applicable template exists.
-  - Allow explicit template selection when multiple templates are available.
-- [ ] Validate that the selected template is compatible with the configured LZA version.
-- [ ] Refuse to overwrite an existing configuration directory by default.
-- [ ] Support `--force` to explicitly replace an existing local configuration.
-- [ ] Support `--dry-run` to show the files that would be created or replaced.
-- [ ] Copy the selected template into the configured local configuration directory.
-- [ ] Record template provenance in `lza-workspace.yaml` when required to reproduce the workspace.
-- [ ] Validate the resulting local configuration structure.
-
-Implementation notes:
-
-- `lza config init` is local-only and does not require AWS authentication.
-- It must not create AWS resources, configure the installer, synchronize repositories, or start pipelines.
-- `lza init` creates the workspace metadata and delegates local configuration creation to the
-  `config init` workflow.
-- The configuration initialization workflow must be reusable without invoking one CLI command
-  from another CLI command.
-- Existing customer-owned configuration should normally be adopted through `lza import`.
-- Remote configuration remains the responsibility of `lza config download`, `lza config upload`,
-  and `lza config deploy`.
-
 ### `lza config upload`
 
 Upload the customer `aws-accelerator-config` to an S3-backed LZA configuration source without starting the LZA pipeline.
@@ -298,12 +271,7 @@ Future design decision:
 
 ## Configuration Templates
 
-- [ ] List available packaged templates.
-- [ ] Validate template structure.
 - [ ] Validate template compatibility with selected LZA version.
-
-### Future
-
 - [ ] Support Git template source.
 - [ ] Support Bitbucket template source.
 - [ ] Support template version/ref.
@@ -317,7 +285,6 @@ Future design decision:
 - [ ] Validate workspace structure.
 - [ ] Validate installer configuration.
 - [ ] Validate upload target.
-- [ ] Detect unresolved placeholders.
 - [ ] Detect common LZA configuration mistakes.
 
 ## Reports

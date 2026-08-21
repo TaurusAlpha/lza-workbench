@@ -29,7 +29,6 @@ def render_workspace_init_result(result: WorkspaceInitResult) -> None:
     if result.dry_run:
         print_dry_run_header("lza init")
         print_kv("Workspace", workspace_dir)
-        print_kv("Template", config.configuration.template.name)
         console.print("Planned writes:")
         for path in result.planned_paths:
             console.print(f"  - {path}")
@@ -48,6 +47,15 @@ def render_workspace_init_result(result: WorkspaceInitResult) -> None:
     if identity:
         print_kv("AWS account", identity["account"])
         print_kv("Caller ARN", identity["arn"])
+
+    console.print()
+    console.print("[bold]Next steps:[/bold]")
+    console.print(
+        "  1. [cyan]lza installer init[/cyan]  - Configure installer parameters and account emails"
+    )
+    console.print(
+        "  2. [cyan]lza config init[/cyan]     - Initialize local LZA configuration from template"
+    )
 
 
 def workspace_init_command(

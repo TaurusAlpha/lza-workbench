@@ -20,8 +20,6 @@ from lza_workbench.workspace.context import (
 )
 from lza_workbench.workspace.state import write_workspace_state
 
-CONFIG_ARCHIVE_KEY = "aws-accelerator-config.zip"
-
 
 @dataclass(frozen=True)
 class ConfigDownloadResult:
@@ -53,17 +51,34 @@ def download_configuration_workflow(
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
     config_dir = workspace_dir / config.configuration.local_path
-    zip_path = workspace_dir / "aws-accelerator-config.zip"
+
+    repo_cfg = config.configuration.repository
+    prefix = repo_cfg.prefix or ""
+    key = repo_cfg.key or "aws-accelerator-config.zip"
+    if prefix:
+        prefix_clean = prefix if prefix.endswith("/") else f"{prefix}/"
+        s3_key = f"{prefix_clean}{key}"
+    else:
+        s3_key = key
+    zip_path = workspace_dir / key
+
     profile = config.aws.profile or ""
     region = config.aws.region
+
+    bucket = repo_cfg.bucket
+    if not bucket:
+        if bucket_resolver is not None:
+            bucket = bucket_resolver()
+        if not bucket:
+            raise LzaError("No S3 bucket configured for LZA configuration repository.")
 
     if dry_run:
         return ConfigDownloadResult(
             workspace_dir=workspace_dir,
             config_dir=config_dir,
-            zip_path=workspace_dir / "aws-accelerator-config.zip",
-            s3_bucket=config.configuration.repository.bucket or "",
-            s3_key=CONFIG_ARCHIVE_KEY,
+            zip_path=zip_path,
+            s3_bucket=bucket,
+            s3_key=s3_key,
             aws_profile=profile,
             aws_region=region,
             diff_result=ConfigDiffResult(added=[], modified=[], removed=[]),
@@ -71,7 +86,7 @@ def download_configuration_workflow(
             dry_run=True,
         )
 
-    if config_dir.exists() and any(config_dir.iterdir()) and not force and not overwrite_confirmed:
+    if config_dir.is_dir() and any(config_dir.iterdir()) and not force and not overwrite_confirmed:
         raise LzaError(
             f"Local configuration directory is not empty: {config_dir}. Use --force to overwrite."
         )
@@ -89,8 +104,8 @@ def download_configuration_workflow(
     s3_client = aws_context.factory.get_client("s3")
     download_s3_file(
         client=s3_client,
-        bucket_name=config.configuration.repository.bucket or "",
-        object_key=CONFIG_ARCHIVE_KEY,
+        bucket_name=bucket,
+        object_key=s3_key,
         file_path=zip_path,
     )
 
@@ -119,8 +134,8 @@ def download_configuration_workflow(
         workspace_dir=workspace_dir,
         config_dir=config_dir,
         zip_path=zip_path,
-        s3_bucket=config.configuration.repository.bucket or "",
-        s3_key=CONFIG_ARCHIVE_KEY,
+        s3_bucket=bucket,
+        s3_key=s3_key,
         aws_profile=profile,
         aws_region=region,
         diff_result=diff_result,

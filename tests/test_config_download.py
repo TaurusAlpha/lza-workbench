@@ -47,6 +47,7 @@ def test_resolve_workspace_dir_fails_outside_workspace(tmp_path: Path) -> None:
 
 def test_resolve_workspace_dir_finds_workspace_from_subdir(workspace_dir: Path) -> None:
     subdir = workspace_dir / "aws-accelerator-config"
+    subdir.mkdir(parents=True, exist_ok=True)
     assert resolve_workspace_dir(subdir) == workspace_dir
 
 
@@ -69,6 +70,10 @@ def test_run_download_config_force_required(workspace_dir: Path) -> None:
     cfg.configuration.repository.bucket = "my-test-bucket"
     write_workspace_config(workspace_dir, cfg)
 
+    config_dir = workspace_dir / "aws-accelerator-config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "existing.yaml").write_text("content", encoding="utf-8")
+
     with pytest.raises(LzaError, match="not empty"):
         run_download_config(target_dir=workspace_dir, force=False, interactive=False)
 
@@ -79,6 +84,7 @@ def test_run_download_config_success(workspace_dir: Path) -> None:
     write_workspace_config(workspace_dir, cfg)
 
     config_dir = workspace_dir / "aws-accelerator-config"
+    config_dir.mkdir(parents=True, exist_ok=True)
     for item in config_dir.iterdir():
         if item.is_dir():
             shutil.rmtree(item)
@@ -139,9 +145,15 @@ def test_run_download_config_without_extract(workspace_dir: Path) -> None:
         run_download_config(target_dir=workspace_dir, force=True, extract=False)
 
     assert (workspace_dir / "aws-accelerator-config.zip").is_file()
+    assert not (workspace_dir / "aws-accelerator-config").exists()
+
+    state = load_workspace_state(workspace_dir)
+    assert state.config_downloaded_at is not None
 
 
-def test_cli_config_download_command(workspace_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_config_download_command(
+    workspace_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     cfg = load_workspace_config(workspace_dir)
     cfg.configuration.repository.bucket = "my-test-bucket"
     write_workspace_config(workspace_dir, cfg)
@@ -156,6 +168,10 @@ def test_run_download_config_interactive_declined(workspace_dir: Path) -> None:
     cfg.configuration.repository.bucket = "my-test-bucket"
     write_workspace_config(workspace_dir, cfg)
 
+    config_dir = workspace_dir / "aws-accelerator-config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "existing.yaml").write_text("content", encoding="utf-8")
+
     with patch("typer.confirm", return_value=False):
         with pytest.raises(typer.Abort):
             run_download_config(target_dir=workspace_dir, force=False, interactive=True)
@@ -166,21 +182,25 @@ def test_run_download_config_interactive_confirmed(workspace_dir: Path) -> None:
     cfg.configuration.repository.bucket = "my-test-bucket"
     write_workspace_config(workspace_dir, cfg)
 
+    config_dir = workspace_dir / "aws-accelerator-config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "existing.yaml").write_text("content", encoding="utf-8")
+
     def fake_download(bucket: str, key: str, filename: str) -> None:
         p = Path(filename)
         p.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(str(p), "w") as zf:
-            zf.writestr("aws-accelerator-config/global-config.yaml", "new content")
+            zf.writestr("aws-accelerator-config/global-config.yaml", "confirmed content")
 
     mock_s3 = MagicMock()
     mock_s3.download_file.side_effect = fake_download
 
-    with patch("typer.confirm", return_value=True), patch("boto3.Session") as mock_session_cls:
+    with patch("boto3.Session") as mock_session_cls:
         mock_session_cls.return_value.client.return_value = mock_s3
-        path = run_download_config(target_dir=workspace_dir, force=False, interactive=True)
+        with patch("typer.confirm", return_value=True):
+            path = run_download_config(target_dir=workspace_dir, force=False, interactive=True)
 
-    assert path == workspace_dir / "aws-accelerator-config"
-    assert (path / "global-config.yaml").read_text(encoding="utf-8") == "new content"
+    assert (path / "global-config.yaml").read_text(encoding="utf-8") == "confirmed content"
 
 
 def test_cli_config_download_command_fails_on_non_empty_without_force(
@@ -189,6 +209,10 @@ def test_cli_config_download_command_fails_on_non_empty_without_force(
     cfg = load_workspace_config(workspace_dir)
     cfg.configuration.repository.bucket = "my-test-bucket"
     write_workspace_config(workspace_dir, cfg)
+
+    config_dir = workspace_dir / "aws-accelerator-config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "existing.yaml").write_text("content", encoding="utf-8")
 
     monkeypatch.chdir(workspace_dir)
     exit_code = main(["config", "download"])
@@ -202,11 +226,15 @@ def test_cli_config_download_command_succeeds_with_force(
     cfg.configuration.repository.bucket = "my-test-bucket"
     write_workspace_config(workspace_dir, cfg)
 
+    config_dir = workspace_dir / "aws-accelerator-config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "existing.yaml").write_text("content", encoding="utf-8")
+
     def fake_download(bucket: str, key: str, filename: str) -> None:
         p = Path(filename)
         p.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(str(p), "w") as zf:
-            zf.writestr("aws-accelerator-config/global-config.yaml", "forced content")
+            zf.writestr("aws-accelerator-config/global-config.yaml", "force content")
 
     mock_s3 = MagicMock()
     mock_s3.download_file.side_effect = fake_download
@@ -217,9 +245,7 @@ def test_cli_config_download_command_succeeds_with_force(
         exit_code = main(["config", "download", "--force"])
 
     assert exit_code == 0
-    assert (workspace_dir / "aws-accelerator-config" / "global-config.yaml").read_text(
-        encoding="utf-8"
-    ) == "forced content"
+    assert (config_dir / "global-config.yaml").read_text(encoding="utf-8") == "force content"
 
 
 def test_run_download_config_custom_key_and_prefix(workspace_dir: Path) -> None:
@@ -248,6 +274,4 @@ def test_run_download_config_custom_key_and_prefix(workspace_dir: Path) -> None:
         "custom-prefix/custom-archive.zip",
         str(workspace_dir / "custom-archive.zip"),
     )
-    assert (path / "global-config.yaml").read_text(encoding="utf-8") == "custom key content"
-
-
+    assert path == workspace_dir / "aws-accelerator-config"

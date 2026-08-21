@@ -11,6 +11,7 @@ from lza_workbench.workflows.config_download import (
     ConfigDownloadResult,
     download_configuration_workflow,
 )
+from lza_workbench.workflows.config_init import init_config_workflow
 from lza_workbench.workflows.config_upload import (
     ConfigUploadResult,
     upload_configuration_workflow,
@@ -30,6 +31,7 @@ def initialized_workspace(tmp_path: Path) -> Path:
         dry_run=False,
         force=False,
     )
+    init_config_workflow(target_dir=ws_dir)
     from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 
     config = load_workspace_config(ws_dir)
@@ -47,7 +49,7 @@ def test_download_configuration_workflow_dry_run(initialized_workspace: Path) ->
     assert isinstance(result, ConfigDownloadResult)
     assert result.dry_run is True
     assert result.workspace_dir == initialized_workspace
-    assert result.s3_key == "aws-accelerator-config.zip"
+    assert result.s3_key == "zipped/aws-accelerator-config.zip"
 
 
 def test_upload_configuration_workflow_dry_run(initialized_workspace: Path) -> None:

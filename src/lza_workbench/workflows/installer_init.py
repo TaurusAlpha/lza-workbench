@@ -48,7 +48,9 @@ def initialize_installer_workflow(
     no_save: bool = False,
 ) -> InstallerInitResult:
     """Collect template parameters, validate them, and persist accepted local settings."""
-    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.IMPORTED)
+    ctx = load_workspace_context(
+        target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
+    )
     workspace_dir, config = ctx.workspace_dir, ctx.config
     options = config.installer.options
 

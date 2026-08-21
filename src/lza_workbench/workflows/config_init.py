@@ -1,0 +1,116 @@
+"""Workflow for initializing local LZA configuration from a template."""
+
+from __future__ import annotations
+
+import shutil
+from dataclasses import dataclass
+from pathlib import Path
+
+from lza_workbench.configuration.templates import (
+    DEFAULT_TEMPLATE_SOURCE,
+    ResolvedTemplateSource,
+    render_and_copy_template,
+    resolve_template_source,
+    validate_template,
+)
+from lza_workbench.errors import LzaError
+from lza_workbench.workspace.config import write_workspace_config
+from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.schema import WorkspaceConfig
+
+
+@dataclass(frozen=True)
+class ConfigInitResult:
+    """Structured result of configuration initialization workflow."""
+
+    workspace_dir: Path
+    config_dir: Path
+    template_source: ResolvedTemplateSource
+    written_paths: list[Path]
+    unresolved_placeholders: list[str]
+    dry_run: bool
+    config: WorkspaceConfig
+
+
+def init_config_workflow(
+    *,
+    target_dir: Path | None = None,
+    template_name: str | None = None,
+    force: bool = False,
+    dry_run: bool = False,
+) -> ConfigInitResult:
+    """Execute configuration initialization and return structured result."""
+    context = load_workspace_context(
+        target_dir=target_dir,
+        min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED,
+    )
+    workspace_dir = context.workspace_dir
+    config = context.config
+
+    # Resolve template
+    template_to_resolve = (
+        template_name
+        or config.configuration.template.name
+        or DEFAULT_TEMPLATE_SOURCE
+    )
+    resolved_template = resolve_template_source(template_to_resolve)
+    validate_template(resolved_template.config_dir)
+
+    target_config_dir = workspace_dir / config.configuration.local_path
+
+    # Check if target exists
+    if target_config_dir.exists():
+        if not target_config_dir.is_dir():
+            raise LzaError(
+                f"Target configuration path exists and is not a directory: {target_config_dir}"
+            )
+        # Check if directory has existing contents
+        has_contents = any(target_config_dir.iterdir())
+        if has_contents and not force:
+            raise LzaError(
+                f"Configuration directory already exists: '{target_config_dir}'. "
+                "Use --force to overwrite."
+            )
+
+    if not dry_run and force and target_config_dir.exists():
+        # Scoped cleanup of target directory to prevent orphaned files
+        for child in target_config_dir.iterdir():
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+
+    written_paths, unresolved = render_and_copy_template(
+        template_config_dir=resolved_template.config_dir,
+        target_config_dir=target_config_dir,
+        config=config,
+        dry_run=dry_run,
+    )
+
+    if not dry_run:
+        validate_template(target_config_dir)
+
+        # Update provenance in lza-workspace.yaml if template changed
+        template_source_type = (
+            "packaged"
+            if resolved_template.source_type == "bundled"
+            else resolved_template.source_type
+        )
+        current_template = config.configuration.template
+        if (
+            current_template.name != resolved_template.source
+            or current_template.source != template_source_type
+        ):
+            current_template.name = resolved_template.source
+            current_template.source = template_source_type  # type: ignore[assignment]
+            write_workspace_config(workspace_dir, config)
+
+    return ConfigInitResult(
+        workspace_dir=workspace_dir,
+        config_dir=target_config_dir,
+        template_source=resolved_template,
+        written_paths=written_paths,
+        unresolved_placeholders=unresolved,
+        dry_run=dry_run,
+        config=config,
+    )

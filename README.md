@@ -24,7 +24,7 @@ uv run ruff check .
 uv run pytest
 ```
 
-Create a customer workspace from the packaged default template defined by `WorkspaceConfig`:
+Create a customer workspace metadata structure:
 
 ```bash
 uv run lza init comm-it --skip-aws-check
@@ -35,7 +35,6 @@ The command prompts for missing customer/AWS values and writes:
 ```text
 comm-it/
   lza-workspace.yaml
-  aws-accelerator-config/
   aws-accelerator-installer/
   .lza/
     state.json
@@ -48,16 +47,26 @@ Use `--dry-run` to preview the file operations without writing anything:
 uv run lza init comm-it --dry-run --skip-aws-check
 ```
 
-## Installer Setup and Planning
+## Workspace Setup Flow
 
-Initialize the installer configuration first. The command prompts for every parameter exposed by
-the selected CloudFormation installer template and saves accepted values to `lza-workspace.yaml`:
+Follow the recommended workflow sequence:
 
-```bash
-lza installer init
-```
+1. **Initialize workspace metadata**:
+   ```bash
+   lza init <customer-name>
+   ```
+2. **Configure installer parameters**:
+   ```bash
+   lza installer init
+   ```
+   Prompts for parameters exposed by the selected CloudFormation installer template (including mandatory account emails) and saves accepted values to `lza-workspace.yaml`.
+3. **Initialize local LZA configuration**:
+   ```bash
+   lza config init
+   ```
+   Populates `aws-accelerator-config/` from the packaged configuration template, automatically rendering placeholders (customer slug, prefix, region, and account emails). Use `--force` to reinitialize or `--dry-run` to preview changes.
 
-Then inspect the non-mutating AWS deployment plan using the saved configuration:
+Then inspect the non-mutating AWS deployment plan:
 
 ```bash
 lza installer plan

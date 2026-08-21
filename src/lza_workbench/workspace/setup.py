@@ -1,4 +1,7 @@
-import shutil
+"""Setup helpers for workspace directory structure and files."""
+
+from __future__ import annotations
+
 from pathlib import Path
 
 from lza_workbench.errors import LzaError
@@ -28,7 +31,6 @@ def validate_workspace_structure(
 def create_workspace(
     *,
     workspace_dir: Path,
-    template_config_dir: Path,
     config: WorkspaceConfig,
     state: WorkspaceState,
 ) -> None:
@@ -37,10 +39,6 @@ def create_workspace(
     target.mkdir(parents=True, exist_ok=True)
     (target / ".lza" / "logs").mkdir(parents=True, exist_ok=True)
     (target / config.installer.local_path).mkdir(parents=True, exist_ok=True)
-
-    shutil.copytree(
-        template_config_dir, target / config.configuration.local_path, dirs_exist_ok=True
-    )
 
     write_workspace_config(target, config)
     write_workspace_state(target, state)
@@ -56,11 +54,10 @@ def overwrite_workspace_metadata(
 
 
 def planned_write_paths(workspace_dir: Path, config: WorkspaceConfig) -> list[Path]:
-    """Return the paths initialization will create or replace."""
+    """Return the paths workspace initialization will create or replace."""
     return [
         workspace_dir,
         workspace_dir / WORKSPACE_CONFIG_FILE,
-        workspace_dir / config.configuration.local_path,
         workspace_dir / config.installer.local_path,
         workspace_dir / WORKSPACE_STATE_FILE,
         workspace_dir / ".lza" / "logs",

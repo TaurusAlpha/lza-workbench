@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.configuration.schema import ConfigurationConfig
-from lza_workbench.configuration.templates import resolve_template_source, validate_template
 from lza_workbench.errors import LzaError
 from lza_workbench.workspace.paths import normalize_customer_slug, resolve_init_workspace_dir
 from lza_workbench.workspace.schema import (
@@ -57,14 +55,6 @@ def build_workspace_config(
     )
 
 
-def resolve_packaged_template(config: WorkspaceConfig) -> Path:
-    """Resolve the packaged template selected by workspace defaults."""
-    template = config.configuration.template
-    if template.source != "packaged" or template.name is None:
-        raise ValueError("Init requires a named packaged configuration template.")
-    return resolve_template_source(template.name).config_dir
-
-
 def init_workspace_workflow(
     *,
     customer_name: str,
@@ -82,14 +72,6 @@ def init_workspace_workflow(
     resolved_workspace_dir = resolve_init_workspace_dir(customer_name, workspace_dir)
 
     existing_directory = validate_workspace_structure(resolved_workspace_dir, force)
-    if (
-        existing_directory
-        and not (resolved_workspace_dir / ConfigurationConfig().local_path).is_dir()
-    ):
-        raise LzaError(
-            f"Cannot overwrite metadata: LZA configuration directory is missing in "
-            f"{resolved_workspace_dir}."
-        )
 
     if aws_auth_type != "profile":
         raise LzaError(f"Invalid AWS auth type: {aws_auth_type}")
@@ -103,10 +85,6 @@ def init_workspace_workflow(
         aws_region=aws_region,
         lza_version=lza_version,
     )
-    template_dir = resolve_packaged_template(config)
-
-    if not existing_directory:
-        validate_template(template_dir)
 
     if skip_aws_check:
         identity = None
@@ -138,11 +116,9 @@ def init_workspace_workflow(
     else:
         create_workspace(
             workspace_dir=resolved_workspace_dir,
-            template_config_dir=template_dir,
             config=config,
             state=state,
         )
-        validate_template(resolved_workspace_dir / config.configuration.local_path)
 
     return WorkspaceInitResult(
         workspace_dir=resolved_workspace_dir,

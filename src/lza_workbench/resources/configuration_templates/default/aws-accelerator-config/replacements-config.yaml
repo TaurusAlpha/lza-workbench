@@ -1,10 +1,10 @@
 globalReplacements:
   - key: CustomerName
     type: String
-    value: <lza_config.customer_slug>
+    value: ${customer.slug}
   - key: AcceleratorPrefix
     type: String
-    value: <lza_config.accelerator_prefix>
+    value: ${lza.accelerator_prefix}
   - key: HomeRegion
     type: String
-    value: <lza_config.region>
+    value: ${aws.region}

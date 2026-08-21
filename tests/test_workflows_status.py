@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lza_workbench.aws.cloudformation import CfnStackStatusResult
+from lza_workbench.workflows.config_init import init_config_workflow
 from lza_workbench.workflows.status_config import (
     ConfigurationStatusResult,
     get_config_status_workflow,
@@ -39,6 +40,7 @@ def status_workspace(tmp_path: Path) -> Path:
         dry_run=False,
         force=False,
     )
+    init_config_workflow(target_dir=ws_dir)
     return ws_dir
 
 

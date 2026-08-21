@@ -13,6 +13,7 @@ from lza_workbench.cli.commands.config_upload import (
 )
 from lza_workbench.cli.main import main
 from lza_workbench.errors import LzaError
+from lza_workbench.workflows.config_init import init_config_workflow
 from lza_workbench.workflows.workspace_init import init_workspace_workflow
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.paths import resolve_workspace_dir
@@ -32,6 +33,7 @@ def workspace_dir(tmp_path: Path) -> Path:
         force=False,
         skip_aws_check=True,
     )
+    init_config_workflow(target_dir=target)
     config = load_workspace_config(target)
     config.configuration.repository.type = "s3"
     write_workspace_config(target, config)

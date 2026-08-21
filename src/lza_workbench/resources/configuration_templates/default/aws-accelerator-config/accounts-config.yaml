@@ -4,7 +4,7 @@ mandatoryAccounts:
       The management (primary) account. Do not change the name field for this
       mandatory account. Note, the account name key does not need to match the
       AWS account name.
-    email: <lza_config.management_account_email>
+    email: ${installer.options.management_account_email}
     organizationalUnit: Root
     warm: false
   - name: LogArchive
@@ -12,7 +12,7 @@ mandatoryAccounts:
       The log archive account. Do not change the name field for this mandatory
       account. Note, the account name key does not need to match the AWS account
       name.
-    email: <lza_config.log_archive_account_email>
+    email: ${installer.options.log_archive_account_email}
     organizationalUnit: Security
     warm: false
   - name: Audit
@@ -20,7 +20,7 @@ mandatoryAccounts:
       The security audit account (also referred to as the audit account). Do not
       change the name field for this mandatory account. Note, the account name
       key does not need to match the AWS account name.
-    email: <lza_config.audit_account_email>
+    email: ${installer.options.audit_account_email}
     organizationalUnit: Security
     warm: false
 workloadAccounts: []

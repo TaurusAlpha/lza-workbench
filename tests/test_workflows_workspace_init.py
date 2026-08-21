@@ -42,4 +42,5 @@ def test_init_workspace_workflow_execution(tmp_path: Path) -> None:
     assert result.dry_run is False
     assert (target_dir / "lza-workspace.yaml").is_file()
     assert (target_dir / ".lza" / "state.json").is_file()
-    assert (target_dir / "aws-accelerator-config").is_dir()
+    assert (target_dir / "aws-accelerator-installer").is_dir()
+    assert not (target_dir / "aws-accelerator-config").exists()

@@ -9,6 +9,7 @@ import pytest
 
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult
 from lza_workbench.installer.versions import PACKAGED_INSTALLER_VERSION
+from lza_workbench.workflows.config_init import init_config_workflow
 from lza_workbench.workflows.installer_deploy import (
     InstallerDeployResult,
     deploy_installer_workflow,
@@ -29,6 +30,7 @@ def deployed_workspace(tmp_path: Path) -> Path:
         dry_run=False,
         force=False,
     )
+    init_config_workflow(target_dir=ws_dir)
     from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 
     config = load_workspace_config(ws_dir)

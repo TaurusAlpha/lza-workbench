@@ -14,6 +14,9 @@ from lza_workbench.cli import params
 from lza_workbench.cli.commands.config_download import (
     config_download_command as run_cli_download_config,
 )
+from lza_workbench.cli.commands.config_init import (
+    config_init_command as run_cli_init_config,
+)
 from lza_workbench.cli.commands.config_upload import (
     config_upload_command as run_cli_upload_config,
 )
@@ -239,6 +242,20 @@ def bootstrap_command(
         dry_run=dry_run,
         force=force,
         interactive=_is_interactive(),
+    )
+
+
+@config_app.command("init")
+def config_init_command(
+    template: params.ConfigTemplate = None,
+    force: params.Force = False,
+    dry_run: params.DryRun = False,
+) -> None:
+    """Initialize local LZA configuration in the current workspace from a template."""
+    run_cli_init_config(
+        template=template,
+        force=force,
+        dry_run=dry_run,
     )
 
 

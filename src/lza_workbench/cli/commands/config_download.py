@@ -60,7 +60,7 @@ def config_download_command(
         ws_dir = resolve_workspace_dir(target_dir)
         cfg = load_workspace_config(ws_dir)
         local_dir = ws_dir / cfg.configuration.local_path
-        if local_dir.exists() and any(local_dir.iterdir()):
+        if local_dir.is_dir() and any(local_dir.iterdir()):
             confirm = typer.confirm(
                 f"Local configuration directory {local_dir} is not empty. Overwrite local files?"
             )

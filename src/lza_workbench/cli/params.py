@@ -161,3 +161,12 @@ AuditAccountEmail = Annotated[
         help="Security Audit account email address.",
     ),
 ]
+
+ConfigTemplate = Annotated[
+    str | None,
+    typer.Option(
+        "--template",
+        "-t",
+        help="Packaged configuration template name or path.",
+    ),
+]

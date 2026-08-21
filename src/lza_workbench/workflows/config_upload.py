@@ -21,8 +21,6 @@ from lza_workbench.workspace.context import (
 )
 from lza_workbench.workspace.state import write_workspace_state
 
-CONFIG_ARCHIVE_KEY = "aws-accelerator-config.zip"
-
 
 @dataclass(frozen=True)
 class ConfigUploadResult:
@@ -58,17 +56,33 @@ def upload_configuration_workflow(
 
     validate_template(config_dir)
 
-    zip_path = workspace_dir / "aws-accelerator-config.zip"
+    repo_cfg = config.configuration.repository
+    prefix = repo_cfg.prefix or ""
+    key = repo_cfg.key or "aws-accelerator-config.zip"
+    if prefix:
+        prefix_clean = prefix if prefix.endswith("/") else f"{prefix}/"
+        s3_key = f"{prefix_clean}{key}"
+    else:
+        s3_key = key
+    zip_path = workspace_dir / key
+
     profile = config.aws.profile or ""
     region = config.aws.region
+
+    bucket = repo_cfg.bucket
+    if not bucket:
+        if bucket_resolver is not None:
+            bucket = bucket_resolver()
+        if not bucket:
+            raise LzaError("No S3 bucket configured for LZA configuration repository.")
 
     if dry_run:
         return ConfigUploadResult(
             workspace_dir=workspace_dir,
             config_dir=config_dir,
             zip_path=zip_path,
-            s3_bucket=config.configuration.repository.bucket or "",
-            s3_key=CONFIG_ARCHIVE_KEY,
+            s3_bucket=bucket,
+            s3_key=s3_key,
             aws_profile=profile,
             aws_region=region,
             diff_result=ConfigDiffResult(added=[], modified=[], removed=[]),
@@ -99,8 +113,8 @@ def upload_configuration_workflow(
     etag, version_id = upload_s3_file(
         client=s3_client,
         file_path=zip_path,
-        bucket_name=config.configuration.repository.bucket or "",
-        object_key=CONFIG_ARCHIVE_KEY,
+        bucket_name=bucket,
+        object_key=s3_key,
     )
     record_config_upload(
         state,
@@ -117,8 +131,8 @@ def upload_configuration_workflow(
         workspace_dir=workspace_dir,
         config_dir=config_dir,
         zip_path=zip_path,
-        s3_bucket=config.configuration.repository.bucket or "",
-        s3_key=CONFIG_ARCHIVE_KEY,
+        s3_bucket=bucket,
+        s3_key=s3_key,
         aws_profile=profile,
         aws_region=region,
         diff_result=diff_result,

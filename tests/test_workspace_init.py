@@ -12,7 +12,6 @@ from lza_workbench.cli.commands.workspace_init import (
 from lza_workbench.errors import LzaError
 from lza_workbench.workflows.workspace_init import (
     build_workspace_config,
-    resolve_packaged_template,
 )
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.paths import resolve_init_workspace_dir
@@ -42,18 +41,6 @@ def test_build_workspace_config_uses_workspace_defaults() -> None:
     assert config.installer.local_path == "aws-accelerator-installer"
 
 
-def test_resolve_packaged_template_uses_config_default() -> None:
-    config = build_workspace_config(
-        customer_name="Example Customer",
-        customer_slug="example-customer",
-        aws_profile="example-root",
-        aws_region="eu-west-1",
-        lza_version="v1.15.5",
-    )
-
-    assert resolve_packaged_template(config).name == "aws-accelerator-config"
-
-
 def test_run_init_dry_run_does_not_create_workspace(tmp_path: Path) -> None:
     workspace_dir = tmp_path / "example-customer"
 
@@ -72,7 +59,7 @@ def test_run_init_dry_run_does_not_create_workspace(tmp_path: Path) -> None:
     assert not workspace_dir.exists()
 
 
-def test_run_init_creates_workspace_from_packaged_template(tmp_path: Path) -> None:
+def test_run_init_creates_workspace_metadata(tmp_path: Path) -> None:
     workspace_dir = tmp_path / "example-customer"
 
     run_init(
@@ -90,8 +77,10 @@ def test_run_init_creates_workspace_from_packaged_template(tmp_path: Path) -> No
     config = load_workspace_config(workspace_dir)
     state = load_workspace_state(workspace_dir)
     assert config.customer.slug == "example-customer"
-    assert (workspace_dir / config.configuration.local_path / "global-config.yaml").is_file()
+    assert (workspace_dir / "lza-workspace.yaml").is_file()
+    assert (workspace_dir / ".lza" / "state.json").is_file()
     assert (workspace_dir / config.installer.local_path).is_dir()
+    assert not (workspace_dir / config.configuration.local_path).exists()
     assert state.initialized_at is None
 
 
