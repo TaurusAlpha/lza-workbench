@@ -14,6 +14,7 @@ from lza_workbench.configuration.archive import (
 )
 from lza_workbench.configuration.git import (
     clone_git_repository,
+    configure_codecommit_credential_helper,
     count_git_files,
     fetch_git_remote,
     get_git_branch,
@@ -266,23 +267,37 @@ def _handle_git_pull(
                 f"No remote URL configured for '{repo_type}' configuration repository. "
                 "Configure repository settings before pulling."
             )
+        profile = config.aws.profile if repo_type == "codecommit" else None  # type: ignore[union-attr]
         if config_dir.exists() and any(config_dir.iterdir()):
             if not force and not overwrite_confirmed:
                 raise LzaError(
                     f"Local configuration directory '{config_dir}' is not a Git repository "
                     "and contains files. Use --force to initialize and synchronize."
                 )
-            init_git_repository(config_dir, remote_name=remote_name, remote_url=remote_url)
+            init_git_repository(
+                config_dir,
+                remote_name=remote_name,
+                remote_url=remote_url,
+                aws_profile=profile,
+            )
             fetch_git_remote(config_dir, remote=remote_name)
             pull_git_branch(config_dir, remote=remote_name, branch=branch)
         else:
-            clone_git_repository(config_dir, remote_url=remote_url, branch=branch)
+            clone_git_repository(
+                config_dir,
+                remote_url=remote_url,
+                branch=branch,
+                aws_profile=profile,
+            )
     else:
         existing_url = get_git_remote_url(config_dir, remote_name)
         if not existing_url and remote_url:
             set_git_remote_url(config_dir, remote_name, remote_url)
         elif existing_url:
             remote_url = existing_url
+
+        if repo_type == "codecommit" and config.aws.profile:  # type: ignore[union-attr]
+            configure_codecommit_credential_helper(config_dir, config.aws.profile)  # type: ignore[union-attr]
 
         if has_uncommitted_changes(config_dir):
             if not force and not overwrite_confirmed:

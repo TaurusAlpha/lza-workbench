@@ -139,6 +139,10 @@ def test_pull_codecommit_success(
     mock_fetch.assert_called_once_with(config_dir, remote="origin")
     mock_pull.assert_called_once_with(config_dir, remote="origin", branch="main")
 
+    git_config_content = (config_dir / ".git" / "config").read_text(encoding="utf-8")
+    assert "codecommit credential-helper $@" in git_config_content
+    assert "UseHttpPath = true" in git_config_content
+
     state = load_workspace_state(configured_workspace)
     assert state.config_downloaded_at is not None
 

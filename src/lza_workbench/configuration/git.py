@@ -130,10 +130,23 @@ def pull_git_branch(repo_dir: Path, remote: str, branch: str) -> None:
         )
 
 
+def configure_codecommit_credential_helper(
+    repo_dir: Path,
+    aws_profile: str,
+) -> None:
+    """Configure AWS CodeCommit credential helper in repository .git/config."""
+    if not (repo_dir / ".git").exists() and not is_git_repository(repo_dir):
+        return
+    helper_cmd = f"!aws --profile {aws_profile} codecommit credential-helper $@"
+    _run_git_command(["config", "credential.helper", helper_cmd], cwd=repo_dir)
+    _run_git_command(["config", "credential.UseHttpPath", "true"], cwd=repo_dir)
+
+
 def init_git_repository(
     repo_dir: Path,
     remote_name: str = "origin",
     remote_url: str | None = None,
+    aws_profile: str | None = None,
 ) -> None:
     """Initialize a git repository in repo_dir and configure remote if provided."""
     repo_dir.mkdir(parents=True, exist_ok=True)
@@ -144,14 +157,17 @@ def init_git_repository(
         )
     if remote_url:
         set_git_remote_url(repo_dir, remote_name, remote_url)
+    if aws_profile:
+        configure_codecommit_credential_helper(repo_dir, aws_profile)
 
 
 def clone_git_repository(
     repo_dir: Path,
     remote_url: str,
     branch: str | None = None,
+    aws_profile: str | None = None,
 ) -> None:
-    """Clone a remote repository into repo_dir."""
+    """Clone a remote repository into repo_dir and configure credential helper if profile given."""
     repo_dir.parent.mkdir(parents=True, exist_ok=True)
     args = ["clone"]
     if branch:
@@ -162,4 +178,7 @@ def clone_git_repository(
         raise LzaError(
             f"Failed to clone repository '{remote_url}' into '{repo_dir}': {proc.stderr.strip()}"
         )
+    if aws_profile and "codecommit" in remote_url.lower():
+        configure_codecommit_credential_helper(repo_dir, aws_profile)
+
 

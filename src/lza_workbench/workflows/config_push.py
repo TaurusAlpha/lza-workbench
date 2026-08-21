@@ -13,6 +13,7 @@ from lza_workbench.configuration.archive import (
     create_zip_archive,
 )
 from lza_workbench.configuration.git import (
+    configure_codecommit_credential_helper,
     count_git_files,
     get_git_branch,
     get_git_commit,
@@ -240,6 +241,8 @@ def _handle_git_push(
             region = config.aws.region  # type: ignore[union-attr]
             remote_url = f"https://git-codecommit.{region}.amazonaws.com/v1/repos/{repo_name}"
             set_git_remote_url(config_dir, remote_name, remote_url)
+        if config.aws.profile:  # type: ignore[union-attr]
+            configure_codecommit_credential_helper(config_dir, config.aws.profile)  # type: ignore[union-attr]
     else:  # codeconnection or git
         if not remote_url:
             if repo_cfg.repository:

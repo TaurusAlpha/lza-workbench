@@ -182,6 +182,10 @@ def test_push_codecommit_success(
     assert result.exit_code == 0
     mock_push.assert_called_once_with(config_dir, remote="origin", branch="main", dry_run=False)
 
+    git_config_content = (config_dir / ".git" / "config").read_text(encoding="utf-8")
+    assert "codecommit credential-helper $@" in git_config_content
+    assert "UseHttpPath = true" in git_config_content
+
     state = load_workspace_state(configured_workspace)
     assert state.config_uploaded_at is not None
 

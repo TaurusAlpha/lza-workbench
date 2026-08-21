@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from lza_workbench.configuration.git import (
+    configure_codecommit_credential_helper,
+    is_git_repository,
+)
 from lza_workbench.configuration.rendering import (
     capture_init_values_snapshot,
     compute_config_directory_digest,
@@ -141,6 +145,13 @@ def init_config_workflow(
             current_template.name = resolved_template.source
             current_template.source = template_source_type  # type: ignore[assignment]
             write_workspace_config(workspace_dir, config)
+
+        if (
+            config.configuration.repository.type == "codecommit"
+            and config.aws.profile
+            and (is_git_repository(target_config_dir) or (target_config_dir / ".git").exists())
+        ):
+            configure_codecommit_credential_helper(target_config_dir, config.aws.profile)
 
         if state:
             state.config_initialized_at = datetime.now(UTC)
