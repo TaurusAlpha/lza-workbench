@@ -13,7 +13,6 @@ from lza_workbench.workflows.workspace_bootstrap import (
     get_workbench_assets_bucket_name,
     plan_bootstrap_workflow,
 )
-from lza_workbench.workflows.workspace_init import init_workspace_workflow
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.state import load_workspace_state
 
@@ -45,16 +44,7 @@ def test_ensure_s3_workbench_assets_bucket_new_bucket() -> None:
     assert len(actions) == 3
 
 
-def test_plan_bootstrap_workflow_create(tmp_path: Path) -> None:
-    ws_dir = tmp_path / "bootstrap-test"
-    init_workspace_workflow(
-        customer_name="Acme Corp",
-        workspace_dir=ws_dir,
-        aws_profile="acme-root",
-        aws_region="eu-west-1",
-        skip_aws_check=True,
-    )
-
+def test_plan_bootstrap_workflow_create(initialized_workspace: Path) -> None:
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
@@ -67,7 +57,7 @@ def test_plan_bootstrap_workflow_create(tmp_path: Path) -> None:
         )
         mock_client.return_value = mock_s3
 
-        plan = plan_bootstrap_workflow(target_dir=ws_dir, dry_run=True)
+        plan = plan_bootstrap_workflow(target_dir=initialized_workspace, dry_run=True)
         assert plan.planned_operation == "CREATE"
         assert plan.account_id == "111222333444"
         assert plan.bucket_name == "s3-lza-workbench-assets-111222333444-eu-west-1"
@@ -75,16 +65,7 @@ def test_plan_bootstrap_workflow_create(tmp_path: Path) -> None:
         assert len(plan.actions) == 3
 
 
-def test_plan_bootstrap_workflow_no_change(tmp_path: Path) -> None:
-    ws_dir = tmp_path / "bootstrap-test"
-    init_workspace_workflow(
-        customer_name="Acme Corp",
-        workspace_dir=ws_dir,
-        aws_profile="acme-root",
-        aws_region="eu-west-1",
-        skip_aws_check=True,
-    )
-
+def test_plan_bootstrap_workflow_no_change(initialized_workspace: Path) -> None:
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
@@ -106,23 +87,16 @@ def test_plan_bootstrap_workflow_no_change(tmp_path: Path) -> None:
         }
         mock_client.return_value = mock_s3
 
-        plan = plan_bootstrap_workflow(target_dir=ws_dir, dry_run=True)
+        plan = plan_bootstrap_workflow(target_dir=initialized_workspace, dry_run=True)
         assert plan.planned_operation == "NO_CHANGE"
         assert plan.bucket_exists is True
         assert plan.versioning_enabled is True
         assert plan.encryption_enabled is True
 
 
-def test_bootstrap_workspace_workflow_executes_and_saves_state(tmp_path: Path) -> None:
-    ws_dir = tmp_path / "bootstrap-test"
-    init_workspace_workflow(
-        customer_name="Acme Corp",
-        workspace_dir=ws_dir,
-        aws_profile="acme-root",
-        aws_region="eu-west-1",
-        skip_aws_check=True,
-    )
-
+def test_bootstrap_workspace_workflow_executes_and_saves_state(
+    initialized_workspace: Path,
+) -> None:
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
@@ -136,7 +110,7 @@ def test_bootstrap_workspace_workflow_executes_and_saves_state(tmp_path: Path) -
         mock_client.return_value = mock_s3
 
         result = bootstrap_workspace_workflow(
-            target_dir=ws_dir,
+            target_dir=initialized_workspace,
             dry_run=False,
         )
 
@@ -145,11 +119,11 @@ def test_bootstrap_workspace_workflow_executes_and_saves_state(tmp_path: Path) -
         assert len(result.actions_taken) == 3
 
         # Verify config saved
-        cfg = load_workspace_config(ws_dir)
+        cfg = load_workspace_config(initialized_workspace)
         assert cfg.assets_bucket == "s3-lza-workbench-assets-111222333444-eu-west-1"
 
         # Verify state saved
-        st = load_workspace_state(ws_dir)
+        st = load_workspace_state(initialized_workspace)
         assert st.assets_bucket_name == "s3-lza-workbench-assets-111222333444-eu-west-1"
         assert st.bootstrapped_at is not None
         assert st.management_account_id == "111222333444"
