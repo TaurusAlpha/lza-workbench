@@ -1,7 +1,9 @@
-"""AWS CloudFormation integration utilities for LZA installer deployment planning."""
+"""AWS CloudFormation service adapter for stack operations."""
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -13,14 +15,13 @@ from lza_workbench.errors import LzaError
 
 @dataclass
 class CfnDeploymentPlanResult:
-    """Result of CloudFormation deployment planning inspection."""
+    """Result of CloudFormation stack parameter inspection."""
 
     stack_name: str
     operation: str  # CREATE, UPDATE, NO_CHANGE, UNKNOWN
     stack_status: str | None
     resolved_parameters: dict[str, str]
     parameter_diffs: dict[str, tuple[str, str]] = field(default_factory=dict)
-    provenance: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -36,6 +37,19 @@ class CfnStackStatusResult:
     creation_time: str | None = None
     last_updated_time: str | None = None
     error: str | None = None
+
+
+def _is_stack_not_found(exc: Exception) -> bool:
+    """Check if an AWS exception indicates that the CloudFormation stack does not exist."""
+    if isinstance(exc, ClientError):
+        error = exc.response.get("Error", {})
+        code = error.get("Code", "")
+        message = error.get("Message", "") or str(exc)
+        if code in {"StackNotFoundException", "ResourceNotFoundException", "404"}:
+            return True
+        if code == "ValidationError" and "does not exist" in message.lower():
+            return True
+    return False
 
 
 def _get_cfn_client(
@@ -56,20 +70,15 @@ def inspect_cloudformation_stack(
     stack_name: str,
     resolved_parameters: dict[str, str],
 ) -> CfnDeploymentPlanResult:
-    """Inspect CloudFormation stack to determine deployment operation without mutating AWS."""
-    clean_stack_name = (stack_name or "AWSAccelerator-InstallerStack").strip()
-
-    provenance = {
-        "RepositorySource": "installer.source_code.repository_type",
-        "RepositoryOwner": "installer.source_code.owner",
-        "RepositoryName": "installer.source_code.repository_name",
-        "RepositoryBranchName": "installer.source_code.branch",
-        "ManagementAccountEmail": "installer.options.management_account_email",
-        "LogArchiveAccountEmail": "installer.options.log_archive_account_email",
-        "AuditAccountEmail": "installer.options.audit_account_email",
-        "AcceleratorPrefix": "lza.accelerator_prefix",
-        "ConfigurationRepositoryLocation": "configuration.repository.type",
-    }
+    """Inspect CloudFormation stack parameters and compare with desired parameters."""
+    clean_stack_name = (stack_name or "").strip()
+    if not clean_stack_name:
+        return CfnDeploymentPlanResult(
+            stack_name="",
+            operation="UNKNOWN",
+            stack_status="Stack name is required",
+            resolved_parameters=resolved_parameters,
+        )
 
     cfn = _get_cfn_client(factory=factory, client=client)
     if cfn is None:
@@ -78,7 +87,6 @@ def inspect_cloudformation_stack(
             operation="CREATE",
             stack_status=None,
             resolved_parameters=resolved_parameters,
-            provenance=provenance,
         )
 
     try:
@@ -90,7 +98,6 @@ def inspect_cloudformation_stack(
                 operation="CREATE",
                 stack_status=None,
                 resolved_parameters=resolved_parameters,
-                provenance=provenance,
             )
 
         stack = stacks[0]
@@ -110,29 +117,25 @@ def inspect_cloudformation_stack(
 
         return CfnDeploymentPlanResult(
             stack_name=clean_stack_name,
-            operation=operation if stack_status != "ROLLBACK_COMPLETE" else "CREATE",
+            operation=operation,
             stack_status=stack_status,
             resolved_parameters=resolved_parameters,
             parameter_diffs=diffs,
-            provenance=provenance,
         )
 
     except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "")
-        if code in {"ValidationError", "404"} or "does not exist" in str(exc):
+        if _is_stack_not_found(exc):
             return CfnDeploymentPlanResult(
                 stack_name=clean_stack_name,
                 operation="CREATE",
                 stack_status=None,
                 resolved_parameters=resolved_parameters,
-                provenance=provenance,
             )
         return CfnDeploymentPlanResult(
             stack_name=clean_stack_name,
             operation="UNKNOWN",
             stack_status=f"Error: {exc}",
             resolved_parameters=resolved_parameters,
-            provenance=provenance,
         )
     except BotoCoreError as exc:
         return CfnDeploymentPlanResult(
@@ -140,18 +143,24 @@ def inspect_cloudformation_stack(
             operation="UNKNOWN",
             stack_status=f"Connection failure: {exc}",
             resolved_parameters=resolved_parameters,
-            provenance=provenance,
         )
 
 
 def get_cloudformation_stack_status(
     *,
-    client: Any | None = None,
     factory: AwsClientFactory | None = None,
+    client: Any | None = None,
     stack_name: str,
 ) -> CfnStackStatusResult:
     """Get CloudFormation stack status, parameters, and outputs without mutating AWS."""
-    clean_stack_name = (stack_name or "AWSAccelerator-InstallerStack").strip()
+    clean_stack_name = (stack_name or "").strip()
+    if not clean_stack_name:
+        return CfnStackStatusResult(
+            stack_name="",
+            exists=False,
+            stack_status="NOT_SPECIFIED",
+            error="Stack name is empty",
+        )
 
     cfn = _get_cfn_client(factory=factory, client=client)
     if cfn is None:
@@ -200,9 +209,7 @@ def get_cloudformation_stack_status(
         )
 
     except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "")
-
-        if code in {"ValidationError", "404"} or "does not exist" in str(exc):
+        if _is_stack_not_found(exc):
             return CfnStackStatusResult(
                 stack_name=clean_stack_name,
                 exists=False,
@@ -232,12 +239,16 @@ def deploy_cloudformation_stack(
     template_url: str | None = None,
     parameters: dict[str, str],
     operation: str,
+    capabilities: list[str] | None = None,
 ) -> str:
     """Trigger CloudFormation stack creation or update.
 
     Returns the stack ID returned by CloudFormation.
     """
-    clean_stack_name = (stack_name or "AWSAccelerator-InstallerStack").strip()
+    clean_stack_name = (stack_name or "").strip()
+    if not clean_stack_name:
+        raise ValueError("Stack name must not be empty")
+
     cfn = _get_cfn_client(factory=factory, client=client)
     if cfn is None:
         raise ValueError("AWS CloudFormation client is not available")
@@ -248,12 +259,16 @@ def deploy_cloudformation_stack(
         )
 
     cfn_params = [{"ParameterKey": k, "ParameterValue": v} for k, v in parameters.items()]
-    capabilities = ["CAPABILITY_NAMED_IAM", "CAPABILITY_AUTO_EXPAND"]
+    resolved_capabilities = (
+        capabilities
+        if capabilities is not None
+        else ["CAPABILITY_NAMED_IAM", "CAPABILITY_AUTO_EXPAND"]
+    )
 
     kwargs: dict[str, Any] = {
         "StackName": clean_stack_name,
         "Parameters": cfn_params,
-        "Capabilities": capabilities,
+        "Capabilities": resolved_capabilities,
     }
     if template_url:
         kwargs["TemplateURL"] = template_url
@@ -277,12 +292,18 @@ def stream_cloudformation_stack_events(
     stack_name: str,
     poll_interval: float = 3.0,
     max_consecutive_errors: int = 5,
-    on_event: Any | None = None,
+    on_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> CfnStackStatusResult:
     """Stream CloudFormation stack events in real-time until stack reaches terminal status."""
-    import time
+    clean_stack_name = (stack_name or "").strip()
+    if not clean_stack_name:
+        return CfnStackStatusResult(
+            stack_name="",
+            exists=False,
+            stack_status="NOT_SPECIFIED",
+            error="Stack name is empty",
+        )
 
-    clean_stack_name = (stack_name or "AWSAccelerator-InstallerStack").strip()
     cfn = _get_cfn_client(factory=factory, client=client)
     if cfn is None:
         return CfnStackStatusResult(
@@ -340,8 +361,7 @@ def stream_cloudformation_stack_events(
                     return status_res
 
         except ClientError as exc:
-            code = exc.response.get("Error", {}).get("Code", "")
-            if code in {"ValidationError", "404"} or "does not exist" in str(exc):
+            if _is_stack_not_found(exc):
                 # Stack might have finished deleting or does not exist
                 status_res = get_cloudformation_stack_status(
                     client=cfn, stack_name=clean_stack_name
@@ -371,12 +391,38 @@ def stream_cloudformation_stack_events(
         time.sleep(poll_interval)
 
 
-def delete_cloudformation_stack(*, client, stack_name: str) -> None:
+def delete_cloudformation_stack(
+    *,
+    factory: AwsClientFactory | None = None,
+    client: Any | None = None,
+    stack_name: str,
+) -> None:
+    """Delete a CloudFormation stack and wait for deletion to complete."""
+    clean_stack_name = (stack_name or "").strip()
+    if not clean_stack_name:
+        raise ValueError("Stack name must not be empty")
+
+    cfn = _get_cfn_client(factory=factory, client=client)
+    if cfn is None:
+        raise ValueError("AWS CloudFormation client is not available")
+
     try:
-        waiter = client.get_waiter("stack_delete_complete")
-        client.delete_stack(StackName=stack_name)
-        waiter.wait(StackName=stack_name)
+        waiter = cfn.get_waiter("stack_delete_complete")
+        cfn.delete_stack(StackName=clean_stack_name)
+        waiter.wait(StackName=clean_stack_name)
     except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "")
-        if code not in {"ValidationError", "404"} and "does not exist" not in str(exc):
-            raise LzaError(f"Failed to delete CloudFormation stack '{stack_name}': {exc}") from exc
+        if not _is_stack_not_found(exc):
+            raise LzaError(
+                f"Failed to delete CloudFormation stack '{clean_stack_name}': {exc}"
+            ) from exc
+
+
+__all__ = [
+    "CfnDeploymentPlanResult",
+    "CfnStackStatusResult",
+    "delete_cloudformation_stack",
+    "deploy_cloudformation_stack",
+    "get_cloudformation_stack_status",
+    "inspect_cloudformation_stack",
+    "stream_cloudformation_stack_events",
+]

@@ -275,3 +275,91 @@ def test_delete_cloudformation_stack() -> None:
     delete_cloudformation_stack(client=client, stack_name="MyStack")
     client.delete_stack.assert_called_once_with(StackName="MyStack")
     waiter.wait.assert_called_once_with(StackName="MyStack")
+
+
+def test_cloudformation_empty_stack_names() -> None:
+    """Test handling of empty stack names across cloudformation functions."""
+    res_inspect = inspect_cloudformation_stack(stack_name="", resolved_parameters={})
+    assert res_inspect.operation == "UNKNOWN"
+    assert res_inspect.stack_name == ""
+
+    res_status = get_cloudformation_stack_status(stack_name="")
+    assert res_status.exists is False
+    assert res_status.error == "Stack name is empty"
+
+    res_stream = stream_cloudformation_stack_events(stack_name="")
+    assert res_stream.exists is False
+    assert res_stream.error == "Stack name is empty"
+
+    with pytest.raises(ValueError, match="Stack name must not be empty"):
+        deploy_cloudformation_stack(
+            stack_name="",
+            template_body="{}",
+            parameters={},
+            operation="CREATE",
+        )
+
+    with pytest.raises(ValueError, match="Stack name must not be empty"):
+        delete_cloudformation_stack(stack_name="")
+
+
+def test_deploy_cloudformation_stack_custom_capabilities() -> None:
+    """Test deploying a stack with custom capabilities."""
+    client = MagicMock()
+    client.create_stack.return_value = {"StackId": "arn:aws:cfn:stack/created"}
+
+    deploy_cloudformation_stack(
+        client=client,
+        stack_name="MyCustomStack",
+        template_body="{}",
+        parameters={},
+        operation="CREATE",
+        capabilities=["CAPABILITY_IAM"],
+    )
+    client.create_stack.assert_called_once_with(
+        StackName="MyCustomStack",
+        TemplateBody="{}",
+        Parameters=[],
+        Capabilities=["CAPABILITY_IAM"],
+    )
+
+
+def test_inspect_cloudformation_stack_validation_error_not_swallowed() -> None:
+    """Non-missing ValidationError is reported as an error, not treated as a missing stack."""
+    client = MagicMock()
+    client.describe_stacks.side_effect = ClientError(
+        {"Error": {"Code": "ValidationError", "Message": "Invalid template syntax"}},
+        "DescribeStacks",
+    )
+
+    res = inspect_cloudformation_stack(
+        client=client,
+        stack_name="MyStack",
+        resolved_parameters={"Param1": "Val1"},
+    )
+    assert res.operation == "UNKNOWN"
+    assert "Invalid template syntax" in str(res.stack_status)
+
+
+def test_inspect_cloudformation_stack_preserves_rollback_complete_status() -> None:
+    """Stack inspection reports actual ROLLBACK_COMPLETE status without forcing CREATE."""
+    client = MagicMock()
+    client.describe_stacks.return_value = {
+        "Stacks": [
+            {
+                "StackName": "MyStack",
+                "StackStatus": "ROLLBACK_COMPLETE",
+                "Parameters": [{"ParameterKey": "Param1", "ParameterValue": "OldVal"}],
+            }
+        ]
+    }
+
+    res = inspect_cloudformation_stack(
+        client=client,
+        stack_name="MyStack",
+        resolved_parameters={"Param1": "NewVal"},
+    )
+    assert res.operation == "UPDATE"
+    assert res.stack_status == "ROLLBACK_COMPLETE"
+
+

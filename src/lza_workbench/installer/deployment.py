@@ -114,6 +114,8 @@ def inspect_installer_source(
 
 def validate_cloudformation_plan(plan: CfnDeploymentPlanResult) -> str:
     """Return a safe mutation operation or reject an unknown/unsafe stack state."""
+    if plan.stack_status == "ROLLBACK_COMPLETE":
+        return "CREATE"
     if (
         plan.operation in {"CREATE", "NO_CHANGE"}
         and plan.stack_status in SAFE_CREATE_STACK_STATUSES
@@ -128,6 +130,7 @@ def validate_cloudformation_plan(plan: CfnDeploymentPlanResult) -> str:
         "Refusing CloudFormation deployment because the stack state is unsafe or unknown: "
         f"operation={plan.operation}, status={plan.stack_status or 'not found'}."
     )
+
 
 
 __all__ = [
