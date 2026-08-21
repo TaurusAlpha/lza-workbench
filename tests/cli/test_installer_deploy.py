@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -19,7 +20,8 @@ from lza_workbench.installer.deployment import (
     inspect_installer_source,
     validate_cloudformation_plan,
 )
-from lza_workbench.workspace.config import write_workspace_config
+from lza_workbench.installer.state import record_installer_deployment
+from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,
@@ -69,7 +71,6 @@ def sample_workspace(tmp_path: Path) -> Path:
 
 
 def test_missing_aws_profile_failure(tmp_path: Path) -> None:
-    """Test that missing AWS profile in lza-workspace.yaml raises an exception."""
     ws_dir = tmp_path / "no-aws"
     ws_dir.mkdir(parents=True, exist_ok=True)
     with pytest.raises(
@@ -86,7 +87,6 @@ def test_missing_aws_profile_failure(tmp_path: Path) -> None:
 
 
 def test_missing_required_params_failure(tmp_path: Path) -> None:
-    """Test that missing required installer parameters stops deployment."""
     ws_dir = tmp_path / "incomplete"
     ws_dir.mkdir(parents=True, exist_ok=True)
     (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
@@ -104,6 +104,24 @@ def test_missing_required_params_failure(tmp_path: Path) -> None:
         run_installer_deploy(target_dir=ws_dir)
 
 
+def test_installer_deploy_refuses_imported_workspace(tmp_path: Path) -> None:
+    ws_dir = tmp_path / "imported-ws-deploy"
+    ws_dir.mkdir(parents=True, exist_ok=True)
+    (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Imported Customer", slug="imported-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+    write_workspace_config(ws_dir, config)
+    write_workspace_state(ws_dir, WorkspaceState.from_config(config))
+
+    with pytest.raises(LzaError, match="missing required installer configuration parameters"):
+        run_installer_deploy(target_dir=ws_dir)
+
+
 @patch("lza_workbench.workflows.installer_deploy.resolve_aws_execution_context")
 @patch("lza_workbench.workflows.installer_deploy.inspect_cloudformation_stack")
 def test_installer_deploy_dry_run(
@@ -111,7 +129,6 @@ def test_installer_deploy_dry_run(
     mock_resolve_context: MagicMock,
     sample_workspace: Path,
 ) -> None:
-    """Test dry-run deployment does not mutate AWS resources or update state."""
     mock_factory = MagicMock()
     mock_resolve_context.return_value = AwsExecutionContext(
         region="us-east-1",
@@ -149,7 +166,6 @@ def test_installer_deploy_success(
     mock_stream_cfn: MagicMock,
     sample_workspace: Path,
 ) -> None:
-    """Test successful deployment updates workspace state correctly."""
     mock_factory = MagicMock()
     mock_resolve_context.return_value = AwsExecutionContext(
         region="us-east-1",
@@ -206,7 +222,6 @@ def test_installer_deploy_requires_manually_synchronized_codecommit_source(
     mock_inspect_cc: MagicMock,
     sample_workspace: Path,
 ) -> None:
-    """An empty CodeCommit repository must not be mistaken for a usable source."""
     mock_resolve_context.return_value = AwsExecutionContext(
         region="us-east-1",
         factory=MagicMock(),
@@ -242,7 +257,6 @@ def test_installer_deploy_requires_manually_synchronized_codecommit_source(
 def test_cloudformation_plan_accepts_safe_outcomes(
     operation: str, stack_status: str | None, expected: str
 ) -> None:
-    """Create, update, and no-change plans are accepted only from safe states."""
     plan = CfnDeploymentPlanResult(
         stack_name="AWSAccelerator-InstallerStack",
         operation=operation,
@@ -260,7 +274,6 @@ def test_cloudformation_plan_accepts_safe_outcomes(
 def test_cloudformation_plan_rejects_inaccessible_or_unsafe_outcomes(
     operation: str, stack_status: str
 ) -> None:
-    """Unknown and transitional states cannot reach CloudFormation mutation."""
     plan = CfnDeploymentPlanResult(
         stack_name="AWSAccelerator-InstallerStack",
         operation=operation,
@@ -273,7 +286,6 @@ def test_cloudformation_plan_rejects_inaccessible_or_unsafe_outcomes(
 
 
 def test_inspect_installer_source_codecommit_inaccessible_fails_closed() -> None:
-    """Unexpected CodeCommit errors return INACCESSIBLE and fail deployment source preflight."""
     mock_cc = MagicMock()
     mock_cc.get_repository.return_value = {"repositoryMetadata": {}}
     mock_cc.get_branch.side_effect = ClientError(
@@ -301,9 +313,6 @@ def test_inspect_installer_source_codecommit_inaccessible_fails_closed() -> None
 
 
 def test_missing_assets_bucket_failure(sample_workspace: Path) -> None:
-    """Test that missing assets_bucket in lza-workspace.yaml fails preflight."""
-    from lza_workbench.workspace.config import load_workspace_config
-
     config = load_workspace_config(sample_workspace)
     config.assets_bucket = None
     write_workspace_config(sample_workspace, config)
@@ -323,7 +332,6 @@ def test_assets_bucket_not_existing_in_aws_failure(
     mock_inspect_cfn: MagicMock,
     sample_workspace: Path,
 ) -> None:
-    """Test that non-existing assets bucket in AWS stops deployment with bootstrap guidance."""
     mock_resolve_context.return_value = AwsExecutionContext(
         region="us-east-1",
         factory=MagicMock(),
@@ -355,84 +363,7 @@ def test_assets_bucket_not_existing_in_aws_failure(
         run_installer_deploy(force=True, target_dir=sample_workspace)
 
 
-def test_deploy_cloudformation_stack_template_url() -> None:
-    """Test that deploy_cloudformation_stack uses TemplateURL when provided."""
-    from lza_workbench.aws.cloudformation import deploy_cloudformation_stack
-
-    mock_cfn = MagicMock()
-    mock_cfn.create_stack.return_value = {"StackId": "arn:aws:cloudformation:stack-123"}
-    mock_cfn.update_stack.return_value = {"StackId": "arn:aws:cloudformation:stack-123"}
-
-    stack_id = deploy_cloudformation_stack(
-        client=mock_cfn,
-        stack_name="MyStack",
-        template_url="https://s3.amazonaws.com/my-bucket/template.json",
-        parameters={"Param1": "Val1"},
-        operation="CREATE",
-    )
-    assert stack_id == "arn:aws:cloudformation:stack-123"
-    mock_cfn.create_stack.assert_called_once_with(
-        StackName="MyStack",
-        TemplateURL="https://s3.amazonaws.com/my-bucket/template.json",
-        Parameters=[{"ParameterKey": "Param1", "ParameterValue": "Val1"}],
-        Capabilities=["CAPABILITY_NAMED_IAM", "CAPABILITY_AUTO_EXPAND"],
-    )
-
-    # Test UPDATE
-    stack_id_update = deploy_cloudformation_stack(
-        client=mock_cfn,
-        stack_name="MyStack",
-        template_url="https://s3.amazonaws.com/my-bucket/template.json",
-        parameters={"Param1": "Val1"},
-        operation="UPDATE",
-    )
-    assert stack_id_update == "arn:aws:cloudformation:stack-123"
-    mock_cfn.update_stack.assert_called_once_with(
-        StackName="MyStack",
-        TemplateURL="https://s3.amazonaws.com/my-bucket/template.json",
-        Parameters=[{"ParameterKey": "Param1", "ParameterValue": "Val1"}],
-        Capabilities=["CAPABILITY_NAMED_IAM", "CAPABILITY_AUTO_EXPAND"],
-    )
-
-
-def test_s3_upload_file_and_urls(tmp_path: Path) -> None:
-    """Test upload_s3_file and URL generation functions."""
-    from lza_workbench.aws.s3 import get_s3_https_url, get_s3_uri, upload_s3_file
-
-    sample_file = tmp_path / "test.template"
-    sample_file.write_text("{}", encoding="utf-8")
-
-    mock_s3 = MagicMock()
-    mock_s3.head_object.return_value = {"ETag": '"abc123etag"', "VersionId": "v1"}
-
-    etag, ver = upload_s3_file(
-        client=mock_s3,
-        file_path=sample_file,
-        bucket_name="my-bucket",
-        object_key="path/test.template",
-    )
-    assert etag == "abc123etag"
-    assert ver == "v1"
-    mock_s3.upload_file.assert_called_once_with(str(sample_file), "my-bucket", "path/test.template")
-
-    assert (
-        get_s3_https_url("my-bucket", "path/test.template", "us-east-1")
-        == "https://s3.amazonaws.com/my-bucket/path/test.template"
-    )
-    assert (
-        get_s3_https_url("my-bucket", "path/test.template", "eu-west-1")
-        == "https://s3.eu-west-1.amazonaws.com/my-bucket/path/test.template"
-    )
-    assert get_s3_uri("my-bucket", "path/test.template") == "s3://my-bucket/path/test.template"
-
-
 def test_record_installer_deployment_sets_version_and_downloaded_at() -> None:
-    """Test that record_installer_deployment populates template version and downloaded_at."""
-    from datetime import UTC, datetime
-
-    from lza_workbench.installer.state import record_installer_deployment
-    from lza_workbench.workspace.schema import WorkspaceState
-
     state = WorkspaceState()
     now = datetime.now(UTC)
     record_installer_deployment(
@@ -449,5 +380,3 @@ def test_record_installer_deployment_sets_version_and_downloaded_at() -> None:
     assert state.installer_template_version == "v1.16.0"
     assert state.installer_downloaded_at == now
     assert state.management_account_id == "123456789012"
-
-

@@ -7,12 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.configuration.archive import count_config_files, is_path_excluded
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.schema import AwsConfig, CustomerConfig, WorkspaceConfig
 
 WORKSPACE_EXAMPLES_DIR = (
-    Path(__file__).parents[1] / "src" / "lza_workbench" / "resources" / "workspace_examples"
+    Path(__file__).parents[2] / "src" / "lza_workbench" / "resources" / "workspace_examples"
 )
 
 
@@ -74,7 +73,7 @@ cli_defaults:
     )
 
     with pytest.raises(ValueError, match="watch_pipline"):
-        load_workspace_config(tmp_path)  # Pass workspace root directory tmp_path
+        load_workspace_config(tmp_path)
 
 
 @pytest.mark.parametrize("field", ["access_key", "secret_access_key"])
@@ -101,18 +100,3 @@ def test_workspace_writer_never_serializes_secret_keys(tmp_path: Path) -> None:
     assert "access_key" not in serialized
     assert "secret_access_key" not in serialized
     assert "role_arn" in serialized
-
-
-def test_is_path_excluded_and_count_config_files(tmp_path: Path) -> None:
-    assert is_path_excluded(Path(".git/config"), exclude_dirs={".git"})
-    assert is_path_excluded(Path("sub/.git/HEAD"), exclude_dirs={".git"})
-    assert not is_path_excluded(Path("accounts/accounts.yaml"), exclude_dirs={".git"})
-
-    config_dir = tmp_path / "config"
-    (config_dir / "dir1").mkdir(parents=True)
-    (config_dir / ".git").mkdir(parents=True)
-
-    (config_dir / "dir1" / "file1.txt").write_text("hello")
-    (config_dir / ".git" / "HEAD").write_text("ref")
-
-    assert count_config_files(config_dir, exclude_dirs={".git"}) == 1

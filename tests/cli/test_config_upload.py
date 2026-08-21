@@ -176,4 +176,3 @@ def test_run_upload_config_custom_key_and_prefix(workspace_dir: Path) -> None:
     mock_s3.upload_file.assert_called_once_with(
         str(zip_path), "my-test-bucket", "custom-prefix/custom-archive.zip"
     )
-

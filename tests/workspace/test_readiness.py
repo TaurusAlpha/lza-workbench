@@ -62,7 +62,7 @@ def create_minimal_workspace(
     return ws_dir
 
 
-def test_readiness_level_enum_ordering():
+def test_readiness_level_enum_ordering() -> None:
     assert WorkspaceReadinessLevel.UNINITIALIZED < WorkspaceReadinessLevel.CORE_CONFIGURED
     assert WorkspaceReadinessLevel.CORE_CONFIGURED < WorkspaceReadinessLevel.IMPORTED
     assert WorkspaceReadinessLevel.IMPORTED < WorkspaceReadinessLevel.CONFIGURED
@@ -70,7 +70,13 @@ def test_readiness_level_enum_ordering():
 
 
 @pytest.mark.parametrize(
-    ("has_core_config", "has_config_dir", "has_installer_params", "installer_stack_id", "expected"),
+    (
+        "has_core_config",
+        "has_config_dir",
+        "has_installer_params",
+        "installer_stack_id",
+        "expected",
+    ),
     [
         (False, False, False, None, WorkspaceReadinessLevel.UNINITIALIZED),
         (True, False, False, None, WorkspaceReadinessLevel.CORE_CONFIGURED),
@@ -112,7 +118,7 @@ def test_evaluate_workspace_readiness_transitions(
     assert evaluate_workspace_readiness(ws_dir, config, state) == expected
 
 
-def test_load_workspace_context_success(tmp_path: Path):
+def test_load_workspace_context_success(tmp_path: Path) -> None:
     ws_dir = create_minimal_workspace(tmp_path, has_config_dir=True, has_installer_params=True)
     ctx = load_workspace_context(ws_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
     assert ctx.workspace_dir == ws_dir.resolve()
@@ -120,7 +126,7 @@ def test_load_workspace_context_success(tmp_path: Path):
     assert ctx.readiness_level >= WorkspaceReadinessLevel.CONFIGURED
 
 
-def test_load_workspace_context_fails_when_below_min_readiness(tmp_path: Path):
+def test_load_workspace_context_fails_when_below_min_readiness(tmp_path: Path) -> None:
     ws_dir = create_minimal_workspace(tmp_path, has_config_dir=False, has_installer_params=False)
     with pytest.raises(LzaError, match="missing required LZA templates"):
         load_workspace_context(ws_dir, min_readiness=WorkspaceReadinessLevel.IMPORTED)

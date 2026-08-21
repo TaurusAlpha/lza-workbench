@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import shutil
 import zipfile
 from pathlib import Path
 
-from lza_workbench.configuration.archive import create_zip_archive, extract_zip_to_workspace
+import pytest
+
+from lza_workbench.configuration.archive import (
+    count_config_files,
+    create_zip_archive,
+    extract_zip_to_workspace,
+    is_path_excluded,
+)
 
 
 def test_upload_and_download_apply_the_same_exclusions(tmp_path: Path) -> None:
@@ -62,8 +70,6 @@ def test_extract_zip_invalid_archive_leaves_workspace_intact(tmp_path: Path) -> 
     corrupt_zip = tmp_path / "corrupt.zip"
     corrupt_zip.write_text("this is not a valid zip archive", encoding="utf-8")
 
-    import pytest
-
     with pytest.raises(zipfile.BadZipFile):
         extract_zip_to_workspace(
             zip_path=corrupt_zip,
@@ -76,7 +82,7 @@ def test_extract_zip_invalid_archive_leaves_workspace_intact(tmp_path: Path) -> 
 
 
 def test_extract_zip_failure_during_replacement_restores_original_workspace(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """If an error occurs while copying incoming files, the original configuration is restored."""
     target_dir = tmp_path / "aws-accelerator-config"
@@ -91,10 +97,6 @@ def test_extract_zip_failure_during_replacement_restores_original_workspace(
     with zipfile.ZipFile(valid_zip, "w") as archive:
         archive.writestr("aws-accelerator-config/incoming.yaml", "new content")
         archive.writestr("aws-accelerator-config/nested/sub.yaml", "new nested")
-
-    import shutil
-
-    import pytest
 
     original_copy2 = shutil.copy2
     failed_once = False
@@ -122,3 +124,18 @@ def test_extract_zip_failure_during_replacement_restores_original_workspace(
     assert (target_dir / "nested" / "sub.yaml").read_text(encoding="utf-8") == "nested original"
     assert (target_dir / ".git" / "config").read_text(encoding="utf-8") == "git config"
     assert not (target_dir / "incoming.yaml").exists()
+
+
+def test_is_path_excluded_and_count_config_files(tmp_path: Path) -> None:
+    assert is_path_excluded(Path(".git/config"), exclude_dirs={".git"})
+    assert is_path_excluded(Path("sub/.git/HEAD"), exclude_dirs={".git"})
+    assert not is_path_excluded(Path("accounts/accounts.yaml"), exclude_dirs={".git"})
+
+    config_dir = tmp_path / "config"
+    (config_dir / "dir1").mkdir(parents=True)
+    (config_dir / ".git").mkdir(parents=True)
+
+    (config_dir / "dir1" / "file1.txt").write_text("hello", encoding="utf-8")
+    (config_dir / ".git" / "HEAD").write_text("ref", encoding="utf-8")
+
+    assert count_config_files(config_dir, exclude_dirs={".git"}) == 1

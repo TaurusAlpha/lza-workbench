@@ -12,20 +12,20 @@ from lza_workbench.aws.codepipeline import (
 )
 
 
-def test_get_pipeline_state_no_client():
+def test_get_pipeline_state_no_client() -> None:
     result = get_pipeline_state(client=None, pipeline_name="AWSAccelerator-Installer")
     assert isinstance(result, PipelineStateResult)
     assert result.exists is False
     assert result.status == "NOT_CHECKED"
 
 
-def test_get_pipeline_state_empty_name():
+def test_get_pipeline_state_empty_name() -> None:
     result = get_pipeline_state(client=MagicMock(), pipeline_name="")
     assert result.exists is False
     assert result.status == "NOT_SPECIFIED"
 
 
-def test_get_pipeline_state_not_found():
+def test_get_pipeline_state_not_found() -> None:
     client = MagicMock()
     err_response = {"Error": {"Code": "PipelineNotFoundException", "Message": "Not found"}}
     client.get_pipeline_state.side_effect = ClientError(err_response, "GetPipelineState")
@@ -35,7 +35,7 @@ def test_get_pipeline_state_not_found():
     assert result.status == "NOT_DEPLOYED"
 
 
-def test_get_pipeline_state_succeeded():
+def test_get_pipeline_state_succeeded() -> None:
     client = MagicMock()
     client.get_pipeline_state.return_value = {
         "pipelineName": "AWSAccelerator-Installer",
@@ -78,7 +78,7 @@ def test_get_pipeline_state_succeeded():
     assert result.stage_states[0].actions[0].action_name == "SourceAction"
 
 
-def test_get_pipeline_state_in_progress():
+def test_get_pipeline_state_in_progress() -> None:
     client = MagicMock()
     client.get_pipeline_state.return_value = {
         "pipelineName": "AWSAccelerator-Installer",
@@ -105,7 +105,7 @@ def test_get_pipeline_state_in_progress():
     assert result.status == "InProgress"
 
 
-def test_get_pipeline_state_failed():
+def test_get_pipeline_state_failed() -> None:
     client = MagicMock()
     client.get_pipeline_state.return_value = {
         "pipelineName": "AWSAccelerator-Installer",

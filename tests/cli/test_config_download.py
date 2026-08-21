@@ -95,7 +95,6 @@ def test_run_download_config_success(workspace_dir: Path) -> None:
     git_dir.mkdir(parents=True, exist_ok=True)
     (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
 
-    # Write initial file to test modification diff
     (config_dir / "global-config.yaml").write_text("old content", encoding="utf-8")
     (config_dir / "old-file.yaml").write_text("old file", encoding="utf-8")
 
@@ -291,4 +290,3 @@ def test_run_download_config_custom_key_and_prefix(workspace_dir: Path) -> None:
         str(workspace_dir / "custom-archive.zip"),
     )
     assert path == workspace_dir / "aws-accelerator-config"
-

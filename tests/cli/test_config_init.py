@@ -131,12 +131,10 @@ def test_config_init_workflow_dry_run(workspace_without_config: Path) -> None:
     assert result.dry_run is True
     assert not (workspace_without_config / "aws-accelerator-config").exists()
     assert len(result.written_paths) > 0
-    # Because installer emails were not set, unresolved placeholders should be reported
     assert len(result.unresolved_placeholders) > 0
 
 
 def test_config_init_workflow_execution(workspace_without_config: Path) -> None:
-    # Set installer emails in workspace config
     cfg = load_workspace_config(workspace_without_config)
     cfg.installer.options.management_account_email = "mgmt@example.com"
     cfg.installer.options.log_archive_account_email = "logs@example.com"
@@ -161,21 +159,18 @@ def test_config_init_workflow_execution(workspace_without_config: Path) -> None:
     assert "audit@example.com" in accounts_yaml
     assert "${" not in accounts_yaml
 
-    # No unresolved placeholders
     assert len(result.unresolved_placeholders) == 0
 
 
 def test_config_init_workflow_refuses_overwrite_without_force(
     workspace_without_config: Path,
 ) -> None:
-    # First init
     init_config_workflow(
         target_dir=workspace_without_config,
         template_name="default",
         dry_run=False,
     )
 
-    # Second init without force
     with pytest.raises(LzaError, match=r"Configuration directory already exists.*--force"):
         init_config_workflow(
             target_dir=workspace_without_config,
@@ -195,12 +190,10 @@ def test_config_init_workflow_with_force_cleans_and_repopulates(
         dry_run=False,
     )
 
-    # Add an obsolete test file
     obsolete_file = config_dir / "obsolete-file.txt"
     obsolete_file.write_text("old content", encoding="utf-8")
     assert obsolete_file.exists()
 
-    # Re-run with force
     init_config_workflow(
         target_dir=workspace_without_config,
         template_name="default",
@@ -241,14 +234,11 @@ def test_config_init_cli_force(
 ) -> None:
     monkeypatch.chdir(workspace_without_config)
 
-    # First init
     runner.invoke(app, ["config", "init"])
 
-    # Second without force fails
     res = runner.invoke(app, ["config", "init"])
     assert res.exit_code == 1
 
-    # Second with force succeeds
     res_force = runner.invoke(app, ["config", "init", "--force"])
     assert res_force.exit_code == 0
     assert "Initialized LZA configuration" in res_force.output

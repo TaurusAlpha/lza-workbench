@@ -1,4 +1,4 @@
-"""Tests for workspace initialization."""
+"""Tests for workspace initialization CLI command."""
 
 from __future__ import annotations
 
@@ -10,35 +10,19 @@ from lza_workbench.cli.commands.workspace_init import (
     workspace_init_command as run_init,
 )
 from lza_workbench.errors import LzaError
-from lza_workbench.workflows.workspace_init import (
-    build_workspace_config,
-)
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.paths import resolve_init_workspace_dir
 from lza_workbench.workspace.state import load_workspace_state
 
 
-def test_resolve_init_workspace_dir_uses_customer_slug(tmp_path: Path, monkeypatch) -> None:
+def test_resolve_init_workspace_dir_uses_customer_slug(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.chdir(tmp_path)
 
     workspace_dir = resolve_init_workspace_dir("Example Customer")
 
     assert workspace_dir == tmp_path / "example-customer"
-
-
-def test_build_workspace_config_uses_workspace_defaults() -> None:
-    config = build_workspace_config(
-        customer_name="Example Customer",
-        customer_slug="example-customer",
-        aws_profile="example-root",
-        aws_region="eu-west-1",
-        lza_version="v1.15.5",
-    )
-
-    assert config.configuration.template.source == "packaged"
-    assert config.configuration.template.name == "default"
-    assert config.configuration.local_path == "aws-accelerator-config"
-    assert config.installer.local_path == "aws-accelerator-installer"
 
 
 def test_run_init_dry_run_does_not_create_workspace(tmp_path: Path) -> None:

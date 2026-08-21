@@ -6,8 +6,24 @@ from pathlib import Path
 
 from lza_workbench.workflows.workspace_init import (
     WorkspaceInitResult,
+    build_workspace_config,
     init_workspace_workflow,
 )
+
+
+def test_build_workspace_config_uses_workspace_defaults() -> None:
+    config = build_workspace_config(
+        customer_name="Example Customer",
+        customer_slug="example-customer",
+        aws_profile="example-root",
+        aws_region="eu-west-1",
+        lza_version="v1.15.5",
+    )
+
+    assert config.configuration.template.source == "packaged"
+    assert config.configuration.template.name == "default"
+    assert config.configuration.local_path == "aws-accelerator-config"
+    assert config.installer.local_path == "aws-accelerator-installer"
 
 
 def test_init_workspace_workflow_dry_run(tmp_path: Path) -> None:

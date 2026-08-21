@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -56,7 +57,7 @@ def test_parameter_validation_uses_template_allowed_pattern() -> None:
     with pytest.raises(LzaError, match="must match template pattern"):
         validate_parameters_against_schema(
             {"ManagementAccountEmail": "not-an-email"},
-            {"ManagementAccountEmail": {"AllowedPattern": r"[^\\s@]+@[^\\s@]+\\.[^\\s@]+"}},
+            {"ManagementAccountEmail": {"AllowedPattern": r"[^\s@]+@[^\s@]+\.[^\s@]+"}},
         )
 
 
@@ -132,9 +133,7 @@ def test_resolve_installer_template_dry_run_mismatched_version(tmp_path: Path) -
 
 def test_configure_anonymous_data() -> None:
     """Verify configure_anonymous_data modifies JSON Mappings accurately."""
-    sample = (
-        '{"Mappings": {"Settings": {"SendAnonymizedData": {"Data": "Yes"}}}}'
-    )
+    sample = '{"Mappings": {"Settings": {"SendAnonymizedData": {"Data": "Yes"}}}}'
     disabled = configure_anonymous_data(sample, False)
     assert '"Data": "No"' in disabled
 
@@ -155,8 +154,6 @@ def test_backup_installer_template_on_version_change(tmp_path: Path) -> None:
         aws=AwsConfig(profile="default", region="us-east-1"),
         lza=LzaConfig(version="v1.16.0"),
     )
-
-    from unittest.mock import patch
 
     with patch("lza_workbench.installer.templates.download_installer_template") as mock_dl:
         mock_dl.return_value = template_path

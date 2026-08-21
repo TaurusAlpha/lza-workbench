@@ -15,7 +15,7 @@ from lza_workbench.errors import LzaError
 
 def test_no_direct_boto3_session_or_client_outside_factory() -> None:
     """Verify no file in src/lza_workbench/aws/ except client_factory calls boto3.Session/client."""
-    aws_dir = Path(__file__).parent.parent / "src" / "lza_workbench" / "aws"
+    aws_dir = Path(__file__).parent.parent.parent / "src" / "lza_workbench" / "aws"
     forbidden_calls = []
 
     for path in aws_dir.glob("*.py"):
@@ -219,4 +219,3 @@ def test_role_assumption_without_prime_credentials_skips_global_sts() -> None:
         assert session == assumed_session
 
     source_session.client.assert_called_once_with("sts", region_name="il-central-1")
-

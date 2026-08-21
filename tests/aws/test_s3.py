@@ -185,6 +185,16 @@ def test_inspect_s3_bucket_exists_configured() -> None:
     assert result["kms_encrypted"] is True
 
 
+def test_inspect_s3_bucket_access_denied() -> None:
+    mock_s3 = MagicMock()
+    mock_s3.head_bucket.side_effect = ClientError(
+        {"Error": {"Code": "403", "Message": "Forbidden"}},
+        "HeadBucket",
+    )
+    with pytest.raises(LzaError, match="Access denied to S3 bucket"):
+        inspect_s3_bucket(client=mock_s3, bucket_name="test-bucket")
+
+
 def test_create_s3_bucket_us_east_1() -> None:
     mock_s3 = MagicMock()
     create_s3_bucket(client=mock_s3, bucket_name="test-bucket", region="us-east-1")
@@ -198,6 +208,16 @@ def test_create_s3_bucket_other_region() -> None:
         Bucket="test-bucket",
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
+
+
+def test_create_s3_bucket_already_owned() -> None:
+    mock_s3 = MagicMock()
+    mock_s3.create_bucket.side_effect = ClientError(
+        {"Error": {"Code": "BucketAlreadyOwnedByYou", "Message": "Owned"}},
+        "CreateBucket",
+    )
+    # Should not raise
+    create_s3_bucket(client=mock_s3, bucket_name="test-bucket", region="us-east-1")
 
 
 def test_put_s3_bucket_versioning() -> None:

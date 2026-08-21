@@ -19,37 +19,37 @@ from lza_workbench.cli.output import (
 from lza_workbench.errors import LzaError
 
 
-def test_print_success(capsys) -> None:
+def test_print_success(capsys: pytest.CaptureFixture[str]) -> None:
     print_success("Operation completed")
     captured = capsys.readouterr().out
     assert "Operation completed" in captured
 
 
-def test_print_dry_run_header(capsys) -> None:
+def test_print_dry_run_header(capsys: pytest.CaptureFixture[str]) -> None:
     print_dry_run_header("lza init")
     captured = capsys.readouterr().out
     assert "Dry run: lza init" in captured
 
 
-def test_print_warning(capsys) -> None:
+def test_print_warning(capsys: pytest.CaptureFixture[str]) -> None:
     print_warning("Resource exists")
     captured = capsys.readouterr().out
     assert "Resource exists" in captured
 
 
-def test_print_notice(capsys) -> None:
+def test_print_notice(capsys: pytest.CaptureFixture[str]) -> None:
     print_notice("Downloading template...")
     captured = capsys.readouterr().out
     assert "Downloading template..." in captured
 
 
-def test_print_error(capsys) -> None:
+def test_print_error(capsys: pytest.CaptureFixture[str]) -> None:
     print_error("Fatal problem")
     captured = capsys.readouterr().out
     assert "Fatal problem" in captured
 
 
-def test_print_info(capsys) -> None:
+def test_print_info(capsys: pytest.CaptureFixture[str]) -> None:
     print_info("Normal message")
     assert "Normal message" in capsys.readouterr().out
 
@@ -57,13 +57,13 @@ def test_print_info(capsys) -> None:
     assert "Dimmed message" in capsys.readouterr().out
 
 
-def test_print_section(capsys) -> None:
+def test_print_section(capsys: pytest.CaptureFixture[str]) -> None:
     print_section(1, "CloudFormation Planning")
     captured = capsys.readouterr().out
     assert "1. CloudFormation Planning" in captured
 
 
-def test_print_kv(capsys) -> None:
+def test_print_kv(capsys: pytest.CaptureFixture[str]) -> None:
     print_kv("Workspace", "/tmp/workspace")
     captured = capsys.readouterr().out
     assert "Workspace: /tmp/workspace" in captured
@@ -73,13 +73,13 @@ def test_print_kv(capsys) -> None:
     assert "Profile: dev-root" in captured
 
 
-def test_print_diff_summary_no_changes(capsys) -> None:
+def test_print_diff_summary_no_changes(capsys: pytest.CaptureFixture[str]) -> None:
     print_diff_summary([], [], [])
     captured = capsys.readouterr().out
     assert "No file changes detected" in captured
 
 
-def test_print_diff_summary_with_changes(capsys) -> None:
+def test_print_diff_summary_with_changes(capsys: pytest.CaptureFixture[str]) -> None:
     print_diff_summary(["file1.yaml"], ["file2.yaml"], ["file3.yaml"])
     captured = capsys.readouterr().out
     assert "Changes: 1 added, 1 modified, 1 removed" in captured

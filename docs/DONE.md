@@ -35,3 +35,8 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 - **Bounded Monitoring & Failure-Safe Archives**: Bounded CloudFormation event-stream error recovery and implemented failure-safe backup/rollback for archive extraction.
 - **Architectural Tests**: Added AST-based test suite verifying strict layer boundaries, AWS adapter isolation, and CLI workflow delegation.
 - **Removed Legacy Scaffolding**: Deleted deprecated `commands/`, `core/`, `utils/`, `workspace.models`, and root shim modules.
+
+### Test Suite Modernization & Architectural Alignment
+- **Mirrored Test Hierarchy**: Reorganized flat test directory into package-aligned test packages matching source structure (`tests/aws/`, `tests/workspace/`, `tests/configuration/`, `tests/installer/`, `tests/workflows/`, `tests/cli/`).
+- **Centralized Test Fixtures (`conftest.py`)**: Consolidated duplicate setup logic and created reusable test fixtures for AWS caller identity, execution context, workspace configurations, and temporary initialized/configured workspaces.
+- **Deduplication & Layer Purity**: Eliminated redundant and duplicate tests across bootstrap, deploy, and S3 modules. Decoupled CLI tests from internal domain algorithm testing and isolated workflow orchestration tests.

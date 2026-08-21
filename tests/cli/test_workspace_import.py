@@ -1,4 +1,4 @@
-"""Tests for importing existing LZA configurations."""
+"""Tests for importing existing LZA configurations CLI command."""
 
 from __future__ import annotations
 
@@ -11,9 +11,21 @@ from lza_workbench.cli.commands.workspace_import import (
 )
 from lza_workbench.configuration.templates import REQUIRED_TEMPLATE_FILES
 from lza_workbench.errors import LzaError
-from lza_workbench.workflows.workspace_import import resolve_import_paths
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.state import load_workspace_state
+
+
+def _write_required_files(config_dir: Path) -> None:
+    config_dir.mkdir(parents=True, exist_ok=True)
+    for filename in REQUIRED_TEMPLATE_FILES:
+        (config_dir / filename).write_text("{}\n", encoding="utf-8")
+
+
+def _make_configuration(tmp_path: Path) -> tuple[Path, Path]:
+    workspace_dir = tmp_path / "workspace"
+    config_dir = workspace_dir / "aws-accelerator-config"
+    _write_required_files(config_dir)
+    return workspace_dir, config_dir
 
 
 def test_import_creates_metadata_without_modifying_configuration(tmp_path: Path) -> None:
@@ -39,20 +51,6 @@ def test_import_creates_metadata_without_modifying_configuration(tmp_path: Path)
     assert config.configuration.template.source == "local"
     assert load_workspace_state(workspace_dir)
     assert config_file.read_text(encoding="utf-8") == content_before
-
-
-def test_import_accepts_explicit_configuration_directory(tmp_path: Path) -> None:
-    workspace_dir = tmp_path / "workspace"
-    config_dir = workspace_dir / "customer-config"
-    _write_required_files(config_dir)
-
-    resolved_workspace, resolved_config = resolve_import_paths(
-        workspace_dir=workspace_dir,
-        config_dir=config_dir,
-    )
-
-    assert resolved_workspace == workspace_dir
-    assert resolved_config == config_dir
 
 
 def test_import_dry_run_does_not_write_metadata(tmp_path: Path) -> None:
@@ -107,16 +105,3 @@ def test_import_invalid_metadata_requires_force(tmp_path: Path) -> None:
     )
 
     assert load_workspace_config(workspace_dir).customer.name == "Example Customer"
-
-
-def _make_configuration(tmp_path: Path) -> tuple[Path, Path]:
-    workspace_dir = tmp_path / "workspace"
-    config_dir = workspace_dir / "aws-accelerator-config"
-    _write_required_files(config_dir)
-    return workspace_dir, config_dir
-
-
-def _write_required_files(config_dir: Path) -> None:
-    config_dir.mkdir(parents=True)
-    for filename in REQUIRED_TEMPLATE_FILES:
-        (config_dir / filename).write_text("{}\n", encoding="utf-8")
