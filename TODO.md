@@ -28,21 +28,8 @@ Keep for reference. Do not delete commands from this list even if they are imple
 ### `lza bootstrap`
 
 Create or validate AWS prerequisite resources required by LZA Workbench.
-The command can be run at any time after workspace creation and is idempotent.
-Bootstrap is create/validate only. It must never delete resources.
 
-Implementation checklist:
-
----
-
-Implementation notes:
-
-- The Workbench assets bucket is owned by LZA Workbench.
-- It may be created for both newly initialized and imported workspaces.
-- The bucket may later store installer templates, state, workspace configuration, and other Workbench-managed assets.
-- Bootstrap never deletes or cleans up AWS resources.
-
-### Future `lza bootstrap` enhancements
+#### Future `lza bootstrap` enhancements
 
 Bootstrap installer and configuration prerequisites based on the current installer configuration in `lza-workspace.yaml`.
 
@@ -129,9 +116,17 @@ Adopt an existing local LZA configuration without modifying customer-owned files
 
 ### `lza installer init`
 
+Collect and persist installer CloudFormation parameters and workspace settings.
+
 - [ ] Add support to ask for different parameters according to chosen options. For example don't ask for codeconnection arn if github was chosen as source. Don't ask for github token if codeconnection was chosen as source.
 
+### `lza installer plan`
+
+Inspect AWS and display the CloudFormation actions and changes required to deploy the installer stack.
+
 ### `lza installer deploy`
+
+Deploy or update the LZA installer CloudFormation stack in the management account.
 
 Future design decision:
 
@@ -168,75 +163,21 @@ Initialize the local `aws-accelerator-config` in the current workspace from a pa
 
 - [ ] Check configuration source that will be used in installer. If S3 then with template initialize local git repo in the `aws-accelerator-config` folder.
 
+### `lza config download`
+
+Download LZA configuration from the configured remote source into the local workspace (alias for `lza config pull`).
+
+### `lza config upload`
+
+Upload local LZA configuration to the configured remote repository or S3 bucket (alias for `lza config push`).
+
 ### `lza config push`
 
 Synchronize the local customer `aws-accelerator-config` to the configured remote configuration source without starting the LZA pipeline.
 
-This is the canonical local-to-remote configuration synchronization command.
-
-Implementation checklist:
-
-- [x] Detect the configured configuration source type from `lza-workspace.yaml`.
-- [x] Validate the local configuration before synchronization.
-- [x] Show the configured destination and planned synchronization behavior.
-- [x] Route synchronization through source-specific implementations:
-  - [x] S3:
-    - Package the local configuration as required by LZA.
-    - Upload the configuration archive to the configured S3 location.
-  - [x] CodeCommit:
-    - Synchronize the local Git repository with the configured CodeCommit repository.
-    - Push the configured branch.
-  - [x] CodeConnections:
-    - Synchronize the local Git repository with the configured external repository.
-    - Push the configured branch.
-- [x] Reuse shared Git synchronization behavior for CodeCommit and CodeConnections where practical.
-- [x] Record synchronization metadata in `.lza/state.json`.
-- [x] Support `--dry-run`.
-
 ### `lza config pull`
 
 Synchronize the configured remote customer configuration source into the local `aws-accelerator-config`.
-
-This is the canonical remote-to-local configuration synchronization command.
-
-Implementation checklist:
-
-- [ ] Detect the configured configuration source type from `lza-workspace.yaml`.
-- [ ] Validate the configured remote source before synchronization.
-- [ ] Protect local changes from accidental overwrite.
-- [ ] Show the configured source and planned synchronization behavior.
-- [ ] Route synchronization through source-specific implementations:
-  - [ ] S3:
-    - Download the configured configuration archive.
-    - Extract it into the local configuration directory.
-  - [ ] CodeCommit:
-    - Fetch and pull the configured branch from CodeCommit.
-  - [ ] CodeConnections:
-    - Fetch and pull the configured branch from the configured external repository.
-- [ ] Reuse shared Git synchronization behavior for CodeCommit and CodeConnections where practical.
-- [ ] Validate the synchronized local configuration structure.
-- [ ] Record synchronization metadata in `.lza/state.json`.
-- [ ] Support `--force` where local changes would otherwise block synchronization.
-- [ ] Support `--dry-run`.
-
-### `lza config upload`
-
-Human-friendly local-to-remote synchronization command.
-
-- [x] Keep the command available as an alternative to `lza config push`.
-- [x] Route through the same synchronization workflow as `lza config push`.
-- [x] Preserve intuitive S3 upload terminology without maintaining separate business logic.
-- [x] Do not implement independent provider-specific synchronization behavior in the CLI command.
-
-
-### `lza config download`
-
-Human-friendly remote-to-local synchronization command.
-
-- [ ] Keep the command available as an alternative to `lza config pull`.
-- [ ] Route through the same synchronization workflow as `lza config pull`.
-- [ ] Preserve intuitive S3 download terminology without maintaining separate business logic.
-- [ ] Do not implement independent provider-specific synchronization behavior in the CLI command.
 
 ### `lza config deploy`
 

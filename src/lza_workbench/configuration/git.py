@@ -99,3 +99,67 @@ def push_git_branch(repo_dir: Path, remote: str, branch: str, dry_run: bool = Fa
         raise LzaError(
             f"Failed to push git branch '{branch}' to remote '{remote}': {proc.stderr.strip()}"
         )
+
+
+def stash_git_changes(repo_dir: Path, message: str = "lza-config-pull-stash") -> bool:
+    """Stash uncommitted changes including untracked files.
+
+    Returns True if changes were stashed, False if working tree was already clean.
+    """
+    if not has_uncommitted_changes(repo_dir):
+        return False
+    proc = _run_git_command(["stash", "push", "--include-untracked", "-m", message], cwd=repo_dir)
+    if proc.returncode != 0:
+        raise LzaError(f"Failed to stash local git changes: {proc.stderr.strip()}")
+    return True
+
+
+def fetch_git_remote(repo_dir: Path, remote: str = "origin") -> None:
+    """Fetch branches/commits from specified git remote."""
+    proc = _run_git_command(["fetch", remote], cwd=repo_dir)
+    if proc.returncode != 0:
+        raise LzaError(f"Failed to fetch from remote '{remote}': {proc.stderr.strip()}")
+
+
+def pull_git_branch(repo_dir: Path, remote: str, branch: str) -> None:
+    """Pull changes for the specified branch from remote repository."""
+    proc = _run_git_command(["pull", remote, branch], cwd=repo_dir)
+    if proc.returncode != 0:
+        raise LzaError(
+            f"Failed to pull git branch '{branch}' from remote '{remote}': {proc.stderr.strip()}"
+        )
+
+
+def init_git_repository(
+    repo_dir: Path,
+    remote_name: str = "origin",
+    remote_url: str | None = None,
+) -> None:
+    """Initialize a git repository in repo_dir and configure remote if provided."""
+    repo_dir.mkdir(parents=True, exist_ok=True)
+    proc = _run_git_command(["init"], cwd=repo_dir)
+    if proc.returncode != 0:
+        raise LzaError(
+            f"Failed to initialize git repository at '{repo_dir}': {proc.stderr.strip()}"
+        )
+    if remote_url:
+        set_git_remote_url(repo_dir, remote_name, remote_url)
+
+
+def clone_git_repository(
+    repo_dir: Path,
+    remote_url: str,
+    branch: str | None = None,
+) -> None:
+    """Clone a remote repository into repo_dir."""
+    repo_dir.parent.mkdir(parents=True, exist_ok=True)
+    args = ["clone"]
+    if branch:
+        args.extend(["--branch", branch])
+    args.extend([remote_url, str(repo_dir)])
+    proc = _run_git_command(args, cwd=repo_dir.parent)
+    if proc.returncode != 0:
+        raise LzaError(
+            f"Failed to clone repository '{remote_url}' into '{repo_dir}': {proc.stderr.strip()}"
+        )
+

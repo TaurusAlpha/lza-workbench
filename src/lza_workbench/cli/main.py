@@ -17,6 +17,9 @@ from lza_workbench.cli.commands.config_download import (
 from lza_workbench.cli.commands.config_init import (
     config_init_command as run_cli_init_config,
 )
+from lza_workbench.cli.commands.config_pull import (
+    config_pull_command as run_cli_pull_config,
+)
 from lza_workbench.cli.commands.config_push import (
     config_push_command as run_cli_push_config,
 )
@@ -270,6 +273,21 @@ def config_download_command(
 ) -> None:
     """Download LZA configuration from configured repository source."""
     run_cli_download_config(
+        dry_run=dry_run,
+        force=force,
+        extract=extract,
+        interactive=_is_interactive(),
+    )
+
+
+@config_app.command("pull")
+def config_pull_command(
+    dry_run: params.DryRun = False,
+    force: params.Force = False,
+    extract: params.Extract = True,
+) -> None:
+    """Synchronize remote LZA configuration to local workspace."""
+    run_cli_pull_config(
         dry_run=dry_run,
         force=force,
         extract=extract,

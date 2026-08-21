@@ -104,6 +104,10 @@ def test_run_download_config_success(workspace_dir: Path) -> None:
         p.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(str(p), "w") as zf:
             zf.writestr("aws-accelerator-config/global-config.yaml", "new content")
+            zf.writestr("aws-accelerator-config/organization-config.yaml", "org content")
+            zf.writestr("aws-accelerator-config/accounts-config.yaml", "accounts content")
+            zf.writestr("aws-accelerator-config/network-config.yaml", "network content")
+            zf.writestr("aws-accelerator-config/security-config.yaml", "security content")
             zf.writestr("aws-accelerator-config/new-file.yaml", "added file")
 
     mock_s3 = MagicMock()
@@ -123,8 +127,8 @@ def test_run_download_config_success(workspace_dir: Path) -> None:
     state = load_workspace_state(workspace_dir)
     assert state.config_downloaded_at is not None
     assert state.config_artifact_sha256 is not None
-    assert state.config_files_count == 2
-    assert state.config_last_diff_summary == {"added": 1, "modified": 1, "removed": 1}
+    assert state.config_files_count == 6
+    assert state.config_last_diff_summary == {"added": 5, "modified": 1, "removed": 1}
 
 
 def test_run_download_config_without_extract(workspace_dir: Path) -> None:
@@ -191,6 +195,10 @@ def test_run_download_config_interactive_confirmed(workspace_dir: Path) -> None:
         p.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(str(p), "w") as zf:
             zf.writestr("aws-accelerator-config/global-config.yaml", "confirmed content")
+            zf.writestr("aws-accelerator-config/organization-config.yaml", "org content")
+            zf.writestr("aws-accelerator-config/accounts-config.yaml", "accounts content")
+            zf.writestr("aws-accelerator-config/network-config.yaml", "network content")
+            zf.writestr("aws-accelerator-config/security-config.yaml", "security content")
 
     mock_s3 = MagicMock()
     mock_s3.download_file.side_effect = fake_download
@@ -235,6 +243,10 @@ def test_cli_config_download_command_succeeds_with_force(
         p.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(str(p), "w") as zf:
             zf.writestr("aws-accelerator-config/global-config.yaml", "force content")
+            zf.writestr("aws-accelerator-config/organization-config.yaml", "org content")
+            zf.writestr("aws-accelerator-config/accounts-config.yaml", "accounts content")
+            zf.writestr("aws-accelerator-config/network-config.yaml", "network content")
+            zf.writestr("aws-accelerator-config/security-config.yaml", "security content")
 
     mock_s3 = MagicMock()
     mock_s3.download_file.side_effect = fake_download
@@ -262,6 +274,10 @@ def test_run_download_config_custom_key_and_prefix(workspace_dir: Path) -> None:
         p.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(str(p), "w") as zf:
             zf.writestr("aws-accelerator-config/global-config.yaml", "custom key content")
+            zf.writestr("aws-accelerator-config/organization-config.yaml", "org content")
+            zf.writestr("aws-accelerator-config/accounts-config.yaml", "accounts content")
+            zf.writestr("aws-accelerator-config/network-config.yaml", "network content")
+            zf.writestr("aws-accelerator-config/security-config.yaml", "security content")
 
     mock_s3.download_file.side_effect = fake_download
 
@@ -275,3 +291,4 @@ def test_run_download_config_custom_key_and_prefix(workspace_dir: Path) -> None:
         str(workspace_dir / "custom-archive.zip"),
     )
     assert path == workspace_dir / "aws-accelerator-config"
+
