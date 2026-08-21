@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import subprocess
+import zipfile
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from typer.testing import CliRunner
 
 from lza_workbench.aws.context import AwsExecutionContext
 from lza_workbench.installer.versions import PACKAGED_INSTALLER_VERSION
@@ -20,6 +24,12 @@ from lza_workbench.workspace.schema import (
     WorkspaceState,
 )
 from lza_workbench.workspace.state import write_workspace_state
+
+
+@pytest.fixture
+def cli_runner() -> CliRunner:
+    """Fixture providing an isolated Typer CLI runner."""
+    return CliRunner()
 
 
 @pytest.fixture
@@ -120,3 +130,59 @@ def configured_workspace(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     return ws_dir
+
+
+def init_test_git_repo(config_dir: Path, commit: bool = True) -> None:
+    """Initialize a local Git repository in config_dir with initial commit."""
+    subprocess.run(["git", "init", "-b", "main"], cwd=config_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.name", "LZA Tester"],
+        cwd=config_dir,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "tester@example.com"],
+        cwd=config_dir,
+        check=True,
+        capture_output=True,
+    )
+    if commit:
+        subprocess.run(["git", "add", "."], cwd=config_dir, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", "Initial LZA configuration"],
+            cwd=config_dir,
+            check=True,
+            capture_output=True,
+        )
+
+
+def create_sample_config_zip(
+    destination_path: Path, files_content: dict[str, str] | None = None
+) -> Path:
+    """Create a sample configuration zip archive for download/upload tests."""
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    contents = files_content or {
+        "aws-accelerator-config/global-config.yaml": "global: content",
+        "aws-accelerator-config/organization-config.yaml": "org: content",
+        "aws-accelerator-config/accounts-config.yaml": "accounts: content",
+        "aws-accelerator-config/network-config.yaml": "network: content",
+        "aws-accelerator-config/security-config.yaml": "security: content",
+    }
+    with zipfile.ZipFile(destination_path, "w") as zf:
+        for path_in_zip, text in contents.items():
+            zf.writestr(path_in_zip, text)
+    return destination_path
+
+
+@pytest.fixture
+def init_git_repo() -> Any:
+    """Fixture providing helper to initialize a Git repository."""
+    return init_test_git_repo
+
+
+@pytest.fixture
+def sample_config_zip() -> Any:
+    """Fixture providing helper to generate a sample configuration zip archive."""
+    return create_sample_config_zip
+

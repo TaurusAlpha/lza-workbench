@@ -100,7 +100,10 @@ LzaConfigDir = Annotated[
 
 Extract = Annotated[
     bool,
-    typer.Option("--extract", help="Extract downloaded configuration archives in workspace."),
+    typer.Option(
+        "--extract/--no-extract",
+        help="Extract downloaded configuration archives in workspace.",
+    ),
 ]
 
 ExecutePipeline = Annotated[

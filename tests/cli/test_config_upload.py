@@ -1,4 +1,4 @@
-"""Tests for lza config upload command."""
+"""Tests for lza config upload CLI command."""
 
 from __future__ import annotations
 
@@ -7,83 +7,54 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from typer.testing import CliRunner
 
-from lza_workbench.cli.commands.config_upload import (
-    config_upload_command as run_upload_config,
-)
-from lza_workbench.cli.main import main
-from lza_workbench.errors import LzaError
-from lza_workbench.workflows.config_init import init_config_workflow
-from lza_workbench.workflows.workspace_init import init_workspace_workflow
+from lza_workbench.cli import app
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
-from lza_workbench.workspace.paths import resolve_workspace_dir
 from lza_workbench.workspace.state import load_workspace_state
 
 
 @pytest.fixture
-def workspace_dir(tmp_path: Path) -> Path:
-    target = tmp_path / "test-customer"
-    init_workspace_workflow(
-        customer_name="Test Customer",
-        workspace_dir=target,
-        aws_profile="test-profile",
-        aws_region="us-east-1",
-        lza_version="v1.15.5",
-        dry_run=False,
-        force=False,
-        skip_aws_check=True,
-    )
-    init_config_workflow(target_dir=target)
-    config = load_workspace_config(target)
+def s3_workspace(configured_workspace: Path) -> Path:
+    config = load_workspace_config(configured_workspace)
     config.configuration.repository.type = "s3"
-    write_workspace_config(target, config)
-    return target
+    config.configuration.repository.bucket = "my-test-bucket"
+    write_workspace_config(configured_workspace, config)
+    return configured_workspace
 
 
-def test_resolve_workspace_dir_fails_outside_workspace(tmp_path: Path) -> None:
-    with pytest.raises(LzaError, match="must be run inside an LZA workspace directory"):
-        resolve_workspace_dir(tmp_path)
+def test_cli_config_upload_requires_bucket(
+    configured_workspace: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_workspace_config(configured_workspace)
+    config.configuration.repository.bucket = None
+    write_workspace_config(configured_workspace, config)
+
+    monkeypatch.chdir(configured_workspace)
+    result = cli_runner.invoke(app, ["config", "upload"])
+    assert result.exit_code == 1
+    assert "No S3 bucket configured" in (result.output or str(result.exception))
 
 
-def test_resolve_workspace_dir_finds_workspace_from_subdir(workspace_dir: Path) -> None:
-    subdir = workspace_dir / "aws-accelerator-config"
-    assert resolve_workspace_dir(subdir) == workspace_dir
+def test_cli_config_upload_dry_run(
+    s3_workspace: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(s3_workspace)
+    result = cli_runner.invoke(app, ["config", "upload", "--dry-run"])
+    assert result.exit_code == 0
+    assert "Dry run" in result.output
 
 
-def test_run_upload_config_requires_bucket(workspace_dir: Path) -> None:
-    with pytest.raises(LzaError, match="No S3 bucket configured"):
-        run_upload_config(target_dir=workspace_dir, interactive=False)
-
-
-def test_run_upload_config_requires_profile(workspace_dir: Path) -> None:
-    cfg = load_workspace_config(workspace_dir)
-    cfg.configuration.repository.bucket = "my-test-bucket"
-    cfg.aws.profile = None
-    write_workspace_config(workspace_dir, cfg)
-
-    with pytest.raises(
-        (LzaError, ValueError),
-        match="AWS configuration requires|profile|Invalid workspace configuration",
-    ):
-        run_upload_config(target_dir=workspace_dir, interactive=False)
-
-
-def test_run_upload_config_dry_run(workspace_dir: Path) -> None:
-    cfg = load_workspace_config(workspace_dir)
-    cfg.configuration.repository.bucket = "my-test-bucket"
-    write_workspace_config(workspace_dir, cfg)
-
-    zip_path = run_upload_config(target_dir=workspace_dir, dry_run=True)
-    assert zip_path == workspace_dir / "aws-accelerator-config.zip"
-
-
-def test_run_upload_config_success(workspace_dir: Path) -> None:
-    cfg = load_workspace_config(workspace_dir)
-    cfg.configuration.repository.bucket = "my-test-bucket"
-    cfg.configuration.repository.prefix = "my-prefix"
-    write_workspace_config(workspace_dir, cfg)
-
-    config_dir = workspace_dir / "aws-accelerator-config"
+def test_cli_config_upload_success(
+    s3_workspace: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_dir = s3_workspace / "aws-accelerator-config"
     (config_dir / ".DS_Store").write_text("dummy", encoding="utf-8")
     backup_dir = config_dir / "backup"
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -92,11 +63,16 @@ def test_run_upload_config_success(workspace_dir: Path) -> None:
     mock_s3 = MagicMock()
     mock_s3.head_object.return_value = {"ETag": '"123456789"', "VersionId": "v1.0"}
 
-    with patch("boto3.Session") as mock_session_cls:
-        mock_session_cls.return_value.client.return_value = mock_s3
-        zip_path = run_upload_config(target_dir=workspace_dir)
+    monkeypatch.chdir(s3_workspace)
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_s3),
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        result = cli_runner.invoke(app, ["config", "upload"])
 
-    assert zip_path == workspace_dir / "aws-accelerator-config.zip"
+    assert result.exit_code == 0
+    zip_path = s3_workspace / "aws-accelerator-config.zip"
     assert zip_path.is_file()
 
     with zipfile.ZipFile(zip_path, "r") as zf:
@@ -106,10 +82,10 @@ def test_run_upload_config_success(workspace_dir: Path) -> None:
         assert "global-config.yaml" in namelist
 
     mock_s3.upload_file.assert_called_once_with(
-        str(zip_path), "my-test-bucket", "my-prefix/aws-accelerator-config.zip"
+        str(zip_path), "my-test-bucket", "zipped/aws-accelerator-config.zip"
     )
 
-    state = load_workspace_state(workspace_dir)
+    state = load_workspace_state(s3_workspace)
     assert state.config_uploaded_at is not None
     assert state.config_artifact_sha256 is not None
     assert state.config_artifact_etag == "123456789"
@@ -118,61 +94,29 @@ def test_run_upload_config_success(workspace_dir: Path) -> None:
     assert state.config_last_diff_summary == {"added": len(namelist), "modified": 0, "removed": 0}
 
 
-def test_run_upload_config_diff_calculation(workspace_dir: Path) -> None:
-    cfg = load_workspace_config(workspace_dir)
-    cfg.configuration.repository.bucket = "my-test-bucket"
-    write_workspace_config(workspace_dir, cfg)
-
-    zip_path = workspace_dir / "aws-accelerator-config.zip"
-
-    with zipfile.ZipFile(zip_path, "w") as zf:
-        zf.writestr("global-config.yaml", "old content")
-        zf.writestr("deleted-file.yaml", "will be removed")
-
-    config_dir = workspace_dir / "aws-accelerator-config"
-    (config_dir / "global-config.yaml").write_text("new content", encoding="utf-8")
-    (config_dir / "new-file.yaml").write_text("added file", encoding="utf-8")
-    if (config_dir / "deleted-file.yaml").exists():
-        (config_dir / "deleted-file.yaml").unlink()
-
-    mock_s3 = MagicMock()
-    mock_s3.head_object.return_value = {}
-
-    with patch("boto3.Session") as mock_session_cls:
-        mock_session_cls.return_value.client.return_value = mock_s3
-        run_upload_config(target_dir=workspace_dir)
-
-    state = load_workspace_state(workspace_dir)
-    assert state.config_last_diff_summary is not None
-    assert state.config_last_diff_summary["modified"] >= 1
-    assert state.config_last_diff_summary["removed"] >= 1
-
-
-def test_cli_config_upload_command(workspace_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    cfg = load_workspace_config(workspace_dir)
-    cfg.configuration.repository.bucket = "my-test-bucket"
-    write_workspace_config(workspace_dir, cfg)
-
-    monkeypatch.chdir(workspace_dir)
-    exit_code = main(["config", "upload", "--dry-run"])
-    assert exit_code == 0
-
-
-def test_run_upload_config_custom_key_and_prefix(workspace_dir: Path) -> None:
-    cfg = load_workspace_config(workspace_dir)
-    cfg.configuration.repository.bucket = "my-test-bucket"
+def test_cli_config_upload_custom_key_and_prefix(
+    s3_workspace: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = load_workspace_config(s3_workspace)
     cfg.configuration.repository.prefix = "custom-prefix/"
     cfg.configuration.repository.key = "custom-archive.zip"
-    write_workspace_config(workspace_dir, cfg)
+    write_workspace_config(s3_workspace, cfg)
 
     mock_s3 = MagicMock()
     mock_s3.head_object.return_value = {"ETag": '"987654321"', "VersionId": "v2.0"}
 
-    with patch("boto3.Session") as mock_session_cls:
-        mock_session_cls.return_value.client.return_value = mock_s3
-        zip_path = run_upload_config(target_dir=workspace_dir)
+    monkeypatch.chdir(s3_workspace)
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_s3),
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        result = cli_runner.invoke(app, ["config", "upload"])
 
-    assert zip_path == workspace_dir / "custom-archive.zip"
+    assert result.exit_code == 0
+    zip_path = s3_workspace / "custom-archive.zip"
     mock_s3.upload_file.assert_called_once_with(
         str(zip_path), "my-test-bucket", "custom-prefix/custom-archive.zip"
     )

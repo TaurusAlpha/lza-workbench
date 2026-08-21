@@ -9,7 +9,6 @@ import pytest
 
 from lza_workbench.aws.cloudformation import CfnStackStatusResult
 from lza_workbench.errors import LzaError
-from lza_workbench.workflows.config_init import init_config_workflow
 from lza_workbench.workflows.status_config import (
     ConfigurationStatusResult,
     get_config_status_workflow,
@@ -29,7 +28,6 @@ from lza_workbench.workflows.status_root import (
     RootStatusResult,
     get_root_status_workflow,
 )
-from lza_workbench.workflows.workspace_init import init_workspace_workflow
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.schema import (
     AwsConfig,
@@ -40,58 +38,42 @@ from lza_workbench.workspace.schema import (
 from lza_workbench.workspace.state import load_workspace_state
 
 
-@pytest.fixture
-def status_workspace(tmp_path: Path) -> Path:
-    ws_dir = tmp_path / "status-corp"
-    init_workspace_workflow(
-        customer_name="Status Corp",
-        workspace_dir=ws_dir,
-        aws_profile="status-profile",
-        aws_region="us-east-1",
-        skip_aws_check=True,
-        dry_run=False,
-        force=False,
-    )
-    init_config_workflow(target_dir=ws_dir)
-    return ws_dir
-
-
-def test_get_root_status_workflow(status_workspace: Path) -> None:
+def test_get_root_status_workflow(configured_workspace: Path) -> None:
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
-        result = get_root_status_workflow(target_dir=status_workspace)
+        result = get_root_status_workflow(target_dir=configured_workspace)
         assert isinstance(result, RootStatusResult)
-        assert result.customer_name == "Status Corp"
-        assert result.profile == "status-profile"
-        assert result.region == "us-east-1"
+        assert result.customer_name == "Acme Corp"
+        assert result.profile == "acme-root"
+        assert result.region == "eu-west-1"
 
 
-def test_get_config_status_workflow(status_workspace: Path) -> None:
-    result = get_config_status_workflow(target_dir=status_workspace)
+def test_get_config_status_workflow(configured_workspace: Path) -> None:
+    result = get_config_status_workflow(target_dir=configured_workspace)
     assert isinstance(result, ConfigurationStatusResult)
-    assert result.customer_name == "Status Corp"
+    assert result.customer_name == "Acme Corp"
     assert result.config_dir_exists is True
-    assert result.repository_type == "codecommit"
+    assert result.repository_type == "s3"
 
 
-def test_get_pipeline_status_workflow(status_workspace: Path) -> None:
+def test_get_pipeline_status_workflow(configured_workspace: Path) -> None:
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
-        result = get_pipeline_status_workflow(target_dir=status_workspace)
+        result = get_pipeline_status_workflow(target_dir=configured_workspace)
         assert isinstance(result, PipelineStatusResult)
         assert result.installer_pipeline_name == "AWSAccelerator-Installer"
         assert result.config_pipeline_name == "AWSAccelerator-Pipeline"
 
 
-def test_get_installer_status_workflow(status_workspace: Path) -> None:
+def test_get_installer_status_workflow(configured_workspace: Path) -> None:
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
@@ -113,7 +95,7 @@ def test_get_installer_status_workflow(status_workspace: Path) -> None:
         mock_pipe.return_value = MagicMock(
             pipeline_name="AWSAccelerator-Installer", exists=True, status="Succeeded"
         )
-        result = get_installer_status_workflow(target_dir=status_workspace)
+        result = get_installer_status_workflow(target_dir=configured_workspace)
         assert isinstance(result, InstallerStatusResult)
         assert result.cfn_status.exists is True
         assert result.deployed_version == "v1.16.0"

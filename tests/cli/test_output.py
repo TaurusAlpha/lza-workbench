@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 
-from lza_workbench.cli.input import value_or_prompt
+from lza_workbench.cli.input import validate_email, value_or_prompt
 from lza_workbench.cli.output import (
     print_diff_summary,
     print_dry_run_header,
@@ -19,42 +21,35 @@ from lza_workbench.cli.output import (
 from lza_workbench.errors import LzaError
 
 
-def test_print_success(capsys: pytest.CaptureFixture[str]) -> None:
-    print_success("Operation completed")
+@pytest.mark.parametrize(
+    ("print_fn", "message"),
+    [
+        (print_success, "Operation completed"),
+        (print_warning, "Resource exists"),
+        (print_notice, "Downloading template..."),
+        (print_error, "Fatal problem"),
+        (print_info, "Normal message"),
+    ],
+)
+def test_print_helpers(
+    print_fn: Callable[[str], None],
+    message: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    print_fn(message)
     captured = capsys.readouterr().out
-    assert "Operation completed" in captured
+    assert message in captured
+
+
+def test_print_info_dimmed(capsys: pytest.CaptureFixture[str]) -> None:
+    print_info("Dimmed message", dim=True)
+    assert "Dimmed message" in capsys.readouterr().out
 
 
 def test_print_dry_run_header(capsys: pytest.CaptureFixture[str]) -> None:
     print_dry_run_header("lza init")
     captured = capsys.readouterr().out
     assert "Dry run: lza init" in captured
-
-
-def test_print_warning(capsys: pytest.CaptureFixture[str]) -> None:
-    print_warning("Resource exists")
-    captured = capsys.readouterr().out
-    assert "Resource exists" in captured
-
-
-def test_print_notice(capsys: pytest.CaptureFixture[str]) -> None:
-    print_notice("Downloading template...")
-    captured = capsys.readouterr().out
-    assert "Downloading template..." in captured
-
-
-def test_print_error(capsys: pytest.CaptureFixture[str]) -> None:
-    print_error("Fatal problem")
-    captured = capsys.readouterr().out
-    assert "Fatal problem" in captured
-
-
-def test_print_info(capsys: pytest.CaptureFixture[str]) -> None:
-    print_info("Normal message")
-    assert "Normal message" in capsys.readouterr().out
-
-    print_info("Dimmed message", dim=True)
-    assert "Dimmed message" in capsys.readouterr().out
 
 
 def test_print_section(capsys: pytest.CaptureFixture[str]) -> None:
@@ -102,8 +97,6 @@ def test_value_or_prompt_non_interactive() -> None:
 
 
 def test_value_or_prompt_email_validation() -> None:
-    from lza_workbench.cli.input import validate_email
-
     assert validate_email("  user@example.com  ") == "user@example.com"
     with pytest.raises(ValueError, match="Must be a valid email address"):
         validate_email("invalid-email")

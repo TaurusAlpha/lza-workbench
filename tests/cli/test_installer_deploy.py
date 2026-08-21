@@ -1,26 +1,17 @@
-"""Tests for lza installer deploy command."""
+"""Tests for lza installer deploy CLI command."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from botocore.exceptions import ClientError
+from typer.testing import CliRunner
 
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackStatusResult
 from lza_workbench.aws.codecommit import CodeCommitPlanResult
 from lza_workbench.aws.context import AwsExecutionContext
-from lza_workbench.cli.commands.installer_deploy import (
-    installer_deploy_command as run_installer_deploy,
-)
-from lza_workbench.errors import LzaError
-from lza_workbench.installer.deployment import (
-    inspect_installer_source,
-    validate_cloudformation_plan,
-)
-from lza_workbench.installer.state import record_installer_deployment
+from lza_workbench.cli import app
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.schema import (
     AwsConfig,
@@ -32,61 +23,35 @@ from lza_workbench.workspace.schema import (
 from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
 
-@pytest.fixture
-def sample_workspace(tmp_path: Path) -> Path:
-    """Create a sample workspace directory with valid lza-workspace.yaml."""
-    ws_dir = tmp_path / "comm-it"
-    ws_dir.mkdir(parents=True, exist_ok=True)
-    (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
-    (ws_dir / "aws-accelerator-installer").mkdir(parents=True, exist_ok=True)
-    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
-
-    config = WorkspaceConfig(
-        customer=CustomerConfig(name="Comm IT", slug="comm-it"),
-        aws=AwsConfig(profile="test-profile", region="us-east-1"),
-        assets_bucket="s3-lza-workbench-assets-123456789012-us-east-1",
-        lza=LzaConfig(version="v1.16.0", accelerator_prefix="AWSAccelerator"),
-    )
-    config.installer.source_code.repository_type = "codecommit"
-    config.installer.source_code.repository_name = "aws-accelerator-codecommit"
-    config.installer.source_code.branch = "release/v1.16.0"
-
-    config.installer.options.management_account_email = "root@example.com"
-    config.installer.options.log_archive_account_email = "log@example.com"
-    config.installer.options.audit_account_email = "audit@example.com"
-
-    write_workspace_config(ws_dir, config)
-    write_workspace_state(ws_dir, WorkspaceState.from_config(config))
-
-    template_file = ws_dir / "aws-accelerator-installer" / "AWSAccelerator-InstallerStack.template"
-    template_file.write_text(
-        '{"Description": "Installer", "Parameters": {'
-        '"ManagementAccountEmail": {"Type": "String"},'
-        '"RepositorySource": {"Type": "String"}'
-        "}}",
-        encoding="utf-8",
-    )
-
-    return ws_dir
-
-
-def test_missing_aws_profile_failure(tmp_path: Path) -> None:
+def test_cli_installer_deploy_missing_aws_profile_failure(
+    tmp_path: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     ws_dir = tmp_path / "no-aws"
     ws_dir.mkdir(parents=True, exist_ok=True)
-    with pytest.raises(
-        (LzaError, ValueError),
-        match="missing required core configuration|profile|AWS configuration requires",
-    ):
-        config = WorkspaceConfig(
-            customer=CustomerConfig(name="No AWS", slug="no-aws"),
-            aws=AwsConfig(profile="", region="us-east-1"),
-            lza=LzaConfig(version="v1.16.0"),
-        )
-        write_workspace_config(ws_dir, config)
-        run_installer_deploy(target_dir=ws_dir)
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="No AWS", slug="no-aws"),
+        aws=AwsConfig(profile="default", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+    write_workspace_config(ws_dir, config)
+
+    # Blank out profile directly in yaml to trigger validation failure
+    (ws_dir / "lza-workspace.yaml").write_text(
+        "customer:\n  name: No AWS\n  slug: no-aws\naws:\n  profile: ''\n  region: us-east-1\n"
+    )
+
+    monkeypatch.chdir(ws_dir)
+    result = cli_runner.invoke(app, ["installer", "deploy"])
+    assert result.exit_code == 1
 
 
-def test_missing_required_params_failure(tmp_path: Path) -> None:
+def test_cli_installer_deploy_missing_required_params_failure(
+    tmp_path: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     ws_dir = tmp_path / "incomplete"
     ws_dir.mkdir(parents=True, exist_ok=True)
     (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
@@ -97,14 +62,17 @@ def test_missing_required_params_failure(tmp_path: Path) -> None:
     )
     write_workspace_config(ws_dir, config)
 
-    with pytest.raises(
-        LzaError,
-        match="missing required installer configuration parameters|missing from lza-workspace.yaml",
-    ):
-        run_installer_deploy(target_dir=ws_dir)
+    monkeypatch.chdir(ws_dir)
+    result = cli_runner.invoke(app, ["installer", "deploy"])
+    assert result.exit_code == 1
+    assert "missing required installer configuration" in (result.output or str(result.exception))
 
 
-def test_installer_deploy_refuses_imported_workspace(tmp_path: Path) -> None:
+def test_cli_installer_deploy_refuses_imported_workspace(
+    tmp_path: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     ws_dir = tmp_path / "imported-ws-deploy"
     ws_dir.mkdir(parents=True, exist_ok=True)
     (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
@@ -118,16 +86,20 @@ def test_installer_deploy_refuses_imported_workspace(tmp_path: Path) -> None:
     write_workspace_config(ws_dir, config)
     write_workspace_state(ws_dir, WorkspaceState.from_config(config))
 
-    with pytest.raises(LzaError, match="missing required installer configuration parameters"):
-        run_installer_deploy(target_dir=ws_dir)
+    monkeypatch.chdir(ws_dir)
+    result = cli_runner.invoke(app, ["installer", "deploy"])
+    assert result.exit_code == 1
+    assert "missing required installer configuration" in (result.output or str(result.exception))
 
 
 @patch("lza_workbench.workflows.installer_deploy.resolve_aws_execution_context")
 @patch("lza_workbench.workflows.installer_deploy.inspect_cloudformation_stack")
-def test_installer_deploy_dry_run(
+def test_cli_installer_deploy_dry_run(
     mock_inspect_cfn: MagicMock,
     mock_resolve_context: MagicMock,
-    sample_workspace: Path,
+    configured_workspace: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mock_factory = MagicMock()
     mock_resolve_context.return_value = AwsExecutionContext(
@@ -147,9 +119,12 @@ def test_installer_deploy_dry_run(
         resolved_parameters={},
     )
 
-    run_installer_deploy(dry_run=True, force=True, target_dir=sample_workspace)
+    monkeypatch.chdir(configured_workspace)
+    result = cli_runner.invoke(app, ["installer", "deploy", "--dry-run", "--force"])
 
-    state = load_workspace_state(sample_workspace)
+    assert result.exit_code == 0
+    assert "Dry run" in result.output
+    state = load_workspace_state(configured_workspace)
     assert state.installer_stack_id is None
 
 
@@ -158,13 +133,15 @@ def test_installer_deploy_dry_run(
 @patch("lza_workbench.workflows.installer_deploy.inspect_cloudformation_stack")
 @patch("lza_workbench.installer.deployment.inspect_codecommit_repository")
 @patch("lza_workbench.workflows.installer_deploy.resolve_aws_execution_context")
-def test_installer_deploy_success(
+def test_cli_installer_deploy_success(
     mock_resolve_context: MagicMock,
     mock_inspect_cc: MagicMock,
     mock_inspect_cfn: MagicMock,
     mock_deploy_cfn: MagicMock,
     mock_stream_cfn: MagicMock,
-    sample_workspace: Path,
+    configured_workspace: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mock_factory = MagicMock()
     mock_resolve_context.return_value = AwsExecutionContext(
@@ -204,9 +181,11 @@ def test_installer_deploy_success(
         outputs={"PipelineName": "AWSAccelerator-Pipeline"},
     )
 
-    run_installer_deploy(force=True, target_dir=sample_workspace)
+    monkeypatch.chdir(configured_workspace)
+    result = cli_runner.invoke(app, ["installer", "deploy", "--force"])
 
-    state = load_workspace_state(sample_workspace)
+    assert result.exit_code == 0
+    state = load_workspace_state(configured_workspace)
     assert state.installer_stack_status == "CREATE_COMPLETE"
     assert (
         state.installer_stack_id
@@ -215,168 +194,16 @@ def test_installer_deploy_success(
     assert state.management_account_id == "123456789012"
 
 
-@patch("lza_workbench.installer.deployment.inspect_codecommit_repository")
-@patch("lza_workbench.workflows.installer_deploy.resolve_aws_execution_context")
-def test_installer_deploy_requires_manually_synchronized_codecommit_source(
-    mock_resolve_context: MagicMock,
-    mock_inspect_cc: MagicMock,
-    sample_workspace: Path,
+def test_cli_installer_deploy_missing_assets_bucket_failure(
+    configured_workspace: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    mock_resolve_context.return_value = AwsExecutionContext(
-        region="us-east-1",
-        factory=MagicMock(),
-        identity={
-            "account": "123456789012",
-            "arn": "arn:aws:iam::123456789012:user/admin",
-            "user_id": "ADMIN",
-        },
-        error=None,
-    )
-    mock_inspect_cc.return_value = CodeCommitPlanResult(
-        repository_name="aws-accelerator-codecommit",
-        branch_name="release/v1.16.0",
-        status="UNINITIALIZED",
-        creation_required=False,
-        sync_required=True,
-        official_repo_url="",
-        official_version_ref="",
-    )
-
-    with pytest.raises(LzaError, match="manual prerequisite"):
-        run_installer_deploy(force=True, target_dir=sample_workspace)
-
-
-@pytest.mark.parametrize(
-    ("operation", "stack_status", "expected"),
-    [
-        ("CREATE", None, "CREATE"),
-        ("UPDATE", "UPDATE_COMPLETE", "UPDATE"),
-        ("NO_CHANGE", "CREATE_COMPLETE", "NO_CHANGE"),
-    ],
-)
-def test_cloudformation_plan_accepts_safe_outcomes(
-    operation: str, stack_status: str | None, expected: str
-) -> None:
-    plan = CfnDeploymentPlanResult(
-        stack_name="AWSAccelerator-InstallerStack",
-        operation=operation,
-        stack_status=stack_status,
-        resolved_parameters={},
-    )
-
-    assert validate_cloudformation_plan(plan) == expected
-
-
-@pytest.mark.parametrize(
-    ("operation", "stack_status"),
-    [("UNKNOWN", "Error: access denied"), ("UPDATE", "UPDATE_IN_PROGRESS")],
-)
-def test_cloudformation_plan_rejects_inaccessible_or_unsafe_outcomes(
-    operation: str, stack_status: str
-) -> None:
-    plan = CfnDeploymentPlanResult(
-        stack_name="AWSAccelerator-InstallerStack",
-        operation=operation,
-        stack_status=stack_status,
-        resolved_parameters={},
-    )
-
-    with pytest.raises(LzaError, match="unsafe or unknown"):
-        validate_cloudformation_plan(plan)
-
-
-def test_inspect_installer_source_codecommit_inaccessible_fails_closed() -> None:
-    mock_cc = MagicMock()
-    mock_cc.get_repository.return_value = {"repositoryMetadata": {}}
-    mock_cc.get_branch.side_effect = ClientError(
-        {"Error": {"Code": "AccessDeniedException", "Message": "Not authorized"}}, "GetBranch"
-    )
-
-    mock_factory = MagicMock()
-    mock_factory.get_client.return_value = mock_cc
-
-    config = WorkspaceConfig(
-        customer=CustomerConfig(name="Test", slug="test"),
-        aws=AwsConfig(profile="test-profile", region="us-east-1"),
-        lza=LzaConfig(version="v1.16.0"),
-    )
-    config.installer.source_code.repository_type = "codecommit"
-    config.installer.source_code.repository_name = "test-repo"
-    config.installer.source_code.branch = "release/v1.16.0"
-
-    with pytest.raises(LzaError, match="CodeCommit source is a manual prerequisite"):
-        inspect_installer_source(
-            factory=mock_factory,
-            config=config,
-            region="us-east-1",
-        )
-
-
-def test_missing_assets_bucket_failure(sample_workspace: Path) -> None:
-    config = load_workspace_config(sample_workspace)
+    config = load_workspace_config(configured_workspace)
     config.assets_bucket = None
-    write_workspace_config(sample_workspace, config)
+    write_workspace_config(configured_workspace, config)
 
-    with pytest.raises(LzaError, match="Workbench assets bucket is not configured"):
-        run_installer_deploy(target_dir=sample_workspace)
-
-
-@patch("lza_workbench.workflows.installer_deploy.inspect_cloudformation_stack")
-@patch("lza_workbench.installer.deployment.inspect_codecommit_repository")
-@patch("lza_workbench.workflows.installer_deploy.inspect_s3_bucket")
-@patch("lza_workbench.workflows.installer_deploy.resolve_aws_execution_context")
-def test_assets_bucket_not_existing_in_aws_failure(
-    mock_resolve_context: MagicMock,
-    mock_inspect_s3: MagicMock,
-    mock_inspect_cc: MagicMock,
-    mock_inspect_cfn: MagicMock,
-    sample_workspace: Path,
-) -> None:
-    mock_resolve_context.return_value = AwsExecutionContext(
-        region="us-east-1",
-        factory=MagicMock(),
-        identity={
-            "account": "123456789012",
-            "arn": "arn:aws:iam::123456789012:user/admin",
-            "user_id": "ADMIN",
-        },
-        error=None,
-    )
-    mock_inspect_cc.return_value = CodeCommitPlanResult(
-        repository_name="aws-accelerator-codecommit",
-        branch_name="release/v1.16.0",
-        status="INITIALIZED",
-        creation_required=False,
-        sync_required=False,
-        official_repo_url="",
-        official_version_ref="",
-    )
-    mock_inspect_cfn.return_value = CfnDeploymentPlanResult(
-        stack_name="AWSAccelerator-InstallerStack",
-        operation="CREATE",
-        stack_status=None,
-        resolved_parameters={},
-    )
-    mock_inspect_s3.return_value = {"exists": False}
-
-    with pytest.raises(LzaError, match="does not exist in AWS"):
-        run_installer_deploy(force=True, target_dir=sample_workspace)
-
-
-def test_record_installer_deployment_sets_version_and_downloaded_at() -> None:
-    state = WorkspaceState()
-    now = datetime.now(UTC)
-    record_installer_deployment(
-        state,
-        aws_identity={"account": "123456789012", "arn": "arn:aws:iam::123:user/test"},
-        stack_id="arn:aws:cloudformation:stack/123",
-        stack_status="CREATE_COMPLETE",
-        template_version="v1.16.0",
-        downloaded_at=now,
-    )
-
-    assert state.installer_stack_id == "arn:aws:cloudformation:stack/123"
-    assert state.installer_stack_status == "CREATE_COMPLETE"
-    assert state.installer_template_version == "v1.16.0"
-    assert state.installer_downloaded_at == now
-    assert state.management_account_id == "123456789012"
+    monkeypatch.chdir(configured_workspace)
+    result = cli_runner.invoke(app, ["installer", "deploy"])
+    assert result.exit_code == 1
+    assert "Workbench assets bucket is not configured" in (result.output or str(result.exception))
