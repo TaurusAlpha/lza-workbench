@@ -50,6 +50,21 @@ def record_config_download(
     state.config_last_diff_summary = _diff_summary(diff_result)
 
 
+def record_config_git_push(
+    state: WorkspaceState,
+    *,
+    files_count: int,
+    commit_hash: str | None = None,
+) -> None:
+    """Record metadata after a successful configuration Git push."""
+    now = datetime.now(UTC)
+    state.updated_at = now
+    state.config_uploaded_at = now
+    state.config_files_count = files_count
+    if commit_hash:
+        state.config_artifact_sha256 = commit_hash
+
+
 def _archive_sha256(zip_path: Path) -> str:
     return hashlib.sha256(zip_path.read_bytes()).hexdigest()
 
@@ -60,3 +75,4 @@ def _diff_summary(diff_result: ConfigDiffResult) -> dict[str, int]:
         "modified": len(diff_result.modified),
         "removed": len(diff_result.removed),
     }
+

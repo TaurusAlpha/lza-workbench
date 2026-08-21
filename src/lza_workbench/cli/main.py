@@ -17,6 +17,9 @@ from lza_workbench.cli.commands.config_download import (
 from lza_workbench.cli.commands.config_init import (
     config_init_command as run_cli_init_config,
 )
+from lza_workbench.cli.commands.config_push import (
+    config_push_command as run_cli_push_config,
+)
 from lza_workbench.cli.commands.config_upload import (
     config_upload_command as run_cli_upload_config,
 )
@@ -274,15 +277,27 @@ def config_download_command(
     )
 
 
+@config_app.command("push")
+def config_push_command(
+    dry_run: params.DryRun = False,
+) -> None:
+    """Synchronize local LZA configuration to configured remote repository."""
+    run_cli_push_config(
+        dry_run=dry_run,
+        interactive=_is_interactive(),
+    )
+
+
 @config_app.command("upload")
 def config_upload_command(
     dry_run: params.DryRun = False,
 ) -> None:
-    """Upload LZA configuration to configured repository destination."""
+    """Upload LZA configuration to configured repository destination (alias for push)."""
     run_cli_upload_config(
         dry_run=dry_run,
         interactive=_is_interactive(),
     )
+
 
 
 def main(argv: list[str] | None = None) -> int:

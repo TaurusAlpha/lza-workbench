@@ -18,6 +18,8 @@ Keep for reference. Do not delete commands from this list even if they are imple
 - [ ] `lza config init`
 - [ ] `lza config download`
 - [ ] `lza config upload`
+- [ ] `lza config push`
+- [ ] `lza config pull`
 - [ ] `lza config deploy`
 - [ ] `lza pipeline start`
 - [ ] `lza pipeline watch`
@@ -164,41 +166,93 @@ Implementation notes:
 
 Initialize the local `aws-accelerator-config` in the current workspace from a packaged configuration template.
 
-### `lza config upload`
+- [ ] Check configuration source that will be used in installer. If S3 then with template initialize local git repo in the `aws-accelerator-config` folder.
 
-Upload the customer `aws-accelerator-config` to an S3-backed LZA configuration source without starting the LZA pipeline.
+### `lza config push`
 
-This command is the explicit S3 transfer utility. Other configuration repository types require their own synchronization behavior and are future work.
+Synchronize the local customer `aws-accelerator-config` to the configured remote configuration source without starting the LZA pipeline.
 
-- [ ] Keep non-S3 repository synchronization out of this command unless its semantics are explicitly redesigned.
-
-### `lza config download`
-
-Download the current `aws-accelerator-config` from the configured LZA configuration source into the customer workspace.
-
-- [ ] Support additional repository types:
-  - Git repository
-  - Bitbucket repository
-  - Future custom repository providers
-- [ ] Validate the downloaded configuration structure.
-- [ ] Verify download integrity with checksums or signatures.
-- [ ] Detect identical local and remote configurations and skip unnecessary downloads.
-
-### `lza config deploy`
-
-Synchronize the local customer configuration to its configured deployment destination.
-
-By default, the command uploads or synchronizes configuration and then stops. It does not implicitly start or watch the LZA pipeline.
+This is the canonical local-to-remote configuration synchronization command.
 
 Implementation checklist:
 
+- [x] Detect the configured configuration source type from `lza-workspace.yaml`.
+- [x] Validate the local configuration before synchronization.
+- [x] Show the configured destination and planned synchronization behavior.
+- [x] Route synchronization through source-specific implementations:
+  - [x] S3:
+    - Package the local configuration as required by LZA.
+    - Upload the configuration archive to the configured S3 location.
+  - [x] CodeCommit:
+    - Synchronize the local Git repository with the configured CodeCommit repository.
+    - Push the configured branch.
+  - [x] CodeConnections:
+    - Synchronize the local Git repository with the configured external repository.
+    - Push the configured branch.
+- [x] Reuse shared Git synchronization behavior for CodeCommit and CodeConnections where practical.
+- [x] Record synchronization metadata in `.lza/state.json`.
+- [x] Support `--dry-run`.
+
+### `lza config pull`
+
+Synchronize the configured remote customer configuration source into the local `aws-accelerator-config`.
+
+This is the canonical remote-to-local configuration synchronization command.
+
+Implementation checklist:
+
+- [ ] Detect the configured configuration source type from `lza-workspace.yaml`.
+- [ ] Validate the configured remote source before synchronization.
+- [ ] Protect local changes from accidental overwrite.
+- [ ] Show the configured source and planned synchronization behavior.
+- [ ] Route synchronization through source-specific implementations:
+  - [ ] S3:
+    - Download the configured configuration archive.
+    - Extract it into the local configuration directory.
+  - [ ] CodeCommit:
+    - Fetch and pull the configured branch from CodeCommit.
+  - [ ] CodeConnections:
+    - Fetch and pull the configured branch from the configured external repository.
+- [ ] Reuse shared Git synchronization behavior for CodeCommit and CodeConnections where practical.
+- [ ] Validate the synchronized local configuration structure.
+- [ ] Record synchronization metadata in `.lza/state.json`.
+- [ ] Support `--force` where local changes would otherwise block synchronization.
+- [ ] Support `--dry-run`.
+
+### `lza config upload`
+
+Human-friendly local-to-remote synchronization command.
+
+- [x] Keep the command available as an alternative to `lza config push`.
+- [x] Route through the same synchronization workflow as `lza config push`.
+- [x] Preserve intuitive S3 upload terminology without maintaining separate business logic.
+- [x] Do not implement independent provider-specific synchronization behavior in the CLI command.
+
+
+### `lza config download`
+
+Human-friendly remote-to-local synchronization command.
+
+- [ ] Keep the command available as an alternative to `lza config pull`.
+- [ ] Route through the same synchronization workflow as `lza config pull`.
+- [ ] Preserve intuitive S3 download terminology without maintaining separate business logic.
+- [ ] Do not implement independent provider-specific synchronization behavior in the CLI command.
+
+### `lza config deploy`
+
+Synchronize the local customer configuration to its configured deployment destination and execute the LZA pipeline.
+
+By default, the command synchronizes configuration and then starts and watches the LZA pipeline.
+
+Implementation checklist:
+
+- [ ] Reuse the same local-to-remote synchronization workflow as `lza config push`.
 - [ ] Validate the local configuration and configured destination.
 - [ ] Show the target and planned synchronization changes.
-- [ ] Upload or synchronize the configuration using provider-specific behavior.
-- [ ] Stop after synchronization when no execution flags are supplied.
-- [ ] Support `--execute` to start the relevant configuration pipeline after successful synchronization.
+- [ ] Synchronize configuration using provider-specific behavior.
+- [ ] Start the configured LZA pipeline after successful synchronization.
 - [ ] Support `--watch` to watch the started execution; imply `--execute` when necessary.
-- [ ] Record the upload/synchronization result and started pipeline execution ID in `.lza/state.json`.
+- [ ] Record the synchronization result and started pipeline execution ID in `.lza/state.json`.
 - [ ] Reuse the same start/watch services as the separate pipeline commands.
 - [ ] Support `--dry-run`.
 
