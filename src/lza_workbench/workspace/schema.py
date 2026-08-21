@@ -125,6 +125,11 @@ class WorkspaceState(WorkspaceModel):
     installer_stack_updated_at: datetime | None = None
     installer_pipeline_execution_id: str | None = None
     config_pipeline_execution_id: str | None = None
+    config_initialized_at: datetime | None = None
+    config_template_name: str | None = None
+    config_template_source: str | None = None
+    config_init_values: dict[str, str] | None = None
+    config_init_digest: str | None = None
     config_uploaded_at: datetime | None = None
     config_downloaded_at: datetime | None = None
     config_artifact_etag: str | None = None

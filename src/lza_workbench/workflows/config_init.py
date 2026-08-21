@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import shutil
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
+from lza_workbench.configuration.rendering import (
+    capture_init_values_snapshot,
+    compute_config_directory_digest,
+)
 from lza_workbench.configuration.templates import (
     DEFAULT_TEMPLATE_SOURCE,
     ResolvedTemplateSource,
@@ -17,6 +22,7 @@ from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig
+from lza_workbench.workspace.state import write_workspace_state
 
 
 @dataclass(frozen=True)
@@ -30,6 +36,10 @@ class ConfigInitResult:
     unresolved_placeholders: list[str]
     dry_run: bool
     config: WorkspaceConfig
+    skipped: bool = False
+    is_managed: bool = False
+    initialized_at: datetime | None = None
+    drifted_fields: tuple[str, ...] = ()
 
 
 def init_config_workflow(
@@ -46,6 +56,7 @@ def init_config_workflow(
     )
     workspace_dir = context.workspace_dir
     config = context.config
+    state = context.state
 
     # Resolve template
     template_to_resolve = (
@@ -67,9 +78,35 @@ def init_config_workflow(
         # Check if directory has existing contents
         has_contents = any(target_config_dir.iterdir())
         if has_contents and not force:
-            raise LzaError(
-                f"Configuration directory already exists: '{target_config_dir}'. "
-                "Use --force to overwrite."
+            if state and state.config_initialized_at:
+                current_snapshot = capture_init_values_snapshot(config)
+                saved_snapshot = state.config_init_values or {}
+                drifted = tuple(
+                    sorted(k for k, v in current_snapshot.items() if saved_snapshot.get(k) != v)
+                )
+                return ConfigInitResult(
+                    workspace_dir=workspace_dir,
+                    config_dir=target_config_dir,
+                    template_source=resolved_template,
+                    written_paths=[],
+                    unresolved_placeholders=[],
+                    dry_run=dry_run,
+                    config=config,
+                    skipped=True,
+                    is_managed=True,
+                    initialized_at=state.config_initialized_at,
+                    drifted_fields=drifted,
+                )
+            return ConfigInitResult(
+                workspace_dir=workspace_dir,
+                config_dir=target_config_dir,
+                template_source=resolved_template,
+                written_paths=[],
+                unresolved_placeholders=[],
+                dry_run=dry_run,
+                config=config,
+                skipped=True,
+                is_managed=False,
             )
 
     if not dry_run and force and target_config_dir.exists():
@@ -105,6 +142,15 @@ def init_config_workflow(
             current_template.source = template_source_type  # type: ignore[assignment]
             write_workspace_config(workspace_dir, config)
 
+        if state:
+            state.config_initialized_at = datetime.now(UTC)
+            state.config_template_name = resolved_template.source
+            state.config_template_source = template_source_type
+            state.config_init_values = capture_init_values_snapshot(config)
+            state.config_init_digest = compute_config_directory_digest(target_config_dir)
+            state.config_files_count = len(written_paths)
+            write_workspace_state(workspace_dir, state)
+
     return ConfigInitResult(
         workspace_dir=workspace_dir,
         config_dir=target_config_dir,
@@ -113,4 +159,5 @@ def init_config_workflow(
         unresolved_placeholders=unresolved,
         dry_run=dry_run,
         config=config,
+        skipped=False,
     )

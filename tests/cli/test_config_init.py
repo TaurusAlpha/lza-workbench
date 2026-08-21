@@ -13,7 +13,6 @@ from lza_workbench.configuration.rendering import (
     resolve_path_value,
 )
 from lza_workbench.configuration.templates import list_packaged_templates
-from lza_workbench.errors import LzaError
 from lza_workbench.workflows.config_init import (
     ConfigInitResult,
     init_config_workflow,
@@ -23,6 +22,7 @@ from lza_workbench.workflows.workspace_init import (
     init_workspace_workflow,
 )
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+from lza_workbench.workspace.state import load_workspace_state
 
 runner = CliRunner()
 
@@ -161,8 +161,56 @@ def test_config_init_workflow_execution(workspace_without_config: Path) -> None:
 
     assert len(result.unresolved_placeholders) == 0
 
+    state = load_workspace_state(workspace_without_config)
+    assert state.config_initialized_at is not None
+    assert state.config_template_name == "default"
+    assert state.config_template_source == "packaged"
+    mgmt_key = "installer.options.management_account_email"
+    assert state.config_init_values.get(mgmt_key) == "mgmt@example.com"
+    assert state.config_init_digest is not None
+    assert state.config_files_count == 8
 
-def test_config_init_workflow_refuses_overwrite_without_force(
+
+def test_config_init_workflow_skips_when_unmanaged(
+    workspace_without_config: Path,
+) -> None:
+    config_dir = workspace_without_config / "aws-accelerator-config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "manual-config.yaml").write_text("dummy", encoding="utf-8")
+
+    result = init_config_workflow(
+        target_dir=workspace_without_config,
+        template_name="default",
+        force=False,
+        dry_run=False,
+    )
+    assert result.skipped is True
+    assert result.is_managed is False
+
+
+def test_config_init_workflow_skips_when_already_initialized(
+    workspace_without_config: Path,
+) -> None:
+    first_res = init_config_workflow(
+        target_dir=workspace_without_config,
+        template_name="default",
+        dry_run=False,
+    )
+    assert first_res.skipped is False
+
+    second_res = init_config_workflow(
+        target_dir=workspace_without_config,
+        template_name="default",
+        force=False,
+        dry_run=False,
+    )
+    assert second_res.skipped is True
+    assert second_res.is_managed is True
+    assert second_res.initialized_at is not None
+    assert len(second_res.drifted_fields) == 0
+
+
+def test_config_init_workflow_detects_drift_on_existing_dir(
     workspace_without_config: Path,
 ) -> None:
     init_config_workflow(
@@ -171,13 +219,20 @@ def test_config_init_workflow_refuses_overwrite_without_force(
         dry_run=False,
     )
 
-    with pytest.raises(LzaError, match=r"Configuration directory already exists.*--force"):
-        init_config_workflow(
-            target_dir=workspace_without_config,
-            template_name="default",
-            force=False,
-            dry_run=False,
-        )
+    # Now update installer options in workspace config
+    cfg = load_workspace_config(workspace_without_config)
+    cfg.installer.options.management_account_email = "newmgmt@example.com"
+    write_workspace_config(workspace_without_config, cfg)
+
+    result = init_config_workflow(
+        target_dir=workspace_without_config,
+        template_name="default",
+        force=False,
+        dry_run=False,
+    )
+    assert result.skipped is True
+    assert result.is_managed is True
+    assert "installer.options.management_account_email" in result.drifted_fields
 
 
 def test_config_init_workflow_with_force_cleans_and_repopulates(
@@ -194,13 +249,13 @@ def test_config_init_workflow_with_force_cleans_and_repopulates(
     obsolete_file.write_text("old content", encoding="utf-8")
     assert obsolete_file.exists()
 
-    init_config_workflow(
+    result = init_config_workflow(
         target_dir=workspace_without_config,
         template_name="default",
         force=True,
         dry_run=False,
     )
-
+    assert result.skipped is False
     assert config_dir.is_dir()
     assert not obsolete_file.exists()
     assert (config_dir / "global-config.yaml").is_file()
@@ -229,16 +284,19 @@ def test_config_init_cli_execution(
     assert (workspace_without_config / "aws-accelerator-config").is_dir()
 
 
-def test_config_init_cli_force(
+def test_config_init_cli_existing_notice_and_force(
     workspace_without_config: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(workspace_without_config)
 
     runner.invoke(app, ["config", "init"])
 
+    # Second invocation without force displays informational notice, exit code 0
     res = runner.invoke(app, ["config", "init"])
-    assert res.exit_code == 1
+    assert res.exit_code == 0
+    assert "already exists" in res.output
 
+    # Force re-initializes
     res_force = runner.invoke(app, ["config", "init", "--force"])
     assert res_force.exit_code == 0
     assert "Initialized LZA configuration" in res_force.output

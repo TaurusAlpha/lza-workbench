@@ -11,6 +11,7 @@ from lza_workbench.cli.output import (
     print_info,
     print_kv,
     print_section,
+    print_warning,
 )
 from lza_workbench.workflows.status_config import (
     ConfigurationStatusResult,
@@ -33,10 +34,24 @@ def render_config_status(result: ConfigurationStatusResult, *, has_state: bool) 
     exists_str = "[green]Present[/green]" if result.config_dir_exists else "[red]Missing[/red]"
     print_kv("Local Config Path", f"{result.config_dir} ({exists_str})")
 
+    if result.initialized_at:
+        init_str = result.initialized_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+        tmpl_str = result.template_name or "default"
+        print_kv("Configuration Origin", f"Initialized from '{tmpl_str}' template ({init_str})")
+    elif result.config_dir_exists:
+        print_kv("Configuration Origin", "Imported / Unmanaged")
+
     if result.config_dir_exists:
         print_kv("YAML Config Files Count", len(result.yaml_files))
         if result.yaml_files:
             print_kv("Files Found", ", ".join(result.yaml_files), style="dim")
+
+    if result.drifted_fields:
+        fields_str = ", ".join(result.drifted_fields)
+        print_warning(
+            f"Workspace settings changed since template initialization ({fields_str}). "
+            "Run 'lza config init --force' to re-apply the template with current settings."
+        )
 
     console.print()
     print_section(1, "Configuration Repository Settings")
