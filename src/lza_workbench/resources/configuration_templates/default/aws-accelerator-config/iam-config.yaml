@@ -1,1 +1,5 @@
-# Future starter IAM configuration template.
+providers: []
+policySets: []
+roleSets: []
+groupSets: []
+userSets: []

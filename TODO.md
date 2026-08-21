@@ -15,6 +15,7 @@ Keep for reference. Do not delete commands from this list even if they are imple
 - [ ] `lza installer plan`
 - [ ] `lza installer deploy`
 - [ ] `lza status`
+- [ ] `lza config init`
 - [ ] `lza config download`
 - [ ] `lza config upload`
 - [ ] `lza config deploy`
@@ -158,6 +159,37 @@ Implementation notes:
 - Treat this as a destructive, solution-wide workflow, not a renamed installer stack deletion.
 - AWS retains some data-bearing resources to avoid accidental data loss, so preservation and cleanup choices must be explicit.
 - Reference: <https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/uninstall-the-solution.html>.
+
+### `lza config init`
+
+Initialize the local `aws-accelerator-config` in the current workspace from a packaged configuration template.
+
+Implementation checklist:
+
+- [ ] Require an initialized workspace configuration context.
+- [ ] Resolve the configured `configuration.local_path`.
+- [ ] Select the packaged configuration template.
+  - Use the configured/default template when only one applicable template exists.
+  - Allow explicit template selection when multiple templates are available.
+- [ ] Validate that the selected template is compatible with the configured LZA version.
+- [ ] Refuse to overwrite an existing configuration directory by default.
+- [ ] Support `--force` to explicitly replace an existing local configuration.
+- [ ] Support `--dry-run` to show the files that would be created or replaced.
+- [ ] Copy the selected template into the configured local configuration directory.
+- [ ] Record template provenance in `lza-workspace.yaml` when required to reproduce the workspace.
+- [ ] Validate the resulting local configuration structure.
+
+Implementation notes:
+
+- `lza config init` is local-only and does not require AWS authentication.
+- It must not create AWS resources, configure the installer, synchronize repositories, or start pipelines.
+- `lza init` creates the workspace metadata and delegates local configuration creation to the
+  `config init` workflow.
+- The configuration initialization workflow must be reusable without invoking one CLI command
+  from another CLI command.
+- Existing customer-owned configuration should normally be adopted through `lza import`.
+- Remote configuration remains the responsibility of `lza config download`, `lza config upload`,
+  and `lza config deploy`.
 
 ### `lza config upload`
 

@@ -1,1 +1,7 @@
-# Future starter organization configuration template.
+enable: true
+organizationalUnits:
+  - name: Security
+serviceControlPolicies: []
+taggingPolicies: []
+chatbotPolicies: []
+backupPolicies: []

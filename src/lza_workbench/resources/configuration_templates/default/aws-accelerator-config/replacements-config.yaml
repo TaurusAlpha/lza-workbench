@@ -1,1 +1,10 @@
-# Future starter replacements configuration template.
+globalReplacements:
+  - key: CustomerName
+    type: String
+    value: <lza_config.customer_slug>
+  - key: AcceleratorPrefix
+    type: String
+    value: <lza_config.accelerator_prefix>
+  - key: HomeRegion
+    type: String
+    value: <lza_config.region>

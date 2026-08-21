@@ -1,1 +1,6 @@
-# Future starter network configuration template.
+defaultVpc:
+  delete: false
+  excludeAccounts: []
+transitGateways: []
+endpointPolicies: []
+vpcs: []
