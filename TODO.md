@@ -11,6 +11,8 @@ Keep for reference. Do not delete commands from this list even if they are imple
 - [ ] `lza import`
 - [ ] `lza bootstrap`
 - [ ] `lza uninstall`
+- [ ] `lza validate`
+- [ ] `lza diff`
 - [ ] `lza installer init`
 - [ ] `lza installer plan`
 - [ ] `lza installer deploy`
@@ -114,6 +116,94 @@ Adopt an existing local LZA configuration without modifying customer-owned files
 - [ ] Integrate version-aware official LZA schema validation.
 - [ ] Record or resolve remote/Git template provenance.
 
+### `lza validate`
+
+Validate the current workspace and LZA configuration without modifying local files or AWS resources.
+
+By default, validate all applicable workspace components.
+
+Possible scoped usage:
+
+```text
+lza validate
+lza validate workspace
+lza validate config
+lza validate installer
+```
+
+Implementation checklist:
+
+- [ ] Validate `lza-workspace.yaml` schema and required workspace metadata.
+- [ ] Validate workspace directory structure and configured paths.
+- [ ] Validate LZA configuration YAML syntax.
+- [ ] Validate the expected LZA configuration file structure.
+- [ ] Integrate official/version-aware LZA schema validation.
+- [ ] Validate installer configuration and required parameters.
+- [ ] Detect inconsistent settings between workspace, installer, and configuration metadata.
+- [ ] Produce concise pass, warning, and failure results.
+- [ ] Return a non-zero exit code when validation fails.
+- [ ] Keep validation read-only.
+- [ ] Reuse validation logic from other workflows rather than duplicating checks.
+
+### `lza diff`
+
+Show meaningful differences between the current local desired state and the corresponding remote or deployed LZA state without modifying anything.
+
+Initial implementation should focus on configuration differences.
+
+Possible usage:
+
+```text
+lza diff
+lza diff config
+```
+
+Implementation checklist:
+
+- [ ] Compare local `aws-accelerator-config` with the configured remote configuration source.
+- [ ] Reuse provider-specific configuration source access from `lza config pull` without modifying the local workspace.
+- [ ] Support Amazon S3, AWS CodeCommit, AWS CodeConnections, and Git configuration sources.
+- [ ] Show added, removed, and modified configuration files.
+- [ ] Show content differences for modified text/YAML files.
+- [ ] Clearly identify the local and remote revisions or object metadata being compared when available.
+- [ ] Avoid changing the Git working tree or local configuration directory.
+- [ ] Support a concise summary and detailed diff output.
+- [ ] Return successfully when no differences exist.
+- [ ] Keep the design extensible for future installer/deployed-state diff support without implementing those scopes yet.
+
+Future enhancements:
+
+- [ ] `lza diff installer` for configured versus deployed installer state.
+- [ ] Structured LZA-aware YAML differences rather than only textual differences.
+- [ ] Export configuration diff reports.
+
+### `lza config edit`
+
+Future command for safely modifying selected parts of the local LZA configuration through structured Workbench workflows.
+
+Do not implement until configuration schemas and generation/mutation behavior are sufficiently defined.
+
+Potential future usage:
+
+```text
+lza config edit accounts
+lza config edit organization
+lza config edit regions
+lza config edit network
+```
+
+Future design checklist:
+
+- [ ] Decide which LZA configuration domains can be safely mutated by Workbench.
+- [ ] Define version-aware configuration models before modifying customer YAML.
+- [ ] Preserve unsupported and unknown configuration content.
+- [ ] Validate proposed changes before writing files.
+- [ ] Show planned changes and require confirmation before mutation.
+- [ ] Support `--dry-run`.
+- [ ] Keep modification local; do not implicitly push or deploy configuration.
+- [ ] Ensure `lza config deploy` remains the explicit synchronization and execution workflow.
+- [ ] Reuse configuration-generation functionality where appropriate.
+
 ### `lza installer init`
 
 Collect and persist installer CloudFormation parameters and workspace settings.
@@ -181,9 +271,13 @@ Synchronize the configured remote customer configuration source into the local `
 
 ### `lza config deploy`
 
-Synchronize the local customer configuration to its configured deployment destination and execute the LZA pipeline.
+Synchronize the local customer configuration to its configured deployment destination, start the LZA pipeline, and optionally wait for the execution to complete.
 
-By default, the command synchronizes configuration and then starts and watches the LZA pipeline.
+By default, the command performs the full deployment workflow:
+
+```text
+config push -> pipeline start -> pipeline watch
+```
 
 Implementation checklist:
 
@@ -191,15 +285,20 @@ Implementation checklist:
 - [ ] Validate the local configuration and configured destination.
 - [ ] Show the target and planned synchronization changes.
 - [ ] Synchronize configuration using provider-specific behavior.
+- [ ] Reuse the same execution workflow as `lza pipeline start`.
 - [ ] Start the configured LZA pipeline after successful synchronization.
-- [ ] Support `--watch` to watch the started execution; imply `--execute` when necessary.
+- [ ] Reuse the same monitoring workflow as `lza pipeline watch`.
+- [ ] Watch the started execution by default.
+- [ ] Support `--no-watch` to return after starting the pipeline.
 - [ ] Record the synchronization result and started pipeline execution ID in `.lza/state.json`.
-- [ ] Reuse the same start/watch services as the separate pipeline commands.
 - [ ] Support `--dry-run`.
 
 ### `lza pipeline start`
 
-Start the configured LZA pipeline.
+Start the configured LZA pipeline without synchronizing configuration.
+
+This command remains available independently for cases where the existing remote configuration should be executed again without another `lza config push`.
+
 Implementation checklist:
 
 - [ ] Detect the pipeline name from workspace configuration or AWS.
@@ -208,10 +307,14 @@ Implementation checklist:
 - [ ] Return the pipeline execution ID.
 - [ ] Save execution metadata to `.lza/state.json`.
 - [ ] Prevent accidental duplicate execution when appropriate.
+- [ ] Expose the same reusable execution workflow used by `lza config deploy`.
 
 ### `lza pipeline watch`
 
-Monitor an LZA pipeline execution. This remains available independently of `lza config deploy --watch`.
+Monitor an existing LZA pipeline execution without starting or synchronizing anything.
+
+This command remains available independently for reconnecting to or inspecting an execution started previously by `lza pipeline start`, `lza config deploy`, or another mechanism.
+
 Implementation checklist:
 
 - [ ] Use the latest execution ID recorded in `.lza/state.json` by default when available.
@@ -223,6 +326,7 @@ Implementation checklist:
 - [ ] Show relevant failure details.
 - [ ] Exit successfully when the pipeline succeeds.
 - [ ] Return a non-zero exit code when the pipeline fails.
+- [ ] Expose the same reusable monitoring workflow used by `lza config deploy`.
 
 ### `lza status`
 
