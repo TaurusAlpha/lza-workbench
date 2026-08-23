@@ -37,6 +37,7 @@ from lza_workbench.workspace.context import (
     WorkspaceReadinessLevel,
     load_workspace_context,
 )
+from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.state import write_workspace_state
 
 
@@ -123,8 +124,8 @@ def _handle_s3_pull(
     *,
     workspace_dir: Path,
     config_dir: Path,
-    config: object,
-    state: object,
+    config: WorkspaceConfig,
+    state: WorkspaceState,
     dry_run: bool,
     force: bool,
     extract: bool,
@@ -132,7 +133,7 @@ def _handle_s3_pull(
     confirm_callback: Callable[[str], bool] | None,
     overwrite_confirmed: bool,
 ) -> ConfigPullResult:
-    repo_cfg = config.configuration.repository  # type: ignore[union-attr]
+    repo_cfg = config.configuration.repository
     prefix = repo_cfg.prefix or ""
     key = repo_cfg.key or "aws-accelerator-config.zip"
     if prefix:
@@ -142,8 +143,8 @@ def _handle_s3_pull(
         s3_key = key
     zip_path = workspace_dir / key
 
-    profile = config.aws.profile or ""  # type: ignore[union-attr]
-    region = config.aws.region  # type: ignore[union-attr]
+    profile = config.aws.profile or ""
+    region = config.aws.region
 
     bucket = repo_cfg.bucket
     if not bucket:
@@ -191,14 +192,14 @@ def _handle_s3_pull(
                 "Use --force to overwrite."
             )
 
-    exclude_dirs = set(config.configuration.packaging.exclude.directories)  # type: ignore[union-attr]
-    exclude_files = set(config.configuration.packaging.exclude.files)  # type: ignore[union-attr]
+    exclude_dirs = set(config.configuration.packaging.exclude.directories)
+    exclude_files = set(config.configuration.packaging.exclude.files)
 
     aws_context = resolve_aws_execution_context(
-        profile=config.aws.profile,  # type: ignore[union-attr]
-        region=config.aws.region,  # type: ignore[union-attr]
-        role_arn=config.aws.role_arn,  # type: ignore[union-attr]
-        expected_account_id=config.aws.account_id,  # type: ignore[union-attr]
+        profile=config.aws.profile,
+        region=config.aws.region,
+        role_arn=config.aws.role_arn,
+        expected_account_id=config.aws.account_id,
         require_identity=True,
     )
     s3_client = aws_context.factory.get_client("s3")
@@ -221,7 +222,7 @@ def _handle_s3_pull(
         diff_result = ConfigDiffResult(added=[zip_path.name], modified=[], removed=[])
 
     record_config_download(
-        state,  # type: ignore[arg-type]
+        state,
         zip_path=zip_path,
         config_dir=config_dir,
         exclude_dirs=exclude_dirs,
@@ -229,7 +230,7 @@ def _handle_s3_pull(
         diff_result=diff_result,
     )
 
-    write_workspace_state(workspace_dir, state)  # type: ignore[arg-type]
+    write_workspace_state(workspace_dir, state)
 
     return ConfigPullResult(
         workspace_dir=workspace_dir,
@@ -250,21 +251,21 @@ def _handle_git_pull(
     *,
     workspace_dir: Path,
     config_dir: Path,
-    config: object,
-    state: object,
+    config: WorkspaceConfig,
+    state: WorkspaceState,
     repo_type: str,
     dry_run: bool,
     force: bool,
     confirm_callback: Callable[[str], bool] | None,
     overwrite_confirmed: bool,
 ) -> ConfigPullResult:
-    repo_cfg = config.configuration.repository  # type: ignore[union-attr]
+    repo_cfg = config.configuration.repository
     remote_name = "origin"
 
     remote_url: str | None = None
     if repo_type == "codecommit":
         repo_name = repo_cfg.repository_name or "aws-accelerator-config"
-        region = config.aws.region  # type: ignore[union-attr]
+        region = config.aws.region
         remote_url = f"https://git-codecommit.{region}.amazonaws.com/v1/repos/{repo_name}"
     else:
         remote_url = repo_cfg.repository
@@ -291,7 +292,7 @@ def _handle_git_pull(
                 f"No remote URL configured for '{repo_type}' configuration repository. "
                 "Configure repository settings before pulling."
             )
-        profile = config.aws.profile if repo_type == "codecommit" else None  # type: ignore[union-attr]
+        profile = config.aws.profile if repo_type == "codecommit" else None
         if config_dir.exists() and any(config_dir.iterdir()):
             if not force and not overwrite_confirmed:
                 msg = (
@@ -327,8 +328,8 @@ def _handle_git_pull(
         elif existing_url:
             remote_url = existing_url
 
-        if repo_type == "codecommit" and config.aws.profile:  # type: ignore[union-attr]
-            configure_codecommit_credential_helper(config_dir, config.aws.profile)  # type: ignore[union-attr]
+        if repo_type == "codecommit" and config.aws.profile:
+            configure_codecommit_credential_helper(config_dir, config.aws.profile)
 
         if has_uncommitted_changes(config_dir):
             if not force and not overwrite_confirmed:
@@ -358,11 +359,11 @@ def _handle_git_pull(
     files_count = count_git_files(config_dir)
 
     record_config_git_pull(
-        state,  # type: ignore[arg-type]
+        state,
         files_count=files_count,
         commit_hash=commit,
     )
-    write_workspace_state(workspace_dir, state)  # type: ignore[arg-type]
+    write_workspace_state(workspace_dir, state)
 
     return ConfigPullResult(
         workspace_dir=workspace_dir,

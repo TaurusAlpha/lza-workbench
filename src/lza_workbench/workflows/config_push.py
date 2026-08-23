@@ -31,6 +31,7 @@ from lza_workbench.workspace.context import (
     WorkspaceReadinessLevel,
     load_workspace_context,
 )
+from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.state import write_workspace_state
 
 
@@ -112,12 +113,12 @@ def _handle_s3_push(
     *,
     workspace_dir: Path,
     config_dir: Path,
-    config: object,
-    state: object,
+    config: WorkspaceConfig,
+    state: WorkspaceState,
     dry_run: bool,
     bucket_resolver: Callable[[], str] | None,
 ) -> ConfigPushResult:
-    repo_cfg = config.configuration.repository  # type: ignore[union-attr]
+    repo_cfg = config.configuration.repository
     prefix = repo_cfg.prefix or ""
     key = repo_cfg.key or "aws-accelerator-config.zip"
     if prefix:
@@ -127,8 +128,8 @@ def _handle_s3_push(
         s3_key = key
     zip_path = workspace_dir / key
 
-    profile = config.aws.profile or ""  # type: ignore[union-attr]
-    region = config.aws.region  # type: ignore[union-attr]
+    profile = config.aws.profile or ""
+    region = config.aws.region
 
     bucket = repo_cfg.bucket
     if not bucket:
@@ -151,8 +152,8 @@ def _handle_s3_push(
             diff_result=ConfigDiffResult(added=[], modified=[], removed=[]),
         )
 
-    exclude_dirs = set(config.configuration.packaging.exclude.directories)  # type: ignore[union-attr]
-    exclude_files = set(config.configuration.packaging.exclude.files)  # type: ignore[union-attr]
+    exclude_dirs = set(config.configuration.packaging.exclude.directories)
+    exclude_files = set(config.configuration.packaging.exclude.files)
 
     diff_result, zip_manifest = create_zip_archive(
         config_dir=config_dir,
@@ -162,10 +163,10 @@ def _handle_s3_push(
     )
 
     aws_context = resolve_aws_execution_context(
-        profile=config.aws.profile,  # type: ignore[union-attr]
-        region=config.aws.region,  # type: ignore[union-attr]
-        role_arn=config.aws.role_arn,  # type: ignore[union-attr]
-        expected_account_id=config.aws.account_id,  # type: ignore[union-attr]
+        profile=config.aws.profile,
+        region=config.aws.region,
+        role_arn=config.aws.role_arn,
+        expected_account_id=config.aws.account_id,
         require_identity=True,
         require_expected_account=True,
     )
@@ -177,7 +178,7 @@ def _handle_s3_push(
         object_key=s3_key,
     )
     record_config_upload(
-        state,  # type: ignore[arg-type]
+        state,
         zip_path=zip_path,
         manifest=zip_manifest,
         diff_result=diff_result,
@@ -185,7 +186,7 @@ def _handle_s3_push(
         version_id=version_id,
     )
 
-    write_workspace_state(workspace_dir, state)  # type: ignore[arg-type]
+    write_workspace_state(workspace_dir, state)
 
     return ConfigPushResult(
         workspace_dir=workspace_dir,
@@ -207,12 +208,12 @@ def _handle_git_push(
     *,
     workspace_dir: Path,
     config_dir: Path,
-    config: object,
-    state: object,
+    config: WorkspaceConfig,
+    state: WorkspaceState,
     repo_type: str,
     dry_run: bool,
 ) -> ConfigPushResult:
-    repo_cfg = config.configuration.repository  # type: ignore[union-attr]
+    repo_cfg = config.configuration.repository
 
     if not is_git_repository(config_dir):
         raise LzaError(
@@ -238,11 +239,11 @@ def _handle_git_push(
     if repo_type == "codecommit":
         if not remote_url:
             repo_name = repo_cfg.repository_name or "aws-accelerator-config"
-            region = config.aws.region  # type: ignore[union-attr]
+            region = config.aws.region
             remote_url = f"https://git-codecommit.{region}.amazonaws.com/v1/repos/{repo_name}"
             set_git_remote_url(config_dir, remote_name, remote_url)
-        if config.aws.profile:  # type: ignore[union-attr]
-            configure_codecommit_credential_helper(config_dir, config.aws.profile)  # type: ignore[union-attr]
+        if config.aws.profile:
+            configure_codecommit_credential_helper(config_dir, config.aws.profile)
     else:  # codeconnection or git
         if not remote_url:
             if repo_cfg.repository:
@@ -274,11 +275,11 @@ def _handle_git_push(
     push_git_branch(config_dir, remote=remote_name, branch=branch, dry_run=False)
 
     record_config_git_push(
-        state,  # type: ignore[arg-type]
+        state,
         files_count=files_count,
         commit_hash=commit,
     )
-    write_workspace_state(workspace_dir, state)  # type: ignore[arg-type]
+    write_workspace_state(workspace_dir, state)
 
     return ConfigPushResult(
         workspace_dir=workspace_dir,
