@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from lza_workbench.aws.codebuild import fetch_codebuild_diagnostics
 from lza_workbench.aws.codepipeline import (
     get_latest_pipeline_execution_id,
     get_pipeline_execution,
@@ -28,6 +29,9 @@ class PipelineActionSummary:
     status: str | None = None
     summary: str | None = None
     error_message: str | None = None
+    external_execution_id: str | None = None
+    external_execution_url: str | None = None
+    diagnostic_details: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -164,6 +168,8 @@ def watch_pipeline_workflow(
                     status=a.status,
                     summary=a.summary,
                     error_message=a.error_message,
+                    external_execution_id=a.external_execution_id,
+                    external_execution_url=a.external_execution_url,
                 )
                 actions.append(action_sum)
                 if a.status == "Failed":
@@ -195,12 +201,40 @@ def watch_pipeline_workflow(
 
         if last_status in TERMINAL_STATUSES:
             if last_status == "Failed" and failed_actions:
-                action_errs = [
-                    f"Action '{fa.action_name}' failed: "
-                    f"{fa.error_message or fa.summary or 'Unknown error'}"
-                    for fa in failed_actions
-                ]
-                error_message = "; ".join(action_errs)
+                enriched_failed: list[PipelineActionSummary] = []
+                for fa in failed_actions:
+                    diagnostics: list[str] = []
+                    if fa.external_execution_id:
+                        diagnostics = fetch_codebuild_diagnostics(
+                            factory=aws_context.factory,
+                            build_id=fa.external_execution_id,
+                        )
+                    if diagnostics:
+                        fa_enriched = PipelineActionSummary(
+                            action_name=fa.action_name,
+                            status=fa.status,
+                            summary=fa.summary,
+                            error_message=fa.error_message,
+                            external_execution_id=fa.external_execution_id,
+                            external_execution_url=fa.external_execution_url,
+                            diagnostic_details=diagnostics,
+                        )
+                        enriched_failed.append(fa_enriched)
+                    else:
+                        enriched_failed.append(fa)
+                failed_actions = enriched_failed
+
+                action_errs = []
+                for fa in failed_actions:
+                    if fa.diagnostic_details:
+                        diag_text = "\n  - ".join(fa.diagnostic_details)
+                        action_errs.append(
+                            f"Action '{fa.action_name}' failed:\n  - {diag_text}"
+                        )
+                    else:
+                        err_text = fa.error_message or fa.summary or "Unknown error"
+                        action_errs.append(f"Action '{fa.action_name}' failed: {err_text}")
+                error_message = "\n".join(action_errs)
             break
 
         sleeper(interval)

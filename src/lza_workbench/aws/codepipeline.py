@@ -20,6 +20,8 @@ class ActionStateResult:
     summary: str | None = None
     last_status_change: str | None = None
     error_message: str | None = None
+    external_execution_id: str | None = None
+    external_execution_url: str | None = None
 
 
 @dataclass
@@ -130,6 +132,8 @@ def get_pipeline_state(
                 )
                 err_details = a_exec.get("errorDetails") or {}
                 a_err = err_details.get("message")
+                a_ext_id = a_exec.get("externalExecutionId")
+                a_ext_url = a_exec.get("externalExecutionUrl")
                 actions.append(
                     ActionStateResult(
                         action_name=a_name,
@@ -137,6 +141,8 @@ def get_pipeline_state(
                         summary=a_summary,
                         last_status_change=a_time,
                         error_message=a_err,
+                        external_execution_id=a_ext_id,
+                        external_execution_url=a_ext_url,
                     )
                 )
 

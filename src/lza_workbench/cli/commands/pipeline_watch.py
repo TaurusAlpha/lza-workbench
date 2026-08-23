@@ -91,7 +91,18 @@ def render_pipeline_watch_result(result: PipelineWatchResult) -> None:
         print_success(f"Pipeline '{result.pipeline_name}' execution completed successfully.")
     elif result.status == "Failed":
         print_notice(f"Pipeline '{result.pipeline_name}' execution failed.")
-        if result.error_message:
+        if result.failed_actions:
+            console.print("[bold red]Action Failures & Diagnostics:[/bold red]")
+            for fa in result.failed_actions:
+                console.print(f"  ❌ [bold]{fa.action_name}[/bold]")
+                if fa.diagnostic_details:
+                    for diag in fa.diagnostic_details:
+                        console.print(f"     [red]{diag}[/red]")
+                elif fa.error_message or fa.summary:
+                    console.print(f"     [red]{fa.error_message or fa.summary}[/red]")
+                if fa.external_execution_url:
+                    console.print(f"     [dim]Build Console:[/dim] {fa.external_execution_url}")
+        elif result.error_message:
             console.print(f"[bold red]Failure details:[/bold red] {result.error_message}")
     else:
         print_notice(

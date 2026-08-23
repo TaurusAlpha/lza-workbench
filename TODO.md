@@ -23,10 +23,10 @@ Keep for reference. Do not delete commands from this list even if they are imple
 - [ ] `lza config upload`
 - [ ] `lza config push`
 - [ ] `lza config pull`
-- [x] `lza config deploy`
+- [ ] `lza config deploy`
 - [ ] `lza config status`
-- [x] `lza pipeline start`
-- [x] `lza pipeline watch`
+- [ ] `lza pipeline start`
+- [ ] `lza pipeline watch`
 - [ ] `lza doctor`
 
 ### `lza bootstrap`
@@ -281,54 +281,17 @@ By default, the command performs the full deployment workflow:
 config push -> pipeline start -> pipeline watch
 ```
 
-Implementation checklist:
-
-- [x] Reuse the same local-to-remote synchronization workflow as `lza config push`.
-- [x] Validate the local configuration and configured destination.
-- [x] Show the target and planned synchronization changes.
-- [x] Synchronize configuration using provider-specific behavior.
-- [x] Reuse the same execution workflow as `lza pipeline start`.
-- [x] Start the configured LZA pipeline after successful synchronization.
-- [x] Reuse the same monitoring workflow as `lza pipeline watch`.
-- [x] Watch the started execution by default.
-- [x] Support `--no-watch` to return after starting the pipeline.
-- [x] Record the synchronization result and started pipeline execution ID in `.lza/state.json`.
-- [x] Support `--dry-run`.
-
 ### `lza pipeline start`
 
 Start the configured LZA pipeline without synchronizing configuration.
 
 This command remains available independently for cases where the existing remote configuration should be executed again without another `lza config push`.
 
-Implementation checklist:
-
-- [x] Detect the pipeline name from workspace configuration or AWS.
-- [x] Show the target account, region, and pipeline.
-- [x] Start a new pipeline execution.
-- [x] Return the pipeline execution ID.
-- [x] Save execution metadata to `.lza/state.json`.
-- [x] Prevent accidental duplicate execution when appropriate.
-- [x] Expose the same reusable execution workflow used by `lza config deploy`.
-
 ### `lza pipeline watch`
 
 Monitor an existing LZA pipeline execution without starting or synchronizing anything.
 
 This command remains available independently for reconnecting to or inspecting an execution started previously by `lza pipeline start`, `lza config deploy`, or another mechanism.
-
-Implementation checklist:
-
-- [x] Use the latest execution ID recorded in `.lza/state.json` by default when available.
-- [x] Fall back to discovering the latest execution when no recorded execution ID is available.
-- [x] Support a specific execution ID.
-- [x] Show stage and action status.
-- [x] Refresh output without excessive API calls.
-- [x] Detect failed CodeBuild actions.
-- [x] Show relevant failure details.
-- [x] Exit successfully when the pipeline succeeds.
-- [x] Return a non-zero exit code when the pipeline fails.
-- [x] Expose the same reusable monitoring workflow used by `lza config deploy`.
 
 ### `lza status`
 

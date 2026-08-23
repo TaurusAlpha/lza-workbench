@@ -111,6 +111,94 @@ def test_watch_pipeline_failed_action(configured_workspace: Path) -> None:
     assert "Build command exited with code 1" in (result.error_message or "")
 
 
+def test_watch_pipeline_failed_action_with_codebuild_diagnostics(
+    configured_workspace: Path,
+) -> None:
+    mock_codepipeline = MagicMock()
+    mock_codepipeline.get_pipeline_execution.return_value = {
+        "pipelineExecution": {
+            "pipelineExecutionId": "exec-diag-999",
+            "status": "Failed",
+        }
+    }
+    mock_codepipeline.get_pipeline_state.return_value = {
+        "stageStates": [
+            {
+                "stageName": "Prepare",
+                "latestExecution": {"status": "Failed"},
+                "actionStates": [
+                    {
+                        "actionName": "Prepare",
+                        "latestExecution": {
+                            "status": "Failed",
+                            "errorDetails": {"message": "Command did not exit successfully"},
+                            "externalExecutionId": "AWSAccelerator-ToolkitProject:build-id-123",
+                            "externalExecutionUrl": "https://console.aws.amazon.com/codebuild/...",
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+
+    mock_codebuild = MagicMock()
+    mock_codebuild.batch_get_builds.return_value = {
+        "builds": [
+            {
+                "id": "AWSAccelerator-ToolkitProject:build-id-123",
+                "logs": {
+                    "groupName": "AWSAccelerator-Module-Verbose-Logs",
+                    "streamName": "prepare/build-123",
+                },
+            }
+        ]
+    }
+    mock_logs = MagicMock()
+    mock_logs.get_log_events.return_value = {
+        "events": [
+            {
+                "message": (
+                    "2026-08-23 16:47:44.027 | error | toolkit | Deployment of Stack failed: "
+                    "❌  AWSAccelerator-PrepareStack failed: ValidationError: Stack cannot "
+                    "be deleted while TerminationProtection is enabled"
+                )
+            }
+        ]
+    }
+
+    def get_client(service: str) -> MagicMock:
+        if service == "codepipeline":
+            return mock_codepipeline
+        if service == "codebuild":
+            return mock_codebuild
+        if service == "logs":
+            return mock_logs
+        return MagicMock()
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            side_effect=get_client,
+        ),
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        result = watch_pipeline_workflow(
+            target_dir=configured_workspace,
+            execution_id="exec-diag-999",
+            sleeper=lambda _: None,
+        )
+
+    assert result.status == "Failed"
+    assert len(result.failed_actions) == 1
+    assert result.failed_actions[0].action_name == "Prepare"
+    assert len(result.failed_actions[0].diagnostic_details) == 1
+    assert (
+        "TerminationProtection is enabled" in result.failed_actions[0].diagnostic_details[0]
+    )
+    assert "TerminationProtection is enabled" in (result.error_message or "")
+
+
 def test_watch_pipeline_no_execution_id(configured_workspace: Path) -> None:
     mock_client = MagicMock()
     mock_client.list_pipeline_executions.return_value = {"pipelineExecutionSummaries": []}
