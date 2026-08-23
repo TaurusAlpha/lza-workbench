@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from lza_workbench.configuration.schema import ConfigurationRepositoryConfig
 from lza_workbench.errors import LzaError
@@ -135,18 +135,18 @@ class InstallerOptionsConfig(BaseModel):
         # Required Parameters For Code Connection
         if self.configuration_repository_location == "codeconnection":
             if not self.config_code_connection_arn:
-                raise LzaError(
+                raise ValueError(
                     "config_code_connection_arn must be provided when "
                     "configuration_repository_location is set to 'codeconnection'. "
                     "Run `lza config plan` to set your CodeConnection ARN."
                 )
             if not self.use_existing_config_repo:
-                raise LzaError(
+                raise ValueError(
                     "use_existing_config_repo must be True when "
                     "configuration_repository_location is set to 'codeconnection'."
                 )
             if not self.existing_config_repository_owner:
-                raise LzaError(
+                raise ValueError(
                     "existing_config_repository_owner must be populated when "
                     "configuration_repository_location is set to 'codeconnection'. "
                     "Run `lza config plan` to set the repository owner."
@@ -158,7 +158,7 @@ class InstallerOptionsConfig(BaseModel):
                 self.configuration_repository_location == "codeconnection"
                 and not self.config_code_connection_arn
             ):
-                raise LzaError(
+                raise ValueError(
                     "config_code_connection_arn must be provided when "
                     "use_existing_config_repo is True and "
                     "configuration_repository_location is set to 'codeconnection'. "
@@ -177,7 +177,7 @@ class InstallerOptionsConfig(BaseModel):
                 or self.existing_config_repository_name
                 or self.existing_config_repository_branch_name
             ):
-                raise LzaError(
+                raise ValueError(
                     "Existing configuration repository parameters cannot be provided when "
                     "configuration_repository_location is set to 's3'."
                 )
@@ -190,7 +190,7 @@ class InstallerOptionsConfig(BaseModel):
     ) -> InstallerOptionsConfig:
         try:
             repo_config = ConfigurationRepositoryConfig.model_validate(repo_config)
-        except LzaError as err:
+        except (ValidationError, ValueError) as err:
             raise LzaError(
                 f"Configuration Repository is invalid or incomplete: {err}\n"
                 "--> Please run `lza config plan` to configure your workspace."
@@ -213,7 +213,7 @@ class InstallerOptionsConfig(BaseModel):
 
         try:
             return cls(**merged_args)
-        except LzaError as err:
+        except (ValidationError, ValueError) as err:
             raise LzaError(
                 f"Failed to build Installer Options: {err}\n"
                 "--> Please run `lza config plan` to fix configuration parameters."

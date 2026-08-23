@@ -6,8 +6,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from lza_workbench.errors import LzaError
-
 
 class ConfigurationRepositoryConfig(BaseModel):
     """Destination repository for the LZA configuration pipeline (Source of Truth)."""
@@ -41,7 +39,7 @@ class ConfigurationRepositoryConfig(BaseModel):
 
             if missing_fields:
                 fields_str = ", ".join(missing_fields)
-                raise LzaError(
+                raise ValueError(
                     f"Missing required CodeConnection parameter(s): [{fields_str}]. "
                     "Run `lza config plan` to set up your repository configuration."
                 )
