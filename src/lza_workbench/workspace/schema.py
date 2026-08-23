@@ -33,8 +33,8 @@ class AwsConfig(WorkspaceModel):
 
     @model_validator(mode="after")
     def require_profile(self) -> AwsConfig:
-        """Require the externally managed AWS profile used by this workspace."""
-        if not (self.profile or self.role_arn or "").strip():
+        """Require either an AWS profile or role ARN."""
+        if not (self.profile and self.profile.strip()) and not (self.role_arn and self.role_arn.strip()):
             raise ValueError("AWS configuration requires a profile or role_arn.")
         return self
 
@@ -111,8 +111,6 @@ class WorkspaceConfig(WorkspaceModel):
 
 class WorkspaceState(WorkspaceModel):
     """Mutable operational metadata stored in .lza/state.json."""
-
-    model_config = ConfigDict(extra="forbid", strict=False)
 
     initialized_at: datetime | None = None
     updated_at: datetime | None = None

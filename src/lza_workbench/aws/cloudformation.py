@@ -247,14 +247,14 @@ def deploy_cloudformation_stack(
     """
     clean_stack_name = (stack_name or "").strip()
     if not clean_stack_name:
-        raise ValueError("Stack name must not be empty")
+        raise LzaError("Stack name must not be empty")
 
     cfn = _get_cfn_client(factory=factory, client=client)
     if cfn is None:
-        raise ValueError("AWS CloudFormation client is not available")
+        raise LzaError("AWS CloudFormation client is not available")
 
     if not template_body and not template_url:
-        raise ValueError(
+        raise LzaError(
             "Either template_body or template_url must be provided for CloudFormation deployment."
         )
 
@@ -282,7 +282,7 @@ def deploy_cloudformation_stack(
         response = cfn.update_stack(**kwargs)
         return str(response.get("StackId", clean_stack_name))
     else:
-        raise ValueError(f"Unsupported deployment operation: {operation}")
+        raise LzaError(f"Unsupported deployment operation: {operation}")
 
 
 def stream_cloudformation_stack_events(
@@ -400,11 +400,11 @@ def delete_cloudformation_stack(
     """Delete a CloudFormation stack and wait for deletion to complete."""
     clean_stack_name = (stack_name or "").strip()
     if not clean_stack_name:
-        raise ValueError("Stack name must not be empty")
+        raise LzaError("Stack name must not be empty")
 
     cfn = _get_cfn_client(factory=factory, client=client)
     if cfn is None:
-        raise ValueError("AWS CloudFormation client is not available")
+        raise LzaError("AWS CloudFormation client is not available")
 
     try:
         waiter = cfn.get_waiter("stack_delete_complete")

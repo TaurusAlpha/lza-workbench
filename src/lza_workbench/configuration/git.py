@@ -138,8 +138,16 @@ def configure_codecommit_credential_helper(
     if not (repo_dir / ".git").exists() and not is_git_repository(repo_dir):
         return
     helper_cmd = f"!aws --profile {aws_profile} codecommit credential-helper $@"
-    _run_git_command(["config", "credential.helper", helper_cmd], cwd=repo_dir)
-    _run_git_command(["config", "credential.UseHttpPath", "true"], cwd=repo_dir)
+    proc1 = _run_git_command(["config", "credential.helper", helper_cmd], cwd=repo_dir)
+    if proc1.returncode != 0:
+        raise LzaError(
+            f"Failed to configure git credential helper in '{repo_dir}': {proc1.stderr.strip()}"
+        )
+    proc2 = _run_git_command(["config", "credential.UseHttpPath", "true"], cwd=repo_dir)
+    if proc2.returncode != 0:
+        raise LzaError(
+            f"Failed to configure git credential.UseHttpPath in '{repo_dir}': {proc2.stderr.strip()}"
+        )
 
 
 def init_git_repository(
@@ -148,16 +156,16 @@ def init_git_repository(
     remote_url: str | None = None,
     aws_profile: str | None = None,
 ) -> None:
-    """Initialize a git repository in repo_dir and configure remote if provided."""
+    """Initialize a git repository in repo_dir and configure remote and credential helper."""
     repo_dir.mkdir(parents=True, exist_ok=True)
     proc = _run_git_command(["init"], cwd=repo_dir)
     if proc.returncode != 0:
-        raise LzaError(
-            f"Failed to initialize git repository at '{repo_dir}': {proc.stderr.strip()}"
-        )
+        raise LzaError(f"Failed to initialize git repository in '{repo_dir}': {proc.stderr.strip()}")
+
     if remote_url:
-        set_git_remote_url(repo_dir, remote_name, remote_url)
-    if aws_profile:
+        set_git_remote_url(repo_dir, remote_name=remote_name, remote_url=remote_url)
+
+    if aws_profile and remote_url and "codecommit" in remote_url.lower():
         configure_codecommit_credential_helper(repo_dir, aws_profile)
 
 
@@ -180,5 +188,3 @@ def clone_git_repository(
         )
     if aws_profile and "codecommit" in remote_url.lower():
         configure_codecommit_credential_helper(repo_dir, aws_profile)
-
-

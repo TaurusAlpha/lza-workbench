@@ -108,6 +108,7 @@ def configure_anonymous_data(content: str, enable: bool) -> str:
     except json.JSONDecodeError:
         return content
 
+
 def extract_template_version(content: str) -> str | None:
     """Extract LZA version from template description if present."""
     match = re.search(r"Version\s+v?([0-9]+\.[0-9]+\.[0-9]+)", content)

@@ -175,7 +175,7 @@ def ensure_codecommit_repository(
         client if client is not None else (factory.get_client("codecommit") if factory else None)
     )
     if cc_client is None:
-        raise ValueError("AWS CodeCommit client is not available")
+        raise LzaError("AWS CodeCommit client is not available")
 
     repo_name = (repository_name or "aws-accelerator-installer").strip()
 
