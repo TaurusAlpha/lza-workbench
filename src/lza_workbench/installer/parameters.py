@@ -58,11 +58,6 @@ def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, valu
     source_code = config.installer.source_code
     options = config.installer.options
 
-    # if parameter_name == "RepositoryBranchName":
-    #     value = resolve_installer_source_branch(
-    #         source_code.repository_type, value, config.lza.version
-    #     )
-
     config.installer.template_parameters[parameter_name] = value
 
     if parameter_name == "RepositorySource":
@@ -72,7 +67,7 @@ def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, valu
     elif parameter_name == "RepositoryName":
         source_code.repository_name = value
     elif parameter_name == "RepositoryBranchName":
-        source_code.branch = value if value else "release/v1.16.0"
+        source_code.branch = value if value else version_to_branch(config.lza.version)
     elif parameter_name == "EnableApprovalStage":
         options.enable_approval_stage = value == "Yes"
     elif parameter_name == "ApprovalStageNotifyEmailList":
@@ -116,10 +111,6 @@ def build_installer_cfn_parameters(
     source_code = config.installer.source_code
     options = config.installer.options
     repo_config = config.configuration.repository
-
-    # branch = resolve_installer_source_branch(
-    #     source_code.repository_type, source_code.branch, config.lza.version
-    # )
 
     branch = source_code.branch
     enable_approval = options.enable_approval_stage
