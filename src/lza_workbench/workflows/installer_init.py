@@ -72,9 +72,10 @@ def initialize_installer_workflow(
     if prompter:
         for parameter_name, definition in schema.items():
             label = definition.get("Description") or parameter_name
-            resolved_parameters = build_installer_cfn_parameters(config, schema=schema)
-            value = prompter(f"{parameter_name}: {label}", resolved_parameters.get(parameter_name))
+            current_value = resolved_parameters.get(parameter_name)
+            value = prompter(f"{parameter_name}: {label}", current_value)
             apply_installer_parameter(config, parameter_name, value)
+            resolved_parameters[parameter_name] = value
         resolved_parameters = build_installer_cfn_parameters(config, schema=schema)
 
     validation = validate_installer_configuration(config)
@@ -90,13 +91,12 @@ def initialize_installer_workflow(
 
     if not no_save and not dry_run:
         write_workspace_config(workspace_dir, config)
-        if ctx.state:
-            ctx.state.installer_template_version = config.lza.version
-            if template_path.exists():
-                ctx.state.installer_downloaded_at = datetime.fromtimestamp(
-                    template_path.stat().st_mtime, tz=UTC
-                )
-            write_workspace_state(workspace_dir, ctx.state)
+        ctx.state.installer_template_version = config.lza.version
+        if template_path.exists():
+            ctx.state.installer_downloaded_at = datetime.fromtimestamp(
+                template_path.stat().st_mtime, tz=UTC
+            )
+        write_workspace_state(workspace_dir, ctx.state)
 
     return InstallerInitResult(
         workspace_dir=workspace_dir,
