@@ -260,6 +260,7 @@ def import_command(
     lza_version: params.LzaVersion = None,
     dry_run: params.DryRun = False,
     force: params.Force = False,
+    repair: params.Repair = False,
     skip_aws_check: params.SkipAwsCheck = False,
 ) -> None:
     """Adopt an existing customer-owned LZA configuration."""
@@ -274,6 +275,7 @@ def import_command(
         lza_version=lza_version,
         dry_run=dry_run,
         force=force,
+        repair=repair,
         skip_aws_check=skip_aws_check,
         interactive=_is_interactive(),
     )

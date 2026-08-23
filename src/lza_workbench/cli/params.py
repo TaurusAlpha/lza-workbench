@@ -85,6 +85,11 @@ Force = Annotated[
     typer.Option("--force", help="Reinitialize generated files in an existing workspace."),
 ]
 
+Repair = Annotated[
+    bool,
+    typer.Option("--repair", help="Repair missing, partial, or corrupted workspace metadata."),
+]
+
 SkipAwsCheck = Annotated[
     bool,
     typer.Option("--skip-aws-check", help="Skip STS caller identity validation."),

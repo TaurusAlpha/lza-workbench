@@ -113,10 +113,10 @@ Create a new customer-specific LZA workspace.
 
 Adopt an existing local LZA configuration without modifying customer-owned files.
 
-- [ ] Repair missing or invalid workspace metadata.
-- [ ] Parse and validate imported YAML content.
-- [ ] Integrate version-aware official LZA schema validation.
-- [ ] Record or resolve remote/Git template provenance.
+- [x] Repair missing or invalid workspace metadata.
+- [x] Parse and validate imported YAML content.
+- [x] Integrate version-aware official LZA schema validation.
+- [x] Record or resolve remote/Git template provenance.
 
 ### `lza validate`
 

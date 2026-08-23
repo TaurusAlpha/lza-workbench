@@ -28,11 +28,19 @@ def render_workspace_import_result(result: WorkspaceImportResult) -> None:
     config_dir = result.config_dir
     paths = result.affected_paths
     identity = result.identity
+    provenance = result.provenance
 
     if result.dry_run:
         print_dry_run_header("lza import")
         print_kv("Workspace", workspace_dir)
         print_kv("Configuration", config_dir)
+        if provenance and provenance.remote_url:
+            print_kv("Git remote", provenance.remote_url)
+            print_kv("Git branch", provenance.branch)
+            if provenance.commit:
+                print_kv("Git commit", provenance.commit)
+        if result.repaired:
+            console.print("[yellow]Mode:[/] Repair metadata")
         console.print("Affected paths:")
         for path in paths:
             console.print(f"  - {path}")
@@ -46,9 +54,19 @@ def render_workspace_import_result(result: WorkspaceImportResult) -> None:
         print_success("Workspace already imported; no metadata changes")
         return
 
-    print_success("Imported LZA workspace")
+    if result.repaired:
+        print_success("Repaired and adopted LZA workspace")
+    else:
+        print_success("Imported LZA workspace")
+
     print_kv("Workspace", workspace_dir)
     print_kv("Configuration", config_dir)
+    if provenance and provenance.remote_url:
+        print_kv("Git remote", provenance.remote_url)
+        print_kv("Git branch", provenance.branch)
+        if provenance.commit:
+            print_kv("Git commit", provenance.commit)
+
     console.print("Affected paths:")
     for path in paths:
         console.print(f"  - {path}")
@@ -69,6 +87,7 @@ def workspace_import_command(
     lza_version: params.LzaVersion = None,
     dry_run: params.DryRun = False,
     force: params.Force = False,
+    repair: params.Repair = False,
     skip_aws_check: params.SkipAwsCheck = False,
     interactive: bool = False,
 ) -> None:
@@ -77,36 +96,44 @@ def workspace_import_command(
         workspace_dir=workspace_dir,
         config_dir=config_dir,
     )
-    existing = load_existing_metadata(resolved_workspace_dir, force=force)
+    existing = load_existing_metadata(resolved_workspace_dir, force=force, repair=repair)
 
+    default_name = (
+        existing.config.customer.name
+        if existing and existing.config
+        else resolved_workspace_dir.name
+    )
     resolved_customer_name = value_or_prompt(
         "Customer name",
         customer_name,
-        existing.config.customer.name if existing else resolved_workspace_dir.name,
+        default_name,
         interactive,
     )
     customer_slug = (
         existing.config.customer.slug
-        if existing and existing.config.customer.name == resolved_customer_name
+        if existing and existing.config and existing.config.customer.name == resolved_customer_name
         else normalize_customer_slug(resolved_customer_name)
     )
 
+    default_profile = (
+        existing.config.aws.profile if existing and existing.config else f"{customer_slug}-root"
+    )
     resolved_profile = value_or_prompt(
         "AWS profile",
         aws_profile or None,
-        existing.config.aws.profile if existing else f"{customer_slug}-root",
+        default_profile,
         interactive,
     )
     resolved_region = value_or_prompt(
         "AWS region",
         aws_region or None,
-        existing.config.aws.region if existing else "us-east-1",
+        existing.config.aws.region if existing and existing.config else "us-east-1",
         interactive,
     )
     resolved_version = value_or_prompt(
         "LZA version",
         lza_version,
-        existing.config.lza.version if existing else LzaConfig().version,
+        existing.config.lza.version if existing and existing.config else LzaConfig().version,
         interactive,
     )
 
@@ -120,6 +147,7 @@ def workspace_import_command(
         lza_version=resolved_version,
         dry_run=dry_run,
         force=force,
+        repair=repair,
         skip_aws_check=skip_aws_check,
     )
     render_workspace_import_result(result)

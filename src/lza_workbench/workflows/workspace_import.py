@@ -4,10 +4,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.configuration.schema import ConfigurationConfig, ConfigurationTemplateConfig
+from lza_workbench.configuration.archive import count_config_files
+from lza_workbench.configuration.git import (
+    GitProvenance,
+    resolve_git_provenance,
+)
+from lza_workbench.configuration.schema import (
+    ConfigurationConfig,
+    ConfigurationRepositoryConfig,
+    ConfigurationTemplateConfig,
+    PackagingExcludeConfig,
+)
 from lza_workbench.configuration.templates import validate_template
+from lza_workbench.configuration.validation import (
+    validate_lza_configuration_schema,
+    validate_yaml_syntax,
+)
 from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import (
     WORKSPACE_CONFIG_FILE,
@@ -33,8 +48,9 @@ from lza_workbench.workspace.state import (
 class ExistingMetadata:
     """Existing generated metadata, if the workspace has been imported before."""
 
-    config: WorkspaceConfig
-    state: WorkspaceState
+    config: WorkspaceConfig | None
+    state: WorkspaceState | None
+    is_repaired: bool = False
 
 
 @dataclass(frozen=True)
@@ -49,6 +65,9 @@ class WorkspaceImportResult:
     identity: dict[str, str] | None
     already_imported: bool
     dry_run: bool
+    repaired: bool = False
+    provenance: GitProvenance | None = None
+    validation_summary: dict[str, Any] | None = None
 
 
 def resolve_import_paths(*, workspace_dir: Path, config_dir: Path | None) -> tuple[Path, Path]:
@@ -73,26 +92,76 @@ def resolve_import_paths(*, workspace_dir: Path, config_dir: Path | None) -> tup
     return resolved_workspace_dir, resolved_config_dir
 
 
-def load_existing_metadata(workspace_dir: Path, *, force: bool) -> ExistingMetadata | None:
-    """Load a complete existing metadata pair, if present."""
+def load_existing_metadata(
+    workspace_dir: Path,
+    *,
+    force: bool = False,
+    repair: bool = False,
+) -> ExistingMetadata | None:
+    """Load a complete existing metadata pair, or repair partial/corrupted metadata if requested."""
     config_path = workspace_dir / WORKSPACE_CONFIG_FILE
     state_path = workspace_dir / WORKSPACE_STATE_FILE
-    try:
-        if config_path.exists() != state_path.exists():
-            raise LzaError("Workspace has partial metadata; both metadata files are required.")
-        if not config_path.exists():
-            return None
+
+    if not config_path.exists() and not state_path.exists():
+        return None
+
+    if force:
+        return None
+
+    config: WorkspaceConfig | None = None
+    state: WorkspaceState | None = None
+    config_err: Exception | None = None
+    state_err: Exception | None = None
+
+    if config_path.exists():
+        try:
+            config = load_workspace_config(workspace_dir)
+        except Exception as exc:
+            config_err = exc
+
+    if state_path.exists():
+        try:
+            state = load_workspace_state(workspace_dir)
+        except Exception as exc:
+            state_err = exc
+
+    # Both exist and valid
+    if config is not None and state is not None:
+        return ExistingMetadata(config=config, state=state, is_repaired=False)
+
+    # If repair flag is enabled, reconstruct missing or broken metadata
+    if repair:
+        repaired_config = config
+        repaired_state = state
+        if repaired_state is None and repaired_config is not None:
+            repaired_state = WorkspaceState.from_config(repaired_config)
         return ExistingMetadata(
-            config=load_workspace_config(workspace_dir),
-            state=load_workspace_state(workspace_dir),
+            config=repaired_config,
+            state=repaired_state,
+            is_repaired=True,
         )
-    except LzaError as exc:
-        if force:
-            return None
+
+    # Neither force nor repair - raise descriptive errors
+    if config_path.exists() and not state_path.exists():
         raise LzaError(
-            f"Invalid workspace metadata in {workspace_dir}: {exc}. "
-            f"Run `lza import {workspace_dir} --force` to replace it."
-        ) from exc
+            f"Workspace at '{workspace_dir}' has partial metadata; "
+            f"'{WORKSPACE_CONFIG_FILE}' was found but '{WORKSPACE_STATE_FILE}' is missing. "
+            f"Run `lza import {workspace_dir} --repair` to restore state "
+            "or `--force` to recreate metadata."
+        )
+    if state_path.exists() and not config_path.exists():
+        raise LzaError(
+            f"Workspace at '{workspace_dir}' has partial metadata; "
+            f"'{WORKSPACE_STATE_FILE}' was found but '{WORKSPACE_CONFIG_FILE}' is missing. "
+            f"Run `lza import {workspace_dir} --repair` to reconstruct config "
+            "or `--force` to recreate metadata."
+        )
+
+    err = config_err or state_err
+    raise LzaError(
+        f"Invalid workspace metadata in {workspace_dir}: {err}. "
+        f"Run `lza import {workspace_dir} --repair` to repair it or `--force` to replace it."
+    )
 
 
 def build_import_workspace_config(
@@ -105,13 +174,43 @@ def build_import_workspace_config(
     workspace_dir: Path,
     config_dir: Path,
     existing_config: WorkspaceConfig | None,
+    provenance: GitProvenance | None = None,
 ) -> WorkspaceConfig:
-    """Build import metadata."""
+    """Build import metadata, incorporating Git provenance when available."""
+    rel_config_path = str(config_dir.relative_to(workspace_dir))
+
+    if provenance and provenance.remote_url:
+        template = ConfigurationTemplateConfig(
+            source="git",
+            repository=provenance.remote_url,
+            ref=provenance.branch,
+            path=rel_config_path,
+        )
+        if provenance.repo_type == "codecommit":
+            repository = ConfigurationRepositoryConfig(
+                type="codecommit",
+                repository_name=provenance.repo_name or "lza-config-source",
+                branch=provenance.branch,
+            )
+        else:
+            repository = ConfigurationRepositoryConfig(
+                type="git",
+                repository=provenance.remote_url,
+                branch=provenance.branch,
+            )
+    else:
+        template = ConfigurationTemplateConfig(
+            source="local",
+            path=rel_config_path,
+        )
+        repository = ConfigurationRepositoryConfig()
+
     configuration = ConfigurationConfig(
-        local_path=str(config_dir.relative_to(workspace_dir)),
-        template=ConfigurationTemplateConfig(source="local", path=str(config_dir)),
+        local_path=rel_config_path,
+        template=template,
+        repository=repository,
     )
-    fields = {
+    fields: dict[str, Any] = {
         "customer": CustomerConfig(name=customer_name, slug=customer_slug),
         "aws": AwsConfig(
             profile=aws_profile,
@@ -133,7 +232,12 @@ def _metadata_paths(
 ) -> list[Path]:
     config_path = workspace_dir / WORKSPACE_CONFIG_FILE
     state_path = workspace_dir / WORKSPACE_STATE_FILE
-    if existing is None:
+    if (
+        existing is None
+        or existing.config is None
+        or existing.state is None
+        or existing.is_repaired
+    ):
         return [config_path, state_path]
     return [
         path
@@ -156,6 +260,7 @@ def import_workspace_workflow(
     lza_version: str = "v1.15.5",
     dry_run: bool = False,
     force: bool = False,
+    repair: bool = False,
     skip_aws_check: bool = False,
 ) -> WorkspaceImportResult:
     """Execute the pure workspace import workflow and return structured result."""
@@ -163,19 +268,41 @@ def import_workspace_workflow(
         workspace_dir=workspace_dir,
         config_dir=config_dir,
     )
-    existing = load_existing_metadata(resolved_workspace_dir, force=force)
+    existing = load_existing_metadata(resolved_workspace_dir, force=force, repair=repair)
+
+    # Validate template files presence
     validate_template(resolved_config_dir)
+
+    if lza_version is not None:
+        resolved_version = lza_version
+    elif existing and existing.config:
+        resolved_version = existing.config.lza.version
+    else:
+        resolved_version = "v1.15.5"
+
+    # Parse YAML syntax and validate LZA configuration schema
+    parsed_yaml = validate_yaml_syntax(resolved_config_dir)
+    validate_lza_configuration_schema(
+        resolved_config_dir,
+        lza_version=resolved_version,
+        parsed_files=parsed_yaml,
+    )
+
+    # Detect Git repository provenance
+    provenance = resolve_git_provenance(resolved_config_dir)
+    if provenance is None and resolved_config_dir != resolved_workspace_dir:
+        provenance = resolve_git_provenance(resolved_workspace_dir)
 
     if customer_name:
         resolved_customer_name = customer_name
-    elif existing:
+    elif existing and existing.config:
         resolved_customer_name = existing.config.customer.name
     else:
         resolved_customer_name = resolved_workspace_dir.name
 
     customer_slug = (
         existing.config.customer.slug
-        if existing and existing.config.customer.name == resolved_customer_name
+        if existing and existing.config and existing.config.customer.name == resolved_customer_name
         else normalize_customer_slug(resolved_customer_name)
     )
 
@@ -184,24 +311,17 @@ def import_workspace_workflow(
 
     if aws_profile:
         resolved_profile = aws_profile
-    elif existing:
+    elif existing and existing.config:
         resolved_profile = existing.config.aws.profile
     else:
         resolved_profile = f"{customer_slug}-root"
 
     if aws_region is not None:
         resolved_region = aws_region
-    elif existing:
+    elif existing and existing.config:
         resolved_region = existing.config.aws.region
     else:
         resolved_region = "us-east-1"
-
-    if lza_version is not None:
-        resolved_version = lza_version
-    elif existing:
-        resolved_version = existing.config.lza.version
-    else:
-        resolved_version = "v1.15.5"
 
     config = build_import_workspace_config(
         customer_name=resolved_customer_name,
@@ -212,8 +332,28 @@ def import_workspace_workflow(
         workspace_dir=resolved_workspace_dir,
         config_dir=resolved_config_dir,
         existing_config=existing.config if existing else None,
+        provenance=provenance,
     )
-    state = existing.state if existing else WorkspaceState.from_config(config)
+
+    if existing and existing.state:
+        state = existing.state
+    else:
+        state = WorkspaceState.from_config(config)
+
+    # Update operational state with discovered configuration metrics
+    if provenance:
+        state.config_files_count = provenance.files_count
+        if provenance.commit:
+            state.config_artifact_sha256 = provenance.commit
+        state.config_template_source = provenance.repo_type
+    else:
+        exclude = PackagingExcludeConfig()
+        state.config_files_count = count_config_files(
+            resolved_config_dir,
+            set(exclude.directories),
+            set(exclude.files),
+        )
+        state.config_template_source = "local"
 
     identity = (
         None
@@ -227,6 +367,7 @@ def import_workspace_workflow(
         ).identity
     )
     paths = _metadata_paths(resolved_workspace_dir, existing, config, state)
+    is_repaired = bool(existing and existing.is_repaired)
 
     if dry_run:
         return WorkspaceImportResult(
@@ -236,11 +377,14 @@ def import_workspace_workflow(
             state=state,
             affected_paths=paths,
             identity=identity,
-            already_imported=not bool(paths),
+            already_imported=not bool(paths) and not is_repaired,
             dry_run=True,
+            repaired=is_repaired,
+            provenance=provenance,
+            validation_summary={"files_validated": len(parsed_yaml)},
         )
 
-    if not paths:
+    if not paths and not is_repaired:
         return WorkspaceImportResult(
             workspace_dir=resolved_workspace_dir,
             config_dir=resolved_config_dir,
@@ -250,6 +394,9 @@ def import_workspace_workflow(
             identity=identity,
             already_imported=True,
             dry_run=False,
+            repaired=False,
+            provenance=provenance,
+            validation_summary={"files_validated": len(parsed_yaml)},
         )
 
     (resolved_workspace_dir / ".lza").mkdir(parents=True, exist_ok=True)
@@ -267,4 +414,7 @@ def import_workspace_workflow(
         identity=identity,
         already_imported=False,
         dry_run=False,
+        repaired=is_repaired,
+        provenance=provenance,
+        validation_summary={"files_validated": len(parsed_yaml)},
     )

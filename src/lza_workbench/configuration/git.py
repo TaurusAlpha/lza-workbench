@@ -45,12 +45,16 @@ def has_uncommitted_changes(repo_dir: Path) -> bool:
 
 
 def get_git_branch(repo_dir: Path) -> str:
-    """Return the current active git branch name."""
+    """Return the current active git branch name, defaulting to 'main' on empty repositories."""
+    proc = _run_git_command(["branch", "--show-current"], cwd=repo_dir)
+    if proc.returncode == 0 and proc.stdout.strip():
+        return proc.stdout.strip()
     proc = _run_git_command(["rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_dir)
-    if proc.returncode != 0:
-        raise LzaError(f"Failed to get current git branch: {proc.stderr.strip()}")
-    branch = proc.stdout.strip()
-    return branch if branch != "HEAD" else "main"
+    if proc.returncode == 0:
+        branch = proc.stdout.strip()
+        if branch and branch != "HEAD":
+            return branch
+    return "main"
 
 
 def get_git_commit(repo_dir: Path) -> str:
@@ -188,3 +192,64 @@ def clone_git_repository(
         )
     if aws_profile and "codecommit" in remote_url.lower():
         configure_codecommit_credential_helper(repo_dir, aws_profile)
+
+
+def detect_git_repository_type(remote_url: str | None) -> str:
+    """Classify the git repository type from its remote URL."""
+    if not remote_url:
+        return "local"
+    url_lower = remote_url.lower()
+    if "codecommit" in url_lower:
+        return "codecommit"
+    return "git"
+
+
+def extract_codecommit_repo_name(remote_url: str) -> str | None:
+    """Extract CodeCommit repository name from its HTTPS or SSH URL."""
+    cleaned = remote_url.strip().rstrip("/")
+    if cleaned.endswith(".git"):
+        cleaned = cleaned[:-4]
+    parts = cleaned.split("/")
+    return parts[-1] if parts else None
+
+
+from dataclasses import dataclass  # noqa: E402
+
+
+@dataclass(frozen=True)
+class GitProvenance:
+    """Resolved Git repository metadata and provenance."""
+
+    remote_url: str | None
+    branch: str
+    commit: str
+    files_count: int
+    repo_type: str
+    repo_name: str | None
+
+
+def resolve_git_provenance(repo_dir: Path) -> GitProvenance | None:
+    """Detect and resolve Git provenance for a given directory if it is a Git repository."""
+    if not is_git_repository(repo_dir):
+        return None
+
+    remote_url = get_git_remote_url(repo_dir)
+    branch = get_git_branch(repo_dir)
+    commit = get_git_commit(repo_dir)
+    files_count = count_git_files(repo_dir)
+    repo_type = detect_git_repository_type(remote_url)
+    repo_name = (
+        extract_codecommit_repo_name(remote_url)
+        if (remote_url and repo_type == "codecommit")
+        else None
+    )
+
+    return GitProvenance(
+        remote_url=remote_url,
+        branch=branch,
+        commit=commit,
+        files_count=files_count,
+        repo_type=repo_type,
+        repo_name=repo_name,
+    )
+
