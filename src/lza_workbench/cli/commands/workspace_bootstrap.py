@@ -46,6 +46,16 @@ def _render_bootstrap_plan(plan: BootstrapPlanResult) -> None:
         print_kv("Versioning Enabled", str(plan.versioning_enabled))
         print_kv("KMS Encryption Enabled", str(plan.encryption_enabled))
 
+    if plan.codecommit_repo_name:
+        console.print()
+        print_kv("Config CodeCommit Repo", plan.codecommit_repo_name, bold_value=True)
+        print_kv("Target Branch", plan.codecommit_branch_name or "main")
+        print_kv(
+            "Repo Status",
+            "EXISTS" if plan.codecommit_repo_exists else "DOES NOT EXIST",
+            bold_value=True,
+        )
+
     op_color = (
         "green"
         if plan.planned_operation == "CREATE"
@@ -68,13 +78,12 @@ def _confirm_bootstrap(
     dry_run: bool,
     force: bool,
 ) -> bool:
-    """Prompt user for confirmation before mutating AWS S3 resources."""
+    """Prompt user for confirmation before mutating AWS resources."""
     if dry_run or force or plan.planned_operation == "NO_CHANGE":
         return True
 
     prompt = (
-        f"Proceed with {plan.planned_operation.lower()} for S3 assets bucket "
-        f"'{plan.bucket_name}'?"
+        f"Proceed with {plan.planned_operation.lower()} for AWS bootstrap resources?"
     )
     if not typer.confirm(prompt, default=True):
         console.print("[dim]Bootstrap aborted by user.[/dim]")

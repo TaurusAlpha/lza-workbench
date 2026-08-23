@@ -89,6 +89,33 @@ def initialized_workspace(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def imported_workspace(tmp_path: Path) -> Path:
+    """Create a temporary imported workspace directory."""
+    import shutil
+
+    from lza_workbench.configuration.templates import resolve_template_source
+    from lza_workbench.workflows.workspace_import import import_workspace_workflow
+
+    ws_dir = tmp_path / "imported-workspace"
+    config_dir = ws_dir / "aws-accelerator-config"
+    config_dir.mkdir(parents=True)
+    template = resolve_template_source("default")
+    for f in template.config_dir.glob("*.yaml"):
+        shutil.copy(f, config_dir / f.name)
+
+    import_workspace_workflow(
+        workspace_dir=ws_dir,
+        customer_name="Acme Corp",
+        aws_profile="acme-root",
+        aws_region="eu-west-1",
+        lza_version=PACKAGED_INSTALLER_VERSION,
+        dry_run=False,
+        skip_aws_check=True,
+    )
+    return ws_dir
+
+
+@pytest.fixture
 def configured_workspace(tmp_path: Path) -> Path:
     """Create a fully configured workspace with configuration and installer setup."""
     ws_dir = tmp_path / "configured-workspace"

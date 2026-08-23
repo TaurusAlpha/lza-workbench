@@ -104,7 +104,7 @@ class InstallerOptionsConfig(BaseModel):
         description="Specify the location to use to host the LZA configuration files.",
     )
     use_existing_config_repo: bool = Field(
-        default=False,
+        default=True,
         description="Select Yes if deploying the solution with an existing "
         "configuration repository.",
     )
@@ -119,12 +119,12 @@ class InstallerOptionsConfig(BaseModel):
         "repository accessed through CodeConnection.",
     )
     existing_config_repository_name: str | None = Field(
-        default=None,
+        default="lza-config-source",
         description="The name of an existing LZA configuration repository "
         "hosting the accelerator configuration.",
     )
     existing_config_repository_branch_name: str | None = Field(
-        default=None,
+        default="main",
         description="Specify the branch name of the existing LZA configuration repository.",
     )
 
@@ -166,12 +166,7 @@ class InstallerOptionsConfig(BaseModel):
                 )
             elif self.configuration_repository_location == "codecommit":
                 if not self.existing_config_repository_name:
-                    raise LzaError(
-                        "existing_config_repository_name must be provided when "
-                        "use_existing_config_repo is True and "
-                        "configuration_repository_location is set to 'codecommit'. "
-                        "Run `lza config plan`."
-                    )
+                    self.existing_config_repository_name = "lza-config-source"
             if not self.existing_config_repository_branch_name:
                 self.existing_config_repository_branch_name = "main"
 
@@ -208,8 +203,10 @@ class InstallerOptionsConfig(BaseModel):
             "use_existing_config_repo": is_existing,
             "config_code_connection_arn": repo_config.codeconnection_arn,
             "existing_config_repository_owner": repo_config.owner,
-            "existing_config_repository_name": repo_config.repository_name,
-            "existing_config_repository_branch_name": repo_config.branch,
+            "existing_config_repository_name": repo_config.repository_name or (
+                "lza-config-source" if repo_config.type == "codecommit" else None
+            ),
+            "existing_config_repository_branch_name": repo_config.branch or "main",
         }
 
         merged_args = {**derived_options, **kwargs}

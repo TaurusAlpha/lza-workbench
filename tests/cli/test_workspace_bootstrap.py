@@ -60,13 +60,23 @@ def test_cli_bootstrap_force(test_workspace: Path, monkeypatch: pytest.MonkeyPat
             {"Error": {"Code": "404", "Message": "Not Found"}},
             "HeadBucket",
         )
-        mock_client.return_value = mock_s3
+        mock_cc = MagicMock()
+        mock_cc.get_repository.side_effect = ClientError(
+            {"Error": {"Code": "RepositoryDoesNotExistException"}},
+            "GetRepository",
+        )
+
+        def client_factory(service: str):
+            return mock_s3 if service == "s3" else mock_cc
+
+        mock_client.side_effect = client_factory
 
         res = runner.invoke(app, ["bootstrap", "--force"])
         assert res.exit_code == 0
         assert "ready" in res.output
         assert "s3-lza-workbench-assets-111222333444-eu-west-1" in res.output
         assert "Created S3 bucket" in res.output
+        assert "Created CodeCommit repository" in res.output
 
 
 def test_cli_bootstrap_prompt_abort(
@@ -83,8 +93,18 @@ def test_cli_bootstrap_prompt_abort(
             {"Error": {"Code": "404", "Message": "Not Found"}},
             "HeadBucket",
         )
-        mock_client.return_value = mock_s3
+        mock_cc = MagicMock()
+        mock_cc.get_repository.side_effect = ClientError(
+            {"Error": {"Code": "RepositoryDoesNotExistException"}},
+            "GetRepository",
+        )
+
+        def client_factory(service: str):
+            return mock_s3 if service == "s3" else mock_cc
+
+        mock_client.side_effect = client_factory
 
         res = runner.invoke(app, ["bootstrap"], input="n\n")
         assert res.exit_code == 0
         assert "Bootstrap aborted by user." in res.output
+

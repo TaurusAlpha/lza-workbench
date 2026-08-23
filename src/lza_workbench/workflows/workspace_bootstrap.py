@@ -7,6 +7,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from lza_workbench.aws.codecommit import (
+    ensure_codecommit_repository,
+    inspect_codecommit_config_repository,
+)
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.s3 import (
     create_s3_bucket,
@@ -69,6 +73,12 @@ class BootstrapPlanResult:
     bucket_exists: bool
     versioning_enabled: bool
     encryption_enabled: bool
+    bucket_planned_operation: str
+    codecommit_repo_name: str | None
+    codecommit_branch_name: str | None
+    codecommit_repo_exists: bool
+    codecommit_branch_exists: bool
+    codecommit_repo_planned_operation: str
     planned_operation: str
     actions: list[str]
     dry_run: bool
@@ -84,6 +94,9 @@ class WorkspaceBootstrapResult:
     aws_region: str
     account_id: str
     bucket_name: str
+    codecommit_repo_name: str | None
+    codecommit_branch_name: str | None
+    codecommit_repo_planned_operation: str
     planned_operation: str
     dry_run: bool
     skipped: bool
@@ -125,7 +138,7 @@ def plan_bootstrap_workflow(
 
     actions: list[str] = []
     if not insp["exists"]:
-        planned_operation = "CREATE"
+        bucket_planned_operation = "CREATE"
         actions.append(f"Create S3 bucket '{bucket_name}' in region '{region}'")
         actions.append(f"Enable versioning on S3 bucket '{bucket_name}'")
         actions.append(f"Enable AWS-managed KMS encryption on S3 bucket '{bucket_name}'")
@@ -136,10 +149,78 @@ def plan_bootstrap_workflow(
             actions.append(f"Enable AWS-managed KMS encryption on S3 bucket '{bucket_name}'")
 
         if actions:
-            planned_operation = "UPDATE"
+            bucket_planned_operation = "UPDATE"
         else:
-            planned_operation = "NO_CHANGE"
+            bucket_planned_operation = "NO_CHANGE"
             actions.append(f"Reuse existing S3 assets bucket '{bucket_name}' (already configured)")
+
+    # Inspect CodeCommit configuration repository if configured
+    is_codecommit_config = (
+        config.configuration.repository.type == "codecommit"
+        or config.installer.options.configuration_repository_location == "codecommit"
+    )
+
+    cc_repo_name: str | None = None
+    cc_branch_name: str | None = None
+    cc_repo_exists = False
+    cc_branch_exists = False
+    cc_planned_op = "N/A"
+
+    if is_codecommit_config:
+        cc_repo_name = (
+            config.configuration.repository.repository_name
+            or config.installer.options.existing_config_repository_name
+            or "lza-config-source"
+        )
+        cc_branch_name = (
+            config.configuration.repository.branch
+            or config.installer.options.existing_config_repository_branch_name
+            or "main"
+        )
+        cc_client = aws_ctx.factory.get_client("codecommit")
+        cc_insp = inspect_codecommit_config_repository(
+            client=cc_client,
+            repository_name=cc_repo_name,
+            branch_name=cc_branch_name,
+        )
+        cc_repo_exists = cc_insp["exists"]
+        cc_branch_exists = cc_insp["branch_exists"]
+
+        is_imported = config.configuration.template.source == "local"
+
+        if is_imported:
+            if cc_repo_exists:
+                cc_planned_op = "NO_CHANGE"
+                actions.append(
+                    f"Validate existing CodeCommit repository '{cc_repo_name}' "
+                    f"branch '{cc_branch_name}' (imported)"
+                )
+            else:
+                cc_planned_op = "MISSING"
+                actions.append(
+                    f"[bold red]MISSING[/bold red] CodeCommit repository '{cc_repo_name}' "
+                    "not found (imported resources must not be recreated automatically)"
+                )
+        else:
+            if cc_repo_exists:
+                cc_planned_op = "NO_CHANGE"
+                actions.append(
+                    f"Reuse existing CodeCommit repository '{cc_repo_name}'"
+                )
+            else:
+                cc_planned_op = "CREATE"
+                actions.append(
+                    f"Create CodeCommit repository '{cc_repo_name}' in region '{region}'"
+                )
+
+    if cc_planned_op == "MISSING":
+        overall_planned_operation = "MISSING"
+    elif bucket_planned_operation == "CREATE" or cc_planned_op == "CREATE":
+        overall_planned_operation = "CREATE"
+    elif bucket_planned_operation == "UPDATE" or cc_planned_op == "UPDATE":
+        overall_planned_operation = "UPDATE"
+    else:
+        overall_planned_operation = "NO_CHANGE"
 
     return BootstrapPlanResult(
         workspace_dir=workspace_dir,
@@ -151,7 +232,13 @@ def plan_bootstrap_workflow(
         bucket_exists=insp["exists"],
         versioning_enabled=insp["versioning_enabled"],
         encryption_enabled=insp["kms_encrypted"],
-        planned_operation=planned_operation,
+        bucket_planned_operation=bucket_planned_operation,
+        codecommit_repo_name=cc_repo_name,
+        codecommit_branch_name=cc_branch_name,
+        codecommit_repo_exists=cc_repo_exists,
+        codecommit_branch_exists=cc_branch_exists,
+        codecommit_repo_planned_operation=cc_planned_op,
+        planned_operation=overall_planned_operation,
         actions=actions,
         dry_run=dry_run,
     )
@@ -166,6 +253,12 @@ def bootstrap_workspace_workflow(
     del force  # Force bypasses CLI confirmation; workflow itself is idempotent
     plan = plan_bootstrap_workflow(target_dir=target_dir, dry_run=dry_run)
 
+    if plan.codecommit_repo_planned_operation == "MISSING":
+        raise LzaError(
+            f"Configured CodeCommit configuration repository '{plan.codecommit_repo_name}' "
+            "was not found. Imported resources must not be recreated automatically."
+        )
+
     if dry_run:
         return WorkspaceBootstrapResult(
             workspace_dir=plan.workspace_dir,
@@ -174,6 +267,9 @@ def bootstrap_workspace_workflow(
             aws_region=plan.aws_region,
             account_id=plan.account_id,
             bucket_name=plan.bucket_name,
+            codecommit_repo_name=plan.codecommit_repo_name,
+            codecommit_branch_name=plan.codecommit_branch_name,
+            codecommit_repo_planned_operation=plan.codecommit_repo_planned_operation,
             planned_operation=plan.planned_operation,
             dry_run=True,
             skipped=False,
@@ -202,6 +298,24 @@ def bootstrap_workspace_workflow(
         region=plan.aws_region,
     )
 
+    if plan.codecommit_repo_name:
+        cc_client = aws_ctx.factory.get_client("codecommit")
+        if plan.codecommit_repo_planned_operation == "CREATE":
+            ensure_codecommit_repository(
+                client=cc_client,
+                repository_name=plan.codecommit_repo_name,
+                branch_name=plan.codecommit_branch_name or "main",
+                description="LZA Configuration Repository",
+            )
+            actions_taken.append(
+                f"Created CodeCommit repository '{plan.codecommit_repo_name}' "
+                f"in region '{plan.aws_region}'"
+            )
+        else:
+            actions_taken.append(
+                f"Reused existing CodeCommit repository '{plan.codecommit_repo_name}'"
+            )
+
     # Persist assets bucket to lza-workspace.yaml
     config.assets_bucket = plan.bucket_name
     write_workspace_config(workspace_dir, config)
@@ -219,6 +333,9 @@ def bootstrap_workspace_workflow(
         aws_region=plan.aws_region,
         account_id=plan.account_id,
         bucket_name=plan.bucket_name,
+        codecommit_repo_name=plan.codecommit_repo_name,
+        codecommit_branch_name=plan.codecommit_branch_name,
+        codecommit_repo_planned_operation=plan.codecommit_repo_planned_operation,
         planned_operation=plan.planned_operation,
         dry_run=False,
         skipped=False,

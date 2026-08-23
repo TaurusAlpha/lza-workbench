@@ -117,3 +117,64 @@ def test_inspect_codecommit_branch_unexpected_error_fails_closed() -> None:
     assert res.creation_required is False
     assert res.sync_required is False
     assert any("Unexpected CodeCommit error" in action for action in res.actions)
+
+
+def test_inspect_codecommit_config_repository_missing() -> None:
+    """Test inspect_codecommit_config_repository when repository does not exist."""
+    from lza_workbench.aws.codecommit import inspect_codecommit_config_repository
+
+    client = MagicMock()
+    client.get_repository.side_effect = ClientError(
+        {"Error": {"Code": "RepositoryDoesNotExistException"}}, "GetRepository"
+    )
+
+    res = inspect_codecommit_config_repository(
+        client=client,
+        repository_name="lza-config-source",
+        branch_name="main",
+    )
+
+    assert res["exists"] is False
+    assert res["accessible"] is False
+    assert res["branch_exists"] is False
+
+
+def test_inspect_codecommit_config_repository_exists_branch_missing() -> None:
+    """Test inspect_codecommit_config_repository when repository exists but branch does not."""
+    from lza_workbench.aws.codecommit import inspect_codecommit_config_repository
+
+    client = MagicMock()
+    client.get_repository.return_value = {"repositoryMetadata": {}}
+    client.get_branch.side_effect = ClientError(
+        {"Error": {"Code": "BranchDoesNotExistException"}}, "GetBranch"
+    )
+
+    res = inspect_codecommit_config_repository(
+        client=client,
+        repository_name="lza-config-source",
+        branch_name="main",
+    )
+
+    assert res["exists"] is True
+    assert res["accessible"] is True
+    assert res["branch_exists"] is False
+
+
+def test_inspect_codecommit_config_repository_exists_branch_exists() -> None:
+    """Test inspect_codecommit_config_repository when repository and branch both exist."""
+    from lza_workbench.aws.codecommit import inspect_codecommit_config_repository
+
+    client = MagicMock()
+    client.get_repository.return_value = {"repositoryMetadata": {}}
+    client.get_branch.return_value = {"branch": {"branchName": "main"}}
+
+    res = inspect_codecommit_config_repository(
+        client=client,
+        repository_name="lza-config-source",
+        branch_name="main",
+    )
+
+    assert res["exists"] is True
+    assert res["accessible"] is True
+    assert res["branch_exists"] is True
+

@@ -69,15 +69,15 @@ The future implementation should preserve the following behavior:
 
 #### Configuration repository
 
-- [] `ConfigurationRepositoryLocation=codecommit`
+- [x] `ConfigurationRepositoryLocation=codecommit`
   - On init or changed configuration:
-    - Default `UseExistingConfigRepo=true`.
-    - Create or validate the `lza-config-source` CodeCommit repository in the management account.
-    - Default `ExistingConfigRepositoryBranchName` to `main`.
-    - The installer workflow may then push the initial/basic LZA configuration before installer deployment.
+    - [x] Default `UseExistingConfigRepo=true`.
+    - [x] Create or validate the `lza-config-source` CodeCommit repository in the management account.
+    - [x] Default `ExistingConfigRepositoryBranchName` to `main`.
+    - [x] The installer workflow may then push the initial/basic LZA configuration before installer deployment.
   - On import:
-    - Validate that the configured repository and branch exist and are accessible.
-    - Do not recreate missing imported resources automatically.
+    - [x] Validate that the configured repository and branch exist and are accessible.
+    - [x] Do not recreate missing imported resources automatically.
 
 - [] `ConfigurationRepositoryLocation=codeconnection`
   - On init, changed configuration, and import:

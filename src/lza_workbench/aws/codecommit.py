@@ -8,6 +8,7 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
+from lza_workbench.errors import LzaError
 
 
 @dataclass
@@ -189,3 +190,82 @@ def ensure_codecommit_repository(
             )
         else:
             raise
+
+
+def inspect_codecommit_config_repository(
+    *,
+    factory: AwsClientFactory | None = None,
+    client: Any | None = None,
+    repository_name: str,
+    branch_name: str = "main",
+) -> dict[str, Any]:
+    """Inspect CodeCommit repository and branch state for configuration repository."""
+    cc_client = (
+        client if client is not None else (factory.get_client("codecommit") if factory else None)
+    )
+    if cc_client is None:
+        raise ValueError("AWS CodeCommit client is not available")
+
+    clean_repo = (repository_name or "lza-config-source").strip()
+    clean_branch = (branch_name or "main").strip()
+
+    try:
+        cc_client.get_repository(repositoryName=clean_repo)
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        if code in {"RepositoryDoesNotExistException", "404"}:
+            return {
+                "exists": False,
+                "accessible": False,
+                "branch_exists": False,
+                "error": None,
+            }
+        if code in {"AccessDeniedException", "403"}:
+            raise LzaError(
+                f"Access denied checking CodeCommit repository '{clean_repo}': {exc}"
+            ) from exc
+        raise LzaError(
+            f"CodeCommit inspection error on repository '{clean_repo}': {exc}"
+        ) from exc
+    except BotoCoreError as exc:
+        raise LzaError(
+            f"AWS connection failure checking CodeCommit repository '{clean_repo}': {exc}"
+        ) from exc
+
+    branch_exists = False
+    try:
+        cc_client.get_branch(repositoryName=clean_repo, branchName=clean_branch)
+        branch_exists = True
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        if code in {"BranchDoesNotExistException", "CommitDoesNotExistException"}:
+            branch_exists = False
+        elif code in {"AccessDeniedException", "403"}:
+            raise LzaError(
+                f"Access denied checking branch '{clean_branch}' in "
+                f"CodeCommit repository '{clean_repo}': {exc}"
+            ) from exc
+        else:
+            raise LzaError(
+                f"Error checking branch '{clean_branch}' in "
+                f"CodeCommit repository '{clean_repo}': {exc}"
+            ) from exc
+    except BotoCoreError as exc:
+        raise LzaError(
+            f"AWS connection failure checking branch '{clean_branch}': {exc}"
+        ) from exc
+
+    return {
+        "exists": True,
+        "accessible": True,
+        "branch_exists": branch_exists,
+        "error": None,
+    }
+
+
+__all__ = [
+    "CodeCommitPlanResult",
+    "ensure_codecommit_repository",
+    "inspect_codecommit_config_repository",
+    "inspect_codecommit_repository",
+]

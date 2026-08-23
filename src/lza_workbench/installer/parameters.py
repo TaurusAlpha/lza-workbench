@@ -148,10 +148,14 @@ def build_installer_cfn_parameters(
         existing_owner = ""
         if use_existing:
             existing_name = (
-                options.existing_config_repository_name or repo_config.repository_name or ""
+                options.existing_config_repository_name
+                or repo_config.repository_name
+                or "lza-config-source"
             )
             existing_branch = (
-                options.existing_config_repository_branch_name or repo_config.branch or ""
+                options.existing_config_repository_branch_name
+                or repo_config.branch
+                or "main"
             )
         else:
             existing_name = ""

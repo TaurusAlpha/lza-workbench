@@ -27,7 +27,7 @@ class ConfigurationRepositoryConfig(BaseModel):
     @model_validator(mode="after")
     def validate_configuration_repository(self) -> ConfigurationRepositoryConfig:
         if self.type == "codecommit":
-            self.repository_name = self.repository_name or "aws-accelerator-config"
+            self.repository_name = self.repository_name or "lza-config-source"
             self.branch = self.branch or "main"
 
         elif self.type == "codeconnection":

@@ -62,7 +62,7 @@ def test_plan_bootstrap_workflow_create(initialized_workspace: Path) -> None:
         assert plan.account_id == "111222333444"
         assert plan.bucket_name == "s3-lza-workbench-assets-111222333444-eu-west-1"
         assert plan.bucket_exists is False
-        assert len(plan.actions) == 3
+        assert len(plan.actions) == 4
 
 
 def test_plan_bootstrap_workflow_no_change(initialized_workspace: Path) -> None:
@@ -116,7 +116,7 @@ def test_bootstrap_workspace_workflow_executes_and_saves_state(
 
         assert result.dry_run is False
         assert result.bucket_name == "s3-lza-workbench-assets-111222333444-eu-west-1"
-        assert len(result.actions_taken) == 3
+        assert len(result.actions_taken) == 4
 
         # Verify config saved
         cfg = load_workspace_config(initialized_workspace)
@@ -127,3 +127,105 @@ def test_bootstrap_workspace_workflow_executes_and_saves_state(
         assert st.assets_bucket_name == "s3-lza-workbench-assets-111222333444-eu-west-1"
         assert st.bootstrapped_at is not None
         assert st.management_account_id == "111222333444"
+
+
+def test_plan_bootstrap_workflow_with_codecommit_create(initialized_workspace: Path) -> None:
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
+        mock_s3 = MagicMock()
+        mock_s3.head_bucket.return_value = {}
+        mock_s3.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        mock_s3.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        mock_cc = MagicMock()
+        mock_cc.get_repository.side_effect = ClientError(
+            {"Error": {"Code": "RepositoryDoesNotExistException"}}, "GetRepository"
+        )
+
+        def client_factory(service: str):
+            return mock_s3 if service == "s3" else mock_cc
+
+        mock_client.side_effect = client_factory
+
+        plan = plan_bootstrap_workflow(target_dir=initialized_workspace, dry_run=True)
+        assert plan.bucket_planned_operation == "NO_CHANGE"
+        assert plan.codecommit_repo_name == "lza-config-source"
+        assert plan.codecommit_repo_planned_operation == "CREATE"
+        assert plan.planned_operation == "CREATE"
+        assert any("Create CodeCommit repository 'lza-config-source'" in a for a in plan.actions)
+
+
+def test_plan_bootstrap_workflow_with_codecommit_imported_missing(
+    imported_workspace: Path,
+) -> None:
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
+        mock_s3 = MagicMock()
+        mock_s3.head_bucket.return_value = {}
+        mock_s3.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        mock_s3.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        mock_cc = MagicMock()
+        mock_cc.get_repository.side_effect = ClientError(
+            {"Error": {"Code": "RepositoryDoesNotExistException"}}, "GetRepository"
+        )
+
+        def client_factory(service: str):
+            return mock_s3 if service == "s3" else mock_cc
+
+        mock_client.side_effect = client_factory
+
+        plan = plan_bootstrap_workflow(target_dir=imported_workspace, dry_run=True)
+        assert plan.codecommit_repo_planned_operation == "MISSING"
+        assert plan.planned_operation == "MISSING"
+        assert any("MISSING" in a for a in plan.actions)
+
+
+def test_bootstrap_workspace_workflow_with_codecommit_create(initialized_workspace: Path) -> None:
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
+        mock_s3 = MagicMock()
+        mock_s3.head_bucket.return_value = {}
+        mock_s3.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        mock_s3.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        mock_cc = MagicMock()
+        mock_cc.get_repository.side_effect = ClientError(
+            {"Error": {"Code": "RepositoryDoesNotExistException"}}, "GetRepository"
+        )
+
+        def client_factory(service: str):
+            return mock_s3 if service == "s3" else mock_cc
+
+        mock_client.side_effect = client_factory
+
+        result = bootstrap_workspace_workflow(
+            target_dir=initialized_workspace,
+            dry_run=False,
+        )
+
+        assert result.dry_run is False
+        assert result.codecommit_repo_name == "lza-config-source"
+        assert any(
+            "Created CodeCommit repository 'lza-config-source'" in a for a in result.actions_taken
+        )
+        mock_cc.create_repository.assert_called_once()
+
