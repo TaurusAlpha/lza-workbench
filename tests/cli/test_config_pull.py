@@ -197,3 +197,60 @@ def test_pull_git_stashes_uncommitted_with_force(
 
     assert result.exit_code == 0
     assert not (config_dir / "uncommitted.txt").exists()
+
+
+def test_pull_git_interactive_stash_confirmed(
+    configured_workspace: Path,
+    cli_runner: CliRunner,
+    init_git_repo: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = load_workspace_config(configured_workspace)
+    cfg.configuration.repository.type = "git"
+    cfg.configuration.repository.repository = "https://github.com/my-org/my-repo.git"
+    write_workspace_config(configured_workspace, cfg)
+
+    config_dir = configured_workspace / "aws-accelerator-config"
+    init_git_repo(config_dir, commit=True)
+    (config_dir / "uncommitted.txt").write_text("modified", encoding="utf-8")
+
+    monkeypatch.chdir(configured_workspace)
+    with (
+        patch("lza_workbench.cli.main._is_interactive", return_value=True),
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.workflows.config_pull.fetch_git_remote"),
+        patch("lza_workbench.workflows.config_pull.pull_git_branch"),
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        result = cli_runner.invoke(app, ["config", "pull"], input="y\n")
+
+    assert result.exit_code == 0
+    assert not (config_dir / "uncommitted.txt").exists()
+
+
+def test_pull_git_interactive_stash_declined(
+    configured_workspace: Path,
+    cli_runner: CliRunner,
+    init_git_repo: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = load_workspace_config(configured_workspace)
+    cfg.configuration.repository.type = "git"
+    cfg.configuration.repository.repository = "https://github.com/my-org/my-repo.git"
+    write_workspace_config(configured_workspace, cfg)
+
+    config_dir = configured_workspace / "aws-accelerator-config"
+    init_git_repo(config_dir, commit=True)
+    (config_dir / "uncommitted.txt").write_text("modified", encoding="utf-8")
+
+    monkeypatch.chdir(configured_workspace)
+    with (
+        patch("lza_workbench.cli.main._is_interactive", return_value=True),
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        result = cli_runner.invoke(app, ["config", "pull"], input="n\n")
+
+    assert result.exit_code != 0
+
+

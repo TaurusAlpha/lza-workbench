@@ -75,23 +75,6 @@ def config_pull_command(
     target_dir: Path | None = None,
 ) -> ConfigPullResult:
     """Synchronize LZA configuration from configured remote repository or S3."""
-    overwrite_confirmed = False
-    if interactive and not force and not dry_run:
-        from lza_workbench.workspace.config import load_workspace_config
-        from lza_workbench.workspace.paths import resolve_workspace_dir
-
-        ws_dir = resolve_workspace_dir(target_dir)
-        cfg = load_workspace_config(ws_dir)
-        local_dir = ws_dir / cfg.configuration.local_path
-        if local_dir.is_dir() and any(local_dir.iterdir()):
-            confirm = typer.confirm(
-                f"Local configuration directory {local_dir} is not empty. "
-                "Overwrite or sync remote changes?"
-            )
-            if not confirm:
-                raise typer.Abort()
-            overwrite_confirmed = True
-
     result = pull_configuration_workflow(
         target_dir=target_dir,
         dry_run=dry_run,
@@ -100,7 +83,10 @@ def config_pull_command(
         bucket_resolver=(lambda: typer.prompt("S3 bucket name for configuration"))
         if interactive
         else None,
-        overwrite_confirmed=overwrite_confirmed,
+        confirm_callback=(lambda msg: typer.confirm(msg, default=False))
+        if interactive
+        else None,
     )
     render_config_pull_result(result)
     return result
+

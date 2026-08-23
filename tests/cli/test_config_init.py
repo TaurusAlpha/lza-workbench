@@ -166,6 +166,7 @@ def test_config_init_workflow_execution(workspace_without_config: Path) -> None:
     assert state.config_template_name == "default"
     assert state.config_template_source == "packaged"
     mgmt_key = "installer.options.management_account_email"
+    assert state.config_init_values is not None
     assert state.config_init_values.get(mgmt_key) == "mgmt@example.com"
     assert state.config_init_digest is not None
     assert state.config_files_count == 8
