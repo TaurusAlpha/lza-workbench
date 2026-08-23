@@ -79,14 +79,14 @@ def load_existing_metadata(workspace_dir: Path, *, force: bool) -> ExistingMetad
     state_path = workspace_dir / WORKSPACE_STATE_FILE
     try:
         if config_path.exists() != state_path.exists():
-            raise ValueError("Workspace has partial metadata; both metadata files are required.")
+            raise LzaError("Workspace has partial metadata; both metadata files are required.")
         if not config_path.exists():
             return None
         return ExistingMetadata(
             config=load_workspace_config(workspace_dir),
             state=load_workspace_state(workspace_dir),
         )
-    except ValueError as exc:
+    except LzaError as exc:
         if force:
             return None
         raise LzaError(

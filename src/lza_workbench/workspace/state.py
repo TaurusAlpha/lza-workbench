@@ -3,6 +3,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from lza_workbench.errors import LzaError
 from lza_workbench.workspace.schema import WorkspaceState
 
 WORKSPACE_STATE_FILE = Path(".lza") / "state.json"
@@ -22,7 +23,7 @@ def load_workspace_state(workspace_dir: Path) -> WorkspaceState:
         data = json.loads(path.read_text(encoding="utf-8"))
         return WorkspaceState.model_validate(data)
     except (OSError, json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
-        raise ValueError(f"Invalid workspace state at {path}: {exc}") from exc
+        raise LzaError(f"Invalid workspace state at {path}: {exc}") from exc
 
 
 def write_workspace_state(workspace_dir: Path, state: WorkspaceState) -> None:
