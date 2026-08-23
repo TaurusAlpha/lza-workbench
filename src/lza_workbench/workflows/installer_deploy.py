@@ -73,8 +73,10 @@ def deploy_installer_workflow(
             require_identity=True,
             require_expected_account=True,
         )
+    except LzaError:
+        raise
     except Exception as exc:
-        raise LzaError(exc) from exc
+        raise LzaError(f"AWS identity resolution failed: {exc}") from exc
     assert aws_context.identity is not None
     account_id = aws_context.identity["account"]
 

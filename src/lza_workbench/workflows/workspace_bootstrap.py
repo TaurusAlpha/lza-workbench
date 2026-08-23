@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.codecommit import (
     ensure_codecommit_repository,
     inspect_codecommit_config_repository,
@@ -22,7 +23,7 @@ from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig
-from lza_workbench.workspace.state import write_workspace_state
+from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
 
 def get_workbench_assets_bucket_name(account_id: str, region: str) -> str:
@@ -123,8 +124,10 @@ def plan_bootstrap_workflow(
             require_identity=True,
             require_expected_account=True,
         )
+    except LzaError:
+        raise
     except Exception as exc:
-        raise LzaError(exc) from exc
+        raise LzaError(f"AWS identity resolution failed: {exc}") from exc
 
     assert aws_ctx.identity is not None
     account_id = aws_ctx.identity["account"]
@@ -276,21 +279,17 @@ def bootstrap_workspace_workflow(
             actions_taken=[],
         )
 
-    ctx = load_workspace_context(
-        target_dir=target_dir,
-        min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED,
-    )
-    workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
-
-    aws_ctx = resolve_aws_execution_context(
+    # Reuse workspace_dir and config already resolved during planning.
+    # Re-creating the factory is lightweight; identity was already validated in plan_bootstrap_workflow.
+    workspace_dir = plan.workspace_dir
+    config = plan.config
+    state = load_workspace_state(workspace_dir)
+    factory = AwsClientFactory(
         profile=config.aws.profile,
         region=config.aws.region,
         role_arn=config.aws.role_arn,
-        expected_account_id=config.aws.account_id,
-        require_identity=True,
-        require_expected_account=True,
     )
-    s3_client = aws_ctx.factory.get_client("s3")
+    s3_client = factory.get_client("s3")
 
     actions_taken = ensure_s3_workbench_assets_bucket(
         client=s3_client,
@@ -299,7 +298,7 @@ def bootstrap_workspace_workflow(
     )
 
     if plan.codecommit_repo_name:
-        cc_client = aws_ctx.factory.get_client("codecommit")
+        cc_client = factory.get_client("codecommit")
         if plan.codecommit_repo_planned_operation == "CREATE":
             ensure_codecommit_repository(
                 client=cc_client,
