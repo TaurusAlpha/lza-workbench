@@ -34,7 +34,9 @@ class AwsConfig(WorkspaceModel):
     @model_validator(mode="after")
     def require_profile(self) -> AwsConfig:
         """Require either an AWS profile or role ARN."""
-        if not (self.profile and self.profile.strip()) and not (self.role_arn and self.role_arn.strip()):
+        has_profile = bool(self.profile and self.profile.strip())
+        has_role_arn = bool(self.role_arn and self.role_arn.strip())
+        if not has_profile and not has_role_arn:
             raise ValueError("AWS configuration requires a profile or role_arn.")
         return self
 

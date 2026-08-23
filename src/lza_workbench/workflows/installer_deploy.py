@@ -19,9 +19,9 @@ from lza_workbench.aws.cloudformation import (
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.s3 import get_s3_https_url, inspect_s3_bucket, upload_s3_file
 from lza_workbench.errors import LzaError
-from lza_workbench.installer.config import InstallerConfigValidationResult
 from lza_workbench.installer.deployment import (
     InstallerConfigValidationError,
+    InstallerConfigValidationResult,
     inspect_installer_source,
     prepare_installer_template,
     validate_cloudformation_plan,
@@ -204,6 +204,10 @@ def deploy_installer_workflow(
 
 
 __all__ = [
+    "CfnDeploymentPlanResult",
+    "CfnStackStatusResult",
+    "InstallerConfigValidationError",
+    "InstallerConfigValidationResult",
     "InstallerDeployResult",
     "deploy_installer_workflow",
 ]

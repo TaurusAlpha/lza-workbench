@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.schema import AwsConfig, CustomerConfig, WorkspaceConfig
 
@@ -72,7 +73,7 @@ cli_defaults:
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="watch_pipline"):
+    with pytest.raises(LzaError, match="watch_pipline"):
         load_workspace_config(tmp_path)
 
 
@@ -84,7 +85,7 @@ def test_workspace_rejects_persisted_aws_secrets(tmp_path: Path, field: str) -> 
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="not supported"):
+    with pytest.raises(LzaError, match="not supported"):
         load_workspace_config(tmp_path)
 
 

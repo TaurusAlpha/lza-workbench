@@ -280,7 +280,7 @@ def bootstrap_workspace_workflow(
         )
 
     # Reuse workspace_dir and config already resolved during planning.
-    # Re-creating the factory is lightweight; identity was already validated in plan_bootstrap_workflow.
+    # Re-creating factory is lightweight; identity was already validated in planning.
     workspace_dir = plan.workspace_dir
     config = plan.config
     state = load_workspace_state(workspace_dir)

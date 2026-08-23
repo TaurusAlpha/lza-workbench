@@ -145,9 +145,8 @@ def configure_codecommit_credential_helper(
         )
     proc2 = _run_git_command(["config", "credential.UseHttpPath", "true"], cwd=repo_dir)
     if proc2.returncode != 0:
-        raise LzaError(
-            f"Failed to configure git credential.UseHttpPath in '{repo_dir}': {proc2.stderr.strip()}"
-        )
+        msg = proc2.stderr.strip()
+        raise LzaError(f"Failed to configure git credential.UseHttpPath in '{repo_dir}': {msg}")
 
 
 def init_git_repository(
@@ -160,7 +159,8 @@ def init_git_repository(
     repo_dir.mkdir(parents=True, exist_ok=True)
     proc = _run_git_command(["init"], cwd=repo_dir)
     if proc.returncode != 0:
-        raise LzaError(f"Failed to initialize git repository in '{repo_dir}': {proc.stderr.strip()}")
+        msg = proc.stderr.strip()
+        raise LzaError(f"Failed to initialize git repository in '{repo_dir}': {msg}")
 
     if remote_url:
         set_git_remote_url(repo_dir, remote_name=remote_name, remote_url=remote_url)

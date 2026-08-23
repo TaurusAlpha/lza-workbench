@@ -143,7 +143,7 @@ def test_deploy_cloudformation_stack_create_and_update() -> None:
 def test_deploy_cloudformation_stack_invalid_args() -> None:
     """Test deploy_cloudformation_stack validation errors."""
     client = MagicMock()
-    with pytest.raises(ValueError, match="Either template_body or template_url must be provided"):
+    with pytest.raises(LzaError, match="Either template_body or template_url must be provided"):
         deploy_cloudformation_stack(
             client=client,
             stack_name="MyStack",
@@ -151,7 +151,7 @@ def test_deploy_cloudformation_stack_invalid_args() -> None:
             operation="CREATE",
         )
 
-    with pytest.raises(ValueError, match="Unsupported deployment operation: INVALID"):
+    with pytest.raises(LzaError, match="Unsupported deployment operation: INVALID"):
         deploy_cloudformation_stack(
             client=client,
             stack_name="MyStack",
@@ -291,7 +291,7 @@ def test_cloudformation_empty_stack_names() -> None:
     assert res_stream.exists is False
     assert res_stream.error == "Stack name is empty"
 
-    with pytest.raises(ValueError, match="Stack name must not be empty"):
+    with pytest.raises(LzaError, match="Stack name must not be empty"):
         deploy_cloudformation_stack(
             stack_name="",
             template_body="{}",
@@ -299,7 +299,7 @@ def test_cloudformation_empty_stack_names() -> None:
             operation="CREATE",
         )
 
-    with pytest.raises(ValueError, match="Stack name must not be empty"):
+    with pytest.raises(LzaError, match="Stack name must not be empty"):
         delete_cloudformation_stack(stack_name="")
 
 
