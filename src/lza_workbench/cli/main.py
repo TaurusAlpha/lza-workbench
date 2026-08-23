@@ -11,6 +11,9 @@ from pathlib import Path
 import typer
 
 from lza_workbench.cli import params
+from lza_workbench.cli.commands.config_deploy import (
+    config_deploy_command as run_cli_deploy_config,
+)
 from lza_workbench.cli.commands.config_download import (
     config_download_command as run_cli_download_config,
 )
@@ -34,6 +37,12 @@ from lza_workbench.cli.commands.installer_plan import (
 )
 from lza_workbench.cli.commands.installer_plan import (
     installer_plan_command as run_cli_installer_plan,
+)
+from lza_workbench.cli.commands.pipeline_start import (
+    pipeline_start_command as run_cli_pipeline_start,
+)
+from lza_workbench.cli.commands.pipeline_watch import (
+    pipeline_watch_command as run_cli_pipeline_watch,
 )
 from lza_workbench.cli.commands.status_config import (
     status_config_command as run_cli_status_config,
@@ -72,6 +81,11 @@ config_app = typer.Typer(
 
 installer_app = typer.Typer(
     help="Manage LZA installer stack.",
+    no_args_is_help=True,
+)
+
+pipeline_app = typer.Typer(
+    help="Manage LZA pipeline executions.",
     no_args_is_help=True,
 )
 
@@ -166,8 +180,35 @@ def status_pipeline_command() -> None:
     run_cli_status_pipeline()
 
 
+@pipeline_app.command("start")
+def pipeline_start_command(
+    pipeline_name: params.PipelineName = None,
+    dry_run: params.DryRun = False,
+) -> None:
+    """Start an LZA CodePipeline execution."""
+    run_cli_pipeline_start(
+        pipeline_name=pipeline_name,
+        dry_run=dry_run,
+    )
+
+
+@pipeline_app.command("watch")
+def pipeline_watch_command(
+    pipeline_name: params.PipelineName = None,
+    execution_id: params.ExecutionId = None,
+    poll_interval: params.PollInterval = None,
+) -> None:
+    """Monitor an existing LZA CodePipeline execution."""
+    run_cli_pipeline_watch(
+        pipeline_name=pipeline_name,
+        execution_id=execution_id,
+        poll_interval=poll_interval,
+    )
+
+
 app.add_typer(config_app, name="config")
 app.add_typer(installer_app, name="installer")
+app.add_typer(pipeline_app, name="pipeline")
 app.add_typer(status_app, name="status")
 
 
@@ -315,6 +356,20 @@ def config_upload_command(
         dry_run=dry_run,
         interactive=_is_interactive(),
     )
+
+
+@config_app.command("deploy")
+def config_deploy_command(
+    dry_run: params.DryRun = False,
+    no_watch: params.NoWatch = False,
+) -> None:
+    """Synchronize configuration to remote destination and trigger LZA pipeline execution."""
+    run_cli_deploy_config(
+        dry_run=dry_run,
+        no_watch=no_watch,
+        interactive=_is_interactive(),
+    )
+
 
 
 

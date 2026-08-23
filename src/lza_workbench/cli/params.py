@@ -173,3 +173,38 @@ ConfigTemplate = Annotated[
         help="Packaged configuration template name or path.",
     ),
 ]
+
+NoWatch = Annotated[
+    bool,
+    typer.Option(
+        "--no-watch",
+        help="Do not wait for pipeline execution to complete.",
+    ),
+]
+
+PipelineName = Annotated[
+    str | None,
+    typer.Option(
+        "--pipeline-name",
+        "-p",
+        help="Name of the LZA CodePipeline to execute or monitor.",
+    ),
+]
+
+ExecutionId = Annotated[
+    str | None,
+    typer.Option(
+        "--execution-id",
+        "-e",
+        help="Specific pipeline execution ID to monitor.",
+    ),
+]
+
+PollInterval = Annotated[
+    int | None,
+    typer.Option(
+        "--poll-interval",
+        help="Interval in seconds between pipeline status checks.",
+    ),
+]
+

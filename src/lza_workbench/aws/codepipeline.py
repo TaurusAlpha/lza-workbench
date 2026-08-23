@@ -8,6 +8,7 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
+from lza_workbench.errors import LzaError
 
 
 @dataclass
@@ -41,6 +42,19 @@ class PipelineStateResult:
     latest_execution_id: str | None = None
     created: str | None = None
     updated: str | None = None
+    error: str | None = None
+
+
+@dataclass
+class PipelineExecutionResult:
+    """Status and metadata of an AWS CodePipeline execution."""
+
+    pipeline_name: str
+    execution_id: str
+    status: str
+    status_summary: str | None = None
+    start_time: str | None = None
+    last_update_time: str | None = None
     error: str | None = None
 
 
@@ -205,3 +219,148 @@ def get_pipeline_state(
             status="UNKNOWN",
             error=f"Connection failure: {exc}",
         )
+
+
+def start_pipeline_execution(
+    *,
+    client: Any | None = None,
+    factory: AwsClientFactory | None = None,
+    pipeline_name: str,
+) -> str:
+    """Trigger a new CodePipeline execution and return the execution ID."""
+    clean_pipeline_name = (pipeline_name or "").strip()
+    if not clean_pipeline_name:
+        raise LzaError("Pipeline name cannot be empty.")
+
+    codepipeline = _get_codepipeline_client(factory=factory, client=client)
+    if codepipeline is None:
+        raise LzaError("No AWS session or CodePipeline client available.")
+
+    try:
+        response = codepipeline.start_pipeline_execution(name=clean_pipeline_name)
+        execution_id = response.get("pipelineExecutionId")
+        if not execution_id:
+            raise LzaError(f"No pipeline execution ID returned for '{clean_pipeline_name}'.")
+        return str(execution_id)
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        message = exc.response.get("Error", {}).get("Message", str(exc))
+        if code in {"PipelineNotFoundException", "ResourceNotFoundException"}:
+            raise LzaError(f"Pipeline '{clean_pipeline_name}' does not exist.") from exc
+        if code == "ConflictException":
+            raise LzaError(
+                f"Cannot start execution for pipeline '{clean_pipeline_name}': {message}"
+            ) from exc
+        raise LzaError(
+            f"Failed to start CodePipeline '{clean_pipeline_name}': {message}"
+        ) from exc
+    except BotoCoreError as exc:
+        raise LzaError(f"AWS connection failure when starting pipeline: {exc}") from exc
+
+
+def get_pipeline_execution(
+    *,
+    client: Any | None = None,
+    factory: AwsClientFactory | None = None,
+    pipeline_name: str,
+    execution_id: str,
+) -> PipelineExecutionResult:
+    """Fetch status and metadata for a specific CodePipeline execution."""
+    clean_pipeline_name = (pipeline_name or "").strip()
+    clean_execution_id = (execution_id or "").strip()
+    if not clean_pipeline_name or not clean_execution_id:
+        return PipelineExecutionResult(
+            pipeline_name=clean_pipeline_name,
+            execution_id=clean_execution_id,
+            status="UNKNOWN",
+            error="Pipeline name or execution ID is empty",
+        )
+
+    codepipeline = _get_codepipeline_client(factory=factory, client=client)
+    if codepipeline is None:
+        return PipelineExecutionResult(
+            pipeline_name=clean_pipeline_name,
+            execution_id=clean_execution_id,
+            status="UNKNOWN",
+            error="No AWS session available",
+        )
+
+    try:
+        response = codepipeline.get_pipeline_execution(
+            pipelineName=clean_pipeline_name,
+            pipelineExecutionId=clean_execution_id,
+        )
+        execution = response.get("pipelineExecution", {})
+        status = execution.get("status", "Unknown")
+        status_summary = execution.get("statusSummary")
+        start_time = str(execution.get("startTime")) if execution.get("startTime") else None
+        last_update_time = (
+            str(execution.get("lastUpdateTime")) if execution.get("lastUpdateTime") else None
+        )
+        return PipelineExecutionResult(
+            pipeline_name=clean_pipeline_name,
+            execution_id=clean_execution_id,
+            status=status,
+            status_summary=status_summary,
+            start_time=start_time,
+            last_update_time=last_update_time,
+        )
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "")
+        message = exc.response.get("Error", {}).get("Message", str(exc))
+        if code in {
+            "PipelineNotFoundException",
+            "PipelineExecutionNotFoundException",
+            "ResourceNotFoundException",
+        }:
+            return PipelineExecutionResult(
+                pipeline_name=clean_pipeline_name,
+                execution_id=clean_execution_id,
+                status="NOT_FOUND",
+                error=message,
+            )
+        return PipelineExecutionResult(
+            pipeline_name=clean_pipeline_name,
+            execution_id=clean_execution_id,
+            status="UNKNOWN",
+            error=message,
+        )
+    except BotoCoreError as exc:
+        return PipelineExecutionResult(
+            pipeline_name=clean_pipeline_name,
+            execution_id=clean_execution_id,
+            status="UNKNOWN",
+            error=f"Connection failure: {exc}",
+        )
+
+
+def get_latest_pipeline_execution_id(
+    *,
+    client: Any | None = None,
+    factory: AwsClientFactory | None = None,
+    pipeline_name: str,
+) -> str | None:
+    """Discover the most recent execution ID for a pipeline."""
+    clean_pipeline_name = (pipeline_name or "").strip()
+    if not clean_pipeline_name:
+        return None
+
+    codepipeline = _get_codepipeline_client(factory=factory, client=client)
+    if codepipeline is None:
+        return None
+
+    try:
+        response = codepipeline.list_pipeline_executions(
+            pipelineName=clean_pipeline_name,
+            maxResults=1,
+        )
+        summaries = response.get("pipelineExecutionSummaries", [])
+        if summaries:
+            return str(summaries[0].get("pipelineExecutionId"))
+    except (ClientError, BotoCoreError):
+        pass
+
+    # Fallback to get_pipeline_state
+    state = get_pipeline_state(client=client, factory=factory, pipeline_name=clean_pipeline_name)
+    return state.latest_execution_id
+
