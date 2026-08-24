@@ -117,6 +117,10 @@ Adopt an existing local LZA configuration without modifying customer-owned files
 - [x] Parse and validate imported YAML content.
 - [x] Integrate version-aware official LZA schema validation.
 - [x] Record or resolve remote/Git template provenance.
+- [ ] Add live AWS discovery during import: query CloudFormation for `AWSAccelerator-InstallerStack` and `AWSAccelerator-PipelineStack` to automatically extract and populate deployed parameters (`ConfigurationRepositoryLocation`, account emails, `EnableApprovalStage`, LZA version, etc.) into `lza-workspace.yaml` and `.lza/state.json`.
+- [ ] Add graceful error handling and guidance if AWS authentication fails or `--skip-aws-check` is used: explain that live stack introspection was skipped, and suggest verifying AWS credentials and running `lza import` or running `lza installer status --sync-config` / `lza installer plan --sync-config`.
+- [ ] Add context-aware next-step recommendations after import (e.g., recommend `lza config download` if configuration is S3-backed and unverified, or `lza validate` / `lza config push`).
+- [ ] Track imported workspace state flag in `.lza/state.json` (e.g. `imported: true` or `config_synced: false`) until installer/config is downloaded, pulled, or deployed at least once using the tool.
 
 ### `lza validate`
 
@@ -210,6 +214,8 @@ Future design checklist:
 
 Collect and persist installer CloudFormation parameters and workspace settings.
 
+- [ ] Normalize LZA version strings (e.g. prefixing `v` for `vX.Y.Z`) when constructing the official AWS solutions-reference installer template download URL (`https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/v{version}/AWSAccelerator-InstallerStack.template`) to prevent 404 download failures for un-prefixed version inputs (such as `1.15.5`).
+- [ ] Provide better error diagnostics and fallback resolution when downloading non-packaged installer template versions from the public S3 URL.
 - [ ] Add support to ask for different parameters according to chosen options. For example don't ask for codeconnection arn if github was chosen as source. Don't ask for github token if codeconnection was chosen as source.
 
 ### `lza installer plan`
@@ -266,6 +272,12 @@ Upload local LZA configuration to the configured remote repository or S3 bucket 
 ### `lza config push`
 
 Synchronize the local customer `aws-accelerator-config` to the configured remote configuration source without starting the LZA pipeline.
+
+- [ ] Fix default packaging exclusions: remove `"backup"` from `PackagingExcludeConfig.directories` so customer AWS Backup definitions (e.g. `backup/backup-*.json`) are not omitted from configuration archives. Default exclusions should only target `.git`, `.DS_Store`, etc.
+- [ ] Add support to parse and honor `.gitignore` / `.prettierignore` when packaging local configuration files for S3 upload.
+- [ ] Fix zip diff calculation: filter out directory-level records (entries ending with `/`) in `read_zip_manifest` so directory records from existing zip archives are not incorrectly reported as removed files.
+- [ ] Add safety check for S3-backed imported workspaces: if workspace was imported and has not yet synced/downloaded remote configuration from S3, warn the user that local configuration may overwrite unverified remote S3 state, requiring `--force` (or interactive confirmation) and recommending `lza config download` first.
+- [ ] Auto-derive standard S3 configuration bucket name: when `ConfigurationRepositoryLocation=s3`, automatically derive the deterministic bucket name (`aws-accelerator-config-<account-id>-<region>` or `<prefix>-config-<account-id>-<region>`) and persist it into `lza-workspace.yaml` during import / `status --sync-config` / `config push` / `config pull` without prompting the user.
 
 ### `lza config pull`
 
@@ -346,6 +358,7 @@ Future design decision:
 - [ ] Validate `lza-workspace.yaml`.
 - [ ] Validate YAML formatting.
 - [ ] Integrate official LZA schema validation.
+- [ ] Validate configuration replacement variables consistency (cross-validate placeholders in configuration files with variables defined in replacements-config.yaml or installer options).
 - [ ] Validate workspace structure.
 - [ ] Validate installer configuration.
 - [ ] Validate upload target.
