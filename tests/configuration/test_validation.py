@@ -51,6 +51,10 @@ mandatoryAccounts:
         "centralSecurityServices:\n  delegatedAdminAccount: Audit\n",
         encoding="utf-8",
     )
+    (config_dir / "iam-config.yaml").write_text(
+        "policySets: []\nroleSets: []\n",
+        encoding="utf-8",
+    )
 
 
 def test_parse_yaml_file_valid(tmp_path: Path) -> None:
@@ -60,6 +64,16 @@ def test_parse_yaml_file_valid(tmp_path: Path) -> None:
     assert data == {"key": "value", "list": ["item1"]}
 
 
+def test_parse_yaml_file_with_custom_tags(tmp_path: Path) -> None:
+    file_path = tmp_path / "cfn.yaml"
+    file_path.write_text(
+        "Resource:\n  Type: AWS::S3::Bucket\n  BucketName: !Ref MyBucket\n",
+        encoding="utf-8",
+    )
+    data = parse_yaml_file(file_path)
+    assert data["Resource"]["BucketName"] == "MyBucket"
+
+
 def test_parse_yaml_file_invalid_syntax_raises_lza_error(tmp_path: Path) -> None:
     file_path = tmp_path / "invalid.yaml"
     file_path.write_text("key: [unclosed list\n", encoding="utf-8")
@@ -67,12 +81,39 @@ def test_parse_yaml_file_invalid_syntax_raises_lza_error(tmp_path: Path) -> None
         parse_yaml_file(file_path)
 
 
-def test_validate_yaml_syntax_all_files(tmp_path: Path) -> None:
+def test_parse_yaml_file_with_unquoted_lza_replacement_variables(tmp_path: Path) -> None:
+    file_path = tmp_path / "global-config.yaml"
+    file_path.write_text(
+        "homeRegion: '{{ HomeRegion }}'\n"
+        "enabledRegions: [ {{ EnabledRegions }} ]\n"
+        "tags:\n"
+        "  - {{ TagName }}\n",
+        encoding="utf-8",
+    )
+    data = parse_yaml_file(file_path)
+    assert data["homeRegion"] == "{{ HomeRegion }}"
+    assert data["enabledRegions"] == ["{{ EnabledRegions }}"]
+    assert data["tags"] == ["{{ TagName }}"]
+
+
+def test_validate_yaml_syntax_only_checks_core_lza_files(tmp_path: Path) -> None:
     _write_valid_lza_configs(tmp_path)
+    # Add a non-core YAML file with custom CloudFormation tags or broken syntax
+    (tmp_path / "aws_backup_init.yaml").write_text(
+        "InvalidTag: !Ref SomeResource\nBroken: [unclosed\n",
+        encoding="utf-8",
+    )
+    # Subdirectory non-core file
+    sub = tmp_path / "customizations"
+    sub.mkdir(parents=True)
+    (sub / "cfn_stack.yaml").write_text("broken: [unclosed\n", encoding="utf-8")
+
     parsed = validate_yaml_syntax(tmp_path)
     for req in REQUIRED_LZA_CONFIG_FILES:
         assert req in parsed
         assert isinstance(parsed[req], dict)
+    assert "aws_backup_init.yaml" not in parsed
+    assert "customizations/cfn_stack.yaml" not in parsed
 
 
 def test_validate_lza_configuration_schema_valid(tmp_path: Path) -> None:
@@ -85,6 +126,13 @@ def test_validate_lza_schema_missing_required_file(tmp_path: Path) -> None:
     _write_valid_lza_configs(tmp_path)
     (tmp_path / "global-config.yaml").unlink()
     with pytest.raises(LzaError, match="missing required file: 'global-config.yaml'"):
+        validate_lza_configuration_schema(tmp_path)
+
+
+def test_validate_lza_schema_missing_iam_config(tmp_path: Path) -> None:
+    _write_valid_lza_configs(tmp_path)
+    (tmp_path / "iam-config.yaml").unlink()
+    with pytest.raises(LzaError, match="missing required file: 'iam-config.yaml'"):
         validate_lza_configuration_schema(tmp_path)
 
 

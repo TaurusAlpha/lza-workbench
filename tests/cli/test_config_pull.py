@@ -58,6 +58,7 @@ def test_pull_s3_success(
                 "aws-accelerator-config/accounts-config.yaml": "new accounts content",
                 "aws-accelerator-config/network-config.yaml": "new network content",
                 "aws-accelerator-config/security-config.yaml": "new security content",
+                "aws-accelerator-config/iam-config.yaml": "new iam content",
             },
         )
 
@@ -77,7 +78,7 @@ def test_pull_s3_success(
 
     state = load_workspace_state(s3_workspace)
     assert state.config_downloaded_at is not None
-    assert state.config_files_count == 5
+    assert state.config_files_count == 6
 
 
 def test_download_alias_s3(

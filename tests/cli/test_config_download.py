@@ -99,6 +99,7 @@ def test_cli_config_download_success(
                 "aws-accelerator-config/accounts-config.yaml": "accounts content",
                 "aws-accelerator-config/network-config.yaml": "network content",
                 "aws-accelerator-config/security-config.yaml": "security content",
+                "aws-accelerator-config/iam-config.yaml": "iam content",
                 "aws-accelerator-config/new-file.yaml": "added file",
             },
         )
@@ -124,8 +125,8 @@ def test_cli_config_download_success(
     state = load_workspace_state(s3_workspace)
     assert state.config_downloaded_at is not None
     assert state.config_artifact_sha256 is not None
-    assert state.config_files_count == 6
-    assert state.config_last_diff_summary == {"added": 5, "modified": 1, "removed": 1}
+    assert state.config_files_count == 7
+    assert state.config_last_diff_summary == {"added": 6, "modified": 1, "removed": 1}
 
 
 def test_cli_config_download_without_extract(

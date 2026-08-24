@@ -195,6 +195,7 @@ def create_sample_config_zip(
         "aws-accelerator-config/accounts-config.yaml": "accounts: content",
         "aws-accelerator-config/network-config.yaml": "network: content",
         "aws-accelerator-config/security-config.yaml": "security: content",
+        "aws-accelerator-config/iam-config.yaml": "iam: content",
     }
     with zipfile.ZipFile(destination_path, "w") as zf:
         for path_in_zip, text in contents.items():

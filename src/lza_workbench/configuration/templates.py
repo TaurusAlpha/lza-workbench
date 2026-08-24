@@ -22,6 +22,7 @@ REQUIRED_TEMPLATE_FILES = (
     "accounts-config.yaml",
     "network-config.yaml",
     "security-config.yaml",
+    "iam-config.yaml",
 )
 
 OPTIONAL_TEMPLATE_FILES = (

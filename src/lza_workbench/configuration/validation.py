@@ -8,6 +8,7 @@ from typing import Any
 
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
+from ruamel.yaml.nodes import MappingNode, ScalarNode, SequenceNode
 
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.versions import normalize_lza_version
@@ -18,17 +19,61 @@ REQUIRED_LZA_CONFIG_FILES = (
     "accounts-config.yaml",
     "network-config.yaml",
     "security-config.yaml",
+    "iam-config.yaml",
 )
 
+OPTIONAL_LZA_CONFIG_FILES = (
+    "replacements-config.yaml",
+    "customizations-config.yaml",
+)
+
+ALL_LZA_CONFIG_FILES = REQUIRED_LZA_CONFIG_FILES + OPTIONAL_LZA_CONFIG_FILES
 MANDATORY_ACCOUNT_NAMES = {"Management", "LogArchive", "Audit"}
+
+
+def _custom_tag_constructor(loader: Any, tag_suffix: str, node: Any) -> Any:
+    """Handle custom YAML tags (such as CloudFormation !Ref, !Sub) gracefully."""
+    if isinstance(node, ScalarNode):
+        return loader.construct_scalar(node)
+    if isinstance(node, SequenceNode):
+        return loader.construct_sequence(node)
+    if isinstance(node, MappingNode):
+        return loader.construct_mapping(node)
+    return str(node)
+
+
+def _is_placeholder(val: Any) -> bool:
+    """Check if a value is an un-rendered replacement variable or template placeholder."""
+    if isinstance(val, str):
+        cleaned = val.strip()
+        return (
+            (cleaned.startswith("{{") and cleaned.endswith("}}"))
+            or (cleaned.startswith("${") and cleaned.endswith("}"))
+        )
+    return False
+
+
+def _sanitize_template_placeholders(content: str) -> str:
+    """Safely quote unquoted Mustache/Jinja-style template placeholders so YAML parser succeeds."""
+    pattern = re.compile(r'("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|(\{\{[^{}\n]+\}\}))')
+
+    def replacer(match: re.Match[str]) -> str:
+        unquoted_mustache = match.group(2)
+        if unquoted_mustache:
+            return f'"{unquoted_mustache}"'
+        return match.group(1)
+
+    return pattern.sub(replacer, content)
 
 
 def parse_yaml_file(file_path: Path) -> Any:
     """Parse a single YAML file and return its data, raising a clean LzaError on syntax error."""
     yaml = YAML(typ="safe")
+    yaml.constructor.add_multi_constructor("!", _custom_tag_constructor)
     try:
-        content = file_path.read_text(encoding="utf-8")
-        return yaml.load(content)
+        raw_content = file_path.read_text(encoding="utf-8")
+        sanitized_content = _sanitize_template_placeholders(raw_content)
+        return yaml.load(sanitized_content)
     except YAMLError as exc:
         mark = getattr(exc, "problem_mark", None)
         location = f" (line {mark.line + 1}, column {mark.column + 1})" if mark else ""
@@ -39,22 +84,28 @@ def parse_yaml_file(file_path: Path) -> Any:
 
 
 def validate_yaml_syntax(config_dir: Path) -> dict[str, Any]:
-    """Parse and validate YAML syntax for all YAML files in the configuration directory.
+    """Parse and validate YAML syntax for core (required and optional) LZA configuration files.
 
     Returns:
-        Dictionary mapping relative file paths to parsed data.
+        Dictionary mapping canonical file names to parsed data.
     """
     if not config_dir.is_dir():
         raise LzaError(f"Configuration directory does not exist: {config_dir}")
 
     parsed_files: dict[str, Any] = {}
-    yaml_extensions = {".yaml", ".yml"}
 
-    for file_path in sorted(config_dir.rglob("*")):
-        if file_path.is_file() and file_path.suffix.lower() in yaml_extensions:
-            rel_name = str(file_path.relative_to(config_dir))
-            parsed = parse_yaml_file(file_path)
-            parsed_files[rel_name] = parsed
+    for filename in ALL_LZA_CONFIG_FILES:
+        target_file = config_dir / filename
+        if not target_file.is_file():
+            # Check .yml extension alternative
+            alt_name = filename.rsplit(".", 1)[0] + ".yml"
+            alt_file = config_dir / alt_name
+            if alt_file.is_file():
+                target_file = alt_file
+
+        if target_file.is_file():
+            parsed = parse_yaml_file(target_file)
+            parsed_files[filename] = parsed
 
     return parsed_files
 
@@ -100,6 +151,10 @@ def validate_lza_configuration_schema(
     security_config = parsed_files["security-config.yaml"]
     _validate_security_config(security_config)
 
+    # 7. Validate iam-config.yaml
+    iam_config = parsed_files["iam-config.yaml"]
+    _validate_iam_config(iam_config)
+
     # Version-specific checks
     _validate_version_compatibility(normalized_version, parsed_files)
 
@@ -107,19 +162,31 @@ def validate_lza_configuration_schema(
 def _validate_global_config(data: dict[str, Any]) -> None:
     if "homeRegion" not in data or not str(data["homeRegion"]).strip():
         raise LzaError("global-config.yaml is missing required field: 'homeRegion'")
-    if "enabledRegions" not in data or not isinstance(data["enabledRegions"], list):
-        raise LzaError("global-config.yaml must define 'enabledRegions' as a list")
-    if not data["enabledRegions"]:
+    if "enabledRegions" not in data:
+        raise LzaError("global-config.yaml is missing required field: 'enabledRegions'")
+    regions = data["enabledRegions"]
+    if not (isinstance(regions, list) or _is_placeholder(regions)):
+        raise LzaError(
+            "global-config.yaml must define 'enabledRegions' as a list or replacement variable"
+        )
+    if isinstance(regions, list) and not regions:
         raise LzaError("global-config.yaml 'enabledRegions' must contain at least one region")
 
 
 def _validate_organization_config(data: dict[str, Any]) -> None:
-    if "organizationalUnits" in data and not isinstance(data["organizationalUnits"], list):
-        raise LzaError("organization-config.yaml 'organizationalUnits' must be a list")
+    if "organizationalUnits" in data:
+        ous = data["organizationalUnits"]
+        if not (isinstance(ous, list) or _is_placeholder(ous)):
+            raise LzaError("organization-config.yaml 'organizationalUnits' must be a list")
 
 
 def _validate_accounts_config(data: dict[str, Any]) -> None:
-    if "mandatoryAccounts" not in data or not isinstance(data["mandatoryAccounts"], list):
+    if "mandatoryAccounts" not in data:
+        raise LzaError("accounts-config.yaml is missing required field: 'mandatoryAccounts'")
+    accounts = data["mandatoryAccounts"]
+    if _is_placeholder(accounts):
+        return
+    if not isinstance(accounts, list):
         raise LzaError("accounts-config.yaml must define 'mandatoryAccounts' as a list")
 
     accounts = data["mandatoryAccounts"]
@@ -179,6 +246,23 @@ def _validate_security_config(data: dict[str, Any]) -> None:
         keys_str = ", ".join(sorted(expected_keys))
         raise LzaError(
             f"security-config.yaml must define at least one security section ({keys_str})"
+        )
+
+
+def _validate_iam_config(data: dict[str, Any]) -> None:
+    expected_keys = {
+        "providers",
+        "policySets",
+        "roleSets",
+        "groupSets",
+        "userSets",
+        "identityCenter",
+        "samlProviders",
+    }
+    if not any(key in data for key in expected_keys):
+        keys_str = ", ".join(sorted(expected_keys))
+        raise LzaError(
+            f"iam-config.yaml must define at least one IAM section ({keys_str})"
         )
 
 
