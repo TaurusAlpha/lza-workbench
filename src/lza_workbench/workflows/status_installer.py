@@ -169,6 +169,37 @@ def sync_installer_config(
         config.configuration.repository.type = cast(
             Literal["s3", "codecommit", "codeconnection", "git"], repo_type
         )
+        if repo_type == "s3":
+            account_id = config.aws.account_id
+            if not account_id and cfn_status.stack_id and ":stack/" in cfn_status.stack_id:
+                arn_parts = cfn_status.stack_id.split(":")
+                if len(arn_parts) >= 5 and arn_parts[4].isdigit():
+                    account_id = arn_parts[4]
+                    config.aws.account_id = account_id
+            if account_id and config.aws.region and not config.configuration.repository.bucket:
+                config.configuration.repository.bucket = (
+                    f"aws-accelerator-config-{account_id}-{config.aws.region}"
+                )
+        elif repo_type == "codecommit":
+            if repo_name := params.get("ExistingConfigRepositoryName"):
+                config.configuration.repository.repository_name = repo_name
+                config.installer.options.existing_config_repository_name = repo_name
+            if repo_branch := params.get("ExistingConfigRepositoryBranchName"):
+                config.configuration.repository.branch = repo_branch
+                config.installer.options.existing_config_repository_branch_name = repo_branch
+        elif repo_type == "codeconnection":
+            if conn_arn := params.get("ConfigCodeConnectionArn"):
+                config.configuration.repository.codeconnection_arn = conn_arn
+                config.installer.options.config_code_connection_arn = conn_arn
+            if repo_owner := params.get("ExistingConfigRepositoryOwner"):
+                config.configuration.repository.owner = repo_owner
+                config.installer.options.existing_config_repository_owner = repo_owner
+            if repo_name := params.get("ExistingConfigRepositoryName"):
+                config.configuration.repository.repository_name = repo_name
+                config.installer.options.existing_config_repository_name = repo_name
+            if repo_branch := params.get("ExistingConfigRepositoryBranchName"):
+                config.configuration.repository.branch = repo_branch
+                config.installer.options.existing_config_repository_branch_name = repo_branch
     if "EnableApprovalStage" in params:
         config.installer.options.enable_approval_stage = params["EnableApprovalStage"] == "Yes"
         config.installer.options.approval_stage_notify_email_list = (

@@ -148,7 +148,10 @@ def _handle_s3_pull(
 
     bucket = repo_cfg.bucket
     if not bucket:
-        if bucket_resolver is not None:
+        account_id = config.aws.account_id or (state.management_account_id if state else None)
+        if account_id and region:
+            bucket = f"aws-accelerator-config-{account_id}-{region}"
+        elif bucket_resolver is not None:
             bucket = bucket_resolver()
         if not bucket:
             raise LzaError("No S3 bucket configured for LZA configuration repository.")

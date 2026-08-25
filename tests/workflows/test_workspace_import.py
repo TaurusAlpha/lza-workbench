@@ -233,3 +233,57 @@ def test_import_workspace_live_aws_discovery(tmp_path: Path) -> None:
     assert result.state.imported is True
     assert result.state.imported_at is not None
     assert len(result.recommendations) > 0
+
+
+def test_import_workspace_live_aws_discovery_s3_repository(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock, patch
+
+    ws_dir = tmp_path / "live-s3-ws"
+    config_dir = ws_dir / "aws-accelerator-config"
+    _copy_default_templates(config_dir)
+
+    stack_id = (
+        "arn:aws:cloudformation:eu-west-1:123456789012:stack/AWSAccelerator-InstallerStack/abc"
+    )
+    mock_cfn = MagicMock()
+    mock_cfn.describe_stacks.return_value = {
+        "Stacks": [
+            {
+                "StackName": "AWSAccelerator-InstallerStack",
+                "StackId": stack_id,
+                "StackStatus": "UPDATE_COMPLETE",
+                "Parameters": [
+                    {"ParameterKey": "ConfigurationRepositoryLocation", "ParameterValue": "s3"},
+                    {"ParameterKey": "RepositorySource", "ParameterValue": "github"},
+                    {"ParameterKey": "RepositoryBranchName", "ParameterValue": "release/v1.15.5"},
+                ],
+            }
+        ]
+    }
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            return_value=mock_cfn,
+        ),
+    ):
+        mock_val.return_value = {
+            "account": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/admin",
+        }
+        result = import_workspace_workflow(
+            workspace_dir=ws_dir,
+            customer_name="S3 Customer",
+            aws_profile="s3-root",
+            aws_region="eu-west-1",
+            skip_aws_check=False,
+        )
+
+    assert result.installer_discovered is True
+    assert result.config.configuration.repository.type == "s3"
+    assert (
+        result.config.configuration.repository.bucket
+        == "aws-accelerator-config-123456789012-eu-west-1"
+    )
+    assert any("lza config download" in rec for rec in result.recommendations)
