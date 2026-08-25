@@ -234,3 +234,66 @@ def test_cli_import_with_git_provenance_display(
     assert result.exit_code == 0
     assert "Git remote" in result.output
     assert "demo-repo" in result.output
+
+
+def test_cli_import_live_aws_discovery_display(
+    tmp_path: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import MagicMock, patch
+
+    monkeypatch.chdir(tmp_path)
+    workspace_dir, _ = _make_configuration(tmp_path)
+
+    stack_id = (
+        "arn:aws:cloudformation:eu-west-1:123456789012:stack/AWSAccelerator-InstallerStack/abc"
+    )
+    mock_cfn = MagicMock()
+    mock_cfn.describe_stacks.return_value = {
+        "Stacks": [
+            {
+                "StackName": "AWSAccelerator-InstallerStack",
+                "StackId": stack_id,
+                "StackStatus": "CREATE_COMPLETE",
+                "Parameters": [
+                    {
+                        "ParameterKey": "ManagementAccountEmail",
+                        "ParameterValue": "mgmt@example.com",
+                    },
+                    {"ParameterKey": "RepositorySource", "ParameterValue": "codecommit"},
+                    {"ParameterKey": "RepositoryBranchName", "ParameterValue": "release/v1.15.5"},
+                ],
+            }
+        ]
+    }
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            return_value=mock_cfn,
+        ),
+    ):
+        mock_val.return_value = {
+            "account": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/admin",
+        }
+        result = cli_runner.invoke(
+            app,
+            [
+                "import",
+                str(workspace_dir),
+                "--customer-name",
+                "Live CLI Customer",
+                "--aws-profile",
+                "live-root",
+                "--aws-region",
+                "eu-west-1",
+            ],
+        )
+
+    assert result.exit_code == 0
+    assert "Discovered installer stack" in result.output
+    assert "CREATE_COMPLETE" in result.output
+    assert "Next steps:" in result.output

@@ -113,14 +113,10 @@ Create a new customer-specific LZA workspace.
 
 Adopt an existing local LZA configuration without modifying customer-owned files.
 
-- [x] Repair missing or invalid workspace metadata.
-- [x] Parse and validate imported YAML content.
-- [x] Integrate version-aware official LZA schema validation.
-- [x] Record or resolve remote/Git template provenance.
-- [ ] Add live AWS discovery during import: query CloudFormation for `AWSAccelerator-InstallerStack` and `AWSAccelerator-PipelineStack` to automatically extract and populate deployed parameters (`ConfigurationRepositoryLocation`, account emails, `EnableApprovalStage`, LZA version, etc.) into `lza-workspace.yaml` and `.lza/state.json`.
-- [ ] Add graceful error handling and guidance if AWS authentication fails or `--skip-aws-check` is used: explain that live stack introspection was skipped, and suggest verifying AWS credentials and running `lza import` or running `lza installer status --sync-config` / `lza installer plan --sync-config`.
-- [ ] Add context-aware next-step recommendations after import (e.g., recommend `lza config download` if configuration is S3-backed and unverified, or `lza validate` / `lza config push`).
-- [ ] Track imported workspace state flag in `.lza/state.json` (e.g. `imported: true` or `config_synced: false`) until installer/config is downloaded, pulled, or deployed at least once using the tool.
+- [x] Add live AWS discovery during import: query CloudFormation for `AWSAccelerator-InstallerStack` and `AWSAccelerator-PipelineStack` to automatically extract and populate deployed parameters (`ConfigurationRepositoryLocation`, account emails, `EnableApprovalStage`, LZA version, etc.) into `lza-workspace.yaml` and `.lza/state.json`.
+- [x] Add graceful error handling and guidance if AWS authentication fails or `--skip-aws-check` is used: explain that live stack introspection was skipped, and suggest verifying AWS credentials and running `lza import` or running `lza installer status --sync-config` / `lza installer plan --sync-config`.
+- [x] Add context-aware next-step recommendations after import (e.g., recommend `lza config download` if configuration is S3-backed and unverified, or `lza validate` / `lza config push`).
+- [x] Track imported workspace state flag in `.lza/state.json` (e.g. `imported: true` or `config_synced: false`) until installer/config is downloaded, pulled, or deployed at least once using the tool.
 
 ### `lza validate`
 

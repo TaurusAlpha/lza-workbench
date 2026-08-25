@@ -162,3 +162,74 @@ def test_import_workspace_partial_metadata_requires_repair_or_force(tmp_path: Pa
     )
     assert result.repaired is True
     assert (ws_dir / ".lza" / "state.json").is_file()
+
+
+def test_import_workspace_live_aws_discovery(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock, patch
+
+    ws_dir = tmp_path / "live-aws-ws"
+    config_dir = ws_dir / "aws-accelerator-config"
+    _copy_default_templates(config_dir)
+
+    stack_id = (
+        "arn:aws:cloudformation:eu-west-1:123456789012:stack/AWSAccelerator-InstallerStack/abc"
+    )
+    mock_cfn = MagicMock()
+    mock_cfn.describe_stacks.return_value = {
+        "Stacks": [
+            {
+                "StackName": "AWSAccelerator-InstallerStack",
+                "StackId": stack_id,
+                "StackStatus": "UPDATE_COMPLETE",
+                "Parameters": [
+                    {
+                        "ParameterKey": "ManagementAccountEmail",
+                        "ParameterValue": "mgmt@example.com",
+                    },
+                    {"ParameterKey": "LogArchiveAccountEmail", "ParameterValue": "log@example.com"},
+                    {"ParameterKey": "AuditAccountEmail", "ParameterValue": "audit@example.com"},
+                    {"ParameterKey": "RepositorySource", "ParameterValue": "codecommit"},
+                    {"ParameterKey": "RepositoryBranchName", "ParameterValue": "release/v1.15.5"},
+                    {
+                        "ParameterKey": "ConfigurationRepositoryLocation",
+                        "ParameterValue": "codecommit",
+                    },
+                    {"ParameterKey": "EnableApprovalStage", "ParameterValue": "Yes"},
+                ],
+            }
+        ]
+    }
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            return_value=mock_cfn,
+        ),
+    ):
+        mock_val.return_value = {
+            "account": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/admin",
+        }
+        result = import_workspace_workflow(
+            workspace_dir=ws_dir,
+            customer_name="Live Customer",
+            aws_profile="live-root",
+            aws_region="eu-west-1",
+            skip_aws_check=False,
+        )
+
+    assert result.installer_discovered is True
+    assert result.discovered_stack_status == "AWSAccelerator-InstallerStack (UPDATE_COMPLETE)"
+    assert result.config.installer.options.management_account_email == "mgmt@example.com"
+    assert result.config.installer.options.log_archive_account_email == "log@example.com"
+    assert result.config.installer.options.audit_account_email == "audit@example.com"
+    assert result.config.installer.options.enable_approval_stage is True
+    assert result.config.installer.source_code.repository_type == "codecommit"
+    assert result.config.configuration.repository.type == "codecommit"
+    assert result.state.installer_stack_id == stack_id
+    assert result.state.installer_stack_status == "UPDATE_COMPLETE"
+    assert result.state.installer_template_version == "v1.15.5"
+    assert result.state.imported is True
+    assert result.state.imported_at is not None
+    assert len(result.recommendations) > 0

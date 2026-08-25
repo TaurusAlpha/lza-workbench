@@ -192,28 +192,47 @@ def get_installer_status_workflow(
     sync_state: bool = False,
     sync_config: bool = False,
     target_dir: Path | None = None,
+    config: WorkspaceConfig | None = None,
+    state: WorkspaceState | None = None,
+    workspace_dir: Path | None = None,
 ) -> InstallerStatusResult:
     """Query AWS, optionally synchronize, and return installer status data."""
     if sync_config:
         sync_state = True
 
-    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
-    workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
+    if config is not None and workspace_dir is not None:
+        resolved_workspace_dir = workspace_dir
+        resolved_config = config
+        resolved_state = state
+    else:
+        ctx = load_workspace_context(
+            target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
+        )
+        resolved_workspace_dir = ctx.workspace_dir
+        resolved_config = ctx.config
+        resolved_state = ctx.state
+
     aws_context = resolve_aws_execution_context(
-        profile=config.aws.profile,
-        region=config.aws.region,
-        role_arn=config.aws.role_arn,
-        expected_account_id=config.aws.account_id,
+        profile=resolved_config.aws.profile,
+        region=resolved_config.aws.region,
+        role_arn=resolved_config.aws.role_arn,
+        expected_account_id=resolved_config.aws.account_id,
     )
-    cfn_stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
-    cfn_client = aws_context.factory.get_client("cloudformation") if aws_context.identity else None
+    cfn_stack_name = resolved_config.installer.stack_name or "AWSAccelerator-InstallerStack"
+    cfn_client = (
+        aws_context.factory.get_client("cloudformation") if aws_context.identity else None
+    )
     cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=cfn_stack_name)
     deployed_version = branch_to_version(
-        cfn_status.deployed_parameters.get("RepositoryBranchName", "") if cfn_status.exists else ""
+        cfn_status.deployed_parameters.get("RepositoryBranchName", "")
+        if cfn_status.exists
+        else ""
     )
 
-    prefix = config.lza.accelerator_prefix or "AWSAccelerator"
-    installer_pipeline_name = config.pipelines.installer.name or f"{prefix}-Installer"
+    prefix = resolved_config.lza.accelerator_prefix or "AWSAccelerator"
+    installer_pipeline_name = (
+        resolved_config.pipelines.installer.name or f"{prefix}-Installer"
+    )
     codepipeline_client = (
         aws_context.factory.get_client("codepipeline") if aws_context.identity else None
     )
@@ -224,26 +243,28 @@ def get_installer_status_workflow(
     state_synced = False
     config_synced = False
 
-    if sync_state:
-        state = sync_installer_state(
-            workspace_dir=workspace_dir,
-            state=state or WorkspaceState.from_config(config),
+    if sync_state and cfn_status.exists:
+        resolved_state = sync_installer_state(
+            workspace_dir=resolved_workspace_dir,
+            state=resolved_state or WorkspaceState.from_config(resolved_config),
             cfn_status=cfn_status,
             deployed_version=deployed_version,
         )
         state_synced = True
 
-    if sync_config:
-        config = sync_installer_config(
-            workspace_dir=workspace_dir, config=config, cfn_status=cfn_status
+    if sync_config and cfn_status.exists and cfn_status.deployed_parameters:
+        resolved_config = sync_installer_config(
+            workspace_dir=resolved_workspace_dir,
+            config=resolved_config,
+            cfn_status=cfn_status,
         )
         config_synced = True
 
     return prepare_installer_status(
-        workspace_dir=workspace_dir,
-        config=config,
-        state=state,
-        profile=config.aws.profile or "",
+        workspace_dir=resolved_workspace_dir,
+        config=resolved_config,
+        state=resolved_state,
+        profile=resolved_config.aws.profile or "",
         region=aws_context.region,
         aws_identity=aws_context.identity,
         aws_error=aws_context.error,

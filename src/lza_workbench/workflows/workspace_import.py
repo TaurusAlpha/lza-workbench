@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.configuration.archive import count_config_files
 from lza_workbench.configuration.git import (
     GitProvenance,
@@ -24,6 +24,7 @@ from lza_workbench.configuration.validation import (
     validate_yaml_syntax,
 )
 from lza_workbench.errors import LzaError
+from lza_workbench.workflows.status_installer import get_installer_status_workflow
 from lza_workbench.workspace.config import (
     WORKSPACE_CONFIG_FILE,
     load_workspace_config,
@@ -68,6 +69,9 @@ class WorkspaceImportResult:
     repaired: bool = False
     provenance: GitProvenance | None = None
     validation_summary: dict[str, Any] | None = None
+    installer_discovered: bool = False
+    discovered_stack_status: str | None = None
+    recommendations: list[str] = field(default_factory=list)
 
 
 def resolve_import_paths(*, workspace_dir: Path, config_dir: Path | None) -> tuple[Path, Path]:
@@ -232,6 +236,7 @@ def _metadata_paths(
 ) -> list[Path]:
     config_path = workspace_dir / WORKSPACE_CONFIG_FILE
     state_path = workspace_dir / WORKSPACE_STATE_FILE
+
     if (
         existing is None
         or existing.config is None
@@ -340,6 +345,11 @@ def import_workspace_workflow(
     else:
         state = WorkspaceState.from_config(config)
 
+    # Track imported state
+    state.imported = True
+    if state.imported_at is None:
+        state.imported_at = datetime.now(UTC)
+
     # Update operational state with discovered configuration metrics
     if provenance:
         state.config_files_count = provenance.files_count
@@ -355,17 +365,66 @@ def import_workspace_workflow(
         )
         state.config_template_source = "local"
 
-    identity = (
-        None
-        if skip_aws_check
-        else resolve_aws_execution_context(
-            profile=config.aws.profile,
-            region=config.aws.region,
-            role_arn=config.aws.role_arn,
-            expected_account_id=config.aws.account_id,
-            require_identity=True,
-        ).identity
-    )
+    identity: dict[str, str] | None = None
+    installer_discovered = False
+    discovered_stack_status: str | None = None
+    recommendations: list[str] = []
+
+    if not skip_aws_check:
+        try:
+            installer_status = get_installer_status_workflow(
+                workspace_dir=resolved_workspace_dir,
+                config=config,
+                state=state,
+                sync_config=not dry_run,
+                sync_state=not dry_run,
+            )
+            identity = installer_status.aws_identity
+            config = installer_status.config
+            state = installer_status.state or state
+            if identity:
+                state.management_account_id = identity.get("account")
+                state.caller_arn = identity.get("arn")
+
+            if installer_status.cfn_status.exists:
+                installer_discovered = True
+                discovered_stack_status = (
+                    f"{installer_status.cfn_status.stack_name} "
+                    f"({installer_status.cfn_status.stack_status})"
+                )
+            elif installer_status.aws_error:
+                recommendations.append(
+                    f"AWS connection check failed ({installer_status.aws_error}). "
+                    "Verify credentials and run 'lza installer status --sync-config'."
+                )
+        except Exception as exc:
+            recommendations.append(
+                f"Live AWS discovery skipped due to error: {exc}. "
+                "Run 'lza installer status --sync-config' to sync deployed installer parameters."
+            )
+    else:
+        recommendations.append(
+            "Live AWS discovery was skipped (--skip-aws-check). "
+            "Run 'lza installer status --sync-config' to synchronize deployed settings."
+        )
+
+    # Next-step recommendations
+    if installer_discovered:
+        if config.configuration.repository.type == "s3" and state.config_downloaded_at is None:
+            recommendations.append(
+                "Run 'lza config download' to pull the latest remote S3 configuration archive."
+            )
+        recommendations.append("Run 'lza status' to inspect overall workspace readiness.")
+        recommendations.append(
+            "Run 'lza config push' to synchronize configuration to the remote destination."
+        )
+    else:
+        if not recommendations:
+            recommendations.append(
+                "Installer stack was not found in AWS; run 'lza installer plan' "
+                "or 'lza installer init' to configure installer deployment."
+            )
+
     paths = _metadata_paths(resolved_workspace_dir, existing, config, state)
     is_repaired = bool(existing and existing.is_repaired)
 
@@ -382,6 +441,9 @@ def import_workspace_workflow(
             repaired=is_repaired,
             provenance=provenance,
             validation_summary={"files_validated": len(parsed_yaml)},
+            installer_discovered=installer_discovered,
+            discovered_stack_status=discovered_stack_status,
+            recommendations=recommendations,
         )
 
     if not paths and not is_repaired:
@@ -397,6 +459,9 @@ def import_workspace_workflow(
             repaired=False,
             provenance=provenance,
             validation_summary={"files_validated": len(parsed_yaml)},
+            installer_discovered=installer_discovered,
+            discovered_stack_status=discovered_stack_status,
+            recommendations=recommendations,
         )
 
     (resolved_workspace_dir / ".lza").mkdir(parents=True, exist_ok=True)
@@ -417,4 +482,7 @@ def import_workspace_workflow(
         repaired=is_repaired,
         provenance=provenance,
         validation_summary={"files_validated": len(parsed_yaml)},
+        installer_discovered=installer_discovered,
+        discovered_stack_status=discovered_stack_status,
+        recommendations=recommendations,
     )

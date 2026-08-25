@@ -52,6 +52,12 @@ def render_workspace_import_result(result: WorkspaceImportResult) -> None:
 
     if result.already_imported:
         print_success("Workspace already imported; no metadata changes")
+        if result.discovered_stack_status:
+            print_kv("Discovered installer stack", result.discovered_stack_status)
+        if result.recommendations:
+            console.print("\nNext steps:")
+            for rec in result.recommendations:
+                console.print(f"  - {rec}")
         return
 
     if result.repaired:
@@ -66,6 +72,8 @@ def render_workspace_import_result(result: WorkspaceImportResult) -> None:
         print_kv("Git branch", provenance.branch)
         if provenance.commit:
             print_kv("Git commit", provenance.commit)
+    if result.discovered_stack_status:
+        print_kv("Discovered installer stack", result.discovered_stack_status)
 
     console.print("Affected paths:")
     for path in paths:
@@ -74,6 +82,11 @@ def render_workspace_import_result(result: WorkspaceImportResult) -> None:
         print_kv("AWS account", identity["account"])
         print_kv("Caller ARN", identity["arn"])
     console.print("Customer configuration files were preserved.")
+
+    if result.recommendations:
+        console.print("\nNext steps:")
+        for rec in result.recommendations:
+            console.print(f"  - {rec}")
 
 
 def workspace_import_command(
