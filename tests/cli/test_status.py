@@ -103,6 +103,34 @@ def test_run_config_status(mock_load_ctx: MagicMock, tmp_path: Path) -> None:
     run_config_status(target_dir=tmp_path)
 
 
+@patch("lza_workbench.workflows.status_config.load_workspace_context")
+def test_run_config_status_renders_failed_pipeline_stage_and_action(
+    mock_load_ctx: MagicMock, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    state = WorkspaceState(
+        config_pipeline_status="Failed",
+        config_pipeline_failed_stage="BuildStage",
+        config_pipeline_failed_action="SynthAction",
+        config_pipeline_error="CFN Stack synthesis error",
+    )
+    mock_ctx = MagicMock()
+    mock_ctx.workspace_dir = tmp_path
+    mock_ctx.config = config
+    mock_ctx.state = state
+    mock_load_ctx.return_value = mock_ctx
+
+    run_config_status(target_dir=tmp_path)
+    captured = capsys.readouterr().out
+    assert "BuildStage" in captured
+    assert "SynthAction" in captured
+    assert "CFN Stack synthesis error" in captured
+
+
+
 @patch("lza_workbench.workflows.status_pipeline.resolve_aws_execution_context")
 def test_run_pipeline_status(
     mock_resolve_context: MagicMock,

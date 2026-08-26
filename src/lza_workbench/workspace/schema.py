@@ -124,8 +124,20 @@ class WorkspaceState(WorkspaceModel):
     installer_stack_status: str | None = None
     installer_stack_updated_at: datetime | None = None
     installer_pipeline_execution_id: str | None = None
+    installer_pipeline_status: str | None = None
+    installer_pipeline_failed_stage: str | None = None
+    installer_pipeline_failed_action: str | None = None
+    installer_pipeline_failed_build_url: str | None = None
+    installer_pipeline_error: str | None = None
     config_pipeline_execution_id: str | None = None
+    config_pipeline_status: str | None = None
+    config_pipeline_failed_stage: str | None = None
+    config_pipeline_failed_action: str | None = None
+    config_pipeline_failed_build_url: str | None = None
+    config_pipeline_error: str | None = None
     config_initialized_at: datetime | None = None
+
+
     config_template_name: str | None = None
     config_template_source: str | None = None
     config_init_values: dict[str, str] | None = None

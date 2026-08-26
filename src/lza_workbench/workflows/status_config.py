@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from lza_workbench.aws.codebuild import fetch_codebuild_diagnostics
 from lza_workbench.aws.codecommit import inspect_codecommit_config_repository
 from lza_workbench.aws.codeconnections import inspect_codeconnection
 from lza_workbench.aws.codepipeline import PipelineStateResult, get_pipeline_state
@@ -71,8 +72,14 @@ class ConfigurationStatusResult:
     codeconnection_error: str | None
     pipeline_name: str
     pipeline_arn: str
-    pipeline_state: PipelineStateResult | None
+    pipeline_status: str | None
     pipeline_execution_id: str | None
+    pipeline_failed_stage: str | None
+    pipeline_failed_action: str | None
+    pipeline_failed_build_url: str | None
+    pipeline_error: str | None
+    pipeline_state: PipelineStateResult | None
+
     uploaded_at: object | None
     downloaded_at: object | None
     artifact_etag: str | None
@@ -95,7 +102,10 @@ def _compile_warnings(
     codecommit_accessible: bool | None,
     codecommit_branch_exists: bool | None,
     codeconnection_status: str | None,
-    pipeline_state: PipelineStateResult | None,
+    pipeline_name: str,
+    pipeline_status: str | None,
+    pipeline_failed_stage: str | None,
+    pipeline_failed_action: str | None,
 ) -> tuple[str, ...]:
     warnings: list[str] = []
 
@@ -158,18 +168,22 @@ def _compile_warnings(
         elif codeconnection_status in {"ERROR", "NOT_FOUND", "INACCESSIBLE"}:
             warnings.append(f"CodeConnection issue detected (Status: {codeconnection_status}).")
 
-    if pipeline_state:
-        pipe_name = pipeline_state.pipeline_name
-        if pipeline_state.status == "Failed":
-            warnings.append(
-                f"Latest execution of configuration pipeline '{pipe_name}' failed."
-            )
-        elif pipeline_state.status == "Cancelled":
-            warnings.append(
-                f"Latest execution of configuration pipeline '{pipe_name}' was cancelled."
-            )
+    if pipeline_status == "Failed":
+        detail = ""
+        if pipeline_failed_stage and pipeline_failed_action:
+            detail = f" (Stage: '{pipeline_failed_stage}', Action: '{pipeline_failed_action}')"
+        elif pipeline_failed_stage:
+            detail = f" (Stage: '{pipeline_failed_stage}')"
+        warnings.append(
+            f"Latest execution of configuration pipeline '{pipeline_name}' failed{detail}."
+        )
+    elif pipeline_status == "Cancelled":
+        warnings.append(
+            f"Latest execution of configuration pipeline '{pipeline_name}' was cancelled."
+        )
 
     return tuple(warnings)
+
 
 
 
@@ -339,14 +353,53 @@ def get_config_status_workflow(
     config_pipeline_arn = (
         f"arn:aws:codepipeline:{region}:{account_id}:{config_pipeline_name}"
     )
-    codepipeline_client = (
-        factory.get_client("codepipeline") if aws_identity else None
-    )
-    pipeline_state = (
-        get_pipeline_state(client=codepipeline_client, pipeline_name=config_pipeline_name)
-        if codepipeline_client
-        else None
-    )
+
+    pipeline_status: str | None = None
+    pipeline_execution_id: str | None = None
+    pipeline_failed_stage: str | None = None
+    pipeline_failed_action: str | None = None
+    pipeline_failed_build_url: str | None = None
+    pipeline_error: str | None = None
+    pipeline_state: PipelineStateResult | None = None
+
+    if resolved_state and resolved_state.config_pipeline_status:
+        pipeline_status = resolved_state.config_pipeline_status
+        pipeline_execution_id = resolved_state.config_pipeline_execution_id
+        pipeline_failed_stage = resolved_state.config_pipeline_failed_stage
+        pipeline_failed_action = resolved_state.config_pipeline_failed_action
+        pipeline_failed_build_url = resolved_state.config_pipeline_failed_build_url
+        pipeline_error = resolved_state.config_pipeline_error
+    elif aws_identity:
+        codepipeline_client = factory.get_client("codepipeline")
+        pipeline_state = get_pipeline_state(
+            client=codepipeline_client, pipeline_name=config_pipeline_name
+        )
+        if pipeline_state.exists and pipeline_state.status != "NOT_CHECKED":
+            pipeline_status = pipeline_state.status
+            pipeline_execution_id = (
+                resolved_state.config_pipeline_execution_id if resolved_state else None
+            ) or pipeline_state.latest_execution_id
+            if pipeline_state.status in {"Failed", "Cancelled"}:
+                for st in pipeline_state.stage_states:
+                    if st.status == "Failed":
+                        pipeline_failed_stage = st.stage_name
+                        for act in st.actions:
+                            if act.status == "Failed":
+                                pipeline_failed_action = act.action_name
+                                pipeline_failed_build_url = act.external_execution_url
+                                if act.external_execution_id:
+                                    diags = fetch_codebuild_diagnostics(
+                                        factory=factory,
+                                        build_id=act.external_execution_id,
+                                    )
+                                    if diags:
+                                        pipeline_error = "\n".join(diags)
+                                if not pipeline_error:
+                                    pipeline_error = act.error_message or act.summary
+                                break
+                        break
+    elif resolved_state and resolved_state.config_pipeline_execution_id:
+        pipeline_execution_id = resolved_state.config_pipeline_execution_id
 
     warnings = _compile_warnings(
         config_dir_exists=config_dir.exists(),
@@ -361,7 +414,10 @@ def get_config_status_workflow(
         codecommit_accessible=codecommit_accessible,
         codecommit_branch_exists=codecommit_branch_exists,
         codeconnection_status=codeconnection_status,
-        pipeline_state=pipeline_state,
+        pipeline_name=config_pipeline_name,
+        pipeline_status=pipeline_status,
+        pipeline_failed_stage=pipeline_failed_stage,
+        pipeline_failed_action=pipeline_failed_action,
     )
 
     return ConfigurationStatusResult(
@@ -410,10 +466,13 @@ def get_config_status_workflow(
         codeconnection_error=codeconnection_error,
         pipeline_name=config_pipeline_name,
         pipeline_arn=config_pipeline_arn,
+        pipeline_status=pipeline_status,
+        pipeline_execution_id=pipeline_execution_id,
+        pipeline_failed_stage=pipeline_failed_stage,
+        pipeline_failed_action=pipeline_failed_action,
+        pipeline_failed_build_url=pipeline_failed_build_url,
+        pipeline_error=pipeline_error,
         pipeline_state=pipeline_state,
-        pipeline_execution_id=(
-            resolved_state.config_pipeline_execution_id if resolved_state else None
-        ),
         uploaded_at=resolved_state.config_uploaded_at if resolved_state else None,
         downloaded_at=resolved_state.config_downloaded_at if resolved_state else None,
         artifact_etag=resolved_state.config_artifact_etag if resolved_state else None,
@@ -428,4 +487,5 @@ __all__ = [
     "ConfigurationStatusResult",
     "get_config_status_workflow",
 ]
+
 

@@ -15,10 +15,12 @@ from lza_workbench.aws.codepipeline import (
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.errors import LzaError
+from lza_workbench.pipeline.state import record_pipeline_watch_result
 from lza_workbench.workspace.context import (
     WorkspaceReadinessLevel,
     load_workspace_context,
 )
+from lza_workbench.workspace.state import write_workspace_state
 
 
 @dataclass(frozen=True)
@@ -240,7 +242,7 @@ def watch_pipeline_workflow(
         sleeper(interval)
 
     total_elapsed = time_provider() - start_time
-    return PipelineWatchResult(
+    watch_result = PipelineWatchResult(
         workspace_dir=workspace_dir,
         customer_name=config.customer.name,
         pipeline_name=resolved_pipeline_name,
@@ -252,6 +254,21 @@ def watch_pipeline_workflow(
         elapsed_seconds=total_elapsed,
         error_message=error_message,
     )
+
+    if state is not None:
+        record_pipeline_watch_result(
+            state,
+            execution_id=resolved_execution_id,
+            status=last_status,
+            stages=stage_summaries,
+            failed_actions=failed_actions,
+            error_message=error_message,
+            pipeline_type=pipeline_type,
+        )
+        write_workspace_state(workspace_dir, state)
+
+    return watch_result
+
 
 
 __all__ = [

@@ -400,3 +400,96 @@ def test_prepare_installer_status_separates_comparisons_from_rendering(tmp_path:
     assert result.deployed_version == "v1.15.5"
     assert result.state_alignment is not None
     assert result.state_alignment.in_sync is True
+
+
+def test_get_config_status_uses_recorded_pipeline_state_without_aws_api(tmp_path: Path) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    state = WorkspaceState(
+        config_pipeline_execution_id="exec-456",
+        config_pipeline_status="Failed",
+        config_pipeline_failed_stage="Build",
+        config_pipeline_failed_action="SynthesizeStack",
+        config_pipeline_error="CodeBuild build failed with exit code 1",
+    )
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        # codepipeline client should NOT be queried when status is already in state
+        result = get_config_status_workflow(
+            config=config,
+            state=state,
+            workspace_dir=tmp_path,
+        )
+        assert result.pipeline_status == "Failed"
+        assert result.pipeline_execution_id == "exec-456"
+        assert result.pipeline_failed_stage == "Build"
+        assert result.pipeline_failed_action == "SynthesizeStack"
+        assert result.pipeline_error == "CodeBuild build failed with exit code 1"
+        assert any("SynthesizeStack" in w for w in result.warnings)
+        # Ensure get_client was not called with "codepipeline"
+        for call_args in mock_client.call_args_list:
+            assert call_args[0][0] != "codepipeline"
+
+
+def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: Path) -> None:
+    from lza_workbench.aws.codepipeline import ActionStateResult, StageStateResult
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    state = WorkspaceState()
+
+    pipe_state = MagicMock(
+        exists=True,
+        status="Failed",
+        latest_execution_id="exec-789",
+        stage_states=[
+            StageStateResult(
+                stage_name="Build",
+                status="Failed",
+                actions=[
+                    ActionStateResult(
+                        action_name="Synth",
+                        status="Failed",
+                        summary="Action failed",
+                        external_execution_id="build-id-123",
+                        external_execution_url="https://console.aws.amazon.com/codebuild/...",
+                    )
+                ],
+            )
+        ],
+    )
+
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.workflows.status_config.get_pipeline_state") as mock_get_pipe,
+        patch("lza_workbench.workflows.status_config.fetch_codebuild_diagnostics") as mock_diag,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = MagicMock()
+        mock_get_pipe.return_value = pipe_state
+        diag_msg = "❌ Stack AWSAccelerator-Network-Phase2 failed to deploy: ValidationError"
+        mock_diag.return_value = [diag_msg]
+
+        result = get_config_status_workflow(
+            config=config,
+            state=state,
+            workspace_dir=tmp_path,
+        )
+        assert result.pipeline_status == "Failed"
+        assert result.pipeline_failed_stage == "Build"
+        assert result.pipeline_failed_action == "Synth"
+        assert diag_msg in result.pipeline_error
+        assert result.pipeline_failed_build_url == "https://console.aws.amazon.com/codebuild/..."
+
+
+

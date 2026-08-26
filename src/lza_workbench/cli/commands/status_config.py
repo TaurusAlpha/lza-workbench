@@ -171,40 +171,41 @@ def _render_pipeline_status(result: ConfigurationStatusResult) -> None:
     print_kv("Pipeline Name", result.pipeline_name, bold_value=True)
     print_kv("Pipeline ARN", result.pipeline_arn, style="dim")
 
-    if result.pipeline_state:
-        pipe_status = result.pipeline_state.status or "UNKNOWN"
-        p_color = (
-            "green"
-            if pipe_status == "Succeeded"
-            else "yellow"
-            if pipe_status == "InProgress"
-            else "red"
-            if pipe_status in {"Failed", "Cancelled"}
-            else "dim"
-        )
-        console.print(f"Pipeline State: [{p_color}][bold]{pipe_status}[/bold][/{p_color}]")
+    pipe_status = result.pipeline_status or "Not Executed"
+    p_color = (
+        "green"
+        if pipe_status == "Succeeded"
+        else "yellow"
+        if pipe_status == "InProgress"
+        else "red"
+        if pipe_status in {"Failed", "Cancelled"}
+        else "dim"
+    )
+    console.print(f"Pipeline State: [{p_color}][bold]{pipe_status}[/bold][/{p_color}]")
 
-        if result.pipeline_state.latest_execution_id:
-            print_kv("Latest Execution ID", result.pipeline_state.latest_execution_id, style="dim")
+    if result.pipeline_execution_id:
+        print_kv("Latest Execution ID", result.pipeline_execution_id, style="dim")
 
-        if result.pipeline_state.stage_states:
-            stage_parts = []
-            for s in result.pipeline_state.stage_states:
-                s_status = s.status or "Unknown"
-                s_col = (
-                    "green"
-                    if s_status == "Succeeded"
-                    else "yellow"
-                    if s_status == "InProgress"
-                    else "red"
-                    if s_status == "Failed"
-                    else "dim"
-                )
-                stage_parts.append(f"{s.stage_name} ([{s_col}]{s_status}[/{s_col}])")
-            print_kv("Pipeline Stages", " -> ".join(stage_parts))
+    if result.pipeline_failed_stage:
+        print_kv("Failed Stage", result.pipeline_failed_stage, style="red")
+    if result.pipeline_failed_action:
+        print_kv("Failed Action", result.pipeline_failed_action, style="red")
+    if result.pipeline_error:
+        error_lines = [
+            line.strip()
+            for line in result.pipeline_error.splitlines()
+            if line.strip()
+        ]
+        if len(error_lines) == 1:
+            print_kv("Latest Error", error_lines[0], style="red")
+        elif error_lines:
+            console.print("[red]Latest Error:[/red]")
+            for line in error_lines:
+                console.print(f"  [red]{line}[/red]")
+    if result.pipeline_failed_build_url:
+        print_kv("Build Console", result.pipeline_failed_build_url, style="dim")
 
-        if result.pipeline_state.error:
-            print_notice(f"Pipeline Query Notice: {result.pipeline_state.error}")
+
 
 
 def _render_state_metadata(result: ConfigurationStatusResult, *, has_state: bool) -> None:
