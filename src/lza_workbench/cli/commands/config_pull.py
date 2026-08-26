@@ -80,13 +80,9 @@ def config_pull_command(
         dry_run=dry_run,
         force=force,
         extract=extract,
-        bucket_resolver=(lambda: typer.prompt("S3 bucket name for configuration"))
-        if interactive
-        else None,
         confirm_callback=(lambda msg: typer.confirm(msg, default=False))
         if interactive
         else None,
     )
     render_config_pull_result(result)
     return result
-

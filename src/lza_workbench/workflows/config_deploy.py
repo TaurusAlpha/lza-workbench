@@ -39,7 +39,6 @@ def deploy_configuration_workflow(
     watch: bool = True,
     poll_interval_seconds: int | None = None,
     timeout_seconds: int | None = 7200,
-    bucket_resolver: Callable[[], str] | None = None,
     sleeper: Callable[[float], None] = time.sleep,
     time_provider: Callable[[], float] = time.time,
     on_watch_update: Callable[[PipelineWatchUpdate], None] | None = None,
@@ -48,7 +47,6 @@ def deploy_configuration_workflow(
     push_res = push_configuration_workflow(
         target_dir=target_dir,
         dry_run=dry_run,
-        bucket_resolver=bucket_resolver,
     )
 
     start_res = start_pipeline_workflow(

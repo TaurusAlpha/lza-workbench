@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,7 +23,11 @@ from lza_workbench.configuration.git import (
     push_git_branch,
     set_git_remote_url,
 )
-from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
+from lza_workbench.configuration.repository import (
+    CONFIG_ARCHIVE_FILENAME,
+    resolve_git_configuration_destination,
+    resolve_s3_configuration_destination,
+)
 from lza_workbench.configuration.state import record_config_git_push, record_config_upload
 from lza_workbench.configuration.templates import validate_template
 from lza_workbench.errors import LzaError
@@ -71,7 +74,6 @@ def push_configuration_workflow(
     *,
     target_dir: Path | None = None,
     dry_run: bool = False,
-    bucket_resolver: Callable[[], str] | None = None,
 ) -> ConfigPushResult:
     """Synchronize local configuration to configured remote repository."""
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
@@ -94,7 +96,6 @@ def push_configuration_workflow(
             config=config,
             state=state,
             dry_run=dry_run,
-            bucket_resolver=bucket_resolver,
         )
 
     if repo_type in ("codecommit", "codeconnection", "git"):
@@ -117,31 +118,17 @@ def _handle_s3_push(
     config: WorkspaceConfig,
     state: WorkspaceState,
     dry_run: bool,
-    bucket_resolver: Callable[[], str] | None,
 ) -> ConfigPushResult:
     repo_cfg = config.configuration.repository
-    prefix = repo_cfg.prefix or ""
-    key = repo_cfg.key or "aws-accelerator-config.zip"
-    if prefix:
-        prefix_clean = prefix if prefix.endswith("/") else f"{prefix}/"
-        s3_key = f"{prefix_clean}{key}"
-    else:
-        s3_key = key
-    zip_path = workspace_dir / key
+    destination = resolve_s3_configuration_destination(
+        configured_bucket=repo_cfg.bucket,
+        account_id=config.aws.account_id or state.management_account_id,
+        region=config.aws.region,
+    )
+    zip_path = workspace_dir / CONFIG_ARCHIVE_FILENAME
 
     profile = config.aws.profile or ""
     region = config.aws.region
-
-    bucket = repo_cfg.bucket
-    if not bucket:
-        account_id = config.aws.account_id or (state.management_account_id if state else None)
-        if account_id and region:
-            bucket = get_canonical_config_s3_bucket(account_id, region)
-        elif bucket_resolver is not None:
-            bucket = bucket_resolver()
-        if not bucket:
-            raise LzaError("No S3 bucket configured for LZA configuration repository.")
-
 
     if dry_run:
         return ConfigPushResult(
@@ -150,8 +137,8 @@ def _handle_s3_push(
             repository_type="s3",
             dry_run=True,
             zip_path=zip_path,
-            s3_bucket=bucket,
-            s3_key=s3_key,
+            s3_bucket=destination.bucket,
+            s3_key=destination.object_key,
             aws_profile=profile,
             aws_region=region,
             diff_result=ConfigDiffResult(added=[], modified=[], removed=[]),
@@ -180,8 +167,8 @@ def _handle_s3_push(
     etag, version_id = upload_s3_file(
         client=s3_client,
         file_path=zip_path,
-        bucket_name=bucket,
-        object_key=s3_key,
+        bucket_name=destination.bucket,
+        object_key=destination.object_key,
     )
 
     record_config_upload(
@@ -201,8 +188,8 @@ def _handle_s3_push(
         repository_type="s3",
         dry_run=False,
         zip_path=zip_path,
-        s3_bucket=bucket,
-        s3_key=s3_key,
+        s3_bucket=destination.bucket,
+        s3_key=destination.object_key,
         aws_profile=profile,
         aws_region=region,
         diff_result=diff_result,
@@ -240,29 +227,29 @@ def _handle_git_push(
             "Please commit or stash your changes before pushing."
         )
 
+    destination = resolve_git_configuration_destination(
+        repository_type=repo_type,
+        repository_name=repo_cfg.repository_name,
+        repository_url=repo_cfg.repository,
+        branch=repo_cfg.branch,
+        region=config.aws.region,
+    )
     remote_name = "origin"
-    remote_url = get_git_remote_url(config_dir, remote_name)
+    existing_remote_url = get_git_remote_url(config_dir, remote_name)
+    if existing_remote_url and existing_remote_url != destination.remote_url:
+        raise LzaError(
+            f"Git remote '{remote_name}' does not match lza-workspace.yaml: "
+            f"expected '{destination.remote_url}', received '{existing_remote_url}'. "
+            "Update the local remote before pushing."
+        )
 
-    if repo_type == "codecommit":
-        if not remote_url:
-            repo_name = repo_cfg.repository_name or "aws-accelerator-config"
-            region = config.aws.region
-            remote_url = f"https://git-codecommit.{region}.amazonaws.com/v1/repos/{repo_name}"
-            set_git_remote_url(config_dir, remote_name, remote_url)
-        if config.aws.profile:
-            configure_codecommit_credential_helper(config_dir, config.aws.profile)
-    else:  # codeconnection or git
-        if not remote_url:
-            if repo_cfg.repository:
-                set_git_remote_url(config_dir, remote_name, repo_cfg.repository)
-                remote_url = repo_cfg.repository
-            else:
-                raise LzaError(
-                    f"No Git remote '{remote_name}' configured for configuration repository. "
-                    "Configure a remote repository before pushing."
-                )
+    current_branch = get_git_branch(config_dir)
+    if current_branch != destination.branch:
+        raise LzaError(
+            f"Current Git branch '{current_branch}' is not the configured deployable branch "
+            f"'{destination.branch}'. Check out '{destination.branch}' before pushing."
+        )
 
-    branch = repo_cfg.branch or get_git_branch(config_dir)
     commit = get_git_commit(config_dir)
     files_count = count_git_files(config_dir)
 
@@ -273,13 +260,18 @@ def _handle_git_push(
             repository_type=repo_type,
             dry_run=True,
             git_remote=remote_name,
-            git_remote_url=remote_url,
-            git_branch=branch,
+            git_remote_url=destination.remote_url,
+            git_branch=destination.branch,
             git_commit=commit,
             files_count=files_count,
         )
 
-    push_git_branch(config_dir, remote=remote_name, branch=branch, dry_run=False)
+    if not existing_remote_url:
+        set_git_remote_url(config_dir, remote_name, destination.remote_url)
+    if repo_type == "codecommit" and config.aws.profile:
+        configure_codecommit_credential_helper(config_dir, config.aws.profile)
+
+    push_git_branch(config_dir, remote=remote_name, branch=destination.branch, dry_run=False)
 
     record_config_git_push(
         state,
@@ -294,8 +286,8 @@ def _handle_git_push(
         repository_type=repo_type,
         dry_run=False,
         git_remote=remote_name,
-        git_remote_url=remote_url,
-        git_branch=branch,
+        git_remote_url=destination.remote_url,
+        git_branch=destination.branch,
         git_commit=commit,
         files_count=files_count,
     )

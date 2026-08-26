@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import typer
-
 from lza_workbench.cli import params
 from lza_workbench.cli.commands.config_push import render_config_push_result
 from lza_workbench.cli.commands.pipeline_start import render_pipeline_start_result
@@ -53,16 +51,12 @@ def config_deploy_command(
     dry_run: params.DryRun = False,
     no_watch: params.NoWatch = False,
     target_dir: Path | None = None,
-    interactive: bool = False,
 ) -> ConfigDeployResult:
     """Synchronize configuration to remote destination and trigger LZA pipeline execution."""
     result = deploy_configuration_workflow(
         target_dir=target_dir,
         dry_run=dry_run,
         watch=not no_watch,
-        bucket_resolver=(lambda: typer.prompt("S3 bucket name for configuration"))
-        if interactive
-        else None,
         on_watch_update=render_pipeline_watch_update,
     )
     render_config_deploy_result(result)

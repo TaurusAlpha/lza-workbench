@@ -19,7 +19,10 @@ from lza_workbench.configuration.git import (
     get_git_working_tree_status,
 )
 from lza_workbench.configuration.rendering import capture_init_values_snapshot
-from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
+from lza_workbench.configuration.repository import (
+    CONFIG_S3_OBJECT_KEY,
+    resolve_s3_configuration_destination,
+)
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
@@ -40,8 +43,7 @@ class ConfigurationStatusResult:
     yaml_files: tuple[str, ...]
     repository_type: str
     repository_bucket: str | None
-    repository_prefix: str
-    repository_key: str
+    repository_object_key: str
     repository_name: str | None
     repository_branch: str | None
     codeconnection_arn: str | None
@@ -289,16 +291,19 @@ def get_config_status_workflow(
     codeconnection_error = None
 
     if repo.type == "s3":
-        s3_bucket_name = repo.bucket
-        if not s3_bucket_name:
-            acc_id = (
-                resolved_config.aws.account_id
-                or (resolved_state.management_account_id if resolved_state else None)
-                or (aws_identity.get("account") if aws_identity else None)
-            )
-            reg = region or resolved_config.aws.region
-            if acc_id and reg:
-                s3_bucket_name = get_canonical_config_s3_bucket(acc_id, reg)
+        s3_bucket_name = None
+        try:
+            s3_bucket_name = resolve_s3_configuration_destination(
+                configured_bucket=repo.bucket,
+                account_id=(
+                    resolved_config.aws.account_id
+                    or (resolved_state.management_account_id if resolved_state else None)
+                    or (aws_identity.get("account") if aws_identity else None)
+                ),
+                region=region or resolved_config.aws.region,
+            ).bucket
+        except Exception as exc:
+            s3_error = str(exc)
 
         if s3_bucket_name and aws_identity:
 
@@ -311,15 +316,10 @@ def get_config_status_workflow(
                 s3_bucket_encryption = b_info.get("encryption_enabled")
 
                 if s3_bucket_exists:
-                    p = repo.prefix
-                    prefix_clean = (
-                        p if p.endswith("/") else f"{p}/"
-                        if p
-                        else ""
-                    )
-                    key_path = f"{prefix_clean}{repo.key or 'aws-accelerator-config.zip'}"
                     obj_info = inspect_s3_object_safe(
-                        client=s3_client, bucket_name=s3_bucket_name, object_key=key_path
+                        client=s3_client,
+                        bucket_name=s3_bucket_name,
+                        object_key=CONFIG_S3_OBJECT_KEY,
                     )
                     s3_object_exists = obj_info.get("exists")
                     s3_object_etag = obj_info.get("etag")
@@ -448,8 +448,7 @@ def get_config_status_workflow(
         yaml_files=yaml_files,
         repository_type=repo.type,
         repository_bucket=s3_bucket_name if repo.type == "s3" else repo.bucket,
-        repository_prefix=repo.prefix,
-        repository_key=repo.key,
+        repository_object_key=CONFIG_S3_OBJECT_KEY,
 
         repository_name=repo.repository_name,
         repository_branch=repo.branch,
@@ -503,5 +502,4 @@ __all__ = [
     "ConfigurationStatusResult",
     "get_config_status_workflow",
 ]
-
 

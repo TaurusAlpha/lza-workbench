@@ -18,24 +18,28 @@ from lza_workbench.workspace.state import load_workspace_state
 def s3_workspace(configured_workspace: Path) -> Path:
     config = load_workspace_config(configured_workspace)
     config.configuration.repository.type = "s3"
-    config.configuration.repository.bucket = "my-test-bucket"
+    config.aws.account_id = "123456789012"
+    config.configuration.repository.bucket = "aws-accelerator-config-123456789012-eu-west-1"
     write_workspace_config(configured_workspace, config)
     return configured_workspace
 
 
-def test_cli_config_upload_requires_bucket(
+def test_cli_config_upload_requires_account_id_for_s3_destination(
     configured_workspace: Path,
     cli_runner: CliRunner,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = load_workspace_config(configured_workspace)
     config.configuration.repository.bucket = None
+    config.aws.account_id = None
     write_workspace_config(configured_workspace, config)
 
     monkeypatch.chdir(configured_workspace)
     result = cli_runner.invoke(app, ["config", "upload"])
     assert result.exit_code == 1
-    assert "No S3 bucket configured" in (result.output or str(result.exception))
+    assert "Cannot resolve the LZA configuration S3 bucket" in (
+        result.output or str(result.exception)
+    )
 
 
 def test_cli_config_upload_dry_run(
@@ -82,7 +86,9 @@ def test_cli_config_upload_success(
         assert "global-config.yaml" in namelist
 
     mock_s3.upload_file.assert_called_once_with(
-        str(zip_path), "my-test-bucket", "zipped/aws-accelerator-config.zip"
+        str(zip_path),
+        "aws-accelerator-config-123456789012-eu-west-1",
+        "zipped/aws-accelerator-config.zip",
     )
 
     state = load_workspace_state(s3_workspace)
@@ -92,31 +98,3 @@ def test_cli_config_upload_success(
     assert state.config_artifact_version_id == "v1.0"
     assert state.config_files_count == len(namelist)
     assert state.config_last_diff_summary == {"added": len(namelist), "modified": 0, "removed": 0}
-
-
-def test_cli_config_upload_custom_key_and_prefix(
-    s3_workspace: Path,
-    cli_runner: CliRunner,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = load_workspace_config(s3_workspace)
-    cfg.configuration.repository.prefix = "custom-prefix/"
-    cfg.configuration.repository.key = "custom-archive.zip"
-    write_workspace_config(s3_workspace, cfg)
-
-    mock_s3 = MagicMock()
-    mock_s3.head_object.return_value = {"ETag": '"987654321"', "VersionId": "v2.0"}
-
-    monkeypatch.chdir(s3_workspace)
-    with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_s3),
-    ):
-        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
-        result = cli_runner.invoke(app, ["config", "upload"])
-
-    assert result.exit_code == 0
-    zip_path = s3_workspace / "custom-archive.zip"
-    mock_s3.upload_file.assert_called_once_with(
-        str(zip_path), "my-test-bucket", "custom-prefix/custom-archive.zip"
-    )

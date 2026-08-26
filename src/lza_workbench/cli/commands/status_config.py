@@ -97,14 +97,7 @@ def _render_repository_settings(result: ConfigurationStatusResult) -> None:
             bucket_status = "[dim]Not Checked[/dim]"
 
         print_kv("S3 Bucket", f"{s3_bucket} ({bucket_status})")
-        prefix = result.repository_prefix
-        prefix_clean = (
-            prefix if prefix.endswith("/") else f"{prefix}/"
-            if prefix
-            else ""
-        )
-        s3_key_full = f"{prefix_clean}{result.repository_key}"
-        print_kv("S3 Object Key", s3_key_full)
+        print_kv("S3 Object Key", result.repository_object_key)
 
         if result.s3_object_exists is True:
             size_kb = (result.s3_object_size or 0) / 1024
@@ -269,4 +262,3 @@ def status_config_command(
     """Query workspace configuration metadata and display configuration status."""
     result = get_config_status_workflow(target_dir=target_dir)
     render_config_status(result, has_state=result.has_state)
-

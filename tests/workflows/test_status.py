@@ -105,7 +105,7 @@ def test_get_config_status_workflow(configured_workspace: Path) -> None:
         assert result.customer_name == "Acme Corp"
         assert result.config_dir_exists is True
         assert result.repository_type == "s3"
-        assert result.repository_bucket == "test-config-bucket"
+        assert result.repository_bucket == "aws-accelerator-config-123456789012-eu-west-1"
         assert result.s3_bucket_exists is True
         assert result.s3_bucket_versioning is True
 
@@ -532,6 +532,5 @@ def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: 
         assert result.pipeline_failed_action == "Synth"
         assert diag_msg in result.pipeline_error
         assert result.pipeline_failed_build_url == "https://console.aws.amazon.com/codebuild/..."
-
 
 

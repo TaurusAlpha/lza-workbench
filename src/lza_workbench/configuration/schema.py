@@ -14,8 +14,6 @@ class ConfigurationRepositoryConfig(BaseModel):
 
     type: Literal["s3", "codecommit", "codeconnection", "git"] = "codecommit"
     bucket: str | None = None
-    prefix: str = "zipped/"
-    key: str = "aws-accelerator-config.zip"
     repository_name: str | None = None
     repository: str | None = None
     branch: str | None = None
@@ -43,6 +41,9 @@ class ConfigurationRepositoryConfig(BaseModel):
                     f"Missing required CodeConnection parameter(s): [{fields_str}]. "
                     "Run `lza config plan` to set up your repository configuration."
                 )
+            self.branch = self.branch or "main"
+
+        elif self.type == "git":
             self.branch = self.branch or "main"
 
         return self
@@ -108,5 +109,4 @@ __all__ = [
     "PackagingExcludeConfig",
     "get_canonical_config_s3_bucket",
 ]
-
 

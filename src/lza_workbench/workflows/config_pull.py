@@ -27,7 +27,11 @@ from lza_workbench.configuration.git import (
     set_git_remote_url,
     stash_git_changes,
 )
-from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
+from lza_workbench.configuration.repository import (
+    CONFIG_ARCHIVE_FILENAME,
+    resolve_git_configuration_destination,
+    resolve_s3_configuration_destination,
+)
 from lza_workbench.configuration.state import (
     record_config_download,
     record_config_git_pull,
@@ -79,7 +83,6 @@ def pull_configuration_workflow(
     dry_run: bool = False,
     force: bool = False,
     extract: bool = True,
-    bucket_resolver: Callable[[], str] | None = None,
     confirm_callback: Callable[[str], bool] | None = None,
     overwrite_confirmed: bool = False,
 ) -> ConfigPullResult:
@@ -100,7 +103,6 @@ def pull_configuration_workflow(
             dry_run=dry_run,
             force=force,
             extract=extract,
-            bucket_resolver=bucket_resolver,
             confirm_callback=confirm_callback,
             overwrite_confirmed=overwrite_confirmed,
         )
@@ -130,33 +132,19 @@ def _handle_s3_pull(
     dry_run: bool,
     force: bool,
     extract: bool,
-    bucket_resolver: Callable[[], str] | None,
     confirm_callback: Callable[[str], bool] | None,
     overwrite_confirmed: bool,
 ) -> ConfigPullResult:
     repo_cfg = config.configuration.repository
-    prefix = repo_cfg.prefix or ""
-    key = repo_cfg.key or "aws-accelerator-config.zip"
-    if prefix:
-        prefix_clean = prefix if prefix.endswith("/") else f"{prefix}/"
-        s3_key = f"{prefix_clean}{key}"
-    else:
-        s3_key = key
-    zip_path = workspace_dir / key
+    destination = resolve_s3_configuration_destination(
+        configured_bucket=repo_cfg.bucket,
+        account_id=config.aws.account_id or state.management_account_id,
+        region=config.aws.region,
+    )
+    zip_path = workspace_dir / CONFIG_ARCHIVE_FILENAME
 
     profile = config.aws.profile or ""
     region = config.aws.region
-
-    bucket = repo_cfg.bucket
-    if not bucket:
-        account_id = config.aws.account_id or (state.management_account_id if state else None)
-        if account_id and region:
-            bucket = get_canonical_config_s3_bucket(account_id, region)
-        elif bucket_resolver is not None:
-            bucket = bucket_resolver()
-        if not bucket:
-            raise LzaError("No S3 bucket configured for LZA configuration repository.")
-
 
     if dry_run:
         return ConfigPullResult(
@@ -165,8 +153,8 @@ def _handle_s3_pull(
             repository_type="s3",
             dry_run=True,
             zip_path=zip_path,
-            s3_bucket=bucket,
-            s3_key=s3_key,
+            s3_bucket=destination.bucket,
+            s3_key=destination.object_key,
             aws_profile=profile,
             aws_region=region,
             diff_result=ConfigDiffResult(added=[], modified=[], removed=[]),
@@ -212,8 +200,8 @@ def _handle_s3_pull(
     download_s3_file(
 
         client=s3_client,
-        bucket_name=bucket,
-        object_key=s3_key,
+        bucket_name=destination.bucket,
+        object_key=destination.object_key,
         file_path=zip_path,
     )
 
@@ -245,8 +233,8 @@ def _handle_s3_pull(
         repository_type="s3",
         dry_run=False,
         zip_path=zip_path,
-        s3_bucket=bucket,
-        s3_key=s3_key,
+        s3_bucket=destination.bucket,
+        s3_key=destination.object_key,
         aws_profile=profile,
         aws_region=region,
         diff_result=diff_result,
@@ -269,15 +257,13 @@ def _handle_git_pull(
     repo_cfg = config.configuration.repository
     remote_name = "origin"
 
-    remote_url: str | None = None
-    if repo_type == "codecommit":
-        repo_name = repo_cfg.repository_name or "aws-accelerator-config"
-        region = config.aws.region
-        remote_url = f"https://git-codecommit.{region}.amazonaws.com/v1/repos/{repo_name}"
-    else:
-        remote_url = repo_cfg.repository
-
-    branch = repo_cfg.branch or "main"
+    destination = resolve_git_configuration_destination(
+        repository_type=repo_type,
+        repository_name=repo_cfg.repository_name,
+        repository_url=repo_cfg.repository,
+        branch=repo_cfg.branch,
+        region=config.aws.region,
+    )
 
     if dry_run:
         return ConfigPullResult(
@@ -286,19 +272,14 @@ def _handle_git_pull(
             repository_type=repo_type,
             dry_run=True,
             git_remote=remote_name,
-            git_remote_url=remote_url,
-            git_branch=branch,
+            git_remote_url=destination.remote_url,
+            git_branch=destination.branch,
             git_commit=get_git_commit(config_dir) if is_git_repository(config_dir) else None,
             files_count=count_git_files(config_dir) if is_git_repository(config_dir) else None,
         )
 
     stashed = False
     if not is_git_repository(config_dir):
-        if not remote_url:
-            raise LzaError(
-                f"No remote URL configured for '{repo_type}' configuration repository. "
-                "Configure repository settings before pulling."
-            )
         profile = config.aws.profile if repo_type == "codecommit" else None
         if config_dir.exists() and any(config_dir.iterdir()):
             if not force and not overwrite_confirmed:
@@ -316,24 +297,28 @@ def _handle_git_pull(
             init_git_repository(
                 config_dir,
                 remote_name=remote_name,
-                remote_url=remote_url,
+                remote_url=destination.remote_url,
                 aws_profile=profile,
             )
             fetch_git_remote(config_dir, remote=remote_name)
-            pull_git_branch(config_dir, remote=remote_name, branch=branch)
+            pull_git_branch(config_dir, remote=remote_name, branch=destination.branch)
         else:
             clone_git_repository(
                 config_dir,
-                remote_url=remote_url,
-                branch=branch,
+                remote_url=destination.remote_url,
+                branch=destination.branch,
                 aws_profile=profile,
             )
     else:
         existing_url = get_git_remote_url(config_dir, remote_name)
-        if not existing_url and remote_url:
-            set_git_remote_url(config_dir, remote_name, remote_url)
-        elif existing_url:
-            remote_url = existing_url
+        if not existing_url:
+            set_git_remote_url(config_dir, remote_name, destination.remote_url)
+        elif existing_url != destination.remote_url:
+            raise LzaError(
+                f"Git remote '{remote_name}' does not match lza-workspace.yaml: "
+                f"expected '{destination.remote_url}', received '{existing_url}'. "
+                "Update the local remote before pulling."
+            )
 
         if repo_type == "codecommit" and config.aws.profile:
             configure_codecommit_credential_helper(config_dir, config.aws.profile)
@@ -357,7 +342,7 @@ def _handle_git_pull(
 
         fetch_git_remote(config_dir, remote=remote_name)
         current_branch = get_git_branch(config_dir)
-        target_branch = branch or current_branch
+        target_branch = destination.branch or current_branch
         pull_git_branch(config_dir, remote=remote_name, branch=target_branch)
 
     validate_template(config_dir)
@@ -378,8 +363,8 @@ def _handle_git_pull(
         repository_type=repo_type,
         dry_run=False,
         git_remote=remote_name,
-        git_remote_url=remote_url,
-        git_branch=branch,
+        git_remote_url=destination.remote_url,
+        git_branch=destination.branch,
         git_commit=commit,
         files_count=files_count,
         stashed_changes=stashed,

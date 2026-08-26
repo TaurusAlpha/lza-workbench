@@ -134,7 +134,8 @@ def configured_workspace(tmp_path: Path) -> Path:
     config = load_workspace_config(ws_dir)
     config.assets_bucket = "s3-lza-workbench-assets-123456789012-eu-west-1"
     config.configuration.repository.type = "s3"
-    config.configuration.repository.bucket = "test-config-bucket"
+    config.aws.account_id = "123456789012"
+    config.configuration.repository.bucket = "aws-accelerator-config-123456789012-eu-west-1"
     config.installer.source_code.repository_type = "codecommit"
     config.installer.source_code.repository_name = "aws-accelerator-codecommit"
     config.installer.source_code.branch = f"release/{PACKAGED_INSTALLER_VERSION}"
@@ -213,4 +214,3 @@ def init_git_repo() -> Any:
 def sample_config_zip() -> Any:
     """Fixture providing helper to generate a sample configuration zip archive."""
     return create_sample_config_zip
-

@@ -19,12 +19,13 @@ from lza_workbench.workspace.state import load_workspace_state
 def s3_workspace(initialized_workspace: Path) -> Path:
     config = load_workspace_config(initialized_workspace)
     config.configuration.repository.type = "s3"
-    config.configuration.repository.bucket = "my-test-bucket"
+    config.aws.account_id = "123456789012"
+    config.configuration.repository.bucket = "aws-accelerator-config-123456789012-eu-west-1"
     write_workspace_config(initialized_workspace, config)
     return initialized_workspace
 
 
-def test_cli_config_download_requires_bucket(
+def test_cli_config_download_requires_account_id_for_s3_destination(
     initialized_workspace: Path,
     cli_runner: CliRunner,
     monkeypatch: pytest.MonkeyPatch,
@@ -32,12 +33,15 @@ def test_cli_config_download_requires_bucket(
     config = load_workspace_config(initialized_workspace)
     config.configuration.repository.type = "s3"
     config.configuration.repository.bucket = None
+    config.aws.account_id = None
     write_workspace_config(initialized_workspace, config)
 
     monkeypatch.chdir(initialized_workspace)
     result = cli_runner.invoke(app, ["config", "download"])
     assert result.exit_code == 1
-    assert "No S3 bucket configured" in (result.output or str(result.exception))
+    assert "Cannot resolve the LZA configuration S3 bucket" in (
+        result.output or str(result.exception)
+    )
 
 
 def test_cli_config_download_dry_run(
@@ -170,37 +174,3 @@ def test_cli_config_download_interactive_declined(
         result = cli_runner.invoke(app, ["config", "download"], input="n\n")
 
     assert result.exit_code != 0
-
-
-def test_cli_config_download_custom_key_and_prefix(
-    s3_workspace: Path,
-    cli_runner: CliRunner,
-    sample_config_zip: Any,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = load_workspace_config(s3_workspace)
-    cfg.configuration.repository.prefix = "custom-prefix/"
-    cfg.configuration.repository.key = "custom-archive.zip"
-    write_workspace_config(s3_workspace, cfg)
-
-    mock_s3 = MagicMock()
-
-    def fake_download(bucket: str, key: str, filename: str) -> None:
-        sample_config_zip(Path(filename))
-
-    mock_s3.download_file.side_effect = fake_download
-
-    monkeypatch.chdir(s3_workspace)
-    with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_s3),
-    ):
-        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
-        result = cli_runner.invoke(app, ["config", "download", "--force"])
-
-    assert result.exit_code == 0
-    mock_s3.download_file.assert_called_once_with(
-        "my-test-bucket",
-        "custom-prefix/custom-archive.zip",
-        str(s3_workspace / "custom-archive.zip"),
-    )

@@ -45,7 +45,6 @@ configuration:
   repository:
     type: s3
     bucket: aws-accelerator-config-123456789012-eu-west-1
-    prefix: zipped/
   packaging:
     exclude:
       directories: [.git, backup]

@@ -49,6 +49,9 @@ def test_forbids_extra_fields_across_submodels() -> None:
         ConfigurationRepositoryConfig(type="s3", invalid_extra="value")  # type: ignore[call-arg]
 
     with pytest.raises(ValidationError):
+        ConfigurationRepositoryConfig(type="s3", prefix="custom/")  # type: ignore[call-arg]
+
+    with pytest.raises(ValidationError):
         InstallerOptionsConfig(invalid_param="bad")  # type: ignore[call-arg]
 
 

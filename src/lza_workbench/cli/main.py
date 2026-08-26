@@ -375,7 +375,6 @@ def config_deploy_command(
     run_cli_deploy_config(
         dry_run=dry_run,
         no_watch=no_watch,
-        interactive=_is_interactive(),
     )
 
 

@@ -19,7 +19,8 @@ from lza_workbench.workspace.state import load_workspace_state
 def s3_workspace(configured_workspace: Path) -> Path:
     config = load_workspace_config(configured_workspace)
     config.configuration.repository.type = "s3"
-    config.configuration.repository.bucket = "my-test-bucket"
+    config.aws.account_id = "123456789012"
+    config.configuration.repository.bucket = "aws-accelerator-config-123456789012-eu-west-1"
     write_workspace_config(configured_workspace, config)
     return configured_workspace
 
@@ -253,5 +254,4 @@ def test_pull_git_interactive_stash_declined(
         result = cli_runner.invoke(app, ["config", "pull"], input="n\n")
 
     assert result.exit_code != 0
-
 

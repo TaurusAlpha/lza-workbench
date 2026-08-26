@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import typer
-
 from lza_workbench.cli import params
 from lza_workbench.cli.output import (
     print_diff_summary,
@@ -68,9 +66,6 @@ def config_push_command(
     result = push_configuration_workflow(
         target_dir=target_dir,
         dry_run=dry_run,
-        bucket_resolver=(lambda: typer.prompt("S3 bucket name for configuration"))
-        if interactive
-        else None,
     )
     render_config_push_result(result)
     return result
