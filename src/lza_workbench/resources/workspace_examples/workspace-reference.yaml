@@ -114,10 +114,11 @@ configuration:
     #
     # codeconnection example:
     # type: codeconnection
-    # connection_arn: arn:aws:codeconnections:eu-west-1:123456789012:connection/example
+    # codeconnection_arn: arn:aws:codeconnections:eu-west-1:123456789012:connection/example
     # owner: example
     # repository_name: customer-lza-config
     # branch: main
+    # The local configuration repository must already have its Git origin configured.
 
     s3_packaging:
       exclude:

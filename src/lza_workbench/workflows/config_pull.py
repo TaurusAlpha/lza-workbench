@@ -10,6 +10,7 @@ from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.s3 import download_s3_file
 from lza_workbench.configuration.archive import (
     ConfigDiffResult,
+    compute_config_directory_digest,
     extract_zip_to_workspace,
 )
 from lza_workbench.configuration.git import (
@@ -24,6 +25,7 @@ from lza_workbench.configuration.git import (
     init_git_repository,
     is_git_repository,
     pull_git_branch,
+    restore_git_stash,
     set_git_remote_url,
     stash_git_changes,
 )
@@ -71,6 +73,7 @@ class ConfigPullResult:
     git_commit: str | None = None
     files_count: int | None = None
     stashed_changes: bool = False
+    restored_changes: bool = False
 
 
 # Alias for backwards compatibility / download command
@@ -161,32 +164,34 @@ def _handle_s3_pull(
             extracted=extract,
         )
 
-    is_already_managed = (
-        getattr(state, "config_uploaded_at", None) is not None
-        or getattr(state, "config_downloaded_at", None) is not None
-    )
+    exclude_dirs = set(config.configuration.packaging.exclude.directories)
+    exclude_files = set(config.configuration.packaging.exclude.files)
 
     if (
-        config_dir.is_dir()
+        extract
+        and config_dir.is_dir()
         and any(config_dir.iterdir())
-        and not is_already_managed
         and not force
         and not overwrite_confirmed
+        and (
+            state.config_sync_digest is None
+            or compute_config_directory_digest(config_dir, exclude_dirs, exclude_files)
+            != state.config_sync_digest
+        )
     ):
         msg = (
-            f"Local configuration directory '{config_dir}' is not empty and has not "
-            "been synchronized with S3 yet. Overwrite local files?"
+            f"Local configuration directory '{config_dir}' has uncommitted local changes. "
+            "Overwrite?"
         )
         if confirm_callback and confirm_callback(msg):
             overwrite_confirmed = True
         else:
             raise LzaError(
-                f"Local configuration directory is not empty: {config_dir}. "
+                "Local configuration directory is not empty and has changes "
+                "that would be overwritten: "
+                f"{config_dir}. "
                 "Use --force to overwrite."
             )
-
-    exclude_dirs = set(config.configuration.packaging.exclude.directories)
-    exclude_files = set(config.configuration.packaging.exclude.files)
 
     aws_context = resolve_aws_execution_context(
         profile=config.aws.profile,
@@ -211,8 +216,8 @@ def _handle_s3_pull(
             config_dir=config_dir,
             exclude_dirs=exclude_dirs,
             exclude_files=exclude_files,
+            validate_staged_config=validate_template,
         )
-        validate_template(config_dir)
     else:
         diff_result = ConfigDiffResult(added=[zip_path.name], modified=[], removed=[])
 
@@ -223,6 +228,7 @@ def _handle_s3_pull(
         exclude_dirs=exclude_dirs,
         exclude_files=exclude_files,
         diff_result=diff_result,
+        extracted=extract,
     )
 
     write_workspace_state(workspace_dir, state)
@@ -257,10 +263,17 @@ def _handle_git_pull(
     repo_cfg = config.configuration.repository
     remote_name = "origin"
 
+    if repo_type == "codeconnection" and not is_git_repository(config_dir):
+        raise LzaError(
+            "CodeConnection configuration synchronization requires an existing local Git "
+            f"repository with a configured '{remote_name}' remote: {config_dir}"
+        )
+
+    local_remote_url = get_git_remote_url(config_dir, remote_name)
     destination = resolve_git_configuration_destination(
         repository_type=repo_type,
         repository_name=repo_cfg.repository_name,
-        repository_url=repo_cfg.repository,
+        repository_url=local_remote_url if repo_type == "codeconnection" else repo_cfg.repository,
         branch=repo_cfg.branch,
         region=config.aws.region,
     )
@@ -323,6 +336,13 @@ def _handle_git_pull(
         if repo_type == "codecommit" and config.aws.profile:
             configure_codecommit_credential_helper(config_dir, config.aws.profile)
 
+        current_branch = get_git_branch(config_dir)
+        if current_branch != destination.branch:
+            raise LzaError(
+                f"Current Git branch '{current_branch}' is not the configured branch "
+                f"'{destination.branch}'. Check out '{destination.branch}' before pulling."
+            )
+
         if has_uncommitted_changes(config_dir):
             if not force and not overwrite_confirmed:
                 msg = (
@@ -341,9 +361,10 @@ def _handle_git_pull(
                 stashed = stash_git_changes(config_dir)
 
         fetch_git_remote(config_dir, remote=remote_name)
-        current_branch = get_git_branch(config_dir)
-        target_branch = destination.branch or current_branch
-        pull_git_branch(config_dir, remote=remote_name, branch=target_branch)
+        pull_git_branch(config_dir, remote=remote_name, branch=destination.branch)
+
+        if stashed:
+            restore_git_stash(config_dir)
 
     validate_template(config_dir)
 
@@ -368,4 +389,5 @@ def _handle_git_pull(
         git_commit=commit,
         files_count=files_count,
         stashed_changes=stashed,
+        restored_changes=stashed,
     )

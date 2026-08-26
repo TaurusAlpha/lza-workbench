@@ -89,9 +89,14 @@ def test_git_push_updates_remote_and_state_for_configured_deployable_branch(
     )
     config.configuration.repository.owner = "example"
     config.configuration.repository.repository_name = "configuration"
-    config.configuration.repository.repository = str(remote_dir)
     config.configuration.repository.branch = "main"
     write_workspace_config(configured_workspace, config)
+    subprocess.run(
+        ["git", "remote", "add", "origin", str(remote_dir)],
+        cwd=config_dir,
+        check=True,
+        capture_output=True,
+    )
 
     result = push_configuration_workflow(target_dir=configured_workspace)
 

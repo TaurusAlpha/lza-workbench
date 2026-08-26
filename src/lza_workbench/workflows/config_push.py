@@ -174,7 +174,10 @@ def _handle_s3_push(
     record_config_upload(
         state,
         zip_path=zip_path,
+        config_dir=config_dir,
         manifest=zip_manifest,
+        exclude_dirs=exclude_dirs,
+        exclude_files=exclude_files,
         diff_result=diff_result,
         etag=etag,
         version_id=version_id,
@@ -227,15 +230,17 @@ def _handle_git_push(
             "Please commit or stash your changes before pushing."
         )
 
+    remote_name = "origin"
+    existing_remote_url = get_git_remote_url(config_dir, remote_name)
     destination = resolve_git_configuration_destination(
         repository_type=repo_type,
         repository_name=repo_cfg.repository_name,
-        repository_url=repo_cfg.repository,
+        repository_url=(
+            existing_remote_url if repo_type == "codeconnection" else repo_cfg.repository
+        ),
         branch=repo_cfg.branch,
         region=config.aws.region,
     )
-    remote_name = "origin"
-    existing_remote_url = get_git_remote_url(config_dir, remote_name)
     if existing_remote_url and existing_remote_url != destination.remote_url:
         raise LzaError(
             f"Git remote '{remote_name}' does not match lza-workspace.yaml: "

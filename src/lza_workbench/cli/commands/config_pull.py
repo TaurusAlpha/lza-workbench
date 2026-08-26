@@ -63,7 +63,9 @@ def render_config_pull_result(result: ConfigPullResult) -> None:
         print_kv("Branch", result.git_branch)
         print_kv("Commit", result.git_commit)
         print_kv("Tracked Files", result.files_count)
-        if result.stashed_changes:
+        if result.restored_changes:
+            print_kv("Local Changes", "Uncommitted changes were restored")
+        elif result.stashed_changes:
             print_kv("Local Changes", "Uncommitted changes were stashed")
 
 

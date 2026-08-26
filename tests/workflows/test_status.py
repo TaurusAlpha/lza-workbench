@@ -156,7 +156,6 @@ def test_get_config_status_workflow_s3_derived_bucket(tmp_path: Path) -> None:
         assert result.s3_bucket_exists is True
 
 
-
 def test_get_config_status_workflow_codecommit(tmp_path: Path) -> None:
     config = WorkspaceConfig(
         customer=CustomerConfig(name="Test Customer", slug="test-customer"),
@@ -282,8 +281,6 @@ def test_git_working_tree_and_remote_sync_helpers(tmp_path: Path) -> None:
     # Remote sync status without remote
     sync = get_git_remote_sync_status(tmp_path)
     assert sync.status == "No Upstream"
-
-
 
 
 def test_get_pipeline_status_workflow(configured_workspace: Path) -> None:
@@ -524,7 +521,6 @@ def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: 
         ],
     )
 
-
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
@@ -545,5 +541,6 @@ def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: 
         assert result.pipeline_status == "Failed"
         assert result.pipeline_failed_stage == "Build"
         assert result.pipeline_failed_action == "Synth"
+        assert result.pipeline_error is not None
         assert diag_msg in result.pipeline_error
         assert result.pipeline_failed_build_url == "https://console.aws.amazon.com/codebuild/..."

@@ -6,7 +6,11 @@ import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 
-from lza_workbench.configuration.archive import ConfigDiffResult, count_config_files
+from lza_workbench.configuration.archive import (
+    ConfigDiffResult,
+    compute_config_directory_digest,
+    count_config_files,
+)
 from lza_workbench.workspace.schema import WorkspaceState
 
 
@@ -14,7 +18,10 @@ def record_config_upload(
     state: WorkspaceState,
     *,
     zip_path: Path,
+    config_dir: Path,
     manifest: dict[str, tuple[int, int]],
+    exclude_dirs: set[str],
+    exclude_files: set[str],
     diff_result: ConfigDiffResult,
     etag: str | None,
     version_id: str | None,
@@ -27,6 +34,9 @@ def record_config_upload(
     state.config_artifact_etag = etag
     state.config_artifact_version_id = version_id
     state.config_files_count = len(manifest)
+    state.config_sync_digest = compute_config_directory_digest(
+        config_dir, exclude_dirs, exclude_files
+    )
     state.config_last_diff_summary = _diff_summary(diff_result)
 
 
@@ -38,6 +48,7 @@ def record_config_download(
     exclude_dirs: set[str],
     exclude_files: set[str],
     diff_result: ConfigDiffResult,
+    extracted: bool,
 ) -> None:
     """Record metadata after a successful configuration archive download."""
     now = datetime.now(UTC)
@@ -45,8 +56,13 @@ def record_config_download(
     state.config_downloaded_at = now
     if zip_path.exists():
         state.config_artifact_sha256 = _archive_sha256(zip_path)
-    if config_dir.exists():
+    if extracted and config_dir.exists():
         state.config_files_count = count_config_files(config_dir, exclude_dirs, exclude_files)
+        state.config_sync_digest = compute_config_directory_digest(
+            config_dir, exclude_dirs, exclude_files
+        )
+    elif not extracted:
+        state.config_sync_digest = None
     state.config_last_diff_summary = _diff_summary(diff_result)
 
 
@@ -91,4 +107,3 @@ def _diff_summary(diff_result: ConfigDiffResult) -> dict[str, int]:
         "modified": len(diff_result.modified),
         "removed": len(diff_result.removed),
     }
-

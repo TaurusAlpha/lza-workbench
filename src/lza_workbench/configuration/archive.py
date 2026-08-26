@@ -6,6 +6,7 @@ import hashlib
 import shutil
 import tempfile
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -69,6 +70,7 @@ def extract_zip_to_workspace(
     config_dir: Path,
     exclude_dirs: set[str],
     exclude_files: set[str],
+    validate_staged_config: Callable[[Path], None] | None = None,
 ) -> ConfigDiffResult:
     """Extract included archive files into the workspace configuration directory safely."""
     if not zip_path.is_file():
@@ -86,6 +88,8 @@ def extract_zip_to_workspace(
 
         top_level_folder = staging_dir / config_dir.name
         source_content_dir = top_level_folder if top_level_folder.is_dir() else staging_dir
+        if validate_staged_config is not None:
+            validate_staged_config(source_content_dir)
 
         before_files = scan_directory_files(config_dir, exclude_dirs, exclude_files)
         incoming_files = scan_directory_files(source_content_dir, exclude_dirs, exclude_files)
@@ -180,6 +184,21 @@ def scan_directory_files(
         if not is_path_excluded(rel_path, exclude_dirs, exclude_files):
             files_map[str(rel_path)] = hashlib.sha256(path.read_bytes()).hexdigest()
     return files_map
+
+
+def compute_config_directory_digest(
+    directory: Path, exclude_dirs: set[str], exclude_files: set[str]
+) -> str:
+    """Return a deterministic digest of included configuration files."""
+    digest = hashlib.sha256()
+    for relative_path, file_digest in sorted(
+        scan_directory_files(directory, exclude_dirs, exclude_files).items()
+    ):
+        digest.update(relative_path.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(file_digest.encode("ascii"))
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def is_path_excluded(

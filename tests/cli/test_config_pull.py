@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -11,8 +12,9 @@ import pytest
 from typer.testing import CliRunner
 
 from lza_workbench.cli import app
+from lza_workbench.configuration.archive import compute_config_directory_digest
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
-from lza_workbench.workspace.state import load_workspace_state
+from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
 
 @pytest.fixture
@@ -82,6 +84,56 @@ def test_pull_s3_success(
     assert state.config_files_count == 6
 
 
+def test_pull_s3_preserves_local_configuration_when_downloaded_archive_is_invalid(
+    s3_workspace: Path,
+    cli_runner: CliRunner,
+    sample_config_zip: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_dir = s3_workspace / "aws-accelerator-config"
+    original_global_config = (config_dir / "global-config.yaml").read_text(encoding="utf-8")
+
+    def fake_download(bucket: str, key: str, filename: str) -> None:
+        sample_config_zip(
+            Path(filename),
+            {"aws-accelerator-config/global-config.yaml": "incomplete remote configuration"},
+        )
+
+    mock_s3 = MagicMock()
+    mock_s3.download_file.side_effect = fake_download
+
+    monkeypatch.chdir(s3_workspace)
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_s3),
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        result = cli_runner.invoke(app, ["config", "pull", "--force"])
+
+    assert result.exit_code == 1
+    assert (config_dir / "global-config.yaml").read_text(encoding="utf-8") == original_global_config
+
+
+def test_pull_s3_requires_force_when_local_configuration_has_changed(
+    s3_workspace: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_dir = s3_workspace / "aws-accelerator-config"
+    state = load_workspace_state(s3_workspace)
+    state.config_sync_digest = compute_config_directory_digest(
+        config_dir, exclude_dirs={".git", "backup"}, exclude_files={".DS_Store"}
+    )
+    write_workspace_state(s3_workspace, state)
+    (config_dir / "global-config.yaml").write_text("local change", encoding="utf-8")
+
+    monkeypatch.chdir(s3_workspace)
+    result = cli_runner.invoke(app, ["config", "pull"])
+
+    assert result.exit_code == 1
+    assert "has changes that would be overwritten" in (result.output or str(result.exception))
+
+
 def test_download_alias_s3(
     s3_workspace: Path,
     cli_runner: CliRunner,
@@ -149,6 +201,66 @@ def test_pull_codecommit_success(
     assert state.config_downloaded_at is not None
 
 
+def test_pull_codeconnection_uses_existing_local_origin(
+    configured_workspace: Path,
+    cli_runner: CliRunner,
+    init_git_repo: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = load_workspace_config(configured_workspace)
+    cfg.configuration.repository.type = "codeconnection"
+    cfg.configuration.repository.owner = "my-org"
+    cfg.configuration.repository.repository_name = "my-config-repo"
+    cfg.configuration.repository.codeconnection_arn = (
+        "arn:aws:codeconnections:eu-west-1:123456789012:connection/example"
+    )
+    write_workspace_config(configured_workspace, cfg)
+
+    config_dir = configured_workspace / "aws-accelerator-config"
+    init_git_repo(config_dir, commit=True)
+    expected_origin = "https://github.com/my-org/my-config-repo.git"
+    subprocess.run(
+        ["git", "remote", "add", "origin", expected_origin],
+        cwd=config_dir,
+        check=True,
+        capture_output=True,
+    )
+
+    monkeypatch.chdir(configured_workspace)
+    with (
+        patch("lza_workbench.workflows.config_pull.fetch_git_remote") as mock_fetch,
+        patch("lza_workbench.workflows.config_pull.pull_git_branch") as mock_pull,
+    ):
+        result = cli_runner.invoke(app, ["config", "pull"])
+
+    assert result.exit_code == 0
+    mock_fetch.assert_called_once_with(config_dir, remote="origin")
+    mock_pull.assert_called_once_with(config_dir, remote="origin", branch="main")
+    assert expected_origin in result.output
+
+
+def test_pull_git_requires_configured_branch(
+    configured_workspace: Path,
+    cli_runner: CliRunner,
+    init_git_repo: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = load_workspace_config(configured_workspace)
+    cfg.configuration.repository.type = "git"
+    cfg.configuration.repository.repository = "https://github.com/my-org/my-repo.git"
+    cfg.configuration.repository.branch = "deployable"
+    write_workspace_config(configured_workspace, cfg)
+
+    config_dir = configured_workspace / "aws-accelerator-config"
+    init_git_repo(config_dir, commit=True)
+
+    monkeypatch.chdir(configured_workspace)
+    result = cli_runner.invoke(app, ["config", "pull"])
+
+    assert result.exit_code == 1
+    assert "not the configured branch" in (result.output or str(result.exception))
+
+
 def test_pull_git_fails_on_uncommitted_without_force(
     configured_workspace: Path,
     cli_runner: CliRunner,
@@ -198,7 +310,8 @@ def test_pull_git_stashes_uncommitted_with_force(
         result = cli_runner.invoke(app, ["config", "pull", "--force"])
 
     assert result.exit_code == 0
-    assert not (config_dir / "uncommitted.txt").exists()
+    assert (config_dir / "uncommitted.txt").read_text(encoding="utf-8") == "modified"
+    assert "Uncommitted changes were restored" in result.output
 
 
 def test_pull_git_interactive_stash_confirmed(
@@ -227,7 +340,8 @@ def test_pull_git_interactive_stash_confirmed(
         result = cli_runner.invoke(app, ["config", "pull"], input="y\n")
 
     assert result.exit_code == 0
-    assert not (config_dir / "uncommitted.txt").exists()
+    assert (config_dir / "uncommitted.txt").read_text(encoding="utf-8") == "modified"
+    assert "Uncommitted changes were restored" in result.output
 
 
 def test_pull_git_interactive_stash_declined(
@@ -254,4 +368,3 @@ def test_pull_git_interactive_stash_declined(
         result = cli_runner.invoke(app, ["config", "pull"], input="n\n")
 
     assert result.exit_code != 0
-

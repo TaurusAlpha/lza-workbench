@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -58,6 +59,7 @@ def test_push_s3_success(
     state = load_workspace_state(s3_workspace)
     assert state.config_uploaded_at is not None
     assert state.config_artifact_etag == "12345"
+    assert state.config_sync_digest is not None
 
 
 def test_upload_alias_s3(
@@ -204,11 +206,16 @@ def test_push_codeconnection_dry_run_and_success(
     cfg.configuration.repository.codeconnection_arn = (
         "arn:aws:codeconnections:us-east-1:123456789012:connection/abcdef"
     )
-    cfg.configuration.repository.repository = "https://github.com/my-org/my-repo.git"
     write_workspace_config(configured_workspace, cfg)
 
     config_dir = configured_workspace / "aws-accelerator-config"
     init_git_repo(config_dir, commit=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "https://github.com/my-org/my-repo.git"],
+        cwd=config_dir,
+        check=True,
+        capture_output=True,
+    )
 
     monkeypatch.chdir(configured_workspace)
     result_dry = cli_runner.invoke(app, ["config", "push", "--dry-run"])

@@ -118,6 +118,16 @@ def stash_git_changes(repo_dir: Path, message: str = "lza-config-pull-stash") ->
     return True
 
 
+def restore_git_stash(repo_dir: Path) -> None:
+    """Restore the most recently created Git stash after a successful pull."""
+    proc = _run_git_command(["stash", "pop"], cwd=repo_dir)
+    if proc.returncode != 0:
+        raise LzaError(
+            "Configuration pull completed, but local changes could not be restored. "
+            f"They remain in Git stash: {proc.stderr.strip()}"
+        )
+
+
 def fetch_git_remote(repo_dir: Path, remote: str = "origin") -> None:
     """Fetch branches/commits from specified git remote."""
     proc = _run_git_command(["fetch", remote], cwd=repo_dir)
@@ -391,5 +401,4 @@ def resolve_git_provenance(repo_dir: Path) -> GitProvenance | None:
         repo_type=repo_type,
         repo_name=repo_name,
     )
-
 
