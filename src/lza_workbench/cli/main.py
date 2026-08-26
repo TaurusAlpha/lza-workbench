@@ -168,6 +168,12 @@ def status_installer_command(
     )
 
 
+@config_app.command("status")
+def config_status_command() -> None:
+    """Show configuration repository status details."""
+    run_cli_status_config()
+
+
 @status_app.command("config")
 def status_config_command() -> None:
     """Show configuration repository status details."""
@@ -371,8 +377,6 @@ def config_deploy_command(
         no_watch=no_watch,
         interactive=_is_interactive(),
     )
-
-
 
 
 def main(argv: list[str] | None = None) -> int:

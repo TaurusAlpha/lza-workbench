@@ -41,11 +41,6 @@ def render_config_status(result: ConfigurationStatusResult, *, has_state: bool) 
     elif result.config_dir_exists:
         print_kv("Configuration Origin", "Imported / Unmanaged")
 
-    if result.config_dir_exists:
-        print_kv("YAML Config Files Count", len(result.yaml_files))
-        if result.yaml_files:
-            print_kv("Files Found", ", ".join(result.yaml_files), style="dim")
-
     if result.drifted_fields:
         fields_str = ", ".join(result.drifted_fields)
         print_warning(

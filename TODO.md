@@ -3,31 +3,61 @@
 Historical work is recorded in [`docs/DONE.md`](docs/DONE.md). This file tracks active features,
 unresolved design decisions, and technical debt.
 
-## CLI Commands
+## Command Inventory
 
-Keep for reference. Do not delete commands from this list even if they are implemented.
+Keep this as the canonical inventory of implemented and planned command names. Checked commands
+are registered in the current CLI; unchecked commands are planned.
 
-- [ ] `lza init`
-- [ ] `lza import`
-- [ ] `lza bootstrap`
-- [ ] `lza uninstall`
+### Workspace lifecycle
+
+- [x] `lza init`
+- [x] `lza import`
+- [x] `lza bootstrap`
 - [ ] `lza validate`
 - [ ] `lza diff`
-- [ ] `lza installer init`
-- [ ] `lza installer plan`
-- [ ] `lza installer deploy`
-- [ ] `lza installer status`
-- [ ] `lza status`
-- [ ] `lza config init`
-- [ ] `lza config download`
-- [ ] `lza config upload`
-- [ ] `lza config push`
-- [ ] `lza config pull`
-- [ ] `lza config deploy`
-- [ ] `lza config status`
-- [ ] `lza pipeline start`
-- [ ] `lza pipeline watch`
 - [ ] `lza doctor`
+- [ ] `lza uninstall`
+
+### Installer
+
+- [x] `lza installer init`
+- [x] `lza installer plan`
+- [x] `lza installer deploy`
+- [x] `lza installer status` (alias for `lza status installer`)
+
+### Configuration
+
+- [x] `lza config init`
+- [x] `lza config pull`
+- [x] `lza config push`
+- [x] `lza config download` (alias for `lza config pull`)
+- [x] `lza config upload` (alias for `lza config push`)
+- [x] `lza config deploy`
+- [ ] `lza config status` (alias for `lza status config`)
+- [ ] `lza config edit`
+
+### Pipeline and status
+
+- [x] `lza pipeline start`
+- [x] `lza pipeline watch`
+- [x] `lza status`
+- [x] `lza status installer`
+- [x] `lza status config`
+- [x] `lza status pipeline`
+
+## Command Reference and Feature Work
+
+Keep every inventory command in this section with a short description, even when it has no open
+tasks. Add command-specific enhancements beneath the relevant command instead of removing an
+implemented command's section.
+
+### `lza init`
+
+Create a new customer-specific LZA workspace and its local Workbench metadata.
+
+### `lza import`
+
+Adopt an existing local LZA configuration without modifying customer-owned configuration files.
 
 ### `lza bootstrap`
 
@@ -41,7 +71,7 @@ The future implementation should preserve the following behavior:
 
 #### Installer source
 
-- [] `RepositorySource=github`
+- [ ] `RepositorySource=github`
   - On init or changed configuration:
     - Do not create repository resources.
     - Validate the `accelerator/github-token` secret.
@@ -51,14 +81,14 @@ The future implementation should preserve the following behavior:
     - Validate the secret and repository accessibility.
     - Do not create resources.
 
-- [] `RepositorySource=codecommit`
+- [ ] `RepositorySource=codecommit`
   - On init or changed configuration:
     - Create or validate the `lza-installer-source` CodeCommit repository in the management account.
   - On import:
     - Validate that the configured repository exists and is accessible.
     - Do not recreate missing imported resources automatically.
 
-- [] `RepositorySource=s3`
+- [ ] `RepositorySource=s3`
   - On init or changed configuration:
     - Create or validate the versioned
       `s3-lza-installer-source-<account-id>-<region>` bucket.
@@ -69,17 +99,7 @@ The future implementation should preserve the following behavior:
 
 #### Configuration repository
 
-- [x] `ConfigurationRepositoryLocation=codecommit`
-  - On init or changed configuration:
-    - [x] Default `UseExistingConfigRepo=true`.
-    - [x] Create or validate the `lza-config-source` CodeCommit repository in the management account.
-    - [x] Default `ExistingConfigRepositoryBranchName` to `main`.
-    - [x] The installer workflow may then push the initial/basic LZA configuration before installer deployment.
-  - On import:
-    - [x] Validate that the configured repository and branch exist and are accessible.
-    - [x] Do not recreate missing imported resources automatically.
-
-- [] `ConfigurationRepositoryLocation=codeconnection`
+- [ ] `ConfigurationRepositoryLocation=codeconnection`
   - On init, changed configuration, and import:
     - Require `ConfigCodeConnectionArn`.
     - Require the configured repository owner, name, and branch.
@@ -87,7 +107,7 @@ The future implementation should preserve the following behavior:
     - Validate repository accessibility where possible.
     - Do not create CodeConnections or external repository resources.
 
-- [] `ConfigurationRepositoryLocation=s3`
+- [ ] `ConfigurationRepositoryLocation=s3`
   - Treat as a separate LZA-specific configuration workflow.
   - Do not currently create the LZA-managed
     `aws-accelerator-config-<account-id>-<region>` bucket during bootstrap.
@@ -96,27 +116,12 @@ The future implementation should preserve the following behavior:
 
 #### Import and change semantics
 
-- [] Treat resources discovered through `lza installer import` as existing deployment resources.
-- [] Imported resources are validation-only; bootstrap must not recreate or replace them automatically.
-- [] If the user later explicitly changes installer or configuration source settings, treat the new desired resources as newly configured resources and apply the corresponding init/create behavior.
-- [] Bootstrap must never delete old repositories, buckets, branches, connections, or other resources after configuration changes.
-
-### `lza init`
-
-Create a new customer-specific LZA workspace.
-
-- [ ] Support selecting a packaged template when multiple templates exist.
-- [ ] Init local git repository in LZA configuration directory and "init" commit.
-  Check for correlation if configuration repo is already stored in Git or CodeCommit or other supported repository.
-
-### `lza import`
-
-Adopt an existing local LZA configuration without modifying customer-owned files.
-
-- [x] Add live AWS discovery during import: query CloudFormation for `AWSAccelerator-InstallerStack` and `AWSAccelerator-PipelineStack` to automatically extract and populate deployed parameters (`ConfigurationRepositoryLocation`, account emails, `EnableApprovalStage`, LZA version, etc.) into `lza-workspace.yaml` and `.lza/state.json`.
-- [x] Add graceful error handling and guidance if AWS authentication fails or `--skip-aws-check` is used: explain that live stack introspection was skipped, and suggest verifying AWS credentials and running `lza import` or running `lza installer status --sync-config` / `lza installer plan --sync-config`.
-- [x] Add context-aware next-step recommendations after import (e.g., recommend `lza config download` if configuration is S3-backed and unverified, or `lza validate` / `lza config push`).
-- [x] Track imported workspace state flag in `.lza/state.json` (e.g. `imported: true` or `config_synced: false`) until installer/config is downloaded, pulled, or deployed at least once using the tool.
+- [ ] Treat resources discovered through `lza import` as existing deployment resources.
+- [ ] Keep imported resources validation-only; bootstrap must not recreate or replace them automatically.
+- [ ] If the user later explicitly changes installer or configuration source settings, treat the new
+  desired resources as newly configured resources and apply the corresponding init/create behavior.
+- [ ] Bootstrap must never delete old repositories, buckets, branches, connections, or other
+  resources after configuration changes.
 
 ### `lza validate`
 
@@ -139,9 +144,14 @@ Implementation checklist:
 - [ ] Validate workspace directory structure and configured paths.
 - [ ] Validate LZA configuration YAML syntax.
 - [ ] Validate the expected LZA configuration file structure.
-- [ ] Integrate official/version-aware LZA schema validation.
+- [ ] Reuse the existing official/version-aware LZA schema validation used by import and
+  configuration synchronization workflows.
 - [ ] Validate installer configuration and required parameters.
+- [ ] Validate the configured upload target.
+- [ ] Validate configuration replacement-variable consistency across configuration files and
+  `replacements-config.yaml`.
 - [ ] Detect inconsistent settings between workspace, installer, and configuration metadata.
+- [ ] Detect common LZA configuration mistakes.
 - [ ] Produce concise pass, warning, and failure results.
 - [ ] Return a non-zero exit code when validation fails.
 - [ ] Keep validation read-only.
@@ -211,12 +221,13 @@ Future design checklist:
 Collect and persist installer CloudFormation parameters and workspace settings.
 
 - [ ] Normalize LZA version strings (e.g. prefixing `v` for `vX.Y.Z`) when constructing the official AWS solutions-reference installer template download URL (`https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/v{version}/AWSAccelerator-InstallerStack.template`) to prevent 404 download failures for un-prefixed version inputs (such as `1.15.5`).
-- [ ] Provide better error diagnostics and fallback resolution when downloading non-packaged installer template versions from the public S3 URL.
-- [ ] Add support to ask for different parameters according to chosen options. For example don't ask for codeconnection arn if github was chosen as source. Don't ask for github token if codeconnection was chosen as source.
+- [ ] Prompt only for parameters applicable to the selected installer and configuration sources;
+  for example, do not prompt for a CodeConnection ARN when GitHub is selected.
 
 ### `lza installer plan`
 
-Inspect AWS and display the CloudFormation actions and changes required to deploy the installer stack.
+Inspect AWS and show the CloudFormation actions required for the initialized installer
+configuration without modifying AWS resources.
 
 ### `lza installer deploy`
 
@@ -226,6 +237,10 @@ Future design decision:
 
 - [ ] Prepare and synchronize installer source code across Amazon S3, AWS CodeCommit, and the official AWS GitHub repository when the configured LZA version or source settings require it.
 - [ ] Follow the AWS source-location requirements for S3 packaging and synthesized installer parameters: <https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/source-code-location.html>.
+
+### `lza installer status`
+
+Show installer deployment status as an alias for `lza status installer`.
 
 ### `lza uninstall`
 
@@ -255,15 +270,11 @@ Implementation notes:
 
 Initialize the local `aws-accelerator-config` in the current workspace from a packaged configuration template.
 
-- [ ] Check configuration source that will be used in installer. If S3 then with template initialize local git repo in the `aws-accelerator-config` folder.
-
-### `lza config download`
-
-Download LZA configuration from the configured remote source into the local workspace (alias for `lza config pull`).
-
-### `lza config upload`
-
-Upload local LZA configuration to the configured remote repository or S3 bucket (alias for `lza config push`).
+- [ ] Prompt for a packaged template when multiple templates exist and `--template` is omitted.
+- [ ] When the configured remote source is S3, initialize a local Git repository and initial commit
+  in the generated `aws-accelerator-config` directory.
+- [ ] Avoid creating a nested or competing Git repository when the configuration directory is
+  already tracked by Git, CodeCommit, or another supported repository.
 
 ### `lza config push`
 
@@ -273,39 +284,69 @@ Synchronize the local customer `aws-accelerator-config` to the configured remote
 - [ ] Add support to parse and honor `.gitignore` / `.prettierignore` when packaging local configuration files for S3 upload.
 - [ ] Fix zip diff calculation: filter out directory-level records (entries ending with `/`) in `read_zip_manifest` so directory records from existing zip archives are not incorrectly reported as removed files.
 - [ ] Add safety check for S3-backed imported workspaces: if workspace was imported and has not yet synced/downloaded remote configuration from S3, warn the user that local configuration may overwrite unverified remote S3 state, requiring `--force` (or interactive confirmation) and recommending `lza config download` first.
-- [ ] Auto-derive standard S3 configuration bucket name: when `ConfigurationRepositoryLocation=s3`, automatically derive the deterministic bucket name (`aws-accelerator-config-<account-id>-<region>` or `<prefix>-config-<account-id>-<region>`) and persist it into `lza-workspace.yaml` during import / `status --sync-config` / `config push` / `config pull` without prompting the user.
+- [ ] Persist the derived standard S3 configuration bucket name to `lza-workspace.yaml` during
+  `config push` and `config pull`. Import and `status installer --sync-config` already derive and
+  persist `aws-accelerator-config-<account-id>-<region>`.
 
 ### `lza config pull`
 
-Synchronize the configured remote customer configuration source into the local `aws-accelerator-config`.
+Synchronize the configured remote customer configuration source into the local
+`aws-accelerator-config` directory.
+
+### `lza config download`
+
+Download configuration from the configured remote source as an alias for `lza config pull`.
+
+### `lza config upload`
+
+Upload configuration to the configured remote source as an alias for `lza config push`.
 
 ### `lza config deploy`
 
-Synchronize the local customer configuration to its configured deployment destination, start the LZA pipeline, and optionally wait for the execution to complete.
-
-By default, the command performs the full deployment workflow:
-
-```text
-config push -> pipeline start -> pipeline watch
-```
+Push the local configuration, start the configuration pipeline, and optionally watch the pipeline
+execution to completion.
 
 ### `lza pipeline start`
 
-Start the configured LZA pipeline without synchronizing configuration.
-
-This command remains available independently for cases where the existing remote configuration should be executed again without another `lza config push`.
+Start the configured LZA pipeline without synchronizing local configuration first.
 
 ### `lza pipeline watch`
 
-Monitor an existing LZA pipeline execution without starting or synchronizing anything.
-
-This command remains available independently for reconnecting to or inspecting an execution started previously by `lza pipeline start`, `lza config deploy`, or another mechanism.
+Monitor an existing pipeline execution without starting a new execution or synchronizing
+configuration.
 
 ### `lza status`
 
-Provide the single status entry point for the customer LZA workspace.
+Show the read-only overall workspace, installer, configuration, and pipeline summary.
 
-`lza status` shows the overall summary. Filtered views or subcommands such as `lza status installer`, `lza status config`, and `lza status pipeline` show component detail without separate top-level status commands.
+### `lza status installer`
+
+Show detailed installer stack status, deployed configuration drift, and optional explicit state or
+configuration synchronization.
+
+### `lza status config`
+
+The command currently reports local configuration presence, provider settings, initialization
+drift, and upload/download metadata. Remaining work:
+
+- [ ] Show complete source details for every provider, including CodeConnections.
+- [ ] Check whether the configured remote source exists and is accessible.
+- [ ] Show local Git branch, commit, and working-tree status when the configuration is Git-managed.
+- [ ] Compare local and remote Git revisions when supported and report whether the local configuration is ahead, behind, or synchronized.
+- [ ] Report warnings for missing, inaccessible, or inconsistent configuration or pipeline state.
+- [ ] Include the configuration pipeline summary from the shared `status pipeline` workflow.
+- [ ] Reuse this status workflow when rendering the configuration summary in `lza status`.
+
+### `lza status pipeline`
+
+The command currently reports configured pipeline names, ARNs, and locally recorded execution IDs.
+Remaining work:
+
+- [ ] Query CodePipeline for pipeline existence and the latest installer and configuration
+  executions.
+- [ ] Show execution status, ID, start/completion time, and current or failed stage.
+- [ ] Show concise CodePipeline/CodeBuild failure details when the latest execution failed.
+- [ ] Reuse the detailed workflow in `lza status` and `lza status config` summaries.
 
 ### `lza doctor`
 
@@ -313,7 +354,7 @@ Run advisory local and AWS checks for the current workspace. The command reports
 
 Implementation checklist:
 
-- [ ] Run the shared local checks defined under [Validation](#validation).
+- [ ] Run the shared local checks defined for [`lza validate`](#lza-validate).
 - [ ] Validate AWS profile access.
 - [ ] Validate expected AWS account.
 - [ ] Produce a concise pass, warning, and failure summary.
@@ -327,9 +368,8 @@ Future design decision:
 
 - [ ] Support workspace schema migration.
 - [ ] Generate JSON Schema for editor support.
-- [ ] Resolve account ID from authenticated AWS identity when available.
-- [ ] Allow account ID to be derived from AWS profile configuration when reliably possible.
-- [ ] Persist the accepted account ID in `lza-workspace.yaml`.
+- [ ] Resolve the account ID from authenticated AWS identity, including profile-based
+  authentication, and persist the accepted value in `lza-workspace.yaml`.
 
 ## Authentication
 
@@ -349,17 +389,6 @@ Future design decision:
 - [ ] Support template version/ref.
 - [ ] Support cached templates.
 
-## Validation
-
-- [ ] Validate `lza-workspace.yaml`.
-- [ ] Validate YAML formatting.
-- [ ] Integrate official LZA schema validation.
-- [ ] Validate configuration replacement variables consistency (cross-validate placeholders in configuration files with variables defined in replacements-config.yaml or installer options).
-- [ ] Validate workspace structure.
-- [ ] Validate installer configuration.
-- [ ] Validate upload target.
-- [ ] Detect common LZA configuration mistakes.
-
 ## Testing & Quality Assurance
 
 - [ ] Add unified End-to-End Workspace Lifecycle integration test (`tests/cli/test_lifecycle_e2e.py`) covering sequential execution: `lza init` -> `lza config init` -> `lza bootstrap` -> `lza installer init` -> `lza installer plan` -> `lza installer deploy` -> `lza config push` -> `lza status`.
@@ -372,23 +401,19 @@ Future design decision:
 ## Reports
 
 - [ ] Decide whether reports use `lza report` with one subcommand per report type.
-
 - [ ] Generate `reports/aws-profile-check.md`.
 - [ ] Generate `reports/status.md`.
 - [ ] Generate pipeline execution reports.
 - [ ] Generate CodeBuild failure summaries.
-- [ ] Generate config diff reports.
 
 ## LZA Versions
 
-- [ ] Support version-specific installer template URL.
-- [ ] Support version-specific default branch.
 - [ ] Support blocked/unsupported versions list.
 - [ ] Auto-discover latest LZA versions.
 - [ ] Cache installer templates.
 - [ ] Warn on unstable or very old versions.
 - [ ] Support migration helper between LZA versions.
-- [ ] Validate version compatibility with packaged templates.
+- [ ] Validate installer template compatibility with the selected LZA version.
 
 ## Configuration Generation
 
@@ -412,7 +437,8 @@ Future design decision:
 - [ ] Use AI to troubleshoot failed CloudFormation stacks.
 - [ ] Evaluate AWS-provided LZA MCP server.
 - [ ] Add local MCP server exposing workspace files, templates, validation, and pipeline status.
-- [ ] Keep AI advisory first, execution second.
+
+AI features remain advisory by default; execution must be a separate explicit action.
 
 ## Distribution
 
@@ -421,7 +447,6 @@ Future design decision:
 - [ ] Add command examples.
 - [ ] Add contribution guidelines.
 - [ ] Remove personal/company-specific hardcoding.
-- [ ] Add end-to-end CLI tests for core workflows.
 
 ## Backlog
 
