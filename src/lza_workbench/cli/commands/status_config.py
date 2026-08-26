@@ -213,8 +213,12 @@ def _render_state_metadata(result: ConfigurationStatusResult, *, has_state: bool
             print_kv("Artifact ETag", result.artifact_etag, style="dim")
         if result.artifact_version_id:
             print_kv("Artifact Version ID", result.artifact_version_id, style="dim")
-        if result.pipeline_execution_id:
-            print_kv("Recorded Pipeline Execution ID", result.pipeline_execution_id, style="dim")
+        if result.recorded_pipeline_execution_id:
+            print_kv(
+                "Recorded Pipeline Execution ID",
+                result.recorded_pipeline_execution_id,
+                style="dim",
+            )
     else:
         print_info("No local state file found (.lza/state.json).", dim=True)
 

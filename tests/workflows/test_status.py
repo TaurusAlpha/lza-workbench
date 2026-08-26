@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lza_workbench.aws.cloudformation import CfnStackStatusResult
+from lza_workbench.aws.codepipeline import PipelineStateResult
 from lza_workbench.errors import LzaError
 from lza_workbench.workflows.status_config import (
     ConfigurationStatusResult,
@@ -289,13 +290,21 @@ def test_get_pipeline_status_workflow(configured_workspace: Path) -> None:
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.workflows.status_pipeline.get_pipeline_state") as mock_state,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
+        mock_state.side_effect = [
+            PipelineStateResult("AWSAccelerator-Installer", True, status="Succeeded"),
+            PipelineStateResult("AWSAccelerator-Pipeline", True, status="InProgress"),
+        ]
         result = get_pipeline_status_workflow(target_dir=configured_workspace)
         assert isinstance(result, PipelineStatusResult)
         assert result.installer_pipeline_name == "AWSAccelerator-Installer"
         assert result.config_pipeline_name == "AWSAccelerator-Pipeline"
+        assert result.installer_pipeline_state.status == "Succeeded"
+        assert result.config_pipeline_state.status == "InProgress"
+        assert mock_state.call_count == 2
 
 
 def test_get_installer_status_workflow(configured_workspace: Path) -> None:
@@ -377,6 +386,7 @@ def test_sync_installer_config_success(tmp_path: Path) -> None:
             "RepositoryBranchName": "release/v1.15.5",
             "ManagementAccountEmail": "mgmt@example.com",
             "EnableApprovalStage": "Yes",
+            "CustomTemplateParameter": "deployed-value",
         },
     )
     new_config = sync_installer_config(
@@ -387,6 +397,7 @@ def test_sync_installer_config_success(tmp_path: Path) -> None:
     assert new_config.installer.source_code.repository_type == "codecommit"
     assert new_config.installer.options.management_account_email == "mgmt@example.com"
     assert new_config.installer.options.enable_approval_stage is True
+    assert new_config.installer.template_parameters["CustomTemplateParameter"] == "deployed-value"
 
     loaded_config = load_workspace_config(tmp_path)
     assert loaded_config.installer.options.management_account_email == "mgmt@example.com"
@@ -444,7 +455,9 @@ def test_prepare_installer_status_separates_comparisons_from_rendering(tmp_path:
     assert result.state_alignment.in_sync is True
 
 
-def test_get_config_status_uses_recorded_pipeline_state_without_aws_api(tmp_path: Path) -> None:
+def test_get_config_status_prefers_observed_pipeline_state_over_recorded_state(
+    tmp_path: Path,
+) -> None:
     config = WorkspaceConfig(
         customer=CustomerConfig(name="Test Customer", slug="test-customer"),
         aws=AwsConfig(profile="test-profile", region="us-east-1"),
@@ -460,23 +473,25 @@ def test_get_config_status_uses_recorded_pipeline_state_without_aws_api(tmp_path
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.workflows.status_config.get_pipeline_state") as mock_pipeline_state,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
-        # codepipeline client should NOT be queried when status is already in state
+        mock_pipeline_state.return_value = MagicMock(
+            exists=True,
+            status="Succeeded",
+            latest_execution_id="live-exec-789",
+            stage_states=[],
+        )
         result = get_config_status_workflow(
             config=config,
             state=state,
             workspace_dir=tmp_path,
         )
-        assert result.pipeline_status == "Failed"
-        assert result.pipeline_execution_id == "exec-456"
-        assert result.pipeline_failed_stage == "Build"
-        assert result.pipeline_failed_action == "SynthesizeStack"
-        assert result.pipeline_error == "CodeBuild build failed with exit code 1"
-        assert any("SynthesizeStack" in w for w in result.warnings)
-        # Ensure get_client was not called with "codepipeline"
-        for call_args in mock_client.call_args_list:
-            assert call_args[0][0] != "codepipeline"
+        assert result.pipeline_status == "Succeeded"
+        assert result.pipeline_execution_id == "live-exec-789"
+        assert result.recorded_pipeline_execution_id == "exec-456"
+        assert not any("SynthesizeStack" in w for w in result.warnings)
+        assert any(call_args[0][0] == "codepipeline" for call_args in mock_client.call_args_list)
 
 
 def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: Path) -> None:
@@ -532,5 +547,3 @@ def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: 
         assert result.pipeline_failed_action == "Synth"
         assert diag_msg in result.pipeline_error
         assert result.pipeline_failed_build_url == "https://console.aws.amazon.com/codebuild/..."
-
-

@@ -19,6 +19,12 @@ from lza_workbench.workflows.status_pipeline import (
 )
 
 
+def _render_observed_pipeline_state(label: str, status: str | None, error: str | None) -> None:
+    print_kv(f"{label} State", status or "Unknown")
+    if error:
+        print_notice(f"{label} Query Notice: {error}")
+
+
 def render_pipeline_status(result: PipelineStatusResult, *, has_state: bool) -> None:
     """Render prepared pipeline status without AWS calls or workspace reads."""
     console.print(
@@ -42,12 +48,22 @@ def render_pipeline_status(result: PipelineStatusResult, *, has_state: bool) -> 
     print_section(1, "Installer Pipeline")
     print_kv("Pipeline Name", result.installer_pipeline_name, bold_value=True)
     print_kv("Pipeline ARN", result.installer_pipeline_arn, style="dim")
+    _render_observed_pipeline_state(
+        "Observed Pipeline",
+        result.installer_pipeline_state.status,
+        result.installer_pipeline_state.error,
+    )
 
     # Section 2: Configuration Pipeline
     console.print()
     print_section(2, "Configuration Pipeline")
     print_kv("Pipeline Name", result.config_pipeline_name, bold_value=True)
     print_kv("Pipeline ARN", result.config_pipeline_arn, style="dim")
+    _render_observed_pipeline_state(
+        "Observed Pipeline",
+        result.config_pipeline_state.status,
+        result.config_pipeline_state.error,
+    )
 
     # Section 3: Execution Metadata
     console.print()
@@ -62,6 +78,6 @@ def render_pipeline_status(result: PipelineStatusResult, *, has_state: bool) -> 
 def status_pipeline_command(
     target_dir: Path | None = None,
 ) -> None:
-    """Query AWS CodePipeline state for current workspace pipelines."""
+    """Query AWS CodePipeline state and render workspace execution metadata."""
     result = get_pipeline_status_workflow(target_dir=target_dir)
     render_pipeline_status(result, has_state=result.has_state)

@@ -83,6 +83,7 @@ class ConfigurationStatusResult:
     pipeline_failed_build_url: str | None
     pipeline_error: str | None
     pipeline_state: PipelineStateResult | None
+    recorded_pipeline_execution_id: str | None
 
     uploaded_at: object | None
     downloaded_at: object | None
@@ -264,23 +265,17 @@ def get_config_status_workflow(
     pipeline_error: str | None = None
     pipeline_state: PipelineStateResult | None = None
 
-    if resolved_state and resolved_state.config_pipeline_status:
-        pipeline_status = resolved_state.config_pipeline_status
-        pipeline_execution_id = resolved_state.config_pipeline_execution_id
-        pipeline_failed_stage = resolved_state.config_pipeline_failed_stage
-        pipeline_failed_action = resolved_state.config_pipeline_failed_action
-        pipeline_failed_build_url = resolved_state.config_pipeline_failed_build_url
-        pipeline_error = resolved_state.config_pipeline_error
-    elif aws_identity:
+    recorded_pipeline_execution_id = (
+        resolved_state.config_pipeline_execution_id if resolved_state else None
+    )
+    if aws_identity:
         codepipeline_client = factory.get_client("codepipeline")
         pipeline_state = get_pipeline_state(
             client=codepipeline_client, pipeline_name=config_pipeline_name
         )
         if pipeline_state.exists and pipeline_state.status != "NOT_CHECKED":
             pipeline_status = pipeline_state.status
-            pipeline_execution_id = (
-                resolved_state.config_pipeline_execution_id if resolved_state else None
-            ) or pipeline_state.latest_execution_id
+            pipeline_execution_id = pipeline_state.latest_execution_id
             if pipeline_state.status in {"Failed", "Cancelled"}:
                 for st in pipeline_state.stage_states:
                     if st.status == "Failed":
@@ -300,8 +295,13 @@ def get_config_status_workflow(
                                     pipeline_error = act.error_message or act.summary
                                 break
                         break
-    elif resolved_state and resolved_state.config_pipeline_execution_id:
+    elif resolved_state and resolved_state.config_pipeline_status:
+        pipeline_status = resolved_state.config_pipeline_status
         pipeline_execution_id = resolved_state.config_pipeline_execution_id
+        pipeline_failed_stage = resolved_state.config_pipeline_failed_stage
+        pipeline_failed_action = resolved_state.config_pipeline_failed_action
+        pipeline_failed_build_url = resolved_state.config_pipeline_failed_build_url
+        pipeline_error = resolved_state.config_pipeline_error
 
     warnings = compile_configuration_warnings(
         config_dir_exists=config_dir.exists(),
@@ -375,6 +375,7 @@ def get_config_status_workflow(
         pipeline_failed_build_url=pipeline_failed_build_url,
         pipeline_error=pipeline_error,
         pipeline_state=pipeline_state,
+        recorded_pipeline_execution_id=recorded_pipeline_execution_id,
         uploaded_at=resolved_state.config_uploaded_at if resolved_state else None,
         downloaded_at=resolved_state.config_downloaded_at if resolved_state else None,
         artifact_etag=resolved_state.config_artifact_etag if resolved_state else None,

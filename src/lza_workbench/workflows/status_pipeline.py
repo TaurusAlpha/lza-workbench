@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from lza_workbench.aws.codepipeline import PipelineStateResult, get_pipeline_state
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
@@ -24,6 +25,8 @@ class PipelineStatusResult:
     installer_pipeline_arn: str
     config_pipeline_name: str
     config_pipeline_arn: str
+    installer_pipeline_state: PipelineStateResult
+    config_pipeline_state: PipelineStateResult
     installer_execution_id: str | None
     config_execution_id: str | None
     has_state: bool
@@ -52,6 +55,16 @@ def get_pipeline_status_workflow(
     installer_pipeline = resolve_pipeline(config, pipeline_type="installer")
     config_pipeline = resolve_pipeline(config, pipeline_type="configuration")
 
+    codepipeline_client = aws_context.factory.get_client("codepipeline") if aws_identity else None
+    installer_pipeline_state = get_pipeline_state(
+        client=codepipeline_client,
+        pipeline_name=installer_pipeline.name,
+    )
+    config_pipeline_state = get_pipeline_state(
+        client=codepipeline_client,
+        pipeline_name=config_pipeline.name,
+    )
+
     return PipelineStatusResult(
         workspace_dir=workspace_dir,
         customer_name=config.customer.name,
@@ -63,6 +76,8 @@ def get_pipeline_status_workflow(
         installer_pipeline_arn=installer_pipeline.arn(region=region, account_id=account_id),
         config_pipeline_name=config_pipeline.name,
         config_pipeline_arn=config_pipeline.arn(region=region, account_id=account_id),
+        installer_pipeline_state=installer_pipeline_state,
+        config_pipeline_state=config_pipeline_state,
         installer_execution_id=state.installer_pipeline_execution_id if state else None,
         config_execution_id=state.config_pipeline_execution_id if state else None,
         has_state=state is not None,

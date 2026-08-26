@@ -3,7 +3,7 @@
 from typing import Any
 
 from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
-from lza_workbench.installer.versions import version_to_branch
+from lza_workbench.installer.versions import branch_to_version, version_to_branch
 from lza_workbench.workspace.schema import WorkspaceConfig
 
 KNOWN_INSTALLER_PARAMETER_NAMES = frozenset(
@@ -95,14 +95,41 @@ def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, valu
         options.use_existing_config_repo = value == "Yes"
     elif parameter_name == "ConfigCodeConnectionArn":
         options.config_code_connection_arn = value or None
+        config.configuration.repository.codeconnection_arn = value or None
     elif parameter_name == "ExistingConfigRepositoryOwner":
         options.existing_config_repository_owner = value or None
+        config.configuration.repository.owner = value or None
     elif parameter_name == "ExistingConfigRepositoryName":
         options.existing_config_repository_name = value or None
+        config.configuration.repository.repository_name = value or None
     elif parameter_name == "ExistingConfigRepositoryBranchName":
         options.existing_config_repository_branch_name = value or None
+        config.configuration.repository.branch = value or None
     elif parameter_name == "EnableDiagnosticsPack":
         options.enable_diagnostics_pack = value == "Yes"
+
+
+def apply_deployed_installer_parameters(
+    config: WorkspaceConfig,
+    parameters: dict[str, str],
+    *,
+    stack_id: str | None = None,
+) -> None:
+    """Apply observed installer parameters to their owning workspace settings."""
+    if not parameters:
+        return
+
+    if not config.aws.account_id and stack_id and ":stack/" in stack_id:
+        arn_parts = stack_id.split(":")
+        if len(arn_parts) >= 5 and arn_parts[4].isdigit():
+            config.aws.account_id = arn_parts[4]
+
+    for parameter_name, value in parameters.items():
+        apply_installer_parameter(config, parameter_name, value)
+
+    deployed_version = branch_to_version(parameters.get("RepositoryBranchName", ""))
+    if deployed_version != "Unknown":
+        config.lza.version = deployed_version
 
 
 def build_installer_cfn_parameters(

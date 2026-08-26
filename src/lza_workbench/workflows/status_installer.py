@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, cast
 
 from lza_workbench.aws.cloudformation import (
     CfnStackStatusResult,
@@ -16,8 +15,8 @@ from lza_workbench.aws.codepipeline import (
     get_pipeline_state,
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.errors import LzaError
+from lza_workbench.installer.parameters import apply_deployed_installer_parameters
 from lza_workbench.installer.status import (
     StateAlignment,
     calculate_configuration_drift,
@@ -140,82 +139,11 @@ def sync_installer_config(
             "Cannot synchronize config: CloudFormation installer stack is not deployed "
             "or has no parameters."
         )
-    params = cfn_status.deployed_parameters
-    source_type = params.get("RepositorySource")
-    if source_type in {"github", "codecommit", "s3", "codeconnection"}:
-        config.installer.source_code.repository_type = cast(
-            Literal["github", "codecommit", "s3", "codeconnection"], source_type
-        )
-    config.installer.source_code.owner = params.get(
-        "RepositoryOwner", config.installer.source_code.owner
+    apply_deployed_installer_parameters(
+        config,
+        cfn_status.deployed_parameters,
+        stack_id=cfn_status.stack_id,
     )
-    config.installer.source_code.repository_name = params.get(
-        "RepositoryName", config.installer.source_code.repository_name
-    )
-    if branch := params.get("RepositoryBranchName"):
-        config.installer.source_code.branch = branch
-        if (version := branch_to_version(branch)) != "Unknown":
-            config.lza.version = version
-    for parameter, attribute in (
-        ("ManagementAccountEmail", "management_account_email"),
-        ("LogArchiveAccountEmail", "log_archive_account_email"),
-        ("AuditAccountEmail", "audit_account_email"),
-    ):
-        if value := params.get(parameter):
-            setattr(config.installer.options, attribute, value)
-    if prefix := params.get("AcceleratorPrefix"):
-        config.lza.accelerator_prefix = prefix
-    repo_type = params.get("ConfigurationRepositoryLocation")
-    if repo_type in {"s3", "codecommit", "codeconnection", "git"}:
-        config.configuration.repository.type = cast(
-            Literal["s3", "codecommit", "codeconnection", "git"], repo_type
-        )
-        if repo_type == "s3":
-            account_id = config.aws.account_id
-            if not account_id and cfn_status.stack_id and ":stack/" in cfn_status.stack_id:
-                arn_parts = cfn_status.stack_id.split(":")
-                if len(arn_parts) >= 5 and arn_parts[4].isdigit():
-                    account_id = arn_parts[4]
-                    config.aws.account_id = account_id
-            if account_id and config.aws.region:
-                config.configuration.repository.bucket = get_canonical_config_s3_bucket(
-                    account_id, config.aws.region
-                )
-
-        elif repo_type == "codecommit":
-            if repo_name := params.get("ExistingConfigRepositoryName"):
-                config.configuration.repository.repository_name = repo_name
-                config.installer.options.existing_config_repository_name = repo_name
-            if repo_branch := params.get("ExistingConfigRepositoryBranchName"):
-                config.configuration.repository.branch = repo_branch
-                config.installer.options.existing_config_repository_branch_name = repo_branch
-        elif repo_type == "codeconnection":
-            if conn_arn := params.get("ConfigCodeConnectionArn"):
-                config.configuration.repository.codeconnection_arn = conn_arn
-                config.installer.options.config_code_connection_arn = conn_arn
-            if repo_owner := params.get("ExistingConfigRepositoryOwner"):
-                config.configuration.repository.owner = repo_owner
-                config.installer.options.existing_config_repository_owner = repo_owner
-            if repo_name := params.get("ExistingConfigRepositoryName"):
-                config.configuration.repository.repository_name = repo_name
-                config.installer.options.existing_config_repository_name = repo_name
-            if repo_branch := params.get("ExistingConfigRepositoryBranchName"):
-                config.configuration.repository.branch = repo_branch
-                config.installer.options.existing_config_repository_branch_name = repo_branch
-    if "EnableApprovalStage" in params:
-        config.installer.options.enable_approval_stage = params["EnableApprovalStage"] == "Yes"
-        config.installer.options.approval_stage_notify_email_list = (
-            params.get("ApprovalStageNotifyEmailList", "").split(",")
-            if params.get("ApprovalStageNotifyEmailList")
-            else []
-        )
-    for parameter, attribute in (
-        ("ControlTowerEnabled", "control_tower_enabled"),
-        ("EnableDiagnosticsPack", "enable_diagnostics_pack"),
-        ("UseExistingConfigRepo", "use_existing_config_repo"),
-    ):
-        if parameter in params:
-            setattr(config.installer.options, attribute, params[parameter] == "Yes")
     write_workspace_config(workspace_dir, config)
     return config
 
