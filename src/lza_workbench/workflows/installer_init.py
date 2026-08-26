@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import (
@@ -89,8 +90,19 @@ def initialize_installer_workflow(
         )
     validate_parameters_against_schema(resolved_parameters, schema)
 
+    if config.configuration.repository.type == "s3" and not config.configuration.repository.bucket:
+        account_id = config.aws.account_id or (
+            ctx.state.management_account_id if ctx.state else None
+        )
+        region = config.aws.region
+        if account_id and region:
+            config.configuration.repository.bucket = get_canonical_config_s3_bucket(
+                account_id, region
+            )
+
     if not no_save and not dry_run:
         write_workspace_config(workspace_dir, config)
+
         ctx.state.installer_template_version = config.lza.version
         if template_path.exists():
             ctx.state.installer_downloaded_at = datetime.fromtimestamp(

@@ -206,3 +206,33 @@ def test_installer_plan_github_secret_check(tmp_path: Path) -> None:
 
     assert plan_res.github_secret_warning is not None
     assert "accelerator/github-token" in plan_res.github_secret_warning
+
+
+def test_installer_init_populates_s3_config_bucket(tmp_path: Path) -> None:
+    """Installer initialization populates canonical S3 config bucket when type is s3."""
+    ws_dir = tmp_path / "s3-config-ws"
+    ws_dir.mkdir(parents=True, exist_ok=True)
+    (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="S3 Customer", slug="s3-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1", account_id="123456789012"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+    config.configuration.repository.type = "s3"
+    config.configuration.repository.bucket = None
+    config.installer.options.management_account_email = "mgmt@example.com"
+    config.installer.options.log_archive_account_email = "log@example.com"
+    config.installer.options.audit_account_email = "audit@example.com"
+    write_workspace_config(ws_dir, config)
+    write_workspace_state(ws_dir, WorkspaceState.from_config(config))
+
+    res = initialize_installer_workflow(target_dir=ws_dir)
+    expected_bucket = "aws-accelerator-config-123456789012-us-east-1"
+    assert res.config.configuration.repository.bucket == expected_bucket
+
+    saved_config = load_workspace_config(ws_dir)
+    assert saved_config.configuration.repository.bucket == expected_bucket
+
+

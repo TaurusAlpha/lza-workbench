@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.installer.versions import version_to_branch
 from lza_workbench.workspace.schema import WorkspaceConfig
 
@@ -86,6 +87,10 @@ def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, valu
         config.lza.accelerator_prefix = value
     elif parameter_name == "ConfigurationRepositoryLocation":
         config.configuration.repository.type = value  # type: ignore[assignment]
+        if value == "s3" and config.aws.account_id and config.aws.region:
+            config.configuration.repository.bucket = get_canonical_config_s3_bucket(
+                config.aws.account_id, config.aws.region
+            )
     elif parameter_name == "UseExistingConfigRepo":
         options.use_existing_config_repo = value == "Yes"
     elif parameter_name == "ConfigCodeConnectionArn":
@@ -128,6 +133,11 @@ def build_installer_cfn_parameters(
         existing_owner = ""
         existing_name = ""
         existing_branch = ""
+        if config.aws.account_id and config.aws.region and not repo_config.bucket:
+            repo_config.bucket = get_canonical_config_s3_bucket(
+                config.aws.account_id, config.aws.region
+            )
+
     elif config_location == "codeconnection":
         use_existing = True
         code_conn_arn = options.config_code_connection_arn or source_code.connection_arn or ""

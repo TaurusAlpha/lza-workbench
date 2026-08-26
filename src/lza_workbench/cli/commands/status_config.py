@@ -78,7 +78,9 @@ def _render_repository_settings(result: ConfigurationStatusResult) -> None:
     print_kv("Repository Type", result.repository_type, bold_value=True)
 
     if result.repository_type == "s3":
-        s3_bucket = result.repository_bucket or "Not set"
+        s3_bucket = result.repository_bucket or "Not configured"
+
+
         if result.s3_bucket_exists is True:
             ver_str = (
                 "Versioning: Enabled"

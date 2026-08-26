@@ -27,6 +27,7 @@ from lza_workbench.configuration.git import (
     set_git_remote_url,
     stash_git_changes,
 )
+from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.configuration.state import (
     record_config_download,
     record_config_git_pull,
@@ -150,11 +151,12 @@ def _handle_s3_pull(
     if not bucket:
         account_id = config.aws.account_id or (state.management_account_id if state else None)
         if account_id and region:
-            bucket = f"aws-accelerator-config-{account_id}-{region}"
+            bucket = get_canonical_config_s3_bucket(account_id, region)
         elif bucket_resolver is not None:
             bucket = bucket_resolver()
         if not bucket:
             raise LzaError("No S3 bucket configured for LZA configuration repository.")
+
 
     if dry_run:
         return ConfigPullResult(
@@ -206,7 +208,9 @@ def _handle_s3_pull(
         require_identity=True,
     )
     s3_client = aws_context.factory.get_client("s3")
+
     download_s3_file(
+
         client=s3_client,
         bucket_name=bucket,
         object_key=s3_key,

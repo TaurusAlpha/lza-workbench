@@ -19,6 +19,7 @@ from lza_workbench.configuration.git import (
     get_git_working_tree_status,
 )
 from lza_workbench.configuration.rendering import capture_init_values_snapshot
+from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
@@ -95,6 +96,7 @@ def _compile_warnings(
     git_working_tree: GitWorkingTreeStatus | None,
     git_sync_status: GitRemoteSyncStatus | None,
     repository_type: str,
+    s3_bucket_name: str | None = None,
     s3_bucket_exists: bool | None,
     s3_bucket_accessible: bool | None,
     s3_object_exists: bool | None,
@@ -141,15 +143,20 @@ def _compile_warnings(
             )
 
     if repository_type == "s3":
+        b_label = f" '{s3_bucket_name}'" if s3_bucket_name else ""
         if s3_bucket_exists is False:
-            warnings.append("Configured S3 bucket does not exist.")
+            warnings.append(f"Configured S3 bucket{b_label} does not exist.")
         elif s3_bucket_accessible is False:
-            warnings.append("Access denied or connection failure to configured S3 bucket.")
+            warnings.append(
+                f"Access denied or connection failure to configured S3 bucket{b_label}."
+            )
         elif s3_bucket_exists is True and s3_object_exists is False:
             warnings.append(
-                "Configuration archive is not present in S3 bucket. "
+                f"Configuration archive is not present in S3 bucket{b_label}. "
                 "Run 'lza config push' to upload local configuration."
             )
+
+
     elif repository_type == "codecommit":
         if codecommit_exists is False:
             warnings.append("Configured CodeCommit repository does not exist.")
@@ -259,6 +266,7 @@ def get_config_status_workflow(
     )
 
     # Remote source inspection
+    s3_bucket_name = None
     s3_bucket_exists = None
     s3_bucket_accessible = None
     s3_bucket_versioning = None
@@ -281,18 +289,22 @@ def get_config_status_workflow(
     codeconnection_error = None
 
     if repo.type == "s3":
-        bucket_name = repo.bucket
-        if not bucket_name:
-            acc_id = resolved_config.aws.account_id or (
-                resolved_state.management_account_id if resolved_state else None
+        s3_bucket_name = repo.bucket
+        if not s3_bucket_name:
+            acc_id = (
+                resolved_config.aws.account_id
+                or (resolved_state.management_account_id if resolved_state else None)
+                or (aws_identity.get("account") if aws_identity else None)
             )
-            if acc_id and region:
-                bucket_name = f"aws-accelerator-config-{acc_id}-{region}"
+            reg = region or resolved_config.aws.region
+            if acc_id and reg:
+                s3_bucket_name = get_canonical_config_s3_bucket(acc_id, reg)
 
-        if bucket_name and aws_identity:
+        if s3_bucket_name and aws_identity:
+
             try:
                 s3_client = factory.get_client("s3")
-                b_info = inspect_s3_bucket(client=s3_client, bucket_name=bucket_name)
+                b_info = inspect_s3_bucket(client=s3_client, bucket_name=s3_bucket_name)
                 s3_bucket_exists = b_info.get("exists")
                 s3_bucket_accessible = b_info.get("accessible")
                 s3_bucket_versioning = b_info.get("versioning_enabled")
@@ -307,7 +319,7 @@ def get_config_status_workflow(
                     )
                     key_path = f"{prefix_clean}{repo.key or 'aws-accelerator-config.zip'}"
                     obj_info = inspect_s3_object_safe(
-                        client=s3_client, bucket_name=bucket_name, object_key=key_path
+                        client=s3_client, bucket_name=s3_bucket_name, object_key=key_path
                     )
                     s3_object_exists = obj_info.get("exists")
                     s3_object_etag = obj_info.get("etag")
@@ -318,6 +330,7 @@ def get_config_status_workflow(
             except Exception as exc:
                 s3_error = str(exc)
                 s3_bucket_accessible = False
+
 
 
     elif repo.type == "codecommit":
@@ -407,7 +420,9 @@ def get_config_status_workflow(
         git_working_tree=git_working_tree,
         git_sync_status=git_sync_status,
         repository_type=repo.type,
+        s3_bucket_name=s3_bucket_name,
         s3_bucket_exists=s3_bucket_exists,
+
         s3_bucket_accessible=s3_bucket_accessible,
         s3_object_exists=s3_object_exists,
         codecommit_exists=codecommit_exists,
@@ -432,9 +447,10 @@ def get_config_status_workflow(
         config_dir_exists=config_dir.exists(),
         yaml_files=yaml_files,
         repository_type=repo.type,
-        repository_bucket=repo.bucket,
+        repository_bucket=s3_bucket_name if repo.type == "s3" else repo.bucket,
         repository_prefix=repo.prefix,
         repository_key=repo.key,
+
         repository_name=repo.repository_name,
         repository_branch=repo.branch,
         codeconnection_arn=repo.codeconnection_arn,

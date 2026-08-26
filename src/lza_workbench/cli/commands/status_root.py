@@ -88,8 +88,10 @@ def render_root_status(result: RootStatusResult) -> None:
                 if cs.s3_bucket_exists is False or cs.s3_bucket_accessible is False
                 else "dim"
             )
-            bucket_str = cs.repository_bucket or "Not set"
+            bucket_str = cs.repository_bucket or "Not configured"
             print_kv("S3 Target", f"{bucket_str} ([{s3_col}]{s3_status}[/{s3_col}])")
+
+
         elif cs.repository_type == "codecommit":
             cc_status = (
                 "Available"

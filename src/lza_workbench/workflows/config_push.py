@@ -24,6 +24,7 @@ from lza_workbench.configuration.git import (
     push_git_branch,
     set_git_remote_url,
 )
+from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.configuration.state import record_config_git_push, record_config_upload
 from lza_workbench.configuration.templates import validate_template
 from lza_workbench.errors import LzaError
@@ -135,11 +136,12 @@ def _handle_s3_push(
     if not bucket:
         account_id = config.aws.account_id or (state.management_account_id if state else None)
         if account_id and region:
-            bucket = f"aws-accelerator-config-{account_id}-{region}"
+            bucket = get_canonical_config_s3_bucket(account_id, region)
         elif bucket_resolver is not None:
             bucket = bucket_resolver()
         if not bucket:
             raise LzaError("No S3 bucket configured for LZA configuration repository.")
+
 
     if dry_run:
         return ConfigPushResult(
@@ -174,12 +176,14 @@ def _handle_s3_push(
         require_expected_account=True,
     )
     s3_client = aws_context.factory.get_client("s3")
+
     etag, version_id = upload_s3_file(
         client=s3_client,
         file_path=zip_path,
         bucket_name=bucket,
         object_key=s3_key,
     )
+
     record_config_upload(
         state,
         zip_path=zip_path,

@@ -4,8 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lza-workbench"
-version = "0.25.1"
+version = "0.25.2"
 description = "Toolkit for initializing and managing AWS Landing Zone Accelerator workspaces"
+
 
 
 readme = "README.md"

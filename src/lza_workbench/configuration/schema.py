@@ -48,6 +48,18 @@ class ConfigurationRepositoryConfig(BaseModel):
         return self
 
 
+def get_canonical_config_s3_bucket(account_id: str, region: str) -> str:
+    """Return canonical LZA configuration S3 bucket name for an account and region.
+
+    Canonical format: aws-accelerator-config-<account_id>-<region>
+    """
+    clean_account = account_id.strip()
+    clean_region = region.strip()
+    return f"aws-accelerator-config-{clean_account}-{clean_region}"
+
+
+
+
 class ConfigurationTemplateConfig(BaseModel):
     """Source of the starter LZA configuration."""
 
@@ -86,3 +98,15 @@ class ConfigurationConfig(BaseModel):
     template: ConfigurationTemplateConfig = Field(default_factory=ConfigurationTemplateConfig)
     repository: ConfigurationRepositoryConfig = Field(default_factory=ConfigurationRepositoryConfig)
     packaging: PackagingConfig = Field(default_factory=PackagingConfig)
+
+
+__all__ = [
+    "ConfigurationConfig",
+    "ConfigurationRepositoryConfig",
+    "ConfigurationTemplateConfig",
+    "PackagingConfig",
+    "PackagingExcludeConfig",
+    "get_canonical_config_s3_bucket",
+]
+
+

@@ -17,6 +17,7 @@ from lza_workbench.configuration.schema import (
     ConfigurationRepositoryConfig,
     ConfigurationTemplateConfig,
     PackagingExcludeConfig,
+    get_canonical_config_s3_bucket,
 )
 from lza_workbench.configuration.templates import validate_template
 from lza_workbench.configuration.validation import (
@@ -208,6 +209,12 @@ def build_import_workspace_config(
             path=rel_config_path,
         )
         repository = ConfigurationRepositoryConfig()
+
+    if repository.type == "s3" and not repository.bucket and aws_region:
+        account_id = existing_config.aws.account_id if existing_config else None
+        if account_id:
+            repository.bucket = get_canonical_config_s3_bucket(account_id, aws_region)
+
 
     configuration = ConfigurationConfig(
         local_path=rel_config_path,

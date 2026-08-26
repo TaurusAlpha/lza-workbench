@@ -44,6 +44,7 @@ Every implementation must leave the project in a releasable state.
 - Update dependencies, dependency constraints, optional dependencies, entry points, scripts, or other project metadata whenever required by the implementation.
 - Remove obsolete dependencies and metadata introduced by previous implementations.
 - Do not leave `pyproject.toml` inconsistent with the current codebase.
+- If GIT working tree is clean always update pyproject.toml with the new project version according to the project's versioning scheme.
 
 ### Simplicity
 

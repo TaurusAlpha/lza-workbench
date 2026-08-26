@@ -105,13 +105,55 @@ def test_get_config_status_workflow(configured_workspace: Path) -> None:
         assert result.customer_name == "Acme Corp"
         assert result.config_dir_exists is True
         assert result.repository_type == "s3"
+        assert result.repository_bucket == "test-config-bucket"
         assert result.s3_bucket_exists is True
         assert result.s3_bucket_versioning is True
+
         assert result.s3_bucket_encryption is True
         assert result.s3_object_exists is True
         assert result.s3_object_etag == "test-etag-123"
         assert result.pipeline_state is not None
         assert result.pipeline_state.status == "Succeeded"
+
+
+def test_get_config_status_workflow_s3_derived_bucket(tmp_path: Path) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1", account_id="123456789012"),
+    )
+    config.configuration.repository.type = "s3"
+    config.configuration.repository.bucket = None
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        s3_mock = MagicMock()
+        s3_mock.head_bucket.return_value = {}
+        s3_mock.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        s3_mock.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        s3_mock.head_object.return_value = {
+            "ETag": '"test-etag-123"',
+            "VersionId": "v1",
+            "ContentLength": 1024,
+            "LastModified": "2026-08-26T10:00:00Z",
+        }
+        mock_client.return_value = s3_mock
+
+        result = get_config_status_workflow(
+            config=config,
+            state=WorkspaceState(),
+            workspace_dir=tmp_path,
+        )
+        assert result.repository_type == "s3"
+        assert result.repository_bucket == "aws-accelerator-config-123456789012-us-east-1"
+        assert result.s3_bucket_exists is True
+
 
 
 def test_get_config_status_workflow_codecommit(tmp_path: Path) -> None:

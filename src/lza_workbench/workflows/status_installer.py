@@ -16,6 +16,7 @@ from lza_workbench.aws.codepipeline import (
     get_pipeline_state,
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
+from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.status import (
     StateAlignment,
@@ -176,10 +177,11 @@ def sync_installer_config(
                 if len(arn_parts) >= 5 and arn_parts[4].isdigit():
                     account_id = arn_parts[4]
                     config.aws.account_id = account_id
-            if account_id and config.aws.region and not config.configuration.repository.bucket:
-                config.configuration.repository.bucket = (
-                    f"aws-accelerator-config-{account_id}-{config.aws.region}"
+            if account_id and config.aws.region:
+                config.configuration.repository.bucket = get_canonical_config_s3_bucket(
+                    account_id, config.aws.region
                 )
+
         elif repo_type == "codecommit":
             if repo_name := params.get("ExistingConfigRepositoryName"):
                 config.configuration.repository.repository_name = repo_name

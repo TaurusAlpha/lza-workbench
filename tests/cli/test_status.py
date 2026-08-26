@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -217,4 +218,61 @@ def test_cli_status_commands(
 
     res_pipeline = runner.invoke(app, ["status", "pipeline"])
     assert res_pipeline.exit_code == 0
+
+
+@patch("lza_workbench.workflows.status_installer.get_cloudformation_stack_status")
+@patch("lza_workbench.workflows.status_config.resolve_aws_execution_context")
+@patch("lza_workbench.workflows.status_root.resolve_aws_execution_context")
+def test_cli_status_config_s3_bucket_derived(
+    mock_root_context: MagicMock,
+    mock_config_context: MagicMock,
+    mock_get_cfn: MagicMock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "lza-workspace.yaml").write_text(
+        "customer:\n  name: Test\n  slug: test\n"
+        "aws:\n  profile: default\n  region: us-east-1\n"
+        "configuration:\n  repository:\n    type: s3\n"
+    )
+    mock_factory = MagicMock()
+    s3_mock = MagicMock()
+    s3_mock.head_bucket.return_value = {}
+    s3_mock.get_bucket_versioning.return_value = {"Status": "Enabled"}
+    s3_mock.get_bucket_encryption.return_value = {
+        "ServerSideEncryptionConfiguration": {
+            "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+        }
+    }
+    s3_mock.head_object.return_value = {
+        "ETag": '"test-etag-123"',
+        "VersionId": "v1",
+        "ContentLength": 1024,
+        "LastModified": datetime(2026, 8, 26, 10, 0, 0, tzinfo=UTC),
+    }
+
+    mock_factory.get_client.return_value = s3_mock
+    aws_context = AwsExecutionContext(
+        region="us-east-1",
+        factory=mock_factory,
+        identity={"account": "123456789012", "arn": "arn:aws:iam::123:user/test"},
+        error=None,
+    )
+    mock_root_context.return_value = aws_context
+    mock_config_context.return_value = aws_context
+    mock_get_cfn.return_value = CfnStackStatusResult(
+        stack_name="AWSAccelerator-InstallerStack", exists=False
+    )
+
+    res_config = runner.invoke(app, ["status", "config"])
+    assert res_config.exit_code == 0
+    assert "aws-accelerator-config-123456789012-us-east-1" in res_config.output
+    assert "S3 Bucket: Not set" not in res_config.output
+
+    res_root = runner.invoke(app, ["status"])
+    assert res_root.exit_code == 0
+    assert "aws-accelerator-config-123456789012-us-east-1" in res_root.output
+    assert "S3 Target: Not set" not in res_root.output
+
 
