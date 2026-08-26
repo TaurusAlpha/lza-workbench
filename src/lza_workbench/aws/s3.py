@@ -286,6 +286,55 @@ def download_s3_file(
         raise LzaError(f"AWS connection/client failure: {exc}") from exc
 
 
+def inspect_s3_object_safe(
+    *,
+    client: Any,
+    bucket_name: str,
+    object_key: str,
+) -> dict[str, Any]:
+    """Inspect S3 object existence and metadata returning structured dict without raising on 404."""
+    clean_bucket = bucket_name.strip()
+    clean_key = object_key.strip().lstrip("/")
+    try:
+        head = client.head_object(Bucket=clean_bucket, Key=clean_key)
+        return {
+            "exists": True,
+            "etag": head.get("ETag", "").strip('"') or None,
+            "version_id": head.get("VersionId"),
+            "content_length": head.get("ContentLength"),
+            "last_modified": head.get("LastModified"),
+            "error": None,
+        }
+    except ClientError as exc:
+        code = exc.response.get("Error", {}).get("Code", "Unknown")
+        if code in {"404", "NoSuchKey", "NoSuchBucket", "NotFound"}:
+            return {
+                "exists": False,
+                "etag": None,
+                "version_id": None,
+                "content_length": None,
+                "last_modified": None,
+                "error": None,
+            }
+        return {
+            "exists": False,
+            "etag": None,
+            "version_id": None,
+            "content_length": None,
+            "last_modified": None,
+            "error": f"[{code}] {exc}",
+        }
+    except BotoCoreError as exc:
+        return {
+            "exists": False,
+            "etag": None,
+            "version_id": None,
+            "content_length": None,
+            "last_modified": None,
+            "error": f"Connection failure: {exc}",
+        }
+
+
 __all__ = [
     "create_s3_bucket",
     "download_s3_file",
@@ -293,7 +342,9 @@ __all__ = [
     "get_s3_uri",
     "inspect_s3_bucket",
     "inspect_s3_object",
+    "inspect_s3_object_safe",
     "put_s3_bucket_encryption",
     "put_s3_bucket_versioning",
     "upload_s3_file",
 ]
+

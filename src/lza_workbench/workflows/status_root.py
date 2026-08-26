@@ -7,6 +7,10 @@ from pathlib import Path
 
 from lza_workbench.aws.cloudformation import get_cloudformation_stack_status
 from lza_workbench.aws.context import resolve_aws_execution_context
+from lza_workbench.workflows.status_config import (
+    ConfigurationStatusResult,
+    get_config_status_workflow,
+)
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 
 
@@ -29,6 +33,7 @@ class RootStatusResult:
     config_dir_exists: bool
     installer_pipeline_name: str
     config_pipeline_name: str
+    config_status: ConfigurationStatusResult | None = None
 
 
 def get_root_status_workflow(
@@ -37,7 +42,7 @@ def get_root_status_workflow(
 ) -> RootStatusResult:
     """Query workspace and AWS to collect root summary status."""
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
-    workspace_dir, config = ctx.workspace_dir, ctx.config
+    workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
     profile = config.aws.profile or ""
     aws_context = resolve_aws_execution_context(
@@ -55,6 +60,12 @@ def get_root_status_workflow(
     cfn_client = factory.get_client("cloudformation") if aws_identity else None
     cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=cfn_stack_name)
 
+    config_status = get_config_status_workflow(
+        config=config,
+        state=state,
+        workspace_dir=workspace_dir,
+    )
+
     return RootStatusResult(
         workspace_dir=workspace_dir,
         customer_name=config.customer.name,
@@ -71,4 +82,12 @@ def get_root_status_workflow(
         config_dir_exists=(workspace_dir / config.configuration.local_path).exists(),
         installer_pipeline_name=f"{config.lza.accelerator_prefix or 'AWSAccelerator'}-Installer",
         config_pipeline_name=f"{config.lza.accelerator_prefix or 'AWSAccelerator'}-Pipeline",
+        config_status=config_status,
     )
+
+
+__all__ = [
+    "RootStatusResult",
+    "get_root_status_workflow",
+]
+

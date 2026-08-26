@@ -228,6 +228,145 @@ class GitProvenance:
     repo_name: str | None
 
 
+@dataclass(frozen=True)
+class GitWorkingTreeStatus:
+    """Local Git working tree state and branch/commit information."""
+
+    is_git: bool
+    branch: str
+    commit: str
+    commit_subject: str | None
+    has_uncommitted: bool
+    uncommitted_count: int
+    remote_url: str | None
+    files_count: int
+
+
+@dataclass(frozen=True)
+class GitRemoteSyncStatus:
+    """Comparison between local HEAD and remote tracking branch."""
+
+    status: str  # Synchronized, Ahead, Behind, Diverged, No Upstream, Not Git, Unknown
+    ahead: int
+    behind: int
+    summary: str
+
+
+def get_git_working_tree_status(repo_dir: Path) -> GitWorkingTreeStatus | None:
+    """Get local Git repository and working tree status."""
+    if not is_git_repository(repo_dir):
+        return None
+
+    branch = get_git_branch(repo_dir)
+    commit = get_git_commit(repo_dir)
+    commit_subject = None
+    if has_commits(repo_dir):
+        proc = _run_git_command(["log", "-1", "--format=%s"], cwd=repo_dir)
+        if proc.returncode == 0:
+            commit_subject = proc.stdout.strip() or None
+
+    status_proc = _run_git_command(["status", "--porcelain"], cwd=repo_dir)
+    uncommitted_lines = (
+        [line for line in status_proc.stdout.splitlines() if line.strip()]
+        if status_proc.returncode == 0
+        else []
+    )
+    has_uncommitted = bool(uncommitted_lines)
+    files_count = count_git_files(repo_dir)
+    remote_url = get_git_remote_url(repo_dir)
+
+    return GitWorkingTreeStatus(
+        is_git=True,
+        branch=branch,
+        commit=commit,
+        commit_subject=commit_subject,
+        has_uncommitted=has_uncommitted,
+        uncommitted_count=len(uncommitted_lines),
+        remote_url=remote_url,
+        files_count=files_count,
+    )
+
+
+def get_git_remote_sync_status(
+    repo_dir: Path,
+    remote_name: str = "origin",
+    branch: str | None = None,
+) -> GitRemoteSyncStatus:
+    """Compare local branch HEAD against remote tracking branch."""
+    if not is_git_repository(repo_dir) or not has_commits(repo_dir):
+        return GitRemoteSyncStatus(
+            status="Not Git",
+            ahead=0,
+            behind=0,
+            summary="Not a Git repository or has no commits",
+        )
+
+    resolved_branch = branch or get_git_branch(repo_dir)
+    upstream_ref = f"{remote_name}/{resolved_branch}"
+    check_ref = _run_git_command(["rev-parse", "--verify", upstream_ref], cwd=repo_dir)
+
+    if check_ref.returncode != 0:
+        check_u = _run_git_command(["rev-parse", "--verify", "@{u}"], cwd=repo_dir)
+        if check_u.returncode == 0:
+            target_ref = "@{u}"
+        else:
+            return GitRemoteSyncStatus(
+                status="No Upstream",
+                ahead=0,
+                behind=0,
+                summary="No remote tracking branch",
+            )
+    else:
+        target_ref = upstream_ref
+
+    proc = _run_git_command(
+        ["rev-list", "--left-right", "--count", f"HEAD...{target_ref}"], cwd=repo_dir
+    )
+    if proc.returncode != 0:
+        return GitRemoteSyncStatus(
+            status="Unknown",
+            ahead=0,
+            behind=0,
+            summary="Cannot compare with remote",
+        )
+
+    parts = proc.stdout.strip().split()
+    if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+        ahead = int(parts[0])
+        behind = int(parts[1])
+        if ahead == 0 and behind == 0:
+            return GitRemoteSyncStatus(status="Synchronized", ahead=0, behind=0, summary="In Sync")
+        if ahead > 0 and behind == 0:
+            suffix = "s" if ahead != 1 else ""
+            return GitRemoteSyncStatus(
+                status="Ahead",
+                ahead=ahead,
+                behind=0,
+                summary=f"Ahead by {ahead} commit{suffix}",
+            )
+        if ahead == 0 and behind > 0:
+            suffix = "s" if behind != 1 else ""
+            return GitRemoteSyncStatus(
+                status="Behind",
+                ahead=0,
+                behind=behind,
+                summary=f"Behind by {behind} commit{suffix}",
+            )
+        return GitRemoteSyncStatus(
+            status="Diverged",
+            ahead=ahead,
+            behind=behind,
+            summary=f"Diverged ({ahead} ahead, {behind} behind)",
+        )
+
+    return GitRemoteSyncStatus(
+        status="Unknown",
+        ahead=0,
+        behind=0,
+        summary="Unknown sync state",
+    )
+
+
 def resolve_git_provenance(repo_dir: Path) -> GitProvenance | None:
     """Detect and resolve Git provenance for a given directory if it is a Git repository."""
     if not is_git_repository(repo_dir):
@@ -252,4 +391,5 @@ def resolve_git_provenance(repo_dir: Path) -> GitProvenance | None:
         repo_type=repo_type,
         repo_name=repo_name,
     )
+
 

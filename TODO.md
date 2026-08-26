@@ -33,8 +33,9 @@ are registered in the current CLI; unchecked commands are planned.
 - [x] `lza config download` (alias for `lza config pull`)
 - [x] `lza config upload` (alias for `lza config push`)
 - [x] `lza config deploy`
-- [ ] `lza config status` (alias for `lza status config`)
+- [x] `lza config status` (alias for `lza status config`)
 - [ ] `lza config edit`
+
 
 ### Pipeline and status
 
@@ -326,16 +327,18 @@ configuration synchronization.
 
 ### `lza status config`
 
-The command currently reports local configuration presence, provider settings, initialization
-drift, and upload/download metadata. Remaining work:
+Show detailed configuration repository status, remote source existence/accessibility, local Git working-tree status and remote revision comparison, configuration pipeline status, and operational metadata.
 
-- [ ] Show complete source details for every provider, including CodeConnections.
-- [ ] Check whether the configured remote source exists and is accessible.
-- [ ] Show local Git branch, commit, and working-tree status when the configuration is Git-managed.
-- [ ] Compare local and remote Git revisions when supported and report whether the local configuration is ahead, behind, or synchronized.
-- [ ] Report warnings for missing, inaccessible, or inconsistent configuration or pipeline state.
-- [ ] Include the configuration pipeline summary from the shared `status pipeline` workflow.
-- [ ] Reuse this status workflow when rendering the configuration summary in `lza status`.
+Completed capabilities:
+
+- [x] Show complete source details for every provider, including CodeConnections.
+- [x] Check whether the configured remote source exists and is accessible.
+- [x] Show local Git branch, commit, and working-tree status when the configuration is Git-managed.
+- [x] Compare local and remote Git revisions when supported and report whether the local configuration is ahead, behind, or synchronized.
+- [x] Report warnings for missing, inaccessible, or inconsistent configuration or pipeline state.
+- [x] Include the configuration pipeline summary from the shared `status pipeline` workflow.
+- [x] Reuse this status workflow when rendering the configuration summary in `lza status`.
+
 
 ### `lza status pipeline`
 

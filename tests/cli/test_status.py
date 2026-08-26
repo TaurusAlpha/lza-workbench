@@ -176,6 +176,17 @@ def test_cli_status_commands(
 
     res_config = runner.invoke(app, ["status", "config"])
     assert res_config.exit_code == 0
+    assert "LZA Configuration Status - Test" in res_config.output
+    assert "Local Configuration & Working Tree" in res_config.output
+    assert "Configuration Repository & Remote State" in res_config.output
+
+    # Test lza config status alias
+    res_config_alias = runner.invoke(app, ["config", "status"])
+    assert res_config_alias.exit_code == 0
+    assert "LZA Configuration Status - Test" in res_config_alias.output
+    assert "Local Configuration & Working Tree" in res_config_alias.output
+    assert "Configuration Repository & Remote State" in res_config_alias.output
 
     res_pipeline = runner.invoke(app, ["status", "pipeline"])
     assert res_pipeline.exit_code == 0
+

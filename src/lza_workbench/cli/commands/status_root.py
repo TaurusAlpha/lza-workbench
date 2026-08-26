@@ -59,6 +59,72 @@ def render_root_status(result: RootStatusResult) -> None:
     exists_str = "[green]Present[/green]" if result.config_dir_exists else "[red]Missing[/red]"
     print_kv("Local Config Directory", f"{result.config_dir} ({exists_str})")
 
+    if result.config_status:
+        cs = result.config_status
+        if cs.git_working_tree:
+            gwt = cs.git_working_tree
+            tree_str = (
+                "[green]Clean[/green]"
+                if not gwt.has_uncommitted
+                else f"[yellow]Dirty ({gwt.uncommitted_count} uncommitted)[/yellow]"
+            )
+            print_kv("Git Working Tree", f"Branch: {gwt.branch} ({tree_str})")
+            if cs.git_sync_status and cs.git_sync_status.status != "Not Git":
+                print_kv("Remote Git Sync", cs.git_sync_status.summary)
+        if cs.repository_type == "s3":
+            s3_status = (
+                "Available"
+                if cs.s3_bucket_exists
+                else "Not Found / Missing"
+                if cs.s3_bucket_exists is False
+                else "Inaccessible"
+                if cs.s3_bucket_accessible is False
+                else "Configured"
+            )
+            s3_col = (
+                "green"
+                if cs.s3_bucket_exists
+                else "red"
+                if cs.s3_bucket_exists is False or cs.s3_bucket_accessible is False
+                else "dim"
+            )
+            bucket_str = cs.repository_bucket or "Not set"
+            print_kv("S3 Target", f"{bucket_str} ([{s3_col}]{s3_status}[/{s3_col}])")
+        elif cs.repository_type == "codecommit":
+            cc_status = (
+                "Available"
+                if cs.codecommit_exists
+                else "Not Found"
+                if cs.codecommit_exists is False
+                else "Inaccessible"
+                if cs.codecommit_accessible is False
+                else "Configured"
+            )
+            cc_col = (
+                "green"
+                if cs.codecommit_exists
+                else "red"
+                if cs.codecommit_exists is False or cs.codecommit_accessible is False
+                else "dim"
+            )
+            repo_str = cs.repository_name or "Not set"
+            print_kv("CodeCommit Target", f"{repo_str} ([{cc_col}]{cc_status}[/{cc_col}])")
+        elif cs.repository_type == "codeconnection":
+            c_status = cs.codeconnection_status or "Configured"
+            c_col = (
+                "green"
+                if c_status == "AVAILABLE"
+                else "yellow"
+                if c_status == "PENDING"
+                else "dim"
+            )
+            print_kv(
+                "CodeConnection Target",
+                f"{cs.owner}/{cs.repository_name} ([{c_col}]{c_status}[/{c_col}])",
+            )
+
+
+
     # 3. Pipelines Summary
     console.print()
     print_section(3, "Pipelines Overview")
