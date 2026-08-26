@@ -7,6 +7,7 @@ from pathlib import Path
 
 from lza_workbench.aws.codepipeline import start_pipeline_execution
 from lza_workbench.aws.context import resolve_aws_execution_context
+from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.pipeline.state import record_pipeline_execution
 from lza_workbench.workspace.context import (
     WorkspaceReadinessLevel,
@@ -41,13 +42,7 @@ def start_pipeline_workflow(
     ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
-    prefix = config.lza.accelerator_prefix or "AWSAccelerator"
-    if pipeline_name:
-        resolved_pipeline_name = pipeline_name.strip()
-    elif pipeline_type == "installer":
-        resolved_pipeline_name = config.pipelines.installer.name or f"{prefix}-Installer"
-    else:
-        resolved_pipeline_name = config.pipelines.configuration.name or f"{prefix}-Pipeline"
+    pipeline = resolve_pipeline(config, pipeline_type=pipeline_type, pipeline_name=pipeline_name)
 
     profile = config.aws.profile or ""
     aws_context = resolve_aws_execution_context(
@@ -61,13 +56,13 @@ def start_pipeline_workflow(
 
     region = aws_context.region
     account_id = aws_context.identity["account"] if aws_context.identity else "UNKNOWN_ACCOUNT"
-    pipeline_arn = f"arn:aws:codepipeline:{region}:{account_id}:{resolved_pipeline_name}"
+    pipeline_arn = pipeline.arn(region=region, account_id=account_id)
 
     if dry_run:
         return PipelineStartResult(
             workspace_dir=workspace_dir,
             customer_name=config.customer.name,
-            pipeline_name=resolved_pipeline_name,
+            pipeline_name=pipeline.name,
             pipeline_arn=pipeline_arn,
             profile=profile,
             region=region,
@@ -79,7 +74,7 @@ def start_pipeline_workflow(
     client = aws_context.factory.get_client("codepipeline")
     execution_id = start_pipeline_execution(
         client=client,
-        pipeline_name=resolved_pipeline_name,
+        pipeline_name=pipeline.name,
     )
 
     record_pipeline_execution(
@@ -92,7 +87,7 @@ def start_pipeline_workflow(
     return PipelineStartResult(
         workspace_dir=workspace_dir,
         customer_name=config.customer.name,
-        pipeline_name=resolved_pipeline_name,
+        pipeline_name=pipeline.name,
         pipeline_arn=pipeline_arn,
         profile=profile,
         region=region,

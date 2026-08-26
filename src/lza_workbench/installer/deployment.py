@@ -6,9 +6,9 @@ from pathlib import Path
 
 from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult
-from lza_workbench.aws.codecommit import CodeCommitPlanResult, inspect_codecommit_repository
+from lza_workbench.aws.codecommit import inspect_codecommit_repository
 from lza_workbench.aws.s3 import inspect_s3_object
-from lza_workbench.aws.secrets_manager import inspect_github_secret_token
+from lza_workbench.aws.secrets_manager import inspect_secret_exists
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import (
     InstallerConfigValidationResult,
@@ -17,6 +17,11 @@ from lza_workbench.installer.config import (
 from lza_workbench.installer.parameters import (
     build_installer_cfn_parameters,
     resolve_installer_source_branch,
+)
+from lza_workbench.installer.source import (
+    CodeCommitPlanResult,
+    github_secret_warning,
+    prepare_codecommit_source_plan,
 )
 from lza_workbench.installer.templates import (
     inspect_template_parameters,
@@ -84,13 +89,18 @@ def inspect_installer_source(
         version_ref = resolve_installer_source_branch(
             source.repository_type, source.branch, config.lza.version
         )
-        plan = inspect_codecommit_repository(
+        observation = inspect_codecommit_repository(
             factory=factory,
+            repository_name=source.repository_name or "aws-accelerator-codecommit",
+            branch_name=source.branch or version_ref,
+        )
+        plan = prepare_codecommit_source_plan(
             repository_type="codecommit",
             repository_name=source.repository_name,
             branch_name=source.branch,
             version_ref=version_ref,
             region=region,
+            observation=observation,
         )
         if plan.status != "INITIALIZED":
             raise LzaError(
@@ -107,7 +117,12 @@ def inspect_installer_source(
             object_key=source.key or "",
         )
     elif source.repository_type == "github":
-        inspect_github_secret_token(factory=factory, secret_name=source.github_secret_name)
+        exists, error = inspect_secret_exists(
+            factory=factory, secret_name=source.github_secret_name
+        )
+        warning = github_secret_warning(source.github_secret_name, exists, error)
+        if warning:
+            raise LzaError(warning)
         return None
     return None
 
@@ -130,7 +145,6 @@ def validate_cloudformation_plan(plan: CfnDeploymentPlanResult) -> str:
         "Refusing CloudFormation deployment because the stack state is unsafe or unknown: "
         f"operation={plan.operation}, status={plan.stack_status or 'not found'}."
     )
-
 
 
 __all__ = [

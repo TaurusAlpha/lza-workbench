@@ -124,7 +124,6 @@ def test_bootstrap_workspace_workflow_executes_and_saves_state(
 
         # Verify state saved
         st = load_workspace_state(initialized_workspace)
-        assert st.assets_bucket_name == "s3-lza-workbench-assets-111222333444-eu-west-1"
         assert st.bootstrapped_at is not None
         assert st.management_account_id == "111222333444"
 
@@ -228,4 +227,3 @@ def test_bootstrap_workspace_workflow_with_codecommit_create(initialized_workspa
             "Created CodeCommit repository 'lza-config-source'" in a for a in result.actions_taken
         )
         mock_cc.create_repository.assert_called_once()
-

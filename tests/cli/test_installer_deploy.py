@@ -9,7 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackStatusResult
-from lza_workbench.aws.codecommit import CodeCommitPlanResult
+from lza_workbench.aws.codecommit import CodeCommitRepositoryStatus
 from lza_workbench.aws.context import AwsExecutionContext
 from lza_workbench.cli import app
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
@@ -155,14 +155,12 @@ def test_cli_installer_deploy_success(
         error=None,
     )
 
-    mock_inspect_cc.return_value = CodeCommitPlanResult(
+    mock_inspect_cc.return_value = CodeCommitRepositoryStatus(
         repository_name="aws-accelerator-codecommit",
         branch_name="release/v1.16.0",
-        status="INITIALIZED",
-        creation_required=False,
-        sync_required=False,
-        official_repo_url="",
-        official_version_ref="",
+        exists=True,
+        accessible=True,
+        branch_exists=True,
     )
     mock_inspect_cfn.return_value = CfnDeploymentPlanResult(
         stack_name="AWSAccelerator-InstallerStack",

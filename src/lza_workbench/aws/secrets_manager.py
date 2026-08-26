@@ -21,25 +21,20 @@ def _get_sm_client(
     raise LzaError("Either AwsClientFactory or boto3 client must be provided.")
 
 
-def inspect_github_secret_token(
+def inspect_secret_exists(
+    secret_name: str,
     client: Any | None = None,
     factory: AwsClientFactory | None = None,
-    secret_name: str = "accelerator/github-token",
-) -> str | None:
-    """Verify if the specified secret exists in AWS Secrets Manager."""
+) -> tuple[bool, str | None]:
+    """Return whether a resolved secret exists, without feature interpretation."""
     sm_client = _get_sm_client(factory=factory, client=client)
     try:
         sm_client.describe_secret(SecretId=secret_name)
-        return None
+        return True, None
     except ClientError as err:
         code = err.response.get("Error", {}).get("Code")
         if code != "ResourceNotFoundException":
-            return f"Secrets Manager check for '{secret_name}' returned: {err}"
+            return False, str(err)
     except Exception as exc:
-        return f"Secrets Manager check for '{secret_name}' failed: {exc}"
-
-    return (
-        "GitHub source selected, but AWS Secrets Manager secret 'accelerator/github-token' "
-        "was not found in account/region. "
-        "AWS LZA requires a GitHub token stored in Secrets Manager."
-    )
+        return False, str(exc)
+    return False, None

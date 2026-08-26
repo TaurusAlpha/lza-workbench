@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.aws.context import resolve_aws_execution_context
+from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 
 
@@ -48,9 +49,8 @@ def get_pipeline_status_workflow(
     aws_error = aws_context.error
 
     account_id = aws_identity["account"] if aws_identity else "UNKNOWN_ACCOUNT"
-    prefix = config.lza.accelerator_prefix or "AWSAccelerator"
-    installer_pipeline_name = config.pipelines.installer.name or f"{prefix}-Installer"
-    config_pipeline_name = config.pipelines.configuration.name or f"{prefix}-Pipeline"
+    installer_pipeline = resolve_pipeline(config, pipeline_type="installer")
+    config_pipeline = resolve_pipeline(config, pipeline_type="configuration")
 
     return PipelineStatusResult(
         workspace_dir=workspace_dir,
@@ -59,10 +59,10 @@ def get_pipeline_status_workflow(
         region=region,
         aws_identity=aws_identity,
         aws_error=aws_error,
-        installer_pipeline_name=installer_pipeline_name,
-        installer_pipeline_arn=f"arn:aws:codepipeline:{region}:{account_id}:{installer_pipeline_name}",
-        config_pipeline_name=config_pipeline_name,
-        config_pipeline_arn=f"arn:aws:codepipeline:{region}:{account_id}:{config_pipeline_name}",
+        installer_pipeline_name=installer_pipeline.name,
+        installer_pipeline_arn=installer_pipeline.arn(region=region, account_id=account_id),
+        config_pipeline_name=config_pipeline.name,
+        config_pipeline_arn=config_pipeline.arn(region=region, account_id=account_id),
         installer_execution_id=state.installer_pipeline_execution_id if state else None,
         config_execution_id=state.config_pipeline_execution_id if state else None,
         has_state=state is not None,

@@ -119,7 +119,6 @@ class WorkspaceState(WorkspaceModel):
     bootstrapped_at: datetime | None = None
     management_account_id: str | None = None
     caller_arn: str | None = None
-    assets_bucket_name: str | None = None
     installer_stack_id: str | None = None
     installer_stack_status: str | None = None
     installer_stack_updated_at: datetime | None = None
@@ -136,7 +135,6 @@ class WorkspaceState(WorkspaceModel):
     config_pipeline_failed_build_url: str | None = None
     config_pipeline_error: str | None = None
     config_initialized_at: datetime | None = None
-
 
     config_template_name: str | None = None
     config_template_source: str | None = None

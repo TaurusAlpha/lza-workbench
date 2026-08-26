@@ -9,7 +9,7 @@ import pytest
 from botocore.exceptions import ClientError
 from typer.testing import CliRunner
 
-from lza_workbench.aws.secrets_manager import inspect_github_secret_token
+from lza_workbench.aws.secrets_manager import inspect_secret_exists
 from lza_workbench.cli import app
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.schema import (
@@ -240,7 +240,8 @@ def test_installer_plan_github_secret_check_requires_exact_name() -> None:
         {"Error": {"Code": "ResourceNotFoundException"}}, "DescribeSecret"
     )
 
-    warning = inspect_github_secret_token(mock_sm)
+    exists, error = inspect_secret_exists("accelerator/github-token", client=mock_sm)
 
-    assert warning is not None
+    assert exists is False
+    assert error is None
     mock_sm.describe_secret.assert_called_once_with(SecretId="accelerator/github-token")

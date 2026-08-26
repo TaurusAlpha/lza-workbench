@@ -7,12 +7,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.codecommit import (
     ensure_codecommit_repository,
     inspect_codecommit_config_repository,
 )
-from lza_workbench.aws.context import resolve_aws_execution_context
+from lza_workbench.aws.context import AwsExecutionContext, resolve_aws_execution_context
 from lza_workbench.aws.s3 import (
     create_s3_bucket,
     inspect_s3_bucket,
@@ -107,6 +106,7 @@ class WorkspaceBootstrapResult:
 def plan_bootstrap_workflow(
     target_dir: Path | None = None,
     dry_run: bool = True,
+    aws_context: AwsExecutionContext | None = None,
 ) -> BootstrapPlanResult:
     """Inspect AWS resources and plan bootstrap actions without mutating AWS."""
     ctx = load_workspace_context(
@@ -115,19 +115,22 @@ def plan_bootstrap_workflow(
     )
     workspace_dir, config = ctx.workspace_dir, ctx.config
 
-    try:
-        aws_ctx = resolve_aws_execution_context(
-            profile=config.aws.profile,
-            region=config.aws.region,
-            role_arn=config.aws.role_arn,
-            expected_account_id=config.aws.account_id,
-            require_identity=True,
-            require_expected_account=True,
-        )
-    except LzaError:
-        raise
-    except Exception as exc:
-        raise LzaError(f"AWS identity resolution failed: {exc}") from exc
+    if aws_context is None:
+        try:
+            aws_ctx = resolve_aws_execution_context(
+                profile=config.aws.profile,
+                region=config.aws.region,
+                role_arn=config.aws.role_arn,
+                expected_account_id=config.aws.account_id,
+                require_identity=True,
+                require_expected_account=True,
+            )
+        except LzaError:
+            raise
+        except Exception as exc:
+            raise LzaError(f"AWS identity resolution failed: {exc}") from exc
+    else:
+        aws_ctx = aws_context
 
     assert aws_ctx.identity is not None
     account_id = aws_ctx.identity["account"]
@@ -207,9 +210,7 @@ def plan_bootstrap_workflow(
         else:
             if cc_repo_exists:
                 cc_planned_op = "NO_CHANGE"
-                actions.append(
-                    f"Reuse existing CodeCommit repository '{cc_repo_name}'"
-                )
+                actions.append(f"Reuse existing CodeCommit repository '{cc_repo_name}'")
             else:
                 cc_planned_op = "CREATE"
                 actions.append(
@@ -254,7 +255,23 @@ def bootstrap_workspace_workflow(
 ) -> WorkspaceBootstrapResult:
     """Execute workspace bootstrap workflow and return structured result."""
     del force  # Force bypasses CLI confirmation; workflow itself is idempotent
-    plan = plan_bootstrap_workflow(target_dir=target_dir, dry_run=dry_run)
+    context = load_workspace_context(
+        target_dir=target_dir,
+        min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED,
+    )
+    aws_context = resolve_aws_execution_context(
+        profile=context.config.aws.profile,
+        region=context.config.aws.region,
+        role_arn=context.config.aws.role_arn,
+        expected_account_id=context.config.aws.account_id,
+        require_identity=True,
+        require_expected_account=True,
+    )
+    plan = plan_bootstrap_workflow(
+        target_dir=context.workspace_dir,
+        dry_run=dry_run,
+        aws_context=aws_context,
+    )
 
     if plan.codecommit_repo_planned_operation == "MISSING":
         raise LzaError(
@@ -279,17 +296,11 @@ def bootstrap_workspace_workflow(
             actions_taken=[],
         )
 
-    # Reuse workspace_dir and config already resolved during planning.
-    # Re-creating factory is lightweight; identity was already validated in planning.
+    # Reuse the workspace and authenticated AWS execution context from planning.
     workspace_dir = plan.workspace_dir
     config = plan.config
     state = load_workspace_state(workspace_dir)
-    factory = AwsClientFactory(
-        profile=config.aws.profile,
-        region=config.aws.region,
-        role_arn=config.aws.role_arn,
-    )
-    s3_client = factory.get_client("s3")
+    s3_client = aws_context.factory.get_client("s3")
 
     actions_taken = ensure_s3_workbench_assets_bucket(
         client=s3_client,
@@ -298,12 +309,11 @@ def bootstrap_workspace_workflow(
     )
 
     if plan.codecommit_repo_name:
-        cc_client = factory.get_client("codecommit")
+        cc_client = aws_context.factory.get_client("codecommit")
         if plan.codecommit_repo_planned_operation == "CREATE":
             ensure_codecommit_repository(
                 client=cc_client,
                 repository_name=plan.codecommit_repo_name,
-                branch_name=plan.codecommit_branch_name or "main",
                 description="LZA Configuration Repository",
             )
             actions_taken.append(
@@ -319,8 +329,7 @@ def bootstrap_workspace_workflow(
     config.assets_bucket = plan.bucket_name
     write_workspace_config(workspace_dir, config)
 
-    # Persist assets bucket and bootstrap timestamp to .lza/state.json
-    state.assets_bucket_name = plan.bucket_name
+    # Persist operational bootstrap metadata to .lza/state.json.
     state.bootstrapped_at = datetime.now(UTC)
     state.management_account_id = plan.account_id
     write_workspace_state(workspace_dir, state)

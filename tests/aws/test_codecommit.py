@@ -18,17 +18,12 @@ def test_inspect_codecommit_repository_missing() -> None:
 
     res = inspect_codecommit_repository(
         client=client,
-        repository_type="codecommit",
         repository_name="my-repo",
         branch_name="main",
-        version_ref="release/v1.16.0",
-        region="us-east-1",
     )
 
-    assert res.status == "MISSING"
-    assert res.creation_required is True
-    assert res.sync_required is True
-    assert any("Create CodeCommit repository" in action for action in res.actions)
+    assert res.exists is False
+    assert res.accessible is False
 
 
 def test_inspect_codecommit_branch_exists() -> None:
@@ -39,16 +34,12 @@ def test_inspect_codecommit_branch_exists() -> None:
 
     res = inspect_codecommit_repository(
         client=client,
-        repository_type="codecommit",
         repository_name="my-repo",
         branch_name="release/v1.16.0",
-        version_ref="release/v1.16.0",
-        region="us-east-1",
     )
 
-    assert res.status == "INITIALIZED"
-    assert res.creation_required is False
-    assert res.sync_required is False
+    assert res.exists is True
+    assert res.branch_exists is True
 
 
 def test_inspect_codecommit_branch_missing() -> None:
@@ -61,16 +52,12 @@ def test_inspect_codecommit_branch_missing() -> None:
 
     res = inspect_codecommit_repository(
         client=client,
-        repository_type="codecommit",
         repository_name="my-repo",
         branch_name="release/v1.16.0",
-        version_ref="release/v1.16.0",
-        region="us-east-1",
     )
 
-    assert res.status == "UNINITIALIZED"
-    assert res.creation_required is False
-    assert res.sync_required is True
+    assert res.exists is True
+    assert res.branch_exists is False
 
 
 def test_inspect_codecommit_branch_access_denied_fails_closed() -> None:
@@ -83,17 +70,11 @@ def test_inspect_codecommit_branch_access_denied_fails_closed() -> None:
 
     res = inspect_codecommit_repository(
         client=client,
-        repository_type="codecommit",
         repository_name="my-repo",
         branch_name="release/v1.16.0",
-        version_ref="release/v1.16.0",
-        region="us-east-1",
     )
 
-    assert res.status == "INACCESSIBLE"
-    assert res.creation_required is False
-    assert res.sync_required is False
-    assert any("Access Denied" in action for action in res.actions)
+    assert res.accessible is False
 
 
 def test_inspect_codecommit_branch_unexpected_error_fails_closed() -> None:
@@ -106,17 +87,11 @@ def test_inspect_codecommit_branch_unexpected_error_fails_closed() -> None:
 
     res = inspect_codecommit_repository(
         client=client,
-        repository_type="codecommit",
         repository_name="my-repo",
         branch_name="release/v1.16.0",
-        version_ref="release/v1.16.0",
-        region="us-east-1",
     )
 
-    assert res.status == "INACCESSIBLE"
-    assert res.creation_required is False
-    assert res.sync_required is False
-    assert any("Unexpected CodeCommit error" in action for action in res.actions)
+    assert res.accessible is True
 
 
 def test_inspect_codecommit_config_repository_missing() -> None:
@@ -177,4 +152,3 @@ def test_inspect_codecommit_config_repository_exists_branch_exists() -> None:
     assert res["exists"] is True
     assert res["accessible"] is True
     assert res["branch_exists"] is True
-

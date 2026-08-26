@@ -23,6 +23,7 @@ from lza_workbench.configuration.repository import (
     CONFIG_S3_OBJECT_KEY,
     resolve_s3_configuration_destination,
 )
+from lza_workbench.configuration.status import compile_configuration_warnings
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
@@ -91,111 +92,6 @@ class ConfigurationStatusResult:
     warnings: tuple[str, ...]
 
 
-def _compile_warnings(
-    *,
-    config_dir_exists: bool,
-    drifted_fields: tuple[str, ...],
-    git_working_tree: GitWorkingTreeStatus | None,
-    git_sync_status: GitRemoteSyncStatus | None,
-    repository_type: str,
-    s3_bucket_name: str | None = None,
-    s3_bucket_exists: bool | None,
-    s3_bucket_accessible: bool | None,
-    s3_object_exists: bool | None,
-    codecommit_exists: bool | None,
-    codecommit_accessible: bool | None,
-    codecommit_branch_exists: bool | None,
-    codeconnection_status: str | None,
-    pipeline_name: str,
-    pipeline_status: str | None,
-    pipeline_failed_stage: str | None,
-    pipeline_failed_action: str | None,
-) -> tuple[str, ...]:
-    warnings: list[str] = []
-
-    if not config_dir_exists:
-        warnings.append(
-            "Local configuration directory is missing. "
-            "Run 'lza config init' or 'lza config pull' to initialize it."
-        )
-
-    if drifted_fields:
-        fields_str = ", ".join(drifted_fields)
-        warnings.append(
-            f"Workspace settings changed since template initialization ({fields_str}). "
-            "Run 'lza config init --force' to re-apply the template."
-        )
-
-    if git_working_tree and git_working_tree.has_uncommitted:
-        warnings.append(
-            f"Local configuration contains {git_working_tree.uncommitted_count} uncommitted "
-            "change(s). Commit or stash your changes before pushing."
-        )
-
-    if git_sync_status:
-        if git_sync_status.status == "Behind":
-            warnings.append(
-                f"Local configuration is behind remote repository by {git_sync_status.behind} "
-                "commit(s). Run 'lza config pull' to synchronize."
-            )
-        elif git_sync_status.status == "Diverged":
-            warnings.append(
-                f"Local configuration has diverged from remote ({git_sync_status.ahead} ahead, "
-                f"{git_sync_status.behind} behind). Reconcile Git history before pushing."
-            )
-
-    if repository_type == "s3":
-        b_label = f" '{s3_bucket_name}'" if s3_bucket_name else ""
-        if s3_bucket_exists is False:
-            warnings.append(f"Configured S3 bucket{b_label} does not exist.")
-        elif s3_bucket_accessible is False:
-            warnings.append(
-                f"Access denied or connection failure to configured S3 bucket{b_label}."
-            )
-        elif s3_bucket_exists is True and s3_object_exists is False:
-            warnings.append(
-                f"Configuration archive is not present in S3 bucket{b_label}. "
-                "Run 'lza config push' to upload local configuration."
-            )
-
-
-    elif repository_type == "codecommit":
-        if codecommit_exists is False:
-            warnings.append("Configured CodeCommit repository does not exist.")
-        elif codecommit_accessible is False:
-            warnings.append("Access denied or connection failure to CodeCommit repository.")
-        elif codecommit_exists is True and codecommit_branch_exists is False:
-            warnings.append(
-                "Configured branch does not exist in CodeCommit repository. "
-                "Run 'lza config push' to push branch."
-            )
-    elif repository_type == "codeconnection":
-        if codeconnection_status == "PENDING":
-            warnings.append(
-                "CodeConnection is in PENDING status. Complete the handshake in the AWS Console."
-            )
-        elif codeconnection_status in {"ERROR", "NOT_FOUND", "INACCESSIBLE"}:
-            warnings.append(f"CodeConnection issue detected (Status: {codeconnection_status}).")
-
-    if pipeline_status == "Failed":
-        detail = ""
-        if pipeline_failed_stage and pipeline_failed_action:
-            detail = f" (Stage: '{pipeline_failed_stage}', Action: '{pipeline_failed_action}')"
-        elif pipeline_failed_stage:
-            detail = f" (Stage: '{pipeline_failed_stage}')"
-        warnings.append(
-            f"Latest execution of configuration pipeline '{pipeline_name}' failed{detail}."
-        )
-    elif pipeline_status == "Cancelled":
-        warnings.append(
-            f"Latest execution of configuration pipeline '{pipeline_name}' was cancelled."
-        )
-
-    return tuple(warnings)
-
-
-
-
 def get_config_status_workflow(
     *,
     target_dir: Path | None = None,
@@ -262,9 +158,7 @@ def get_config_status_workflow(
     # Git working tree and remote synchronization
     git_working_tree = get_git_working_tree_status(config_dir)
     git_sync_status = (
-        get_git_remote_sync_status(config_dir, branch=repo.branch)
-        if git_working_tree
-        else None
+        get_git_remote_sync_status(config_dir, branch=repo.branch) if git_working_tree else None
     )
 
     # Remote source inspection
@@ -306,7 +200,6 @@ def get_config_status_workflow(
             s3_error = str(exc)
 
         if s3_bucket_name and aws_identity:
-
             try:
                 s3_client = factory.get_client("s3")
                 b_info = inspect_s3_bucket(client=s3_client, bucket_name=s3_bucket_name)
@@ -330,8 +223,6 @@ def get_config_status_workflow(
             except Exception as exc:
                 s3_error = str(exc)
                 s3_bucket_accessible = False
-
-
 
     elif repo.type == "codecommit":
         repo_name = repo.repository_name or "aws-accelerator-config"
@@ -363,9 +254,7 @@ def get_config_status_workflow(
     # Configuration Pipeline Status
     prefix = resolved_config.lza.accelerator_prefix or "AWSAccelerator"
     config_pipeline_name = resolved_config.pipelines.configuration.name or f"{prefix}-Pipeline"
-    config_pipeline_arn = (
-        f"arn:aws:codepipeline:{region}:{account_id}:{config_pipeline_name}"
-    )
+    config_pipeline_arn = f"arn:aws:codepipeline:{region}:{account_id}:{config_pipeline_name}"
 
     pipeline_status: str | None = None
     pipeline_execution_id: str | None = None
@@ -414,7 +303,7 @@ def get_config_status_workflow(
     elif resolved_state and resolved_state.config_pipeline_execution_id:
         pipeline_execution_id = resolved_state.config_pipeline_execution_id
 
-    warnings = _compile_warnings(
+    warnings = compile_configuration_warnings(
         config_dir_exists=config_dir.exists(),
         drifted_fields=drifted_fields,
         git_working_tree=git_working_tree,
@@ -422,7 +311,6 @@ def get_config_status_workflow(
         repository_type=repo.type,
         s3_bucket_name=s3_bucket_name,
         s3_bucket_exists=s3_bucket_exists,
-
         s3_bucket_accessible=s3_bucket_accessible,
         s3_object_exists=s3_object_exists,
         codecommit_exists=codecommit_exists,
@@ -449,7 +337,6 @@ def get_config_status_workflow(
         repository_type=repo.type,
         repository_bucket=s3_bucket_name if repo.type == "s3" else repo.bucket,
         repository_object_key=CONFIG_S3_OBJECT_KEY,
-
         repository_name=repo.repository_name,
         repository_branch=repo.branch,
         codeconnection_arn=repo.codeconnection_arn,
@@ -497,9 +384,7 @@ def get_config_status_workflow(
     )
 
 
-
 __all__ = [
     "ConfigurationStatusResult",
     "get_config_status_workflow",
 ]
-

@@ -14,9 +14,8 @@ from lza_workbench.cli.output import (
 )
 from lza_workbench.workflows.workspace_import import (
     WorkspaceImportResult,
+    discover_import_workspace,
     import_workspace_workflow,
-    load_existing_metadata,
-    resolve_import_paths,
 )
 from lza_workbench.workspace.paths import normalize_customer_slug
 from lza_workbench.workspace.schema import LzaConfig
@@ -105,11 +104,14 @@ def workspace_import_command(
     interactive: bool = False,
 ) -> None:
     """Adopt an existing customer-owned LZA configuration."""
-    resolved_workspace_dir, _ = resolve_import_paths(
+    discovery = discover_import_workspace(
         workspace_dir=workspace_dir,
         config_dir=config_dir,
+        force=force,
+        repair=repair,
     )
-    existing = load_existing_metadata(resolved_workspace_dir, force=force, repair=repair)
+    resolved_workspace_dir = discovery.workspace_dir
+    existing = discovery.existing
 
     default_name = (
         existing.config.customer.name

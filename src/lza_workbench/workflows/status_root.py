@@ -7,6 +7,7 @@ from pathlib import Path
 
 from lza_workbench.aws.cloudformation import get_cloudformation_stack_status
 from lza_workbench.aws.context import resolve_aws_execution_context
+from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.workflows.status_config import (
     ConfigurationStatusResult,
     get_config_status_workflow,
@@ -80,8 +81,8 @@ def get_root_status_workflow(
         repository_type=config.configuration.repository.type,
         config_dir=workspace_dir / config.configuration.local_path,
         config_dir_exists=(workspace_dir / config.configuration.local_path).exists(),
-        installer_pipeline_name=f"{config.lza.accelerator_prefix or 'AWSAccelerator'}-Installer",
-        config_pipeline_name=f"{config.lza.accelerator_prefix or 'AWSAccelerator'}-Pipeline",
+        installer_pipeline_name=resolve_pipeline(config, pipeline_type="installer").name,
+        config_pipeline_name=resolve_pipeline(config, pipeline_type="configuration").name,
         config_status=config_status,
     )
 
@@ -90,4 +91,3 @@ __all__ = [
     "RootStatusResult",
     "get_root_status_workflow",
 ]
-

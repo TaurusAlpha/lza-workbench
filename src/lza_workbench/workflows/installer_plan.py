@@ -7,7 +7,7 @@ from pathlib import Path
 from lza_workbench.aws.cloudformation import inspect_cloudformation_stack
 from lza_workbench.aws.codecommit import inspect_codecommit_repository
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.aws.secrets_manager import inspect_github_secret_token
+from lza_workbench.aws.secrets_manager import inspect_secret_exists
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import (
@@ -16,6 +16,12 @@ from lza_workbench.installer.parameters import (
 from lza_workbench.installer.planning import (
     InstallerPlanResult,
     prepare_installer_plan_result,
+)
+from lza_workbench.installer.source import (
+    github_secret_warning as build_github_secret_warning,
+)
+from lza_workbench.installer.source import (
+    prepare_codecommit_source_plan,
 )
 from lza_workbench.installer.templates import (
     inspect_template_parameters,
@@ -64,13 +70,22 @@ def plan_installer_workflow(
     # Step 4: CodeCommit Source Planning
     codecommit_client = factory.get_client("codecommit") if aws_identity else None
     version_ref = resolved_params["RepositoryBranchName"]
-    codecommit_plan = inspect_codecommit_repository(
+    codecommit_observation = inspect_codecommit_repository(
         client=codecommit_client,
+        repository_name=(
+            config.installer.source_code.repository_name or "aws-accelerator-codecommit"
+        ),
+        branch_name=(config.installer.source_code.branch or version_ref),
+    )
+    codecommit_plan = prepare_codecommit_source_plan(
         repository_type=config.installer.source_code.repository_type,
         repository_name=config.installer.source_code.repository_name,
         branch_name=config.installer.source_code.branch,
         version_ref=version_ref,
         region=region,
+        observation=codecommit_observation
+        if config.installer.source_code.repository_type == "codecommit"
+        else None,
     )
 
     # Check GitHub Secret if GitHub source is selected
@@ -78,7 +93,12 @@ def plan_installer_workflow(
     if resolved_params.get("RepositorySource") == "github" and aws_identity:
         sm_client = factory.get_client("secretsmanager")
         if sm_client:
-            github_secret_warning = inspect_github_secret_token(client=sm_client)
+            exists, error = inspect_secret_exists(
+                client=sm_client, secret_name=config.installer.source_code.github_secret_name
+            )
+            github_secret_warning = build_github_secret_warning(
+                config.installer.source_code.github_secret_name, exists, error
+            )
 
     # Step 5: CloudFormation Deployment Planning
     stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"

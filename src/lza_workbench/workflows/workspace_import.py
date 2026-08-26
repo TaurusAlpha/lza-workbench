@@ -56,6 +56,15 @@ class ExistingMetadata:
 
 
 @dataclass(frozen=True)
+class ImportWorkspaceDiscovery:
+    """Validated import paths and existing metadata used to collect command inputs."""
+
+    workspace_dir: Path
+    config_dir: Path
+    existing: ExistingMetadata | None
+
+
+@dataclass(frozen=True)
 class WorkspaceImportResult:
     """Structured result of workspace import workflow."""
 
@@ -169,6 +178,25 @@ def load_existing_metadata(
     )
 
 
+def discover_import_workspace(
+    *,
+    workspace_dir: Path,
+    config_dir: Path | None,
+    force: bool = False,
+    repair: bool = False,
+) -> ImportWorkspaceDiscovery:
+    """Resolve and validate import inputs before an interface prompts for overrides."""
+    resolved_workspace_dir, resolved_config_dir = resolve_import_paths(
+        workspace_dir=workspace_dir,
+        config_dir=config_dir,
+    )
+    return ImportWorkspaceDiscovery(
+        workspace_dir=resolved_workspace_dir,
+        config_dir=resolved_config_dir,
+        existing=load_existing_metadata(resolved_workspace_dir, force=force, repair=repair),
+    )
+
+
 def build_import_workspace_config(
     *,
     customer_name: str,
@@ -214,7 +242,6 @@ def build_import_workspace_config(
         account_id = existing_config.aws.account_id if existing_config else None
         if account_id:
             repository.bucket = get_canonical_config_s3_bucket(account_id, aws_region)
-
 
     configuration = ConfigurationConfig(
         local_path=rel_config_path,
@@ -276,11 +303,15 @@ def import_workspace_workflow(
     skip_aws_check: bool = False,
 ) -> WorkspaceImportResult:
     """Execute the pure workspace import workflow and return structured result."""
-    resolved_workspace_dir, resolved_config_dir = resolve_import_paths(
+    discovery = discover_import_workspace(
         workspace_dir=workspace_dir,
         config_dir=config_dir,
+        force=force,
+        repair=repair,
     )
-    existing = load_existing_metadata(resolved_workspace_dir, force=force, repair=repair)
+    resolved_workspace_dir = discovery.workspace_dir
+    resolved_config_dir = discovery.config_dir
+    existing = discovery.existing
 
     # Validate template files presence
     validate_template(resolved_config_dir)
