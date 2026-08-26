@@ -12,6 +12,10 @@ from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackSt
 from lza_workbench.aws.codecommit import CodeCommitRepositoryStatus
 from lza_workbench.aws.context import AwsExecutionContext
 from lza_workbench.cli import app
+from lza_workbench.workflows.installer_deploy import (
+    InstallerDeploymentPreparation,
+    InstallerDeployResult,
+)
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.schema import (
     AwsConfig,
@@ -205,3 +209,61 @@ def test_cli_installer_deploy_missing_assets_bucket_failure(
     result = cli_runner.invoke(app, ["installer", "deploy"])
     assert result.exit_code == 1
     assert "Workbench assets bucket is not configured" in (result.output or str(result.exception))
+
+
+@patch("lza_workbench.cli.commands.installer_deploy.apply_installer_deployment")
+@patch("lza_workbench.cli.commands.installer_deploy.prepare_installer_deployment")
+def test_cli_installer_deploy_reuses_prepared_deployment(
+    mock_prepare: MagicMock,
+    mock_apply: MagicMock,
+    configured_workspace: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = load_workspace_config(configured_workspace)
+    preparation = InstallerDeploymentPreparation(
+        workspace_dir=configured_workspace,
+        config=config,
+        aws_context=AwsExecutionContext(
+            region="us-east-1",
+            factory=MagicMock(),
+            identity={"account": "123456789012", "arn": "arn:aws:iam::123:user/test"},
+            error=None,
+        ),
+        template_path=configured_workspace / "template.json",
+        template_digest="digest",
+        resolved_parameters={},
+        stack_name="AWSAccelerator-InstallerStack",
+        operation="CREATE",
+        cfn_plan=CfnDeploymentPlanResult(
+            stack_name="AWSAccelerator-InstallerStack",
+            operation="CREATE",
+            stack_status=None,
+            resolved_parameters={},
+        ),
+        profile="test",
+        account_id="123456789012",
+    )
+    mock_prepare.return_value = preparation
+    mock_apply.return_value = InstallerDeployResult(
+        workspace_dir=configured_workspace,
+        stack_name=preparation.stack_name,
+        operation="CREATE",
+        cfn_plan=preparation.cfn_plan,
+        stack_id="stack-id",
+        final_status=CfnStackStatusResult(
+            stack_name=preparation.stack_name,
+            exists=True,
+            stack_status="CREATE_COMPLETE",
+        ),
+        dry_run=False,
+        skipped=False,
+    )
+
+    monkeypatch.chdir(configured_workspace)
+    result = cli_runner.invoke(app, ["installer", "deploy", "--force"])
+
+    assert result.exit_code == 0
+    mock_prepare.assert_called_once_with(target_dir=None, dry_run=False)
+    mock_apply.assert_called_once()
+    assert mock_apply.call_args.kwargs["preparation"] is preparation

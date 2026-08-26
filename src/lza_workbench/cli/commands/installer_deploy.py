@@ -22,8 +22,10 @@ from lza_workbench.workflows.installer_deploy import (
     CfnStackStatusResult,
     InstallerConfigValidationError,
     InstallerConfigValidationResult,
+    InstallerDeploymentPreparation,
     InstallerDeployResult,
-    deploy_installer_workflow,
+    apply_installer_deployment,
+    prepare_installer_deployment,
 )
 
 
@@ -34,6 +36,7 @@ def _render_deployment_plan(
     region: str,
     account_id: str,
     plan: CfnDeploymentPlanResult,
+    operation: str,
 ) -> None:
     print_section(1, "Deployment Target")
     print_kv("Target AWS Profile", profile or "default")
@@ -41,7 +44,7 @@ def _render_deployment_plan(
     print_kv("Target Account", account_id or "RESOLVED")
     print_kv("CloudFormation Stack", stack_name)
     print_kv("Current Stack Status", plan.stack_status or "DOES NOT EXIST")
-    print_kv("Planned Action", plan.operation, bold_value=True)
+    print_kv("Planned Action", operation, bold_value=True)
 
     if plan.parameter_diffs:
         console.print()
@@ -104,24 +107,21 @@ def installer_deploy_command(
 ) -> None:
     """Deploy the LZA installer CloudFormation stack for the current workspace."""
     try:
-        plan_result = deploy_installer_workflow(
-            target_dir=target_dir,
-            dry_run=True,
-            force=force,
-        )
+        preparation = prepare_installer_deployment(target_dir=target_dir, dry_run=dry_run)
     except InstallerConfigValidationError as exc:
         _render_missing_configuration(exc.validation)
         raise
 
     _render_deployment_plan(
-        stack_name=plan_result.stack_name,
-        profile=plan_result.profile,
-        region=plan_result.region,
-        account_id=plan_result.account_id,
-        plan=plan_result.cfn_plan,
+        stack_name=preparation.stack_name,
+        profile=preparation.profile,
+        region=preparation.aws_context.region,
+        account_id=preparation.account_id,
+        plan=preparation.cfn_plan,
+        operation=preparation.operation,
     )
 
-    operation = plan_result.operation
+    operation = preparation.operation
     force_no_change = False
     if operation == "NO_CHANGE" and not force:
         if not typer.confirm("Force re-deployment of stack?", default=False):
@@ -131,17 +131,17 @@ def installer_deploy_command(
         operation = "UPDATE"
 
     if not _confirm_deployment(
-        operation=operation, stack_name=plan_result.stack_name, dry_run=dry_run, force=force
+        operation=operation, stack_name=preparation.stack_name, dry_run=dry_run, force=force
     ):
         return
 
     if dry_run:
-        _render_dry_run(operation=operation, stack_name=plan_result.stack_name)
+        _render_dry_run(operation=operation, stack_name=preparation.stack_name)
         return
 
     print_info(f"Initiating CloudFormation stack {operation}...", dim=True)
-    result = deploy_installer_workflow(
-        target_dir=target_dir,
+    result = apply_installer_deployment(
+        preparation=preparation,
         dry_run=False,
         force=force,
         force_no_change=force_no_change,
@@ -149,10 +149,16 @@ def installer_deploy_command(
     )
 
     if result.final_status:
-        print_notice(
-            f"CloudFormation stack '{plan_result.stack_name}' deployed successfully "
-            f"({result.final_status.stack_status})."
-        )
+        if result.skipped:
+            print_notice(
+                f"CloudFormation stack '{preparation.stack_name}' required no update "
+                f"({result.final_status.stack_status})."
+            )
+        else:
+            print_notice(
+                f"CloudFormation stack '{preparation.stack_name}' deployed successfully "
+                f"({result.final_status.stack_status})."
+            )
         print_info("Updated operational state in .lza/state.json", dim=True)
         if result.final_status.outputs:
             table = Table(title="Stack Outputs", show_header=True)
@@ -168,12 +174,14 @@ __all__ = [
     "CfnStackStatusResult",
     "InstallerConfigValidationError",
     "InstallerConfigValidationResult",
+    "InstallerDeploymentPreparation",
     "InstallerDeployResult",
+    "apply_installer_deployment",
     "_confirm_deployment",
     "_render_deployment_plan",
     "_render_dry_run",
     "_render_missing_configuration",
     "_render_stack_event",
-    "deploy_installer_workflow",
     "installer_deploy_command",
+    "prepare_installer_deployment",
 ]

@@ -150,6 +150,7 @@ class WorkspaceState(WorkspaceModel):
     config_last_diff_summary: dict[str, int] | None = None
     installer_downloaded_at: datetime | None = None
     installer_template_version: str | None = None
+    installer_template_digest: str | None = None
     imported: bool | None = None
     imported_at: datetime | None = None
 

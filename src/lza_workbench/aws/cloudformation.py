@@ -240,10 +240,10 @@ def deploy_cloudformation_stack(
     parameters: dict[str, str],
     operation: str,
     capabilities: list[str] | None = None,
-) -> str:
+) -> str | None:
     """Trigger CloudFormation stack creation or update.
 
-    Returns the stack ID returned by CloudFormation.
+    Returns the stack ID returned by CloudFormation, or ``None`` when an update is unchanged.
     """
     clean_stack_name = (stack_name or "").strip()
     if not clean_stack_name:
@@ -275,14 +275,26 @@ def deploy_cloudformation_stack(
     elif template_body:
         kwargs["TemplateBody"] = template_body
 
-    if operation == "CREATE":
-        response = cfn.create_stack(**kwargs)
-        return str(response.get("StackId", clean_stack_name))
-    elif operation == "UPDATE":
-        response = cfn.update_stack(**kwargs)
-        return str(response.get("StackId", clean_stack_name))
-    else:
+    try:
+        if operation == "CREATE":
+            response = cfn.create_stack(**kwargs)
+            return str(response.get("StackId", clean_stack_name))
+        if operation == "UPDATE":
+            response = cfn.update_stack(**kwargs)
+            return str(response.get("StackId", clean_stack_name))
         raise LzaError(f"Unsupported deployment operation: {operation}")
+    except ClientError as exc:
+        error = exc.response.get("Error", {})
+        message = error.get("Message", str(exc))
+        if operation == "UPDATE" and "no updates are to be performed" in message.lower():
+            return None
+        raise LzaError(
+            f"CloudFormation stack {operation.lower()} failed for '{clean_stack_name}': {message}"
+        ) from exc
+    except BotoCoreError as exc:
+        raise LzaError(
+            f"CloudFormation stack {operation.lower()} failed for '{clean_stack_name}': {exc}"
+        ) from exc
 
 
 def stream_cloudformation_stack_events(
