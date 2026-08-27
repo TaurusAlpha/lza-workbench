@@ -19,8 +19,8 @@ from lza_workbench.cli.output import (
 from lza_workbench.workflows.workspace_bootstrap import (
     BootstrapPlanResult,
     WorkspaceBootstrapResult,
-    bootstrap_workspace_workflow,
-    plan_bootstrap_workflow,
+    apply_bootstrap_preparation,
+    prepare_bootstrap_workflow,
 )
 
 
@@ -99,7 +99,8 @@ def workspace_bootstrap_command(
 ) -> WorkspaceBootstrapResult | None:
     """Create or validate AWS prerequisite resources required by LZA Workbench."""
     del interactive
-    plan = plan_bootstrap_workflow(target_dir=target_dir, dry_run=dry_run)
+    preparation = prepare_bootstrap_workflow(target_dir=target_dir, dry_run=dry_run)
+    plan = preparation.plan
     _render_bootstrap_plan(plan)
 
     if dry_run:
@@ -117,11 +118,7 @@ def workspace_bootstrap_command(
 
     console.print()
     print_info("Executing LZA Workbench bootstrap...", dim=True)
-    result = bootstrap_workspace_workflow(
-        target_dir=target_dir,
-        dry_run=False,
-        force=force,
-    )
+    result = apply_bootstrap_preparation(preparation=preparation)
 
     console.print()
     print_notice(
@@ -142,7 +139,7 @@ __all__ = [
     "WorkspaceBootstrapResult",
     "_confirm_bootstrap",
     "_render_bootstrap_plan",
-    "bootstrap_workspace_workflow",
-    "plan_bootstrap_workflow",
+    "apply_bootstrap_preparation",
+    "prepare_bootstrap_workflow",
     "workspace_bootstrap_command",
 ]

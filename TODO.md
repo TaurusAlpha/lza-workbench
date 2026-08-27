@@ -109,8 +109,7 @@ The future implementation should preserve the following behavior:
 
 - [ ] `ConfigurationRepositoryLocation=s3`
   - Treat as a separate LZA-specific configuration workflow.
-  - Do not currently create the LZA-managed
-    `aws-accelerator-config-<account-id>-<region>` bucket during bootstrap.
+  - Do not create the LZA-managed `aws-accelerator-config-<account-id>-<region>` bucket during bootstrap.
   - When importing an existing deployment, validate the discovered bucket and access.
   - Revisit exact bootstrap behavior when S3 configuration deployment support is implemented.
 
@@ -318,6 +317,15 @@ Start the configured LZA pipeline without synchronizing local configuration firs
 
 Monitor an existing pipeline execution without starting a new execution or synchronizing
 configuration.
+
+- [ ] Refine pipeline monitoring and failure presentation.
+  - Render polling progress as a single live/updating status instead of emitting repeated status lines.
+  - Keep the default execution summary concise; omit pending/not-executed actions after a failure.
+  - Prioritize the failed stage/action and extracted root cause in failure output.
+  - Suppress raw CodeBuild buildspec command text and wrapper errors from normal output.
+  - Deduplicate repeated AWS/CodeBuild/CloudFormation failure messages.
+  - Keep full stage/action breakdown and raw diagnostic context available through verbose output.
+  - Reuse the same monitoring presentation from `lza config deploy`.
 
 ### `lza status`
 

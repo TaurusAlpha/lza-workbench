@@ -77,6 +77,7 @@ def test_cli_bootstrap_force(test_workspace: Path, monkeypatch: pytest.MonkeyPat
         assert "s3-lza-workbench-assets-111222333444-eu-west-1" in res.output
         assert "Created S3 bucket" in res.output
         assert "Created CodeCommit repository" in res.output
+        mock_val.assert_called_once()
 
 
 def test_cli_bootstrap_prompt_abort(
@@ -107,4 +108,3 @@ def test_cli_bootstrap_prompt_abort(
         res = runner.invoke(app, ["bootstrap"], input="n\n")
         assert res.exit_code == 0
         assert "Bootstrap aborted by user." in res.output
-

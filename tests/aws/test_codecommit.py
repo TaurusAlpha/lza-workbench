@@ -24,6 +24,7 @@ def test_inspect_codecommit_repository_missing() -> None:
 
     assert res.exists is False
     assert res.accessible is False
+    assert res.not_found is True
 
 
 def test_inspect_codecommit_branch_exists() -> None:
@@ -91,7 +92,7 @@ def test_inspect_codecommit_branch_unexpected_error_fails_closed() -> None:
         branch_name="release/v1.16.0",
     )
 
-    assert res.accessible is True
+    assert res.accessible is False
 
 
 def test_inspect_codecommit_config_repository_missing() -> None:
@@ -112,6 +113,7 @@ def test_inspect_codecommit_config_repository_missing() -> None:
     assert res["exists"] is False
     assert res["accessible"] is False
     assert res["branch_exists"] is False
+    assert res["not_found"] is True
 
 
 def test_inspect_codecommit_config_repository_exists_branch_missing() -> None:

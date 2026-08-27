@@ -21,6 +21,7 @@ class CodeCommitRepositoryStatus:
     accessible: bool
     branch_exists: bool
     error: str | None = None
+    not_found: bool = False
 
 
 def inspect_codecommit_repository(
@@ -42,11 +43,8 @@ def inspect_codecommit_repository(
         cc_client.get_repository(repositoryName=repository_name)
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
-        accessible = (
-            False
-            if code in {"RepositoryDoesNotExistException", "404"}
-            else code not in {"AccessDeniedException", "403"}
-        )
+        not_found = code in {"RepositoryDoesNotExistException", "404"}
+        accessible = False
         return CodeCommitRepositoryStatus(
             repository_name,
             branch_name,
@@ -54,6 +52,7 @@ def inspect_codecommit_repository(
             accessible,
             False,
             str(exc),
+            not_found,
         )
     except BotoCoreError as exc:
         return CodeCommitRepositoryStatus(
@@ -68,7 +67,7 @@ def inspect_codecommit_repository(
             repository_name,
             branch_name,
             True,
-            code not in {"AccessDeniedException", "403"},
+            code == "BranchDoesNotExistException",
             False,
             str(exc),
         )
@@ -113,6 +112,7 @@ def inspect_codecommit_config_repository(**kwargs: Any) -> dict[str, Any]:
         "accessible": status.accessible,
         "branch_exists": status.branch_exists,
         "error": status.error,
+        "not_found": status.not_found,
     }
 
 

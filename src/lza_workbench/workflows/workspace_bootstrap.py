@@ -20,7 +20,11 @@ from lza_workbench.aws.s3 import (
 )
 from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import write_workspace_config
-from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.context import (
+    WorkspaceContext,
+    WorkspaceReadinessLevel,
+    load_workspace_context,
+)
 from lza_workbench.workspace.schema import WorkspaceConfig
 from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
@@ -103,35 +107,42 @@ class WorkspaceBootstrapResult:
     actions_taken: list[str]
 
 
-def plan_bootstrap_workflow(
-    target_dir: Path | None = None,
-    dry_run: bool = True,
-    aws_context: AwsExecutionContext | None = None,
+@dataclass(frozen=True)
+class BootstrapPreparation:
+    """Resolved workspace, AWS context, and plan for one bootstrap execution."""
+
+    context: WorkspaceContext
+    aws_context: AwsExecutionContext
+    plan: BootstrapPlanResult
+
+
+def _resolve_bootstrap_aws_context(config: WorkspaceConfig) -> AwsExecutionContext:
+    """Resolve the authenticated AWS target required for bootstrap operations."""
+    try:
+        return resolve_aws_execution_context(
+            profile=config.aws.profile,
+            region=config.aws.region,
+            role_arn=config.aws.role_arn,
+            expected_account_id=config.aws.account_id,
+            require_identity=True,
+            require_expected_account=True,
+        )
+    except LzaError:
+        raise
+    except Exception as exc:
+        raise LzaError(f"AWS identity resolution failed: {exc}") from exc
+
+
+def _build_bootstrap_plan(
+    *,
+    workspace_dir: Path,
+    config: WorkspaceConfig,
+    imported: bool,
+    aws_context: AwsExecutionContext,
+    dry_run: bool,
 ) -> BootstrapPlanResult:
-    """Inspect AWS resources and plan bootstrap actions without mutating AWS."""
-    ctx = load_workspace_context(
-        target_dir=target_dir,
-        min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED,
-    )
-    workspace_dir, config = ctx.workspace_dir, ctx.config
-
-    if aws_context is None:
-        try:
-            aws_ctx = resolve_aws_execution_context(
-                profile=config.aws.profile,
-                region=config.aws.region,
-                role_arn=config.aws.role_arn,
-                expected_account_id=config.aws.account_id,
-                require_identity=True,
-                require_expected_account=True,
-            )
-        except LzaError:
-            raise
-        except Exception as exc:
-            raise LzaError(f"AWS identity resolution failed: {exc}") from exc
-    else:
-        aws_ctx = aws_context
-
+    """Inspect bootstrap resources using one resolved workspace and AWS context."""
+    aws_ctx = aws_context
     assert aws_ctx.identity is not None
     account_id = aws_ctx.identity["account"]
     region = aws_ctx.region
@@ -160,11 +171,7 @@ def plan_bootstrap_workflow(
             bucket_planned_operation = "NO_CHANGE"
             actions.append(f"Reuse existing S3 assets bucket '{bucket_name}' (already configured)")
 
-    # Inspect CodeCommit configuration repository if configured
-    is_codecommit_config = (
-        config.configuration.repository.type == "codecommit"
-        or config.installer.options.configuration_repository_location == "codecommit"
-    )
+    is_codecommit_config = config.configuration.repository.type == "codecommit"
 
     cc_repo_name: str | None = None
     cc_branch_name: str | None = None
@@ -173,16 +180,8 @@ def plan_bootstrap_workflow(
     cc_planned_op = "N/A"
 
     if is_codecommit_config:
-        cc_repo_name = (
-            config.configuration.repository.repository_name
-            or config.installer.options.existing_config_repository_name
-            or "lza-config-source"
-        )
-        cc_branch_name = (
-            config.configuration.repository.branch
-            or config.installer.options.existing_config_repository_branch_name
-            or "main"
-        )
+        cc_repo_name = config.configuration.repository.repository_name or "lza-config-source"
+        cc_branch_name = config.configuration.repository.branch or "main"
         cc_client = aws_ctx.factory.get_client("codecommit")
         cc_insp = inspect_codecommit_config_repository(
             client=cc_client,
@@ -192,9 +191,13 @@ def plan_bootstrap_workflow(
         cc_repo_exists = cc_insp["exists"]
         cc_branch_exists = cc_insp["branch_exists"]
 
-        is_imported = config.configuration.template.source == "local"
+        if not cc_insp["accessible"] and not cc_insp["not_found"]:
+            raise LzaError(
+                f"Unable to access configured CodeCommit repository '{cc_repo_name}': "
+                f"{cc_insp['error'] or 'unknown error'}"
+            )
 
-        if is_imported:
+        if imported:
             if cc_repo_exists:
                 cc_planned_op = "NO_CHANGE"
                 actions.append(
@@ -207,15 +210,12 @@ def plan_bootstrap_workflow(
                     f"[bold red]MISSING[/bold red] CodeCommit repository '{cc_repo_name}' "
                     "not found (imported resources must not be recreated automatically)"
                 )
+        elif cc_repo_exists:
+            cc_planned_op = "NO_CHANGE"
+            actions.append(f"Reuse existing CodeCommit repository '{cc_repo_name}'")
         else:
-            if cc_repo_exists:
-                cc_planned_op = "NO_CHANGE"
-                actions.append(f"Reuse existing CodeCommit repository '{cc_repo_name}'")
-            else:
-                cc_planned_op = "CREATE"
-                actions.append(
-                    f"Create CodeCommit repository '{cc_repo_name}' in region '{region}'"
-                )
+            cc_planned_op = "CREATE"
+            actions.append(f"Create CodeCommit repository '{cc_repo_name}' in region '{region}'")
 
     if cc_planned_op == "MISSING":
         overall_planned_operation = "MISSING"
@@ -248,6 +248,48 @@ def plan_bootstrap_workflow(
     )
 
 
+def prepare_bootstrap_workflow(
+    target_dir: Path | None = None,
+    dry_run: bool = False,
+) -> BootstrapPreparation:
+    """Resolve one workspace and AWS target for bootstrap planning and execution."""
+    context = load_workspace_context(
+        target_dir=target_dir,
+        min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED,
+    )
+    aws_context = _resolve_bootstrap_aws_context(context.config)
+    plan = _build_bootstrap_plan(
+        workspace_dir=context.workspace_dir,
+        config=context.config,
+        imported=context.state.imported is True,
+        aws_context=aws_context,
+        dry_run=dry_run,
+    )
+    return BootstrapPreparation(context=context, aws_context=aws_context, plan=plan)
+
+
+def plan_bootstrap_workflow(
+    target_dir: Path | None = None,
+    dry_run: bool = True,
+    aws_context: AwsExecutionContext | None = None,
+) -> BootstrapPlanResult:
+    """Inspect AWS resources and plan bootstrap actions without mutating AWS."""
+    ctx = load_workspace_context(
+        target_dir=target_dir,
+        min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED,
+    )
+    workspace_dir, config = ctx.workspace_dir, ctx.config
+
+    aws_ctx = aws_context or _resolve_bootstrap_aws_context(config)
+    return _build_bootstrap_plan(
+        workspace_dir=workspace_dir,
+        config=config,
+        imported=ctx.state.imported is True,
+        aws_context=aws_ctx,
+        dry_run=dry_run,
+    )
+
+
 def bootstrap_workspace_workflow(
     target_dir: Path | None = None,
     dry_run: bool = False,
@@ -255,23 +297,18 @@ def bootstrap_workspace_workflow(
 ) -> WorkspaceBootstrapResult:
     """Execute workspace bootstrap workflow and return structured result."""
     del force  # Force bypasses CLI confirmation; workflow itself is idempotent
-    context = load_workspace_context(
-        target_dir=target_dir,
-        min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED,
-    )
-    aws_context = resolve_aws_execution_context(
-        profile=context.config.aws.profile,
-        region=context.config.aws.region,
-        role_arn=context.config.aws.role_arn,
-        expected_account_id=context.config.aws.account_id,
-        require_identity=True,
-        require_expected_account=True,
-    )
-    plan = plan_bootstrap_workflow(
-        target_dir=context.workspace_dir,
-        dry_run=dry_run,
-        aws_context=aws_context,
-    )
+    preparation = prepare_bootstrap_workflow(target_dir=target_dir, dry_run=dry_run)
+    return apply_bootstrap_preparation(preparation=preparation, dry_run=dry_run)
+
+
+def apply_bootstrap_preparation(
+    *,
+    preparation: BootstrapPreparation,
+    dry_run: bool = False,
+) -> WorkspaceBootstrapResult:
+    """Apply a bootstrap plan using the AWS context that produced it."""
+    plan = preparation.plan
+    aws_context = preparation.aws_context
 
     if plan.codecommit_repo_planned_operation == "MISSING":
         raise LzaError(
@@ -353,9 +390,12 @@ def bootstrap_workspace_workflow(
 
 __all__ = [
     "BootstrapPlanResult",
+    "BootstrapPreparation",
     "WorkspaceBootstrapResult",
+    "apply_bootstrap_preparation",
     "bootstrap_workspace_workflow",
     "ensure_s3_workbench_assets_bucket",
     "get_workbench_assets_bucket_name",
     "plan_bootstrap_workflow",
+    "prepare_bootstrap_workflow",
 ]
