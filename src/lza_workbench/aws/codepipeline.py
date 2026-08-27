@@ -22,6 +22,7 @@ class ActionStateResult:
     error_message: str | None = None
     external_execution_id: str | None = None
     external_execution_url: str | None = None
+    execution_id: str | None = None
 
 
 @dataclass
@@ -31,6 +32,7 @@ class StageStateResult:
     stage_name: str
     status: str | None = None
     actions: list[ActionStateResult] = field(default_factory=list)
+    execution_id: str | None = None
 
 
 @dataclass
@@ -134,6 +136,7 @@ def get_pipeline_state(
                 a_err = err_details.get("message")
                 a_ext_id = a_exec.get("externalExecutionId")
                 a_ext_url = a_exec.get("externalExecutionUrl")
+                a_exec_id = a_exec.get("pipelineExecutionId")
                 actions.append(
                     ActionStateResult(
                         action_name=a_name,
@@ -143,6 +146,7 @@ def get_pipeline_state(
                         error_message=a_err,
                         external_execution_id=a_ext_id,
                         external_execution_url=a_ext_url,
+                        execution_id=a_exec_id,
                     )
                 )
 
@@ -170,6 +174,7 @@ def get_pipeline_state(
                     stage_name=s_name,
                     status=s_status,
                     actions=actions,
+                    execution_id=s_exec_id,
                 )
             )
 
@@ -369,4 +374,3 @@ def get_latest_pipeline_execution_id(
     # Fallback to get_pipeline_state
     state = get_pipeline_state(client=client, factory=factory, pipeline_name=clean_pipeline_name)
     return state.latest_execution_id
-

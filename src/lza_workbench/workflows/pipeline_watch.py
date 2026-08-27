@@ -13,11 +13,12 @@ from lza_workbench.aws.codepipeline import (
     get_pipeline_execution,
     get_pipeline_state,
 )
-from lza_workbench.aws.context import resolve_aws_execution_context
+from lza_workbench.aws.context import AwsExecutionContext, resolve_aws_execution_context
 from lza_workbench.errors import LzaError
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.pipeline.state import record_pipeline_watch_result
 from lza_workbench.workspace.context import (
+    WorkspaceContext,
     WorkspaceReadinessLevel,
     load_workspace_context,
 )
@@ -87,16 +88,20 @@ def watch_pipeline_workflow(
     sleeper: Callable[[float], None] = time.sleep,
     time_provider: Callable[[], float] = time.time,
     on_update: Callable[[PipelineWatchUpdate], None] | None = None,
+    workspace_context: WorkspaceContext | None = None,
+    aws_context: AwsExecutionContext | None = None,
 ) -> PipelineWatchResult:
     """Monitor a CodePipeline execution until completion or timeout."""
-    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
+    ctx = workspace_context or load_workspace_context(
+        target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
+    )
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
     pipeline = resolve_pipeline(config, pipeline_type=pipeline_type, pipeline_name=pipeline_name)
     resolved_pipeline_name = pipeline.name
 
     profile = config.aws.profile or ""
-    aws_context = resolve_aws_execution_context(
+    resolved_aws_context = aws_context or resolve_aws_execution_context(
         profile=profile,
         region=config.aws.region,
         role_arn=config.aws.role_arn,
@@ -105,10 +110,14 @@ def watch_pipeline_workflow(
         require_expected_account=True,
     )
 
-    region = aws_context.region
-    account_id = aws_context.identity["account"] if aws_context.identity else "UNKNOWN_ACCOUNT"
+    region = resolved_aws_context.region
+    account_id = (
+        resolved_aws_context.identity["account"]
+        if resolved_aws_context.identity
+        else "UNKNOWN_ACCOUNT"
+    )
     pipeline_arn = pipeline.arn(region=region, account_id=account_id)
-    client = aws_context.factory.get_client("codepipeline")
+    client = resolved_aws_context.factory.get_client("codepipeline")
 
     resolved_execution_id = execution_id
     if not resolved_execution_id:
@@ -159,8 +168,12 @@ def watch_pipeline_workflow(
         stage_summaries = []
         failed_actions = []
         for s in state_res.stage_states:
+            if s.execution_id and s.execution_id != resolved_execution_id:
+                continue
             actions: list[PipelineActionSummary] = []
             for a in s.actions:
+                if a.execution_id and a.execution_id != resolved_execution_id:
+                    continue
                 action_sum = PipelineActionSummary(
                     action_name=a.action_name,
                     status=a.status,
@@ -183,8 +196,6 @@ def watch_pipeline_workflow(
 
         if exec_res.status and exec_res.status not in {"UNKNOWN", "NOT_FOUND"}:
             last_status = exec_res.status
-        elif state_res.status:
-            last_status = state_res.status
 
         if on_update is not None:
             on_update(
@@ -204,7 +215,7 @@ def watch_pipeline_workflow(
                     diagnostics: list[str] = []
                     if fa.external_execution_id:
                         diagnostics = fetch_codebuild_diagnostics(
-                            factory=aws_context.factory,
+                            factory=resolved_aws_context.factory,
                             build_id=fa.external_execution_id,
                         )
                     if diagnostics:

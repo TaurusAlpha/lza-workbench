@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from lza_workbench.aws.context import resolve_aws_execution_context
+from lza_workbench.aws.context import AwsExecutionContext, resolve_aws_execution_context
 from lza_workbench.aws.s3 import upload_s3_file
 from lza_workbench.configuration.archive import (
     ConfigDiffResult,
@@ -32,6 +32,7 @@ from lza_workbench.configuration.state import record_config_git_push, record_con
 from lza_workbench.configuration.templates import validate_template
 from lza_workbench.errors import LzaError
 from lza_workbench.workspace.context import (
+    WorkspaceContext,
     WorkspaceReadinessLevel,
     load_workspace_context,
 )
@@ -74,9 +75,13 @@ def push_configuration_workflow(
     *,
     target_dir: Path | None = None,
     dry_run: bool = False,
+    workspace_context: WorkspaceContext | None = None,
+    aws_context: AwsExecutionContext | None = None,
 ) -> ConfigPushResult:
     """Synchronize local configuration to configured remote repository."""
-    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
+    ctx = workspace_context or load_workspace_context(
+        target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
+    )
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
     config_dir = workspace_dir / config.configuration.local_path
@@ -96,6 +101,7 @@ def push_configuration_workflow(
             config=config,
             state=state,
             dry_run=dry_run,
+            aws_context=aws_context,
         )
 
     if repo_type in ("codecommit", "codeconnection", "git"):
@@ -118,6 +124,7 @@ def _handle_s3_push(
     config: WorkspaceConfig,
     state: WorkspaceState,
     dry_run: bool,
+    aws_context: AwsExecutionContext | None,
 ) -> ConfigPushResult:
     repo_cfg = config.configuration.repository
     destination = resolve_s3_configuration_destination(
@@ -154,7 +161,7 @@ def _handle_s3_push(
         exclude_files=exclude_files,
     )
 
-    aws_context = resolve_aws_execution_context(
+    resolved_aws_context = aws_context or resolve_aws_execution_context(
         profile=config.aws.profile,
         region=config.aws.region,
         role_arn=config.aws.role_arn,
@@ -162,7 +169,7 @@ def _handle_s3_push(
         require_identity=True,
         require_expected_account=True,
     )
-    s3_client = aws_context.factory.get_client("s3")
+    s3_client = resolved_aws_context.factory.get_client("s3")
 
     etag, version_id = upload_s3_file(
         client=s3_client,

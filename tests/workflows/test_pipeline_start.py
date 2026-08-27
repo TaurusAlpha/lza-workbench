@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from lza_workbench.errors import LzaError
 from lza_workbench.workflows.pipeline_start import (
     PipelineStartResult,
     start_pipeline_workflow,
@@ -69,3 +72,24 @@ def test_start_pipeline_installer_type(configured_workspace: Path) -> None:
 
     state = load_workspace_state(configured_workspace)
     assert state.installer_pipeline_execution_id == "exec-inst-456"
+
+
+def test_start_pipeline_reports_execution_id_when_state_save_fails(
+    configured_workspace: Path,
+) -> None:
+    mock_client = MagicMock()
+    mock_client.start_pipeline_execution.return_value = {"pipelineExecutionId": "exec-lost"}
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+        ),
+        patch(
+            "lza_workbench.workflows.pipeline_start.write_workspace_state",
+            side_effect=OSError("disk full"),
+        ),
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        with pytest.raises(LzaError, match="exec-lost"):
+            start_pipeline_workflow(target_dir=configured_workspace)

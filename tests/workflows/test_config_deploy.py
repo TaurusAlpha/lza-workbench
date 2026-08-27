@@ -5,7 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from lza_workbench.errors import LzaError
 from lza_workbench.workflows.config_deploy import (
+    ConfigDeployError,
     ConfigDeployResult,
     deploy_configuration_workflow,
 )
@@ -108,3 +112,58 @@ def test_deploy_configuration_full(configured_workspace: Path) -> None:
     assert result.start_result.execution_id == "exec-deploy-456"
     assert result.watch_result is not None
     assert result.watch_result.status == "Succeeded"
+
+
+def test_deploy_configuration_preserves_push_when_start_fails(configured_workspace: Path) -> None:
+    push_result = MagicMock()
+    aws_context = MagicMock()
+    with (
+        patch(
+            "lza_workbench.workflows.config_deploy.resolve_aws_execution_context",
+            return_value=aws_context,
+        ),
+        patch(
+            "lza_workbench.workflows.config_deploy.push_configuration_workflow",
+            return_value=push_result,
+        ),
+        patch(
+            "lza_workbench.workflows.config_deploy.start_pipeline_workflow",
+            side_effect=LzaError("start failed"),
+        ),
+    ):
+        with pytest.raises(ConfigDeployError, match="push succeeded") as raised:
+            deploy_configuration_workflow(target_dir=configured_workspace, watch=False)
+
+    assert raised.value.result.push_result is push_result
+    assert raised.value.result.start_result is None
+
+
+def test_deploy_configuration_preserves_execution_when_watch_fails(
+    configured_workspace: Path,
+) -> None:
+    push_result = MagicMock()
+    start_result = MagicMock(execution_id="exec-123")
+    aws_context = MagicMock()
+    with (
+        patch(
+            "lza_workbench.workflows.config_deploy.resolve_aws_execution_context",
+            return_value=aws_context,
+        ),
+        patch(
+            "lza_workbench.workflows.config_deploy.push_configuration_workflow",
+            return_value=push_result,
+        ),
+        patch(
+            "lza_workbench.workflows.config_deploy.start_pipeline_workflow",
+            return_value=start_result,
+        ),
+        patch(
+            "lza_workbench.workflows.config_deploy.watch_pipeline_workflow",
+            side_effect=LzaError("watch failed"),
+        ),
+    ):
+        with pytest.raises(ConfigDeployError, match="exec-123") as raised:
+            deploy_configuration_workflow(target_dir=configured_workspace)
+
+    assert raised.value.result.push_result is push_result
+    assert raised.value.result.start_result is start_result
