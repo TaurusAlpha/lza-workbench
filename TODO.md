@@ -229,6 +229,10 @@ Collect and persist installer CloudFormation parameters and workspace settings.
 Inspect AWS and show the CloudFormation actions required for the initialized installer
 configuration without modifying AWS resources.
 
+- [ ] Report validation-only readiness for the selected installer source, including its required
+  GitHub secret/repository, CodeCommit repository and branch, or S3 source object. Keep source
+  provisioning and synchronization in their dedicated future workflows.
+
 ### `lza installer deploy`
 
 Deploy or update the LZA installer CloudFormation stack in the management account.

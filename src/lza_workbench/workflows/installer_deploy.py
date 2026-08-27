@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +23,8 @@ from lza_workbench.errors import LzaError
 from lza_workbench.installer.deployment import (
     InstallerConfigValidationError,
     InstallerConfigValidationResult,
+    get_installer_template_digest,
+    include_template_digest_change,
     inspect_installer_source,
     prepare_installer_template,
     validate_cloudformation_plan,
@@ -72,14 +73,6 @@ class InstallerDeploymentPreparation:
     account_id: str
 
 
-def _get_template_digest(template_path: Path) -> str:
-    """Return a stable digest for the rendered installer template."""
-    try:
-        return sha256(template_path.read_bytes()).hexdigest()
-    except OSError as exc:
-        raise LzaError(f"Unable to read installer template {template_path}: {exc}") from exc
-
-
 def prepare_installer_deployment(
     *,
     target_dir: Path | None = None,
@@ -111,7 +104,7 @@ def prepare_installer_deployment(
     template_path, resolved_parameters = prepare_installer_template(
         workspace_dir=workspace_dir, config=config, dry_run=dry_run
     )
-    template_digest = _get_template_digest(template_path)
+    template_digest = get_installer_template_digest(template_path)
     inspect_installer_source(factory=aws_context.factory, config=config, region=aws_context.region)
 
     stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
@@ -120,11 +113,13 @@ def prepare_installer_deployment(
         stack_name=stack_name,
         resolved_parameters=resolved_parameters,
     )
+    state = load_workspace_state(workspace_dir)
+    cfn_plan = include_template_digest_change(
+        cfn_plan,
+        template_digest=template_digest,
+        deployed_template_digest=state.installer_template_digest,
+    )
     operation = validate_cloudformation_plan(cfn_plan)
-    if operation == "NO_CHANGE":
-        state = load_workspace_state(workspace_dir)
-        if state.installer_template_digest != template_digest:
-            operation = "UPDATE"
 
     return InstallerDeploymentPreparation(
         workspace_dir=workspace_dir,

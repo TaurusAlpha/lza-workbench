@@ -10,6 +10,10 @@ from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.secrets_manager import inspect_secret_exists
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import validate_installer_configuration
+from lza_workbench.installer.deployment import (
+    get_installer_template_digest,
+    include_template_digest_change,
+)
 from lza_workbench.installer.parameters import (
     build_installer_cfn_parameters,
 )
@@ -50,10 +54,11 @@ def plan_installer_workflow(
             "Run 'lza installer init' first."
         )
 
-    template_path = resolve_installer_template(workspace_dir, config, dry_run=dry_run)
+    template_path = resolve_installer_template(workspace_dir, config, dry_run=True)
     params_schema = inspect_template_parameters(template_path)
     resolved_params = build_installer_cfn_parameters(config, schema=params_schema)
     validate_parameters_against_schema(resolved_params, params_schema)
+    template_digest = get_installer_template_digest(template_path)
 
     # Resolve AWS identity only after local configuration is complete and valid.
     aws_context = resolve_aws_execution_context(
@@ -107,6 +112,11 @@ def plan_installer_workflow(
         client=cfn_client,
         stack_name=stack_name,
         resolved_parameters=resolved_params,
+    )
+    cfn_plan = include_template_digest_change(
+        cfn_plan,
+        template_digest=template_digest,
+        deployed_template_digest=ctx.state.installer_template_digest,
     )
 
     # Step 6: Return Structured Plan Result

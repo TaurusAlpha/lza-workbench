@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from botocore.exceptions import ClientError
 
+from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult
 from lza_workbench.installer.planning import InstallerPlanResult
 from lza_workbench.workflows.installer_init import initialize_installer_workflow
 from lza_workbench.workflows.installer_plan import plan_installer_workflow
@@ -38,6 +39,65 @@ def test_plan_installer_workflow_returns_structured_result(
             assert result.region == "eu-west-1"
             assert result.aws_identity is not None
             assert result.aws_identity["account"] == "123456789012"
+
+
+def test_plan_installer_workflow_does_not_mutate_local_template(
+    configured_workspace: Path,
+) -> None:
+    template_path = configured_workspace / "aws-accelerator-installer" / (
+        "AWSAccelerator-InstallerStack.template"
+    )
+    template_path.write_text(
+        """{
+          "Mappings": {"Global": {"SendAnonymizedData": {"Data": "Yes"}}},
+          "Parameters": {
+            "ManagementAccountEmail": {"Type": "String"},
+            "RepositorySource": {"Type": "String", "AllowedValues": ["codecommit"]}
+          }
+        }""",
+        encoding="utf-8",
+    )
+    expected_content = template_path.read_text(encoding="utf-8")
+
+    config = load_workspace_config(configured_workspace)
+    config.installer.options.anonymous_data = False
+    write_workspace_config(configured_workspace, config)
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = MagicMock()
+        plan_installer_workflow(target_dir=configured_workspace)
+
+    assert template_path.read_text(encoding="utf-8") == expected_content
+
+
+def test_plan_installer_workflow_marks_changed_template_for_update(
+    configured_workspace: Path,
+) -> None:
+    state = WorkspaceState.from_config(load_workspace_config(configured_workspace))
+    state.installer_template_digest = "outdated"
+    write_workspace_state(configured_workspace, state)
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.workflows.installer_plan.inspect_cloudformation_stack") as mock_cfn,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = MagicMock()
+        mock_cfn.return_value = CfnDeploymentPlanResult(
+            stack_name="AWSAccelerator-InstallerStack",
+            operation="NO_CHANGE",
+            stack_status="UPDATE_COMPLETE",
+            resolved_parameters={},
+        )
+
+        result = plan_installer_workflow(target_dir=configured_workspace)
+
+    assert result.cloudformation_plan.operation == "UPDATE"
 
 
 def test_installer_init_persists_new_template_defaults(tmp_path: Path) -> None:
@@ -234,5 +294,4 @@ def test_installer_init_populates_s3_config_bucket(tmp_path: Path) -> None:
 
     saved_config = load_workspace_config(ws_dir)
     assert saved_config.configuration.repository.bucket == expected_bucket
-
 
