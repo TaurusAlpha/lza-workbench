@@ -190,3 +190,57 @@ def test_cli_config_deploy_pipeline_failed(
         result.output or ""
     )
     assert "CDK Synth error" in result.output
+
+
+def test_cli_config_deploy_verbose(
+    configured_workspace: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_s3 = MagicMock()
+    mock_s3.head_object.return_value = {"ETag": '"12345"', "VersionId": "v1"}
+    mock_codepipeline = MagicMock()
+    mock_codepipeline.start_pipeline_execution.return_value = {
+        "pipelineExecutionId": "exec-cli-verb"
+    }
+    mock_codepipeline.get_pipeline_execution.return_value = {
+        "pipelineExecution": {
+            "pipelineExecutionId": "exec-cli-verb",
+            "status": "Succeeded",
+        }
+    }
+    mock_codepipeline.get_pipeline_state.return_value = {
+        "stageStates": [
+            {
+                "stageName": "Source",
+                "latestExecution": {"status": "Succeeded"},
+                "actionStates": [
+                    {"actionName": "SourceAction", "latestExecution": {"status": "Succeeded"}}
+                ],
+            }
+        ]
+    }
+
+    def get_client_side_effect(service_name: str) -> MagicMock:
+        if service_name == "s3":
+            return mock_s3
+        if service_name == "codepipeline":
+            return mock_codepipeline
+        return MagicMock()
+
+    monkeypatch.chdir(configured_workspace)
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            side_effect=get_client_side_effect,
+        ),
+        patch("time.sleep"),
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        result = cli_runner.invoke(app, ["config", "deploy", "--verbose"])
+
+    assert result.exit_code == 0
+    assert "Pipeline Execution Summary" in result.output
+    assert "completed successfully" in result.output
+

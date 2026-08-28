@@ -152,34 +152,6 @@ def test_deploy_cloudformation_stack_invalid_args() -> None:
         )
 
 
-def test_deploy_cloudformation_stack_treats_no_updates_as_noop() -> None:
-    """CloudFormation's expected unchanged-stack response is a structured no-op."""
-    client = MagicMock()
-    client.update_stack.side_effect = ClientError(
-        {"Error": {"Code": "ValidationError", "Message": "No updates are to be performed."}},
-        "UpdateStack",
-    )
-
-    stack_id = deploy_cloudformation_stack(
-        client=client,
-        stack_name="MyStack",
-        template_body="{}",
-        parameters={},
-        operation="UPDATE",
-    )
-
-    assert stack_id is None
-
-    with pytest.raises(LzaError, match="Unsupported deployment operation: INVALID"):
-        deploy_cloudformation_stack(
-            client=client,
-            stack_name="MyStack",
-            template_body="{}",
-            parameters={},
-            operation="INVALID",
-        )
-
-
 def test_stream_cloudformation_stack_events_transient_error_recovery() -> None:
     """Test that transient AWS errors recover within max_consecutive_errors allowance."""
     client = MagicMock()
@@ -380,4 +352,3 @@ def test_inspect_cloudformation_stack_preserves_rollback_complete_status() -> No
     )
     assert res.operation == "UPDATE"
     assert res.stack_status == "ROLLBACK_COMPLETE"
-

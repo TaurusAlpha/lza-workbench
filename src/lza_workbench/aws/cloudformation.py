@@ -240,7 +240,7 @@ def deploy_cloudformation_stack(
     parameters: dict[str, str],
     operation: str,
     capabilities: list[str] | None = None,
-) -> str | None:
+) -> str:
     """Trigger CloudFormation stack creation or update.
 
     Returns the stack ID returned by CloudFormation, or ``None`` when an update is unchanged.
@@ -287,7 +287,11 @@ def deploy_cloudformation_stack(
         error = exc.response.get("Error", {})
         message = error.get("Message", str(exc))
         if operation == "UPDATE" and "no updates are to be performed" in message.lower():
-            return None
+            return str(
+                cfn.describe_stacks(StackName=clean_stack_name)
+                .get("Stacks", [{}])[0]
+                .get("StackId")
+            )
         raise LzaError(
             f"CloudFormation stack {operation.lower()} failed for '{clean_stack_name}': {message}"
         ) from exc

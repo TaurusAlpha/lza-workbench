@@ -203,13 +203,16 @@ def pipeline_watch_command(
     pipeline_name: params.PipelineName = None,
     execution_id: params.ExecutionId = None,
     poll_interval: params.PollInterval = None,
+    verbose: params.Verbose = False,
 ) -> None:
     """Monitor an existing LZA CodePipeline execution."""
     run_cli_pipeline_watch(
         pipeline_name=pipeline_name,
         execution_id=execution_id,
         poll_interval=poll_interval,
+        verbose=verbose,
     )
+
 
 
 app.add_typer(config_app, name="config")
@@ -370,12 +373,15 @@ def config_upload_command(
 def config_deploy_command(
     dry_run: params.DryRun = False,
     no_watch: params.NoWatch = False,
+    verbose: params.Verbose = False,
 ) -> None:
     """Synchronize configuration to remote destination and trigger LZA pipeline execution."""
     run_cli_deploy_config(
         dry_run=dry_run,
         no_watch=no_watch,
+        verbose=verbose,
     )
+
 
 
 def main(argv: list[str] | None = None) -> int:

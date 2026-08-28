@@ -22,6 +22,8 @@ def test_deploy_configuration_dry_run(configured_workspace: Path) -> None:
     )
     assert isinstance(result, ConfigDeployResult)
     assert result.dry_run is True
+    assert result.push_result is not None
+    assert result.start_result is not None
     assert result.push_result.dry_run is True
     assert result.start_result.dry_run is True
     assert result.watch_result is None
@@ -57,6 +59,8 @@ def test_deploy_configuration_no_watch(configured_workspace: Path) -> None:
         )
 
     assert result.dry_run is False
+    assert result.push_result is not None
+    assert result.start_result is not None
     assert result.push_result.etag == "12345"
     assert result.start_result.execution_id == "exec-deploy-123"
     assert result.watch_result is None
@@ -108,6 +112,8 @@ def test_deploy_configuration_full(configured_workspace: Path) -> None:
         )
 
     assert result.dry_run is False
+    assert result.push_result is not None
+    assert result.start_result is not None
     assert result.push_result.etag == "12345"
     assert result.start_result.execution_id == "exec-deploy-456"
     assert result.watch_result is not None

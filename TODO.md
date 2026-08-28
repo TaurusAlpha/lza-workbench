@@ -318,15 +318,6 @@ Start the configured LZA pipeline without synchronizing local configuration firs
 Monitor an existing pipeline execution without starting a new execution or synchronizing
 configuration.
 
-- [ ] Refine pipeline monitoring and failure presentation.
-  - Render polling progress as a single live/updating status instead of emitting repeated status lines.
-  - Keep the default execution summary concise; omit pending/not-executed actions after a failure.
-  - Prioritize the failed stage/action and extracted root cause in failure output.
-  - Suppress raw CodeBuild buildspec command text and wrapper errors from normal output.
-  - Deduplicate repeated AWS/CodeBuild/CloudFormation failure messages.
-  - Keep full stage/action breakdown and raw diagnostic context available through verbose output.
-  - Reuse the same monitoring presentation from `lza config deploy`.
-
 ### `lza status`
 
 Show the read-only overall workspace, installer, configuration, and pipeline summary.

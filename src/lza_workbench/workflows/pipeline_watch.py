@@ -30,12 +30,14 @@ class PipelineActionSummary:
     """Status and error details of an individual action inside a pipeline stage."""
 
     action_name: str
+    stage_name: str | None = None
     status: str | None = None
     summary: str | None = None
     error_message: str | None = None
     external_execution_id: str | None = None
     external_execution_url: str | None = None
     diagnostic_details: list[str] = field(default_factory=list)
+    raw_diagnostic_details: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -176,6 +178,7 @@ def watch_pipeline_workflow(
                     continue
                 action_sum = PipelineActionSummary(
                     action_name=a.action_name,
+                    stage_name=s.stage_name,
                     status=a.status,
                     summary=a.summary,
                     error_message=a.error_message,
@@ -221,6 +224,7 @@ def watch_pipeline_workflow(
                     if diagnostics:
                         fa_enriched = PipelineActionSummary(
                             action_name=fa.action_name,
+                            stage_name=fa.stage_name,
                             status=fa.status,
                             summary=fa.summary,
                             error_message=fa.error_message,
@@ -230,17 +234,32 @@ def watch_pipeline_workflow(
                         )
                         enriched_failed.append(fa_enriched)
                     else:
-                        enriched_failed.append(fa)
+                        fa_enriched = PipelineActionSummary(
+                            action_name=fa.action_name,
+                            stage_name=fa.stage_name,
+                            status=fa.status,
+                            summary=fa.summary,
+                            error_message=fa.error_message,
+                            external_execution_id=fa.external_execution_id,
+                            external_execution_url=fa.external_execution_url,
+                            diagnostic_details=[str(fa.error_message or fa.summary)]
+                            if (fa.error_message or fa.summary)
+                            else ["Unknown error"],
+                        )
+                        enriched_failed.append(fa_enriched)
                 failed_actions = enriched_failed
 
                 action_errs = []
                 for fa in failed_actions:
+                    stage_prefix = f"Stage '{fa.stage_name}', action" if fa.stage_name else "Action"
                     if fa.diagnostic_details:
                         diag_text = "\n  - ".join(fa.diagnostic_details)
-                        action_errs.append(f"Action '{fa.action_name}' failed:\n  - {diag_text}")
+                        action_errs.append(
+                            f"{stage_prefix} '{fa.action_name}' failed:\n  - {diag_text}"
+                        )
                     else:
                         err_text = fa.error_message or fa.summary or "Unknown error"
-                        action_errs.append(f"Action '{fa.action_name}' failed: {err_text}")
+                        action_errs.append(f"{stage_prefix} '{fa.action_name}' failed: {err_text}")
                 error_message = "\n".join(action_errs)
             break
 

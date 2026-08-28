@@ -168,6 +168,7 @@ def apply_installer_deployment(
     config = preparation.config
     aws_context = preparation.aws_context
     operation = preparation.operation
+    assert aws_context.identity is not None
 
     if operation == "NO_CHANGE" and not force and not force_no_change:
         return InstallerDeployResult(

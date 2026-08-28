@@ -10,6 +10,125 @@ from botocore.exceptions import BotoCoreError, ClientError
 from lza_workbench.aws.client_factory import AwsClientFactory
 
 
+def _clean_log_line(raw_line: str) -> str:
+    """Strip prefixes, timestamps, log-level wrappers, and ANSI escapes from a log line."""
+    line = raw_line.strip()
+    if not line:
+        return ""
+
+    # Strip ANSI escape sequences
+    line = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", line)
+
+    # Strip [Container] timestamp prefix
+    line = re.sub(
+        r"^\[Container\]\s+\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+", "", line
+    )
+
+    # Strip ISO timestamps and toolkit/log level prefixes e.g. "2026-08-23 16:47:44.027 | error |"
+    line = re.sub(
+        r"^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?\s*(?:\|\s*(?:error|warn|info)\s*\|\s*(?:toolkit\s*\|\s*)?)?",
+        "",
+        line,
+        flags=re.IGNORECASE,
+    )
+
+
+    # Strip leading log prefixes like "[ERROR]", "[error]", "ERROR:", "Deployment of Stack failed: "
+    line = re.sub(
+        r"^(?:\[(?:ERROR|error|WARN|warn|INFO|info)\]\s*|ERROR:\s*|Deployment of Stack failed:\s*)",
+        "",
+        line,
+    )
+
+    # Normalize double spaces
+    line = re.sub(r"\s+", " ", line).strip()
+    return line
+
+
+def _is_wrapper_or_noise(line: str) -> bool:
+    """Check whether a log line is buildspec/wrapper boilerplate or benign noise."""
+    noise_patterns = [
+        r"^Error while executing command:",
+        r"^COMMAND_EXECUTION_ERROR",
+        r"^Phase context status code:",
+        r"^Command failed with exit code",
+        r"^Command did not exit successfully",
+        r"^Build command failed",
+        r"^Subprocess exited with error",
+        r"^npm ERR!",
+        r"^yarn run\s+",
+        r"^State:\s*FAILED",
+        r"^Phase complete:\s*\w+\s+State:\s*\w+",
+        r"Parameter 'CloudFormationExecutionPolicies' is not referenced",
+        r"^npm notice",
+        r"^\s*info\s*\|",
+    ]
+    return any(re.search(pat, line, flags=re.IGNORECASE) for pat in noise_patterns)
+
+
+def _is_high_priority_error(line: str) -> bool:
+    """Check whether a log line represents an actionable root cause."""
+    high_priority_indicators = [
+        "❌",
+        "ValidationError:",
+        "StackPolicyException:",
+        "ResourceStatusReason:",
+        "StatusReason:",
+        "TerminationProtection",
+        "AccessDenied",
+        "UnauthorizedOperation",
+        "is not authorized to perform",
+        "ResourceNotFoundException",
+        "LimitExceededException",
+        "AlreadyExistsException",
+        "ClientError:",
+        "BotoCoreError:",
+        "The following resource(s) failed to create",
+    ]
+    if any(k in line for k in high_priority_indicators):
+        return True
+    if "| error |" in line and "failed:" in line:
+        return True
+    if re.search(r"\b\w+Stack\b.*failed:", line, flags=re.IGNORECASE):
+        return True
+    if re.search(r"^[A-Z][A-Za-z0-9_]*(?:Error|Exception|Fault):\s+", line):
+        return True
+    return False
+
+
+def _deduplicate_messages(messages: list[str], max_messages: int = 5) -> list[str]:
+    """Deduplicate near-identical and substring error messages, prioritizing richer messages."""
+    unique: list[str] = []
+    for msg in messages:
+        clean = msg.strip()
+        if not clean:
+            continue
+
+        # Check if already covered or if it replaces an existing shorter message
+        matched = False
+        for idx, existing in enumerate(unique):
+            if clean == existing:
+                matched = True
+                break
+            if clean in existing:
+                # Existing message is more specific / has more context
+                matched = True
+                break
+            if existing in clean:
+                # New message has more context (e.g. contains stack name + error vs error alone)
+                unique[idx] = clean
+                matched = True
+                break
+
+        if not matched:
+            unique.append(clean)
+
+        if len(unique) >= max_messages:
+            break
+
+    return unique[:max_messages]
+
+
 def extract_log_error_diagnostics(
     log_lines: list[str],
     *,
@@ -21,48 +140,26 @@ def extract_log_error_diagnostics(
 
     high_priority_matches: list[str] = []
     standard_matches: list[str] = []
-    seen_cleaned: set[str] = set()
 
     for raw_line in log_lines:
-        line = raw_line.strip()
-        if not line:
+        cleaned = _clean_log_line(raw_line)
+        if not cleaned:
             continue
 
-        cleaned = re.sub(
-            r"^\[Container\]\s+\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+", "", line
-        )
-
-        if "Parameter 'CloudFormationExecutionPolicies' is not referenced" in cleaned:
-            continue
-
-        if (
-            "❌" in cleaned
-            or ("| error |" in cleaned and "failed:" in cleaned)
-            or "ValidationError:" in cleaned
-            or "StackPolicyException:" in cleaned
-            or "ResourceStatusReason:" in cleaned
-        ):
-            if cleaned not in seen_cleaned:
-                seen_cleaned.add(cleaned)
-                high_priority_matches.append(cleaned)
-        elif (
-            "| error |" in cleaned
-            or "Command failed with exit code" in cleaned
-            or "State: FAILED" in cleaned
-            or "COMMAND_EXECUTION_ERROR" in cleaned
-            or ("Error:" in cleaned and not cleaned.startswith("info"))
-        ):
-            if cleaned not in seen_cleaned:
-                seen_cleaned.add(cleaned)
+        if _is_high_priority_error(cleaned):
+            high_priority_matches.append(cleaned)
+        elif not _is_wrapper_or_noise(cleaned):
+            if (
+                "| error |" in cleaned
+                or "error" in cleaned.lower()
+                or "failed" in cleaned.lower()
+            ):
                 standard_matches.append(cleaned)
 
-    results = list(high_priority_matches) if high_priority_matches else list(standard_matches)
-    if high_priority_matches and len(high_priority_matches) < max_messages:
-        for m in standard_matches:
-            if m not in results and len(results) < max_messages:
-                results.append(m)
+    if high_priority_matches:
+        return _deduplicate_messages(high_priority_matches, max_messages=max_messages)
 
-    return results[:max_messages]
+    return _deduplicate_messages(standard_matches, max_messages=max_messages)
 
 
 def get_codebuild_build_info(
@@ -165,10 +262,14 @@ def fetch_codebuild_diagnostics(
         if phase.get("phaseStatus") == "FAILED":
             for ctx in phase.get("contexts", []):
                 msg = ctx.get("message")
-                if msg and msg not in phase_errors:
-                    phase_errors.append(msg)
+                if msg:
+                    cleaned_msg = _clean_log_line(msg)
+                    if cleaned_msg and not _is_wrapper_or_noise(cleaned_msg):
+                        phase_errors.append(cleaned_msg)
+                    elif msg not in phase_errors:
+                        phase_errors.append(msg)
 
-    return phase_errors[:max_messages]
+    return _deduplicate_messages(phase_errors, max_messages=max_messages)
 
 
 __all__ = [

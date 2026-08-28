@@ -161,3 +161,30 @@ def test_fetch_codebuild_diagnostics_fallback_to_phases() -> None:
     )
     assert len(diagnostics) == 1
     assert diagnostics[0] == "Command exit status 1"
+
+
+def test_extract_log_error_diagnostics_wrapper_suppression_and_deduplication() -> None:
+    raw_logs = [
+        "[Container] 2026/08/23 16:47:44.027 | error | toolkit | Deployment of Stack failed: "
+        "❌  AWSAccelerator-PrepareStack-123 failed: ValidationError: Stack cannot be deleted",
+        "❌  AWSAccelerator-PrepareStack-123 failed: ValidationError: Stack cannot be deleted",
+        "ValidationError: Stack cannot be deleted",
+        "error Command failed with exit code 1.",
+        "Error while executing command: yarn run ts-node ...",
+        "Phase context status code: COMMAND_EXECUTION_ERROR",
+        "npm ERR! code 1",
+    ]
+
+    extracted = extract_log_error_diagnostics(raw_logs)
+    # High priority error should be extracted and deduplicated into 1 rich message
+    assert len(extracted) == 1
+    expected_msg = (
+        "AWSAccelerator-PrepareStack-123 failed: ValidationError: Stack cannot be deleted"
+    )
+    assert expected_msg in extracted[0]
+    # Buildspec wrapper noise should not be present
+
+    assert not any("COMMAND_EXECUTION_ERROR" in line for line in extracted)
+    assert not any("yarn run" in line for line in extracted)
+    assert not any("npm ERR" in line for line in extracted)
+

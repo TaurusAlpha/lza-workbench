@@ -224,8 +224,90 @@ def test_cli_pipeline_watch_with_diagnostics(
         result = cli_runner.invoke(app, ["pipeline", "watch", "-e", "exec-cli-diag"])
 
     assert result.exit_code == 1
-    assert "Action Failures & Diagnostics" in result.output
+    assert "Action Failures & Root Cause Diagnostics" in result.output
+    assert "Prepare" in result.output
     assert "PrepareAction" in result.output
     assert "TerminationProtection is enabled" in result.output
     assert "https://console.aws.amazon.com/codebuild/build-abc-123" in result.output
+
+
+def test_cli_pipeline_watch_concise_omits_pending_stages_on_failure(
+    configured_workspace: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_codepipeline = MagicMock()
+    mock_codepipeline.get_pipeline_execution.return_value = {
+        "pipelineExecution": {
+            "pipelineExecutionId": "exec-concise-fail",
+            "status": "Failed",
+        }
+    }
+    mock_codepipeline.get_pipeline_state.return_value = {
+        "stageStates": [
+            {
+                "stageName": "Source",
+                "latestExecution": {"status": "Succeeded"},
+                "actionStates": [
+                    {"actionName": "SourceAction", "latestExecution": {"status": "Succeeded"}}
+                ],
+            },
+            {
+                "stageName": "Prepare",
+                "latestExecution": {"status": "Failed"},
+                "actionStates": [
+                    {
+                        "actionName": "PrepareAction",
+                        "latestExecution": {
+                            "status": "Failed",
+                            "errorDetails": {"message": "Prepare step failed"},
+                        },
+                    }
+                ],
+            },
+            {
+                "stageName": "Accounts",
+                "actionStates": [
+                    {"actionName": "AccountsAction"}
+                ],
+            },
+            {
+                "stageName": "Network",
+                "actionStates": [
+                    {"actionName": "NetworkAction"}
+                ],
+            },
+        ]
+    }
+
+    monkeypatch.chdir(configured_workspace)
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            return_value=mock_codepipeline,
+        ),
+        patch("time.sleep"),
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        # Default concise mode
+        result = cli_runner.invoke(app, ["pipeline", "watch", "-e", "exec-concise-fail"])
+        assert result.exit_code == 1
+        assert "Source" in result.output
+        assert "Prepare" in result.output
+        # Pending stages after failure should be omitted from table
+        assert "Accounts" not in result.output
+        assert "Network" not in result.output
+
+        # Verbose mode should show pending stages
+        result_verbose = cli_runner.invoke(
+            app, ["pipeline", "watch", "-e", "exec-concise-fail", "--verbose"]
+        )
+        assert result_verbose.exit_code == 1
+
+        assert "Source" in result_verbose.output
+        assert "Prepare" in result_verbose.output
+        assert "Accounts" in result_verbose.output
+        assert "Network" in result_verbose.output
+
 

@@ -213,3 +213,13 @@ PollInterval = Annotated[
     ),
 ]
 
+Verbose = Annotated[
+    bool,
+    typer.Option(
+        "--verbose",
+        "-v",
+        help="Show detailed execution breakdown and diagnostic output.",
+    ),
+]
+
+
