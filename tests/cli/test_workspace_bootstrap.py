@@ -49,6 +49,12 @@ def test_cli_bootstrap_dry_run(test_workspace: Path, monkeypatch: pytest.MonkeyP
 
 
 def test_cli_bootstrap_force(test_workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+
+    cfg = load_workspace_config(test_workspace)
+    cfg.installer.source_code.repository_type = "codecommit"
+    write_workspace_config(test_workspace, cfg)
+
     monkeypatch.chdir(test_workspace)
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
@@ -108,3 +114,182 @@ def test_cli_bootstrap_prompt_abort(
         res = runner.invoke(app, ["bootstrap"], input="n\n")
         assert res.exit_code == 0
         assert "Bootstrap aborted by user." in res.output
+
+
+def test_cli_bootstrap_github_token_flag(
+    test_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+
+    cfg = load_workspace_config(test_workspace)
+    cfg.installer.source_code.repository_type = "github"
+    cfg.configuration.repository.type = "s3"
+    write_workspace_config(test_workspace, cfg)
+
+    monkeypatch.chdir(test_workspace)
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch(
+            "lza_workbench.workflows.workspace_bootstrap.validate_github_repository_access"
+        ) as mock_gh,
+    ):
+        mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
+        mock_s3 = MagicMock()
+        mock_s3.head_bucket.return_value = {}
+        mock_s3.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        mock_s3.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        mock_sm = MagicMock()
+        mock_sm.describe_secret.side_effect = ClientError(
+            {"Error": {"Code": "ResourceNotFoundException"}}, "DescribeSecret"
+        )
+
+        def client_factory(service: str):
+            return mock_s3 if service == "s3" else mock_sm
+
+        mock_client.side_effect = client_factory
+        mock_gh.return_value = {"accessible": True, "error": None}
+
+        res = runner.invoke(
+            app, ["bootstrap", "--force", "--github-token", "ghp_my_secret_token"]
+        )
+        assert res.exit_code == 0
+        assert "Created AWS Secrets Manager secret" in res.output
+        mock_sm.create_secret.assert_called_once()
+
+
+def test_cli_bootstrap_github_allow_missing_secret_flag(
+    test_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+
+    cfg = load_workspace_config(test_workspace)
+    cfg.installer.source_code.repository_type = "github"
+    cfg.configuration.repository.type = "s3"
+    write_workspace_config(test_workspace, cfg)
+
+    monkeypatch.chdir(test_workspace)
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
+        mock_s3 = MagicMock()
+        mock_s3.head_bucket.return_value = {}
+        mock_s3.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        mock_s3.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        mock_sm = MagicMock()
+        mock_sm.describe_secret.side_effect = ClientError(
+            {"Error": {"Code": "ResourceNotFoundException"}}, "DescribeSecret"
+        )
+
+        def client_factory(service: str):
+            return mock_s3 if service == "s3" else mock_sm
+
+        mock_client.side_effect = client_factory
+
+        res = runner.invoke(
+            app, ["bootstrap", "--force", "--allow-missing-github-secret"]
+        )
+        assert res.exit_code == 0
+        assert "WARNING" in res.output
+
+
+def test_cli_bootstrap_github_interactive_prompt_provide_token(
+    test_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+
+    cfg = load_workspace_config(test_workspace)
+    cfg.installer.source_code.repository_type = "github"
+    cfg.configuration.repository.type = "s3"
+    write_workspace_config(test_workspace, cfg)
+
+    monkeypatch.chdir(test_workspace)
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch(
+            "lza_workbench.workflows.workspace_bootstrap.validate_github_repository_access"
+        ) as mock_gh,
+    ):
+        mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
+        mock_s3 = MagicMock()
+        mock_s3.head_bucket.return_value = {}
+        mock_s3.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        mock_s3.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        mock_sm = MagicMock()
+        mock_sm.describe_secret.side_effect = ClientError(
+            {"Error": {"Code": "ResourceNotFoundException"}}, "DescribeSecret"
+        )
+
+        def client_factory(service: str):
+            return mock_s3 if service == "s3" else mock_sm
+
+        mock_client.side_effect = client_factory
+        mock_gh.return_value = {"accessible": True, "error": None}
+        import sys
+        monkeypatch.setattr(sys.modules["lza_workbench.cli.main"], "_is_interactive", lambda: True)
+
+        res = runner.invoke(app, ["bootstrap"], input="y\nghp_interactive_token\ny\n")
+        assert res.exit_code == 0
+        assert "Created AWS Secrets Manager secret" in res.output
+
+
+def test_cli_bootstrap_github_interactive_prompt_proceed_anyway(
+    test_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+
+    cfg = load_workspace_config(test_workspace)
+    cfg.installer.source_code.repository_type = "github"
+    cfg.configuration.repository.type = "s3"
+    write_workspace_config(test_workspace, cfg)
+
+    monkeypatch.chdir(test_workspace)
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch(
+            "lza_workbench.workflows.workspace_bootstrap.validate_github_repository_access"
+        ) as mock_gh,
+    ):
+        mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
+        mock_s3 = MagicMock()
+        mock_s3.head_bucket.return_value = {}
+        mock_s3.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        mock_s3.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        mock_sm = MagicMock()
+        mock_sm.describe_secret.side_effect = ClientError(
+            {"Error": {"Code": "ResourceNotFoundException"}}, "DescribeSecret"
+        )
+
+        def client_factory(service: str):
+            return mock_s3 if service == "s3" else mock_sm
+
+        mock_client.side_effect = client_factory
+        mock_gh.return_value = {"accessible": True, "error": None}
+        import sys
+        monkeypatch.setattr(sys.modules["lza_workbench.cli.main"], "_is_interactive", lambda: True)
+
+        # User declines providing token now (n), confirms proceed anyway (y)
+        res = runner.invoke(app, ["bootstrap"], input="n\ny\n")
+        assert res.exit_code == 0
+        assert "WARNING" in res.output
+

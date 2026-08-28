@@ -222,4 +222,20 @@ Verbose = Annotated[
     ),
 ]
 
+GithubToken = Annotated[
+    str | None,
+    typer.Option(
+        "--github-token",
+        help="GitHub Personal Access Token to store in AWS Secrets Manager.",
+    ),
+]
+
+AllowMissingGithubSecret = Annotated[
+    bool,
+    typer.Option(
+        "--allow-missing-github-secret",
+        help="Allow bootstrap to proceed with a warning if the GitHub token secret does not exist.",
+    ),
+]
+
 

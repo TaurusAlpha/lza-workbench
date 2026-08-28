@@ -65,9 +65,11 @@ class PipelineWatchMonitor:
 
         stage_info = f" | Stage: [cyan]{active_stage}[/cyan]" if active_stage else ""
         if self._live_status:
-            self._live_status.update(
-                f"Pipeline {status_tag} - Execution: {update.execution_id}{stage_info} ({elapsed_str})"
+            msg = (
+                f"Pipeline {status_tag} - Execution: {update.execution_id}"
+                f"{stage_info} ({elapsed_str})"
             )
+            self._live_status.update(msg)
 
     def stop(self) -> None:
         """Clean up live status display."""

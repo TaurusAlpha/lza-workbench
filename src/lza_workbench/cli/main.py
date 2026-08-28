@@ -294,12 +294,16 @@ def import_command(
 def bootstrap_command(
     dry_run: params.DryRun = False,
     force: params.Force = False,
+    github_token: params.GithubToken = None,
+    allow_missing_github_secret: params.AllowMissingGithubSecret = False,
 ) -> None:
     """Create or validate AWS prerequisite resources required by LZA Workbench."""
     run_cli_workspace_bootstrap(
         dry_run=dry_run,
         force=force,
         interactive=_is_interactive(),
+        github_token=github_token,
+        allow_missing_github_secret=allow_missing_github_secret,
     )
 
 

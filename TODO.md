@@ -10,40 +10,40 @@ are registered in the current CLI; unchecked commands are planned.
 
 ### Workspace lifecycle
 
-- [x] `lza init`
-- [x] `lza import`
-- [x] `lza bootstrap`
-- [ ] `lza validate`
-- [ ] `lza diff`
-- [ ] `lza doctor`
-- [ ] `lza uninstall`
+- `lza init`
+- `lza import`
+- `lza bootstrap`
+- `lza validate`
+- `lza diff`
+- `lza doctor`
+- `lza uninstall`
 
 ### Installer
 
-- [x] `lza installer init`
-- [x] `lza installer plan`
-- [x] `lza installer deploy`
-- [x] `lza installer status` (alias for `lza status installer`)
+- `lza installer init`
+- `lza installer plan`
+- `lza installer deploy`
+- `lza installer status` (alias for `lza status installer`)
 
 ### Configuration
 
-- [x] `lza config init`
-- [x] `lza config pull`
-- [x] `lza config push`
-- [x] `lza config download` (alias for `lza config pull`)
-- [x] `lza config upload` (alias for `lza config push`)
-- [x] `lza config deploy`
-- [x] `lza config status` (alias for `lza status config`)
-- [ ] `lza config edit`
+- `lza config init`
+- `lza config pull`
+- `lza config push`
+- `lza config download` (alias for `lza config pull`)
+- `lza config upload` (alias for `lza config push`)
+- `lza config deploy`
+- `lza config status` (alias for `lza status config`)
+- `lza config edit`
 
 ### Pipeline and status
 
-- [x] `lza pipeline start`
-- [x] `lza pipeline watch`
-- [x] `lza status`
-- [x] `lza status installer`
-- [x] `lza status config`
-- [x] `lza status pipeline`
+- `lza pipeline start`
+- `lza pipeline watch`
+- `lza status`
+- `lza status installer`
+- `lza status config`
+- `lza status pipeline`
 
 ## Command Reference and Feature Work
 
@@ -71,15 +71,7 @@ The future implementation should preserve the following behavior:
 
 #### Installer source
 
-- [ ] `RepositorySource=github`
-  - On init or changed configuration:
-    - Do not create repository resources.
-    - Validate the `accelerator/github-token` secret.
-    - Validate that the configured repository is accessible using the token.
-  - On import:
-    - Validate the retrieved installer parameters.
-    - Validate the secret and repository accessibility.
-    - Do not create resources.
+- [x] `RepositorySource=github`
 
 - [ ] `RepositorySource=codecommit`
   - On init or changed configuration:
@@ -112,15 +104,6 @@ The future implementation should preserve the following behavior:
   - Do not create the LZA-managed `aws-accelerator-config-<account-id>-<region>` bucket during bootstrap.
   - When importing an existing deployment, validate the discovered bucket and access.
   - Revisit exact bootstrap behavior when S3 configuration deployment support is implemented.
-
-#### Import and change semantics
-
-- [ ] Treat resources discovered through `lza import` as existing deployment resources.
-- [ ] Keep imported resources validation-only; bootstrap must not recreate or replace them automatically.
-- [ ] If the user later explicitly changes installer or configuration source settings, treat the new
-  desired resources as newly configured resources and apply the corresponding init/create behavior.
-- [ ] Bootstrap must never delete old repositories, buckets, branches, connections, or other
-  resources after configuration changes.
 
 ### `lza validate`
 

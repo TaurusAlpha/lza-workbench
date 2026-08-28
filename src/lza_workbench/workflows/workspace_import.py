@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from lza_workbench.aws.context import resolve_aws_execution_context
+from lza_workbench.aws.secrets_manager import inspect_secret_details
 from lza_workbench.configuration.archive import count_config_files
 from lza_workbench.configuration.git import (
     GitProvenance,
@@ -25,6 +27,7 @@ from lza_workbench.configuration.validation import (
     validate_yaml_syntax,
 )
 from lza_workbench.errors import LzaError
+from lza_workbench.installer.source import validate_github_repository_access
 from lza_workbench.workflows.status_installer import get_installer_status_workflow
 from lza_workbench.workspace.config import (
     WORKSPACE_CONFIG_FILE,
@@ -430,6 +433,42 @@ def import_workspace_workflow(
                     f"{installer_status.cfn_status.stack_name} "
                     f"({installer_status.cfn_status.stack_status})"
                 )
+                if config.installer.source_code.repository_type == "github":
+                    try:
+                        aws_ctx = resolve_aws_execution_context(
+                            profile=config.aws.profile,
+                            region=config.aws.region,
+                            role_arn=config.aws.role_arn,
+                            expected_account_id=config.aws.account_id,
+                        )
+                        sm_client = aws_ctx.factory.get_client("secretsmanager")
+                        secret_name = (
+                            config.installer.source_code.github_secret_name
+                            or "accelerator/github-token"
+                        )
+                        secret_details = inspect_secret_details(secret_name, client=sm_client)
+                        if not secret_details["exists"]:
+                            recommendations.append(
+                                "GitHub installer source detected, but Secrets Manager "
+                                f"secret '{secret_name}' was not found. Create this secret "
+                                "containing a valid GitHub token before deployment."
+                            )
+                        elif secret_details["value"]:
+                            gh_res = validate_github_repository_access(
+                                owner=config.installer.source_code.owner or "awslabs",
+                                repository_name=config.installer.source_code.repository_name
+                                or "landing-zone-accelerator-on-aws",
+                                branch=config.installer.source_code.branch,
+                                token=secret_details["value"],
+                            )
+                            if not gh_res["accessible"]:
+                                recommendations.append(
+                                    f"GitHub repository check returned: {gh_res['error']}"
+                                )
+                    except Exception as gh_exc:
+                        recommendations.append(
+                            f"GitHub token validation check skipped: {gh_exc}"
+                        )
             elif installer_status.aws_error:
                 recommendations.append(
                     f"AWS connection check failed ({installer_status.aws_error}). "

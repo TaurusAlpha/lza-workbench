@@ -127,6 +127,15 @@ def apply_deployed_installer_parameters(
     for parameter_name, value in parameters.items():
         apply_installer_parameter(config, parameter_name, value)
 
+    if config.configuration.repository.type == "codecommit":
+        if config.installer.options.use_existing_config_repo:
+            if config.installer.options.existing_config_repository_name:
+                config.configuration.repository.repository_name = (
+                    config.installer.options.existing_config_repository_name
+                )
+        elif not config.installer.options.existing_config_repository_name:
+            config.configuration.repository.repository_name = "aws-accelerator-config"
+
     deployed_version = branch_to_version(parameters.get("RepositoryBranchName", ""))
     if deployed_version != "Unknown":
         config.lza.version = deployed_version

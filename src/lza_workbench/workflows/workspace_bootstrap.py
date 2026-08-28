@@ -18,7 +18,13 @@ from lza_workbench.aws.s3 import (
     put_s3_bucket_encryption,
     put_s3_bucket_versioning,
 )
+from lza_workbench.aws.secrets_manager import (
+    create_or_update_secret,
+    inspect_secret_details,
+)
 from lza_workbench.errors import LzaError
+from lza_workbench.installer.parameters import resolve_installer_source_branch
+from lza_workbench.installer.source import validate_github_repository_access
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import (
     WorkspaceContext,
@@ -83,8 +89,17 @@ class BootstrapPlanResult:
     codecommit_repo_exists: bool
     codecommit_branch_exists: bool
     codecommit_repo_planned_operation: str
+    github_secret_name: str | None
+    github_secret_exists: bool
+    github_secret_accessible: bool
+    github_repo_owner: str | None
+    github_repo_name: str | None
+    github_repo_branch: str | None
+    github_repo_accessible: bool
+    github_planned_operation: str
     planned_operation: str
     actions: list[str]
+    warnings: list[str]
     dry_run: bool
 
 
@@ -101,10 +116,18 @@ class WorkspaceBootstrapResult:
     codecommit_repo_name: str | None
     codecommit_branch_name: str | None
     codecommit_repo_planned_operation: str
+    github_secret_name: str | None
+    github_secret_created: bool
+    github_repo_owner: str | None
+    github_repo_name: str | None
+    github_repo_branch: str | None
+    github_repo_accessible: bool
+    github_planned_operation: str
     planned_operation: str
     dry_run: bool
     skipped: bool
     actions_taken: list[str]
+    warnings: list[str]
 
 
 @dataclass(frozen=True)
@@ -140,6 +163,8 @@ def _build_bootstrap_plan(
     imported: bool,
     aws_context: AwsExecutionContext,
     dry_run: bool,
+    github_token: str | None = None,
+    allow_missing_github_secret: bool = False,
 ) -> BootstrapPlanResult:
     """Inspect bootstrap resources using one resolved workspace and AWS context."""
     aws_ctx = aws_context
@@ -154,6 +179,7 @@ def _build_bootstrap_plan(
     insp = inspect_s3_bucket(client=s3_client, bucket_name=bucket_name)
 
     actions: list[str] = []
+    warnings: list[str] = []
     if not insp["exists"]:
         bucket_planned_operation = "CREATE"
         actions.append(f"Create S3 bucket '{bucket_name}' in region '{region}'")
@@ -217,9 +243,119 @@ def _build_bootstrap_plan(
             cc_planned_op = "CREATE"
             actions.append(f"Create CodeCommit repository '{cc_repo_name}' in region '{region}'")
 
-    if cc_planned_op == "MISSING":
+    # Inspect GitHub installer source if configured
+    is_github_source = config.installer.source_code.repository_type == "github"
+    github_secret_name: str | None = None
+    github_secret_exists = False
+    github_secret_accessible = False
+    github_repo_owner: str | None = None
+    github_repo_name: str | None = None
+    github_repo_branch: str | None = None
+    github_repo_accessible = False
+    github_planned_op = "N/A"
+
+    if is_github_source:
+        github_secret_name = (
+            config.installer.source_code.github_secret_name or "accelerator/github-token"
+        )
+        github_repo_owner = config.installer.source_code.owner or "awslabs"
+        github_repo_name = (
+            config.installer.source_code.repository_name or "landing-zone-accelerator-on-aws"
+        )
+        github_repo_branch = (
+            config.installer.source_code.branch
+            or resolve_installer_source_branch("github", None, config.lza.version)
+        )
+        sm_client = aws_ctx.factory.get_client("secretsmanager")
+        secret_details = inspect_secret_details(github_secret_name, client=sm_client)
+        github_secret_exists = secret_details["exists"]
+        github_secret_accessible = secret_details["accessible"]
+        token_val = (github_token or "").strip() or secret_details["value"]
+
+        if github_secret_exists:
+            actions.append(f"Validate AWS Secrets Manager secret '{github_secret_name}' (exists)")
+            if github_secret_accessible or token_val:
+                gh_res = validate_github_repository_access(
+                    owner=github_repo_owner,
+                    repository_name=github_repo_name,
+                    branch=github_repo_branch,
+                    token=token_val,
+                )
+                if gh_res["accessible"]:
+                    github_repo_accessible = True
+                    github_planned_op = "NO_CHANGE"
+                    actions.append(
+                        f"Validate GitHub repository '{github_repo_owner}/{github_repo_name}' "
+                        f"branch '{github_repo_branch}' (accessible)"
+                    )
+                else:
+                    github_planned_op = "INACCESSIBLE"
+                    actions.append(
+                        f"[bold red]INACCESSIBLE[/bold red] GitHub repository "
+                        f"'{github_repo_owner}/{github_repo_name}': {gh_res['error']}"
+                    )
+            else:
+                github_planned_op = "INACCESSIBLE"
+                actions.append(
+                    f"[bold red]INACCESSIBLE[/bold red] AWS Secrets Manager secret "
+                    f"'{github_secret_name}': {secret_details['error']}"
+                )
+        elif github_token and github_token.strip():
+            github_planned_op = "CREATE"
+            actions.append(
+                f"Create AWS Secrets Manager secret '{github_secret_name}' with provided token"
+            )
+            gh_res = validate_github_repository_access(
+                owner=github_repo_owner,
+                repository_name=github_repo_name,
+                branch=github_repo_branch,
+                token=github_token.strip(),
+            )
+            if gh_res["accessible"]:
+                github_repo_accessible = True
+                actions.append(
+                    f"Validate GitHub repository '{github_repo_owner}/{github_repo_name}' "
+                    f"branch '{github_repo_branch}' (accessible)"
+                )
+            else:
+                warning_msg = (
+                    f"GitHub repository '{github_repo_owner}/{github_repo_name}' "
+                    f"check returned: {gh_res['error']}"
+                )
+                warnings.append(warning_msg)
+                actions.append(f"[yellow]WARNING[/yellow] {warning_msg}")
+        elif allow_missing_github_secret:
+            github_planned_op = "WARNING"
+            warning_msg = (
+                f"AWS Secrets Manager secret '{github_secret_name}' was not found. "
+                "You must create this secret containing a valid GitHub token before "
+                "deploying the installer."
+            )
+            warnings.append(warning_msg)
+            actions.append(
+                f"[yellow]WARNING[/yellow] AWS Secrets Manager secret '{github_secret_name}' "
+                "not found (proceeding as requested; manual secret creation required)"
+            )
+        else:
+            github_planned_op = "MISSING"
+            actions.append(
+                f"[bold red]MISSING[/bold red] AWS Secrets Manager secret "
+                f"'{github_secret_name}' not found"
+            )
+            actions.append(
+                "  --> AWS LZA requires a GitHub token stored in Secrets Manager "
+                f"secret '{github_secret_name}'"
+            )
+
+    if cc_planned_op == "MISSING" or (
+        github_planned_op in {"MISSING", "INACCESSIBLE"} and not allow_missing_github_secret
+    ):
         overall_planned_operation = "MISSING"
-    elif bucket_planned_operation == "CREATE" or cc_planned_op == "CREATE":
+    elif (
+        bucket_planned_operation == "CREATE"
+        or cc_planned_op == "CREATE"
+        or github_planned_op == "CREATE"
+    ):
         overall_planned_operation = "CREATE"
     elif bucket_planned_operation == "UPDATE" or cc_planned_op == "UPDATE":
         overall_planned_operation = "UPDATE"
@@ -242,8 +378,17 @@ def _build_bootstrap_plan(
         codecommit_repo_exists=cc_repo_exists,
         codecommit_branch_exists=cc_branch_exists,
         codecommit_repo_planned_operation=cc_planned_op,
+        github_secret_name=github_secret_name,
+        github_secret_exists=github_secret_exists,
+        github_secret_accessible=github_secret_accessible,
+        github_repo_owner=github_repo_owner,
+        github_repo_name=github_repo_name,
+        github_repo_branch=github_repo_branch,
+        github_repo_accessible=github_repo_accessible,
+        github_planned_operation=github_planned_op,
         planned_operation=overall_planned_operation,
         actions=actions,
+        warnings=warnings,
         dry_run=dry_run,
     )
 
@@ -251,6 +396,8 @@ def _build_bootstrap_plan(
 def prepare_bootstrap_workflow(
     target_dir: Path | None = None,
     dry_run: bool = False,
+    github_token: str | None = None,
+    allow_missing_github_secret: bool = False,
 ) -> BootstrapPreparation:
     """Resolve one workspace and AWS target for bootstrap planning and execution."""
     context = load_workspace_context(
@@ -264,6 +411,8 @@ def prepare_bootstrap_workflow(
         imported=context.state.imported is True,
         aws_context=aws_context,
         dry_run=dry_run,
+        github_token=github_token,
+        allow_missing_github_secret=allow_missing_github_secret,
     )
     return BootstrapPreparation(context=context, aws_context=aws_context, plan=plan)
 
@@ -272,6 +421,8 @@ def plan_bootstrap_workflow(
     target_dir: Path | None = None,
     dry_run: bool = True,
     aws_context: AwsExecutionContext | None = None,
+    github_token: str | None = None,
+    allow_missing_github_secret: bool = False,
 ) -> BootstrapPlanResult:
     """Inspect AWS resources and plan bootstrap actions without mutating AWS."""
     ctx = load_workspace_context(
@@ -287,6 +438,8 @@ def plan_bootstrap_workflow(
         imported=ctx.state.imported is True,
         aws_context=aws_ctx,
         dry_run=dry_run,
+        github_token=github_token,
+        allow_missing_github_secret=allow_missing_github_secret,
     )
 
 
@@ -294,17 +447,31 @@ def bootstrap_workspace_workflow(
     target_dir: Path | None = None,
     dry_run: bool = False,
     force: bool = False,
+    github_token: str | None = None,
+    allow_missing_github_secret: bool = False,
 ) -> WorkspaceBootstrapResult:
     """Execute workspace bootstrap workflow and return structured result."""
     del force  # Force bypasses CLI confirmation; workflow itself is idempotent
-    preparation = prepare_bootstrap_workflow(target_dir=target_dir, dry_run=dry_run)
-    return apply_bootstrap_preparation(preparation=preparation, dry_run=dry_run)
+    preparation = prepare_bootstrap_workflow(
+        target_dir=target_dir,
+        dry_run=dry_run,
+        github_token=github_token,
+        allow_missing_github_secret=allow_missing_github_secret,
+    )
+    return apply_bootstrap_preparation(
+        preparation=preparation,
+        dry_run=dry_run,
+        github_token=github_token,
+        allow_missing_github_secret=allow_missing_github_secret,
+    )
 
 
 def apply_bootstrap_preparation(
     *,
     preparation: BootstrapPreparation,
     dry_run: bool = False,
+    github_token: str | None = None,
+    allow_missing_github_secret: bool = False,
 ) -> WorkspaceBootstrapResult:
     """Apply a bootstrap plan using the AWS context that produced it."""
     plan = preparation.plan
@@ -314,6 +481,16 @@ def apply_bootstrap_preparation(
         raise LzaError(
             f"Configured CodeCommit configuration repository '{plan.codecommit_repo_name}' "
             "was not found. Imported resources must not be recreated automatically."
+        )
+
+    if (
+        plan.github_planned_operation in {"MISSING", "INACCESSIBLE"}
+        and not allow_missing_github_secret
+    ):
+        raise LzaError(
+            "GitHub installer source prerequisite validation failed for "
+            f"'{plan.github_secret_name}'. Ensure the secret exists in Secrets Manager "
+            "with a valid token, or pass --github-token / --allow-missing-github-secret."
         )
 
     if dry_run:
@@ -327,10 +504,18 @@ def apply_bootstrap_preparation(
             codecommit_repo_name=plan.codecommit_repo_name,
             codecommit_branch_name=plan.codecommit_branch_name,
             codecommit_repo_planned_operation=plan.codecommit_repo_planned_operation,
+            github_secret_name=plan.github_secret_name,
+            github_secret_created=False,
+            github_repo_owner=plan.github_repo_owner,
+            github_repo_name=plan.github_repo_name,
+            github_repo_branch=plan.github_repo_branch,
+            github_repo_accessible=plan.github_repo_accessible,
+            github_planned_operation=plan.github_planned_operation,
             planned_operation=plan.planned_operation,
             dry_run=True,
             skipped=False,
             actions_taken=[],
+            warnings=list(plan.warnings),
         )
 
     # Reuse the workspace and authenticated AWS execution context from planning.
@@ -362,6 +547,31 @@ def apply_bootstrap_preparation(
                 f"Reused existing CodeCommit repository '{plan.codecommit_repo_name}'"
             )
 
+    github_secret_created = False
+    if plan.github_secret_name:
+        sm_client = aws_context.factory.get_client("secretsmanager")
+        if plan.github_planned_operation == "CREATE" and github_token:
+            create_or_update_secret(
+                secret_name=plan.github_secret_name,
+                secret_value=github_token.strip(),
+                description="AWS Accelerator GitHub Token",
+                client=sm_client,
+            )
+            github_secret_created = True
+            actions_taken.append(
+                f"Created AWS Secrets Manager secret '{plan.github_secret_name}' with GitHub token"
+            )
+        elif plan.github_planned_operation == "NO_CHANGE":
+            actions_taken.append(
+                f"Validated GitHub token secret '{plan.github_secret_name}' and repository "
+                f"'{plan.github_repo_owner}/{plan.github_repo_name}'"
+            )
+        elif plan.github_planned_operation == "WARNING":
+            actions_taken.append(
+                f"Skipped missing AWS Secrets Manager secret '{plan.github_secret_name}' "
+                "(manual creation required)"
+            )
+
     # Persist assets bucket to lza-workspace.yaml
     config.assets_bucket = plan.bucket_name
     write_workspace_config(workspace_dir, config)
@@ -381,10 +591,18 @@ def apply_bootstrap_preparation(
         codecommit_repo_name=plan.codecommit_repo_name,
         codecommit_branch_name=plan.codecommit_branch_name,
         codecommit_repo_planned_operation=plan.codecommit_repo_planned_operation,
+        github_secret_name=plan.github_secret_name,
+        github_secret_created=github_secret_created,
+        github_repo_owner=plan.github_repo_owner,
+        github_repo_name=plan.github_repo_name,
+        github_repo_branch=plan.github_repo_branch,
+        github_repo_accessible=plan.github_repo_accessible,
+        github_planned_operation=plan.github_planned_operation,
         planned_operation=plan.planned_operation,
         dry_run=False,
         skipped=False,
         actions_taken=actions_taken,
+        warnings=list(plan.warnings),
     )
 
 

@@ -47,6 +47,10 @@ def test_ensure_s3_workbench_assets_bucket_new_bucket() -> None:
 
 
 def test_plan_bootstrap_workflow_create(initialized_workspace: Path) -> None:
+    config = load_workspace_config(initialized_workspace)
+    config.installer.source_code.repository_type = "codecommit"
+    write_workspace_config(initialized_workspace, config)
+
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
@@ -68,6 +72,10 @@ def test_plan_bootstrap_workflow_create(initialized_workspace: Path) -> None:
 
 
 def test_plan_bootstrap_workflow_no_change(initialized_workspace: Path) -> None:
+    config = load_workspace_config(initialized_workspace)
+    config.installer.source_code.repository_type = "codecommit"
+    write_workspace_config(initialized_workspace, config)
+
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
@@ -99,6 +107,10 @@ def test_plan_bootstrap_workflow_no_change(initialized_workspace: Path) -> None:
 def test_bootstrap_workspace_workflow_executes_and_saves_state(
     initialized_workspace: Path,
 ) -> None:
+    config = load_workspace_config(initialized_workspace)
+    config.installer.source_code.repository_type = "codecommit"
+    write_workspace_config(initialized_workspace, config)
+
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
@@ -131,6 +143,10 @@ def test_bootstrap_workspace_workflow_executes_and_saves_state(
 
 
 def test_plan_bootstrap_workflow_with_codecommit_create(initialized_workspace: Path) -> None:
+    config = load_workspace_config(initialized_workspace)
+    config.installer.source_code.repository_type = "codecommit"
+    write_workspace_config(initialized_workspace, config)
+
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
@@ -219,7 +235,9 @@ def test_plan_bootstrap_uses_configuration_repository_provider(
         plan = plan_bootstrap_workflow(target_dir=initialized_workspace, dry_run=True)
 
     assert plan.codecommit_repo_name is None
-    mock_client.assert_called_once_with("s3")
+    called_services = [c[0][0] for c in mock_client.call_args_list]
+    assert "codecommit" not in called_services
+    assert "s3" in called_services
 
 
 def test_plan_bootstrap_does_not_recreate_git_provenance_import(
@@ -285,6 +303,10 @@ def test_plan_bootstrap_rejects_inaccessible_codecommit_before_mutation(
 
 
 def test_bootstrap_workspace_workflow_with_codecommit_create(initialized_workspace: Path) -> None:
+    config = load_workspace_config(initialized_workspace)
+    config.installer.source_code.repository_type = "codecommit"
+    write_workspace_config(initialized_workspace, config)
+
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
@@ -319,3 +341,169 @@ def test_bootstrap_workspace_workflow_with_codecommit_create(initialized_workspa
             "Created CodeCommit repository 'lza-config-source'" in a for a in result.actions_taken
         )
         mock_cc.create_repository.assert_called_once()
+
+
+def test_plan_bootstrap_workflow_with_github_source_success(
+    initialized_workspace: Path,
+) -> None:
+    config = load_workspace_config(initialized_workspace)
+    config.installer.source_code.repository_type = "github"
+    config.configuration.repository.type = "s3"
+    write_workspace_config(initialized_workspace, config)
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch(
+            "lza_workbench.workflows.workspace_bootstrap.validate_github_repository_access"
+        ) as mock_gh,
+    ):
+        mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
+        mock_s3 = MagicMock()
+        mock_s3.head_bucket.return_value = {}
+        mock_s3.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        mock_s3.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        mock_sm = MagicMock()
+        mock_sm.describe_secret.return_value = {"ARN": "arn:aws:secretsmanager:..."}
+        mock_sm.get_secret_value.return_value = {"SecretString": "ghp_valid_token"}
+
+        def client_factory(service: str):
+            return mock_s3 if service == "s3" else mock_sm
+
+        mock_client.side_effect = client_factory
+        mock_gh.return_value = {"accessible": True, "error": None}
+
+        plan = plan_bootstrap_workflow(target_dir=initialized_workspace, dry_run=True)
+        assert plan.github_secret_name == "accelerator/github-token"
+        assert plan.github_secret_exists is True
+        assert plan.github_repo_accessible is True
+        assert plan.github_planned_operation == "NO_CHANGE"
+        assert plan.planned_operation == "NO_CHANGE"
+
+
+def test_plan_bootstrap_workflow_with_github_source_missing_secret(
+    initialized_workspace: Path,
+) -> None:
+    config = load_workspace_config(initialized_workspace)
+    config.installer.source_code.repository_type = "github"
+    config.configuration.repository.type = "s3"
+    write_workspace_config(initialized_workspace, config)
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
+        mock_s3 = MagicMock()
+        mock_s3.head_bucket.return_value = {}
+        mock_s3.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        mock_s3.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        mock_sm = MagicMock()
+        mock_sm.describe_secret.side_effect = ClientError(
+            {"Error": {"Code": "ResourceNotFoundException"}}, "DescribeSecret"
+        )
+
+        def client_factory(service: str):
+            return mock_s3 if service == "s3" else mock_sm
+
+        mock_client.side_effect = client_factory
+
+        plan = plan_bootstrap_workflow(target_dir=initialized_workspace, dry_run=True)
+        assert plan.github_secret_exists is False
+        assert plan.github_planned_operation == "MISSING"
+        assert plan.planned_operation == "MISSING"
+
+
+def test_plan_bootstrap_workflow_with_github_source_allow_missing_secret(
+    initialized_workspace: Path,
+) -> None:
+    config = load_workspace_config(initialized_workspace)
+    config.installer.source_code.repository_type = "github"
+    config.configuration.repository.type = "s3"
+    write_workspace_config(initialized_workspace, config)
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
+        mock_s3 = MagicMock()
+        mock_s3.head_bucket.return_value = {}
+        mock_s3.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        mock_s3.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        mock_sm = MagicMock()
+        mock_sm.describe_secret.side_effect = ClientError(
+            {"Error": {"Code": "ResourceNotFoundException"}}, "DescribeSecret"
+        )
+
+        def client_factory(service: str):
+            return mock_s3 if service == "s3" else mock_sm
+
+        mock_client.side_effect = client_factory
+
+        plan = plan_bootstrap_workflow(
+            target_dir=initialized_workspace,
+            dry_run=True,
+            allow_missing_github_secret=True,
+        )
+        assert plan.github_planned_operation == "WARNING"
+        assert plan.planned_operation == "NO_CHANGE"
+        assert len(plan.warnings) > 0
+
+
+def test_bootstrap_workspace_workflow_with_github_token_provided(
+    initialized_workspace: Path,
+) -> None:
+    config = load_workspace_config(initialized_workspace)
+    config.installer.source_code.repository_type = "github"
+    config.configuration.repository.type = "s3"
+    write_workspace_config(initialized_workspace, config)
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch(
+            "lza_workbench.workflows.workspace_bootstrap.validate_github_repository_access"
+        ) as mock_gh,
+    ):
+        mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
+        mock_s3 = MagicMock()
+        mock_s3.head_bucket.return_value = {}
+        mock_s3.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        mock_s3.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        mock_sm = MagicMock()
+        mock_sm.describe_secret.side_effect = ClientError(
+            {"Error": {"Code": "ResourceNotFoundException"}}, "DescribeSecret"
+        )
+
+        def client_factory(service: str):
+            return mock_s3 if service == "s3" else mock_sm
+
+        mock_client.side_effect = client_factory
+        mock_gh.return_value = {"accessible": True, "error": None}
+
+        result = bootstrap_workspace_workflow(
+            target_dir=initialized_workspace,
+            dry_run=False,
+            github_token="ghp_new_token",
+        )
+
+        assert result.dry_run is False
+        assert result.github_secret_created is True
+        mock_sm.create_secret.assert_called_once()
