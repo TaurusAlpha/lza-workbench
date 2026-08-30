@@ -11,6 +11,7 @@ from lza_workbench.errors import LzaError
 from lza_workbench.installer.templates import (
     INSTALLER_TEMPLATE_FILENAME,
     configure_anonymous_data,
+    download_installer_template,
     download_installer_template_content,
     inspect_template_parameters,
     resolve_installer_template,
@@ -211,3 +212,21 @@ def test_inspect_template_parameters_rejects_invalid_json(tmp_path: Path) -> Non
 
     with pytest.raises(LzaError, match="not valid JSON"):
         inspect_template_parameters(template_path)
+
+
+def test_download_installer_template_normalizes_version_in_url(tmp_path: Path) -> None:
+    """Un-prefixed version strings (e.g. 1.15.5) are normalized to v1.15.5 in download URL."""
+    out_file = tmp_path / INSTALLER_TEMPLATE_FILENAME
+    with patch(
+        "lza_workbench.installer.templates.download_installer_template_content"
+    ) as mock_download:
+        mock_download.return_value = '{"Description": "Mocked Template"}'
+        download_installer_template(version="1.15.5", local_path=out_file)
+
+        mock_download.assert_called_once_with(
+            "https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/"
+            "v1.15.5/AWSAccelerator-InstallerStack.template",
+            fallback_version="v1.15.5",
+        )
+    assert out_file.read_text(encoding="utf-8") == '{"Description": "Mocked Template"}'
+

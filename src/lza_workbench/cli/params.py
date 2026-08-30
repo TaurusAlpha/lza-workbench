@@ -188,6 +188,14 @@ AuditAccountEmail = Annotated[
     ),
 ]
 
+AcceleratorPrefix = Annotated[
+    str | None,
+    typer.Option(
+        "--accelerator-prefix",
+        help="Prefix value for accelerator deployed resources (default: AWSAccelerator).",
+    ),
+]
+
 ConfigTemplate = Annotated[
     str | None,
     typer.Option(

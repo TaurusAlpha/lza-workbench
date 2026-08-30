@@ -24,6 +24,7 @@ are registered in the current CLI; unchecked commands are planned.
 - `lza installer plan`
 - `lza installer deploy`
 - `lza installer status` (alias for `lza status installer`)
+- `lza installer import`
 
 ### Configuration
 
@@ -202,8 +203,8 @@ Future design checklist:
 
 Collect and persist installer CloudFormation parameters and workspace settings.
 
-- [ ] Normalize LZA version strings (e.g. prefixing `v` for `vX.Y.Z`) when constructing the official AWS solutions-reference installer template download URL (`https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/v{version}/AWSAccelerator-InstallerStack.template`) to prevent 404 download failures for un-prefixed version inputs (such as `1.15.5`).
-- [ ] Prompt only for parameters applicable to the selected installer and configuration sources;
+- [x] Normalize LZA version strings (e.g. prefixing `v` for `vX.Y.Z`) when constructing the official AWS solutions-reference installer template download URL (`https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/v{version}/AWSAccelerator-InstallerStack.template`) to prevent 404 download failures for un-prefixed version inputs (such as `1.15.5`).
+- [x] Prompt only for parameters applicable to the selected installer and configuration sources;
   for example, do not prompt for a CodeConnection ARN when GitHub is selected.
 
 ### `lza installer plan`

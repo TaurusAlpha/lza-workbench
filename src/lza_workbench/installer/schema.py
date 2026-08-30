@@ -38,14 +38,38 @@ class InstallerSourceCodeConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=False)
 
-    repository_type: Literal["github", "codecommit", "s3", "codeconnection"] = "github"
-    owner: str = "awslabs"
-    github_secret_name: Literal["accelerator/github-token"] = "accelerator/github-token"
-    repository_name: str | None = "landing-zone-accelerator-on-aws"
-    branch: str | None = f"release/{PACKAGED_INSTALLER_VERSION}"
-    bucket: str | None = None
-    key: str | None = None
-    connection_arn: str | None = None
+    repository_type: Literal["github", "codecommit", "s3", "codeconnection"] = Field(
+        default="github",
+        description="Installer source location.",
+    )
+    owner: str = Field(
+        default="awslabs",
+        description="Installer repository owner.",
+    )
+    github_secret_name: Literal["accelerator/github-token"] = Field(
+        default="accelerator/github-token",
+        description="Secrets Manager secret name for GitHub token.",
+    )
+    repository_name: str | None = Field(
+        default="landing-zone-accelerator-on-aws",
+        description="Installer repository name.",
+    )
+    branch: str | None = Field(
+        default=f"release/{PACKAGED_INSTALLER_VERSION}",
+        description="Installer source branch name.",
+    )
+    bucket: str | None = Field(
+        default=None,
+        description="S3 bucket for installer source.",
+    )
+    key: str | None = Field(
+        default=None,
+        description="S3 key for installer source archive.",
+    )
+    connection_arn: str | None = Field(
+        default=None,
+        description="CodeConnection ARN for installer source.",
+    )
 
 
 class InstallerOptionsConfig(BaseModel):
@@ -59,73 +83,68 @@ class InstallerOptionsConfig(BaseModel):
     # Pipeline Configuration
     enable_approval_stage: bool = Field(
         default=False,
-        description="Select yes to add a Manual Approval stage to accelerator pipeline.",
+        description="Add a manual approval stage to pipeline.",
     )
     approval_stage_notify_email_list: list[str] = Field(
         default_factory=list,
-        description="Provide list of email ids to receive manual "
-        "approval stage notification email.",
+        description="Emails to notify for manual approval.",
     )
 
     # Mandatory Accounts Configuration
     management_account_email: str | None = Field(
         default=None,
-        description="The management (primary) account email.",
+        description="Management account email.",
     )
     log_archive_account_email: str | None = Field(
         default=None,
-        description="The log archive account email.",
+        description="Log Archive account email.",
     )
     audit_account_email: str | None = Field(
         default=None,
-        description="The security audit account (also referred to as the audit account).",
+        description="Security Audit account email.",
     )
 
     # Environment Configuration
     control_tower_enabled: bool = Field(
         default=True,
-        description="Select yes if deploying to a Control Tower environment.",
+        description="Deploying in Control Tower environment.",
     )
     accelerator_prefix: str = Field(
         default="AWSAccelerator",
         max_length=15,
         pattern=r"^[A-Za-z0-9-]+$",
-        description="The prefix value for accelerator deployed resources.",
+        description="Prefix for accelerator deployed resources.",
     )
     enable_diagnostics_pack: bool = Field(
         default=True,
-        description="Select Yes if deploying the solution with diagnostics pack enabled.",
+        description="Enable pipeline diagnostics pack.",
     )
     anonymous_data: bool = False
 
     # Config Repository Configuration
     configuration_repository_location: Literal["codecommit", "s3", "codeconnection"] = Field(
         default="codecommit",
-        description="Specify the location to use to host the LZA configuration files.",
+        description="Location hosting LZA configuration files.",
     )
     use_existing_config_repo: bool = Field(
         default=True,
-        description="Select Yes if deploying the solution with an existing "
-        "configuration repository.",
+        description="Use an existing configuration repository.",
     )
     config_code_connection_arn: str | None = Field(
         default=None,
-        description="The ARN of an AWS CodeConnection referencing your existing "
-        "LZA configuration repository.",
+        description="AWS CodeConnection ARN for config repository.",
     )
     existing_config_repository_owner: str | None = Field(
         default=None,
-        description="The owner ID or namespace of the LZA configuration "
-        "repository accessed through CodeConnection.",
+        description="Config repository owner or namespace.",
     )
     existing_config_repository_name: str | None = Field(
         default="lza-config-source",
-        description="The name of an existing LZA configuration repository "
-        "hosting the accelerator configuration.",
+        description="Existing config repository name.",
     )
     existing_config_repository_branch_name: str | None = Field(
         default="main",
-        description="Specify the branch name of the existing LZA configuration repository.",
+        description="Existing config repository branch name.",
     )
 
     # Template Validation Rules

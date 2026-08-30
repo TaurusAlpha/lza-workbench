@@ -85,10 +85,13 @@ def download_installer_template(version: str, local_path: Path | None = None) ->
         version: The LZA version to download the installer template for.
         local_path: The local filesystem path to write the downloaded template to.
     """
+    normalized_version = normalize_lza_version(version)
     url = INSTALLER_TEMPLATE_URL_TEMPLATE.format(
-        version=version, filename=INSTALLER_TEMPLATE_FILENAME
+        version=normalized_version, filename=INSTALLER_TEMPLATE_FILENAME
     )
-    template_content = download_installer_template_content(url, fallback_version=version)
+    template_content = download_installer_template_content(
+        url, fallback_version=normalized_version
+    )
     if local_path is None:
         local_path = Path.cwd() / INSTALLER_TEMPLATE_FILENAME
     local_path.parent.mkdir(parents=True, exist_ok=True)

@@ -35,7 +35,7 @@ from lza_workbench.cli.commands.installer_deploy import (
 from lza_workbench.cli.commands.installer_import import (
     installer_import_command as run_cli_installer_import,
 )
-from lza_workbench.cli.commands.installer_plan import (
+from lza_workbench.cli.commands.installer_init import (
     installer_init_command as run_cli_installer_init,
 )
 from lza_workbench.cli.commands.installer_plan import (
@@ -104,6 +104,7 @@ def installer_init_command(
     management_account_email: params.ManagementAccountEmail = None,
     log_archive_account_email: params.LogArchiveAccountEmail = None,
     audit_account_email: params.AuditAccountEmail = None,
+    accelerator_prefix: params.AcceleratorPrefix = None,
     dry_run: params.DryRun = False,
     no_save: bool = typer.Option(False, "--no-save", help="Do not save accepted parameters."),
 ) -> None:
@@ -112,6 +113,7 @@ def installer_init_command(
         management_account_email=management_account_email,
         log_archive_account_email=log_archive_account_email,
         audit_account_email=audit_account_email,
+        accelerator_prefix=accelerator_prefix,
         dry_run=dry_run,
         no_save=no_save,
         interactive=_is_interactive(),

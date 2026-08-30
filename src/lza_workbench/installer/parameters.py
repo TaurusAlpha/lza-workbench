@@ -54,6 +54,38 @@ def resolve_installer_source_branch(
     return "main"
 
 
+def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: str) -> bool:
+    """Return whether a template parameter applies to the current configuration."""
+    source_type = config.installer.source_code.repository_type
+    config_type = (
+        config.configuration.repository.type
+        or config.installer.options.configuration_repository_location
+        or "s3"
+    )
+    use_existing = config.installer.options.use_existing_config_repo
+    approval_enabled = config.installer.options.enable_approval_stage
+
+    if parameter_name == "RepositoryOwner":
+        return source_type == "github"
+
+    if parameter_name in {"RepositoryName", "RepositoryBranchName"}:
+        return source_type in {"github", "codecommit", "codeconnection"}
+
+    if parameter_name == "ApprovalStageNotifyEmailList":
+        return bool(approval_enabled)
+
+    if parameter_name == "UseExistingConfigRepo":
+        return config_type != "s3"
+
+    if parameter_name in {"ConfigCodeConnectionArn", "ExistingConfigRepositoryOwner"}:
+        return config_type == "codeconnection" and bool(use_existing)
+
+    if parameter_name in {"ExistingConfigRepositoryName", "ExistingConfigRepositoryBranchName"}:
+        return config_type in {"codecommit", "codeconnection"} and bool(use_existing)
+
+    return True
+
+
 def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, value: str) -> None:
     """Persist an accepted template parameter in its owning workspace setting."""
     source_code = config.installer.source_code

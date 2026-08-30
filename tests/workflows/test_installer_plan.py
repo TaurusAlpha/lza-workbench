@@ -226,6 +226,74 @@ def test_installer_init_resolves_branch_default_after_source_selection(tmp_path:
     ]
 
 
+def test_installer_init_skips_inapplicable_parameters(tmp_path: Path) -> None:
+    """Parameters that are not applicable to the current sources are skipped during prompting."""
+    ws_dir = tmp_path / "skip-params-ws"
+    ws_dir.mkdir()
+    (ws_dir / ".lza").mkdir()
+    installer_dir = ws_dir / "aws-accelerator-installer"
+    installer_dir.mkdir()
+    (ws_dir / "aws-accelerator-config").mkdir()
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Skip Params", slug="skip-params"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+    config.installer.options.management_account_email = "mgmt@example.com"
+    config.installer.options.log_archive_account_email = "log@example.com"
+    config.installer.options.audit_account_email = "audit@example.com"
+    config.installer.source_code.repository_type = "codecommit"
+    config.configuration.repository.type = "s3"
+    write_workspace_config(ws_dir, config)
+    write_workspace_state(ws_dir, WorkspaceState.from_config(config))
+    (installer_dir / "AWSAccelerator-InstallerStack.template").write_text(
+        """{
+          "Parameters": {
+            "RepositorySource": {"Type": "String", "Description": "Source"},
+            "RepositoryOwner": {"Type": "String", "Description": "Owner"},
+            "EnableApprovalStage": {"Type": "String", "Description": "Approval"},
+            "ApprovalStageNotifyEmailList": {"Type": "String", "Description": "Emails"},
+            "ConfigurationRepositoryLocation": {"Type": "String", "Description": "Config Loc"},
+            "UseExistingConfigRepo": {"Type": "String", "Description": "Use Existing"},
+            "ConfigCodeConnectionArn": {"Type": "String", "Description": "CodeConn ARN"},
+            "ExistingConfigRepositoryName": {"Type": "String", "Description": "Existing Repo"}
+          }
+        }""",
+        encoding="utf-8",
+    )
+    prompts: list[tuple[str, str | None]] = []
+
+    def prompter(label: str, default: str | None) -> str:
+        prompts.append((label, default))
+        if label.startswith("RepositorySource:"):
+            return "codecommit"
+        if label.startswith("EnableApprovalStage:"):
+            return "No"
+        if label.startswith("ConfigurationRepositoryLocation:"):
+            return "s3"
+        return default or ""
+
+    initialize_installer_workflow(
+        target_dir=ws_dir,
+        accelerator_prefix="CustomPrefix",
+        prompter=prompter,
+    )
+
+    # RepositoryOwner skipped because source is codecommit
+    # ApprovalStageNotifyEmailList skipped because EnableApprovalStage is No
+    # UseExistingConfigRepo, ConfigCodeConnectionArn, ExistingConfigRepositoryName
+    # skipped because config is s3
+    assert [p[0] for p in prompts] == [
+        "RepositorySource: Source",
+        "EnableApprovalStage: Approval",
+        "ConfigurationRepositoryLocation: Config Loc",
+    ]
+    saved_config = load_workspace_config(ws_dir)
+    assert saved_config.lza.accelerator_prefix == "CustomPrefix"
+    assert saved_config.installer.options.enable_approval_stage is False
+
+
+
 def test_installer_plan_github_secret_check(tmp_path: Path) -> None:
     """Plan workflow inspects Secrets Manager for GitHub token secret when source is github."""
     ws_dir = tmp_path / "github-ws"

@@ -108,6 +108,8 @@ def test_installer_init_updates_workspace_config(
                 "log@prompted.com",
                 "--audit-account-email",
                 "audit@prompted.com",
+                "--accelerator-prefix",
+                "CustomPrefix",
             ],
         )
 
@@ -116,6 +118,7 @@ def test_installer_init_updates_workspace_config(
     assert updated_config.installer.options.management_account_email == "mgmt@prompted.com"
     assert updated_config.installer.options.log_archive_account_email == "log@prompted.com"
     assert updated_config.installer.options.audit_account_email == "audit@prompted.com"
+    assert updated_config.lza.accelerator_prefix == "CustomPrefix"
 
 
 def test_installer_init_no_save(
