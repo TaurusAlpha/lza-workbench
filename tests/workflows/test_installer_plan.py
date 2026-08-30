@@ -176,8 +176,8 @@ def test_installer_init_prompts_for_every_selected_template_parameter(tmp_path: 
         initialize_installer_workflow(target_dir=ws_dir, prompter=prompter)
 
     assert prompts == [
-        ("MandatoryNewParameter: Required setting", None),
-        ("OptionalNewParameter: OptionalNewParameter", "template-default"),
+        ("Required setting", None),
+        ("OptionalNewParameter", "template-default"),
     ]
     persisted = load_workspace_config(ws_dir)
     assert persisted.installer.template_parameters == {
@@ -216,13 +216,13 @@ def test_installer_init_resolves_branch_default_after_source_selection(tmp_path:
 
     def prompter(label: str, default: str | None) -> str:
         prompts.append((label, default))
-        return "github" if label.startswith("RepositorySource:") else default or ""
+        return "github" if label.startswith("Source location") else default or ""
 
     initialize_installer_workflow(target_dir=ws_dir, prompter=prompter)
 
     assert prompts == [
-        ("RepositorySource: RepositorySource", "codecommit"),
-        ("RepositoryBranchName: RepositoryBranchName", "release/v1.16.0"),
+        ("Source location", "codecommit"),
+        ("Branch name", "release/v1.16.0"),
     ]
 
 
@@ -265,11 +265,11 @@ def test_installer_init_skips_inapplicable_parameters(tmp_path: Path) -> None:
 
     def prompter(label: str, default: str | None) -> str:
         prompts.append((label, default))
-        if label.startswith("RepositorySource:"):
+        if label == "Source location":
             return "codecommit"
-        if label.startswith("EnableApprovalStage:"):
+        if label == "Enable approval stage":
             return "No"
-        if label.startswith("ConfigurationRepositoryLocation:"):
+        if label == "Configuration repository location":
             return "s3"
         return default or ""
 
@@ -284,9 +284,9 @@ def test_installer_init_skips_inapplicable_parameters(tmp_path: Path) -> None:
     # UseExistingConfigRepo, ConfigCodeConnectionArn, ExistingConfigRepositoryName
     # skipped because config is s3
     assert [p[0] for p in prompts] == [
-        "RepositorySource: Source",
-        "EnableApprovalStage: Approval",
-        "ConfigurationRepositoryLocation: Config Loc",
+        "Source location",
+        "Enable approval stage",
+        "Configuration repository location",
     ]
     saved_config = load_workspace_config(ws_dir)
     assert saved_config.lza.accelerator_prefix == "CustomPrefix"

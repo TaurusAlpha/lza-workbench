@@ -13,6 +13,7 @@ from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import (
     apply_installer_parameter,
     build_installer_cfn_parameters,
+    get_installer_parameter_label,
     is_installer_parameter_applicable,
     persist_template_defaults,
 )
@@ -75,9 +76,9 @@ def initialize_installer_workflow(
         for parameter_name, definition in schema.items():
             if not is_installer_parameter_applicable(config, parameter_name):
                 continue
-            label = definition.get("Description") or parameter_name
+            label = get_installer_parameter_label(parameter_name, definition)
             current_value = resolved_parameters.get(parameter_name)
-            value = prompter(f"{parameter_name}: {label}", current_value)
+            value = prompter(label, current_value)
             apply_installer_parameter(config, parameter_name, value)
             resolved_parameters = build_installer_cfn_parameters(config, schema=schema)
 

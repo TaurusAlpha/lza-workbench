@@ -29,6 +29,44 @@ KNOWN_INSTALLER_PARAMETER_NAMES = frozenset(
     }
 )
 
+INSTALLER_PARAMETER_LABELS = {
+    "RepositorySource": "Source location",
+    "RepositoryOwner": "Repository owner",
+    "RepositoryName": "Repository name",
+    "RepositoryBranchName": "Branch name",
+    "EnableApprovalStage": "Enable approval stage",
+    "ApprovalStageNotifyEmailList": "Approval notification emails",
+    "ManagementAccountEmail": "Management account email",
+    "LogArchiveAccountEmail": "Log Archive account email",
+    "AuditAccountEmail": "Security Audit account email",
+    "ControlTowerEnabled": "Control Tower environment",
+    "AcceleratorPrefix": "Accelerator resource name prefix",
+    "ConfigurationRepositoryLocation": "Configuration repository location",
+    "UseExistingConfigRepo": "Use existing configuration repository",
+    "ConfigCodeConnectionArn": "CodeConnection ARN",
+    "ExistingConfigRepositoryOwner": "Existing config repository owner",
+    "ExistingConfigRepositoryName": "Existing config repository name",
+    "ExistingConfigRepositoryBranchName": "Existing config repository branch",
+    "EnableDiagnosticsPack": "Enable diagnostics pack",
+}
+
+
+def get_installer_parameter_label(
+    parameter_name: str, definition: dict[str, Any] | None = None
+) -> str:
+    """Return a concise prompt label for an installer template parameter."""
+    if parameter_name in INSTALLER_PARAMETER_LABELS:
+        return INSTALLER_PARAMETER_LABELS[parameter_name]
+    if definition:
+        label = definition.get("Label") or definition.get("Description")
+        if label:
+            cleaned = str(label).strip()
+            if ". " in cleaned:
+                cleaned = cleaned.split(". ")[0].rstrip(".")
+            if len(cleaned) <= 60:
+                return cleaned
+    return parameter_name
+
 
 def persist_template_defaults(config: WorkspaceConfig, schema: dict[str, dict[str, Any]]) -> bool:
     """Persist defaults for template parameters not represented in the workspace schema."""
