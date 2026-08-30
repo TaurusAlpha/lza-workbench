@@ -217,3 +217,43 @@ def test_normalize_root_cause_and_resource() -> None:
     assert "AccessDenied" in err_3
 
 
+def test_extract_log_error_diagnostics_custom_resource_multiline() -> None:
+    from lza_workbench.aws.codebuild import (
+        extract_log_error_diagnostics,
+        normalize_root_cause_and_resource,
+    )
+
+    raw_logs = [
+        (
+            "2026-08-30 17:53:01.657 | error | toolkit | "
+            "Deployment of AWSAccelerator-PrepareStack-376564958706-eu-west-1 failed: "
+            "❌  AWSAccelerator-PrepareStack-376564958706-eu-west-1 failed: "
+            "DeploymentError: Resource updates failed:"
+        ),
+        (
+            "AWSAccelerator-PrepareStack-376564958706-eu-west-1/"
+            "ValidateEnvironmentConfigValidateEnvironmentResourceD10DC179  "
+            "(Custom::ValidateEnvironmentConfiguration "
+            "ValidateEnvironmentConfigValidateEnvironmentResourceD10DC179)"
+        ),
+        (
+            "  Received response status [FAILED] from custom resource. "
+            "Message returned: Organizational Unit 'Security' with id of"
+        ),
+        "  'ou-ijz2-qoud7qvv' was not found in the organization configuration.",
+    ]
+
+    extracted = extract_log_error_diagnostics(raw_logs)
+    assert len(extracted) >= 1
+    err, res = normalize_root_cause_and_resource(extracted[0])
+    assert res == "AWSAccelerator-PrepareStack-376564958706-eu-west-1"
+    expected_substring = (
+        "Organizational Unit 'Security' with id of 'ou-ijz2-qoud7qvv' "
+        "was not found in the organization configuration."
+    )
+    assert expected_substring in err
+    assert "ValidateEnvironmentConfigValidateEnvironmentResourceD10DC179" in err
+
+
+
+

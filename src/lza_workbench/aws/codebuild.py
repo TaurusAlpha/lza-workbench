@@ -81,6 +81,26 @@ def normalize_root_cause_and_resource(raw_error: str) -> tuple[str, str | None]:
             err = err[len(failed_resource) + 8 :].strip()
         msg = _clean_log_line(err)
 
+    # Clean generic "DeploymentError: Resource updates failed:" prefix if more details follow
+    if re.search(r"^DeploymentError:\s*Resource updates failed:\s*.+", msg, flags=re.IGNORECASE):
+        msg = re.sub(
+            r"^DeploymentError:\s*Resource updates failed:\s*", "", msg, flags=re.IGNORECASE
+        ).strip()
+
+    # Clean leading stack name path prefix from resource
+    # (e.g. "StackName/LogicalResourceId" -> "LogicalResourceId")
+    if failed_resource:
+        msg = re.sub(rf"^{re.escape(failed_resource)}/", "", msg)
+
+    # Clean duplicated custom resource type in parenthesis
+    # e.g. "(Custom::Type Type)" -> "(Custom::Type)"
+    msg = re.sub(
+        r"\(Custom::([A-Za-z0-9_]+)\s+[A-Za-z0-9_]+\)",
+        r"(Custom::\1)",
+        msg,
+    )
+
+
     # Clean double spaces
     msg = re.sub(r"\s+", " ", msg).strip()
     return (msg, failed_resource)
@@ -125,6 +145,14 @@ def _is_high_priority_error(line: str) -> bool:
         "ClientError:",
         "BotoCoreError:",
         "The following resource(s) failed to create",
+        "Received response status [FAILED]",
+        "Message returned:",
+        "Resource handler returned message",
+        "DeploymentError:",
+        "Custom::",
+        "Resource updates failed:",
+        "was not found in the organization configuration",
+        "not found in the organization configuration",
     ]
     if any(k in line for k in high_priority_indicators):
         return True
@@ -136,6 +164,60 @@ def _is_high_priority_error(line: str) -> bool:
         return True
     return False
 
+
+def _is_continuation_line(line: str, prev_cleaned: str) -> bool:
+    """Check whether a line is a continuation of a preceding error message."""
+    clean = line.strip()
+    if not clean or _is_wrapper_or_noise(clean):
+        return False
+
+    # Indented lines (e.g. starting with whitespace in raw log)
+    if line.startswith(" ") or line.startswith("\t"):
+        return True
+
+    continuation_indicators = [
+        "Received response status",
+        "Message returned:",
+        "Resource handler returned message",
+        "ResourceStatusReason:",
+        "StatusReason:",
+        "Custom::",
+        "was not found in",
+        "not found in",
+        "The following resource(s) failed",
+        "failed to satisfy constraint",
+    ]
+    if any(k in clean for k in continuation_indicators):
+        return True
+
+    # If previous line ended with a colon or generic wrapper
+    if prev_cleaned.endswith(":") or "Resource updates failed" in prev_cleaned:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}", clean) and not clean.startswith("[Container]"):
+            return True
+
+    return False
+
+
+def _combine_error_block(lines: list[str]) -> str:
+    """Combine multi-line error block into a single coherent error message."""
+    if not lines:
+        return ""
+    if len(lines) == 1:
+        return lines[0]
+
+    header = lines[0]
+    tail_lines = lines[1:]
+
+    cleaned_tail: list[str] = []
+    for line in tail_lines:
+        clean_l = _clean_log_line(line)
+        if clean_l and clean_l not in cleaned_tail:
+            cleaned_tail.append(clean_l)
+
+    tail_str = " ".join(cleaned_tail)
+    if header.endswith(":"):
+        return f"{header} {tail_str}".strip()
+    return f"{header}: {tail_str}".strip()
 
 
 def _deduplicate_messages(messages: list[str], max_messages: int = 5) -> list[str]:
@@ -180,28 +262,74 @@ def extract_log_error_diagnostics(
     if not log_lines:
         return []
 
+    # Flatten log lines in case single events contained newlines
+    flat_lines: list[str] = []
+    for entry in log_lines:
+        if entry:
+            flat_lines.extend(entry.splitlines())
+
     high_priority_matches: list[str] = []
     standard_matches: list[str] = []
 
-    for raw_line in log_lines:
+    i = 0
+    n = len(flat_lines)
+    while i < n:
+        raw_line = flat_lines[i]
         cleaned = _clean_log_line(raw_line)
         if not cleaned:
+            i += 1
             continue
 
-        if _is_high_priority_error(cleaned):
-            high_priority_matches.append(cleaned)
+        if _is_high_priority_error(cleaned) or (
+            "| error |" in raw_line and not _is_wrapper_or_noise(cleaned)
+        ):
+            # Look ahead for continuation lines
+            block_lines = [cleaned]
+            j = i + 1
+            while j < n and len(block_lines) < 8:
+                next_raw = flat_lines[j]
+                next_cleaned = _clean_log_line(next_raw)
+                if not next_cleaned:
+                    j += 1
+                    continue
+                if _is_wrapper_or_noise(next_cleaned):
+                    break
+                if _is_continuation_line(next_raw, block_lines[-1]) or (
+                    len(block_lines) == 1
+                    and (
+                        block_lines[0].endswith(":")
+                        or "Resource updates failed" in block_lines[0]
+                        or "failed to create" in block_lines[0]
+                    )
+                ):
+                    block_lines.append(next_cleaned)
+                    j += 1
+                else:
+                    break
+
+            combined_msg = _combine_error_block(block_lines)
+            if _is_high_priority_error(combined_msg):
+                high_priority_matches.append(combined_msg)
+            else:
+                standard_matches.append(combined_msg)
+
+            i = j
         elif not _is_wrapper_or_noise(cleaned):
             if (
-                "| error |" in cleaned
+                "| error |" in raw_line
                 or "error" in cleaned.lower()
                 or "failed" in cleaned.lower()
             ):
                 standard_matches.append(cleaned)
+            i += 1
+        else:
+            i += 1
 
     if high_priority_matches:
         return _deduplicate_messages(high_priority_matches, max_messages=max_messages)
 
     return _deduplicate_messages(standard_matches, max_messages=max_messages)
+
 
 
 def get_codebuild_build_info(

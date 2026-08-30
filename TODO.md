@@ -430,4 +430,3 @@ AI features remain advisory by default; execution must be a separate explicit ac
 - [ ] GUI or TUI.
 - [ ] Web interface.
 - [ ] Multi-user/server mode.
-
