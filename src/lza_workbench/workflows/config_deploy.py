@@ -78,6 +78,7 @@ def deploy_configuration_workflow(
             expected_account_id=context.config.aws.account_id,
             require_identity=not dry_run,
             require_expected_account=not dry_run,
+            prime_credentials=context.config.aws.prime_credentials,
         )
     except Exception as exc:
         if isinstance(exc, LzaError):
@@ -147,7 +148,6 @@ def deploy_configuration_workflow(
                 start_result=start_res,
                 watch_result=watch_res,
             )
-
 
     return ConfigDeployResult(
         push_result=push_res,
