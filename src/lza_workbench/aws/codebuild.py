@@ -24,25 +24,66 @@ def _clean_log_line(raw_line: str) -> str:
         r"^\[Container\]\s+\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+", "", line
     )
 
-    # Strip ISO timestamps and toolkit/log level prefixes e.g. "2026-08-23 16:47:44.027 | error |"
+    # Strip ISO timestamps and toolkit/log level prefixes
+    # e.g. "2026-08-23 16:47:44.027 | error |" or "2026-08-23 | error |"
     line = re.sub(
-        r"^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?\s*(?:\|\s*(?:error|warn|info)\s*\|\s*(?:toolkit\s*\|\s*)?)?",
+        r"^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?)?\s*(?:\|\s*(?:error|warn|info)\s*\|\s*(?:toolkit\s*\|\s*)?)?",
         "",
         line,
         flags=re.IGNORECASE,
     )
 
 
+
     # Strip leading log prefixes like "[ERROR]", "[error]", "ERROR:", "Deployment of Stack failed: "
-    line = re.sub(
-        r"^(?:\[(?:ERROR|error|WARN|warn|INFO|info)\]\s*|ERROR:\s*|Deployment of Stack failed:\s*)",
-        "",
-        line,
+    prefix_pat = (
+        r"^(?:\[(?:ERROR|error|WARN|warn|INFO|info)\]\s*|"
+        r"ERROR:\s*|Deployment of Stack failed:\s*|Deployment of (?:Stack )?)+"
     )
+    line = re.sub(prefix_pat, "", line, flags=re.IGNORECASE)
+
+
+    # Strip leading presentation emojis like ❌, ✖
+    line = re.sub(r"^[❌✖⚠️❗\s]+", "", line)
 
     # Normalize double spaces
     line = re.sub(r"\s+", " ", line).strip()
     return line
+
+
+def normalize_root_cause_and_resource(raw_error: str) -> tuple[str, str | None]:
+    """Normalize a diagnostic error line by stripping wrapper artifacts and extracting resource."""
+    msg = _clean_log_line(raw_error)
+    if not msg:
+        return ("", None)
+
+    failed_resource: str | None = None
+
+    # Check for pattern "<Resource/StackName> failed: <ErrorDetails>"
+    res_match = re.match(
+        r"^(?P<resource>[A-Za-z0-9_\-]+(?:Stack|Resource|Project)[A-Za-z0-9_\-]*)\s+failed:\s*(?P<error>.*)$",
+        msg,
+        flags=re.IGNORECASE,
+    )
+    if res_match:
+        failed_resource = res_match.group("resource")
+        err = res_match.group("error").strip()
+        # Clean nested emojis or "Deployment of ... failed"
+        err = re.sub(r"^[❌✖⚠️❗\s]+", "", err).strip()
+        err = re.sub(
+            r"^(?:Deployment of (?:Stack )?(?:[\w\-]+ )?failed:\s*)+",
+            "",
+            err,
+            flags=re.IGNORECASE,
+        ).strip()
+        # Clean nested "<resource> failed: " if duplicated
+        if failed_resource and err.startswith(f"{failed_resource} failed:"):
+            err = err[len(failed_resource) + 8 :].strip()
+        msg = _clean_log_line(err)
+
+    # Clean double spaces
+    msg = re.sub(r"\s+", " ", msg).strip()
+    return (msg, failed_resource)
 
 
 def _is_wrapper_or_noise(line: str) -> bool:
@@ -94,6 +135,7 @@ def _is_high_priority_error(line: str) -> bool:
     if re.search(r"^[A-Z][A-Za-z0-9_]*(?:Error|Exception|Fault):\s+", line):
         return True
     return False
+
 
 
 def _deduplicate_messages(messages: list[str], max_messages: int = 5) -> list[str]:
@@ -277,4 +319,6 @@ __all__ = [
     "fetch_codebuild_diagnostics",
     "get_cloudwatch_log_events",
     "get_codebuild_build_info",
+    "normalize_root_cause_and_resource",
 ]
+

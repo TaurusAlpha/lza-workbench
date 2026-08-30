@@ -7,7 +7,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from lza_workbench.aws.codebuild import fetch_codebuild_diagnostics
+from lza_workbench.aws.codebuild import (
+    fetch_codebuild_diagnostics,
+    normalize_root_cause_and_resource,
+)
 from lza_workbench.aws.codepipeline import (
     get_latest_pipeline_execution_id,
     get_pipeline_execution,
@@ -38,6 +41,7 @@ class PipelineActionSummary:
     external_execution_url: str | None = None
     diagnostic_details: list[str] = field(default_factory=list)
     raw_diagnostic_details: list[str] = field(default_factory=list)
+    failed_resource: str | None = None
 
 
 @dataclass(frozen=True)
@@ -72,7 +76,7 @@ class PipelineWatchResult:
     status: str
     stages: list[PipelineStageSummary]
     failed_actions: list[PipelineActionSummary]
-    elapsed_seconds: float
+    elapsed_seconds: float | None = None
     error_message: str | None = None
 
 
@@ -148,6 +152,7 @@ def watch_pipeline_workflow(
     stage_summaries: list[PipelineStageSummary] = []
     failed_actions: list[PipelineActionSummary] = []
     error_message: str | None = None
+    last_exec_res = None
 
     while True:
         elapsed = time_provider() - start_time
@@ -161,6 +166,7 @@ def watch_pipeline_workflow(
             pipeline_name=resolved_pipeline_name,
             execution_id=resolved_execution_id,
         )
+        last_exec_res = exec_res
 
         state_res = get_pipeline_state(
             client=client,
@@ -221,37 +227,47 @@ def watch_pipeline_workflow(
                             factory=resolved_aws_context.factory,
                             build_id=fa.external_execution_id,
                         )
+
+                    raw_diags = list(diagnostics)
+                    norm_diags: list[str] = []
+                    detected_resource: str | None = None
+
                     if diagnostics:
-                        fa_enriched = PipelineActionSummary(
-                            action_name=fa.action_name,
-                            stage_name=fa.stage_name,
-                            status=fa.status,
-                            summary=fa.summary,
-                            error_message=fa.error_message,
-                            external_execution_id=fa.external_execution_id,
-                            external_execution_url=fa.external_execution_url,
-                            diagnostic_details=diagnostics,
-                        )
-                        enriched_failed.append(fa_enriched)
-                    else:
-                        fa_enriched = PipelineActionSummary(
-                            action_name=fa.action_name,
-                            stage_name=fa.stage_name,
-                            status=fa.status,
-                            summary=fa.summary,
-                            error_message=fa.error_message,
-                            external_execution_id=fa.external_execution_id,
-                            external_execution_url=fa.external_execution_url,
-                            diagnostic_details=[str(fa.error_message or fa.summary)]
-                            if (fa.error_message or fa.summary)
-                            else ["Unknown error"],
-                        )
-                        enriched_failed.append(fa_enriched)
+                        for d in diagnostics:
+                            norm_err, res = normalize_root_cause_and_resource(d)
+                            if res and not detected_resource:
+                                detected_resource = res
+                            if norm_err and norm_err not in norm_diags:
+                                norm_diags.append(norm_err)
+                    elif fa.error_message or fa.summary:
+                        raw_msg = str(fa.error_message or fa.summary)
+                        raw_diags = [raw_msg]
+                        norm_err, res = normalize_root_cause_and_resource(raw_msg)
+                        if res:
+                            detected_resource = res
+                        norm_diags = [norm_err] if norm_err else [raw_msg]
+
+                    fa_enriched = PipelineActionSummary(
+                        action_name=fa.action_name,
+                        stage_name=fa.stage_name,
+                        status=fa.status,
+                        summary=fa.summary,
+                        error_message=fa.error_message,
+                        external_execution_id=fa.external_execution_id,
+                        external_execution_url=fa.external_execution_url,
+                        diagnostic_details=norm_diags,
+                        raw_diagnostic_details=raw_diags,
+                        failed_resource=detected_resource,
+                    )
+                    enriched_failed.append(fa_enriched)
+
                 failed_actions = enriched_failed
 
                 action_errs = []
                 for fa in failed_actions:
-                    stage_prefix = f"Stage '{fa.stage_name}', action" if fa.stage_name else "Action"
+                    stage_prefix = (
+                        f"Stage '{fa.stage_name}', action" if fa.stage_name else "Action"
+                    )
                     if fa.diagnostic_details:
                         diag_text = "\n  - ".join(fa.diagnostic_details)
                         action_errs.append(
@@ -265,7 +281,19 @@ def watch_pipeline_workflow(
 
         sleeper(interval)
 
-    total_elapsed = time_provider() - start_time
+    total_elapsed: float | None = None
+    if (
+        last_exec_res
+        and last_exec_res.duration_seconds is not None
+        and last_exec_res.duration_seconds > 0
+    ):
+        total_elapsed = last_exec_res.duration_seconds
+    else:
+        live_dur = time_provider() - start_time
+        if live_dur >= 1.0:
+            total_elapsed = live_dur
+
+
     watch_result = PipelineWatchResult(
         workspace_dir=workspace_dir,
         customer_name=config.customer.name,
@@ -301,3 +329,4 @@ __all__ = [
     "PipelineWatchUpdate",
     "watch_pipeline_workflow",
 ]
+

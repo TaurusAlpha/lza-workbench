@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
@@ -59,7 +60,9 @@ class PipelineExecutionResult:
     status_summary: str | None = None
     start_time: str | None = None
     last_update_time: str | None = None
+    duration_seconds: float | None = None
     error: str | None = None
+
 
 
 def _get_codepipeline_client(
@@ -304,10 +307,22 @@ def get_pipeline_execution(
         execution = response.get("pipelineExecution", {})
         status = execution.get("status", "Unknown")
         status_summary = execution.get("statusSummary")
-        start_time = str(execution.get("startTime")) if execution.get("startTime") else None
-        last_update_time = (
-            str(execution.get("lastUpdateTime")) if execution.get("lastUpdateTime") else None
-        )
+        raw_start = execution.get("startTime")
+        raw_update = execution.get("lastUpdateTime")
+        start_time = str(raw_start) if raw_start else None
+        last_update_time = str(raw_update) if raw_update else None
+
+        duration_seconds: float | None = None
+        if isinstance(raw_start, datetime) and isinstance(raw_update, datetime):
+            duration_seconds = max(0.0, (raw_update - raw_start).total_seconds())
+        elif raw_start and raw_update:
+            try:
+                st = datetime.fromisoformat(str(raw_start).replace("Z", "+00:00"))
+                ut = datetime.fromisoformat(str(raw_update).replace("Z", "+00:00"))
+                duration_seconds = max(0.0, (ut - st).total_seconds())
+            except Exception:
+                duration_seconds = None
+
         return PipelineExecutionResult(
             pipeline_name=clean_pipeline_name,
             execution_id=clean_execution_id,
@@ -315,7 +330,9 @@ def get_pipeline_execution(
             status_summary=status_summary,
             start_time=start_time,
             last_update_time=last_update_time,
+            duration_seconds=duration_seconds,
         )
+
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
         message = exc.response.get("Error", {}).get("Message", str(exc))

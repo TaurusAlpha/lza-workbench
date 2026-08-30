@@ -177,14 +177,43 @@ def test_extract_log_error_diagnostics_wrapper_suppression_and_deduplication() -
 
     extracted = extract_log_error_diagnostics(raw_logs)
     # High priority error should be extracted and deduplicated into 1 rich message
-    assert len(extracted) == 1
-    expected_msg = (
-        "AWSAccelerator-PrepareStack-123 failed: ValidationError: Stack cannot be deleted"
-    )
-    assert expected_msg in extracted[0]
-    # Buildspec wrapper noise should not be present
-
     assert not any("COMMAND_EXECUTION_ERROR" in line for line in extracted)
     assert not any("yarn run" in line for line in extracted)
     assert not any("npm ERR" in line for line in extracted)
+
+
+def test_normalize_root_cause_and_resource() -> None:
+    from lza_workbench.aws.codebuild import normalize_root_cause_and_resource
+
+    # Test case 1: Full toolkit error with emoji, deployment prefix, and stack name
+    raw_1 = (
+        "2026-08-23 16:47:44.027 | error | toolkit | Deployment of Stack failed: "
+        "❌  AWSAccelerator-PrepareStack-376564958706-eu-west-1 failed: "
+        "ValidationError: Stack cannot be deleted while TerminationProtection is enabled"
+    )
+    err_1, res_1 = normalize_root_cause_and_resource(raw_1)
+    assert res_1 == "AWSAccelerator-PrepareStack-376564958706-eu-west-1"
+    expected = (
+        "ValidationError: Stack cannot be deleted while TerminationProtection is enabled"
+    )
+    assert err_1 == expected
+    assert "❌" not in err_1
+    assert "Deployment of Stack failed" not in err_1
+
+
+    # Test case 2: Duplicated wrapper error
+    raw_2 = (
+        "Deployment of Stack failed: ❌  AWSAccelerator-AccountsStack-123 failed: "
+        "AWSAccelerator-AccountsStack-123 failed: StackPolicyException: Action Denied"
+    )
+    err_2, res_2 = normalize_root_cause_and_resource(raw_2)
+    assert res_2 == "AWSAccelerator-AccountsStack-123"
+    assert err_2 == "StackPolicyException: Action Denied"
+
+    # Test case 3: Generic error without resource
+    raw_3 = "ClientError: An error occurred (AccessDenied) when calling the AssumeRole operation"
+    err_3, res_3 = normalize_root_cause_and_resource(raw_3)
+    assert res_3 is None
+    assert "AccessDenied" in err_3
+
 

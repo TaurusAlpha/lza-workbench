@@ -141,8 +141,10 @@ def test_cli_pipeline_watch_failure(
         result = cli_runner.invoke(app, ["pipeline", "watch", "-e", "exec-watch-fail"])
 
     assert result.exit_code == 1
-    assert "execution failed" in result.output
-    assert "Synth failed with error" in result.output
+    assert "2. Failure" in result.output
+    assert "Stage: Synth" in result.output
+    assert "Action: SynthAction" in result.output
+    assert "Error: Synth failed with error" in result.output
 
 
 def test_cli_pipeline_watch_with_diagnostics(
@@ -155,6 +157,8 @@ def test_cli_pipeline_watch_with_diagnostics(
         "pipelineExecution": {
             "pipelineExecutionId": "exec-cli-diag",
             "status": "Failed",
+            "startTime": "2026-08-30T12:00:00+00:00",
+            "lastUpdateTime": "2026-08-30T12:02:31+00:00",
         }
     }
     mock_codepipeline.get_pipeline_state.return_value = {
@@ -167,7 +171,13 @@ def test_cli_pipeline_watch_with_diagnostics(
                         "actionName": "PrepareAction",
                         "latestExecution": {
                             "status": "Failed",
-                            "errorDetails": {"message": "Build command failed"},
+                            "errorDetails": {
+                                "message": (
+                                    "Phase context status code: COMMAND_EXECUTION_ERROR "
+                                    'Message: "Error while executing command: yarn run ts-node". '
+                                    "Reason: exit status 1"
+                                )
+                            },
                             "externalExecutionId": "build-abc-123",
                             "externalExecutionUrl": "https://console.aws.amazon.com/codebuild/build-abc-123",
                         },
@@ -194,6 +204,7 @@ def test_cli_pipeline_watch_with_diagnostics(
         "events": [
             {
                 "message": (
+                    "2026-08-23 | error | toolkit | Deployment of Stack failed: "
                     "❌  AWSAccelerator-PrepareStack-376564958706-eu-west-1 failed: "
                     "ValidationError: Stack cannot be deleted while "
                     "TerminationProtection is enabled"
@@ -224,11 +235,26 @@ def test_cli_pipeline_watch_with_diagnostics(
         result = cli_runner.invoke(app, ["pipeline", "watch", "-e", "exec-cli-diag"])
 
     assert result.exit_code == 1
-    assert "Action Failures & Root Cause Diagnostics" in result.output
-    assert "Prepare" in result.output
-    assert "PrepareAction" in result.output
-    assert "TerminationProtection is enabled" in result.output
+    # Check concise duration
+    assert "Duration: 2m 31s" in result.output
+    # Check concise action table detail (not full raw buildspec dump)
+    assert "CodeBuild BUILD phase failed" in result.output
+    assert "exit status" in result.output
+    assert "yarn run ts-node" not in result.output
+    # Check clear failure section
+    assert "2. Failure" in result.output
+    assert "Stage: Prepare" in result.output
+    assert "Action: PrepareAction" in result.output
+    assert "Resource: AWSAccelerator-PrepareStack-376564958706-eu-west-1" in result.output
+    assert "ValidationError: Stack cannot be deleted while" in result.output
+    assert "TerminationProtection" in result.output
     assert "https://console.aws.amazon.com/codebuild/build-abc-123" in result.output
+
+
+    # Presentation emoji ❌ should be stripped from domain error output
+    assert "❌" not in result.output
+
+
 
 
 def test_cli_pipeline_watch_concise_omits_pending_stages_on_failure(
@@ -309,5 +335,50 @@ def test_cli_pipeline_watch_concise_omits_pending_stages_on_failure(
         assert "Prepare" in result_verbose.output
         assert "Accounts" in result_verbose.output
         assert "Network" in result_verbose.output
+
+
+def test_cli_pipeline_watch_omits_duration_when_unknown(
+    configured_workspace: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_codepipeline = MagicMock()
+    mock_codepipeline.get_pipeline_execution.return_value = {
+        "pipelineExecution": {
+            "pipelineExecutionId": "exec-unknown-dur",
+            "status": "Succeeded",
+            # No startTime or lastUpdateTime
+        }
+    }
+    mock_codepipeline.get_pipeline_state.return_value = {
+        "stageStates": [
+            {
+                "stageName": "Source",
+                "latestExecution": {"status": "Succeeded"},
+                "actionStates": [
+                    {"actionName": "SourceAction", "latestExecution": {"status": "Succeeded"}}
+                ],
+            }
+        ]
+    }
+
+    monkeypatch.chdir(configured_workspace)
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            return_value=mock_codepipeline,
+        ),
+        patch("time.sleep"),
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        result = cli_runner.invoke(app, ["pipeline", "watch", "-e", "exec-unknown-dur"])
+
+    assert result.exit_code == 0
+    assert "Pipeline Execution Summary" in result.output
+    # When duration cannot be determined reliably, Duration line should be omitted
+    assert "Duration:" not in result.output
+    assert "Duration: 0 seconds" not in result.output
+
 
 

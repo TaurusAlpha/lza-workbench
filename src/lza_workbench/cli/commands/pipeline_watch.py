@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,7 @@ from lza_workbench.cli.output import (
 )
 from lza_workbench.errors import LzaError
 from lza_workbench.workflows.pipeline_watch import (
+    PipelineActionSummary,
     PipelineWatchResult,
     PipelineWatchUpdate,
     watch_pipeline_workflow,
@@ -36,6 +38,53 @@ def _status_color(status: str | None) -> str:
     if status in {"Cancelled", "Stopped"}:
         return "magenta"
     return "white"
+
+
+def _format_duration(seconds: float | None) -> str | None:
+    """Format duration in seconds into human readable string (e.g. 2m 31s or 45s)."""
+    if seconds is None or seconds <= 0:
+        return None
+    total_secs = int(round(seconds))
+    if total_secs < 60:
+        return f"{total_secs}s"
+    mins = total_secs // 60
+    rem_secs = total_secs % 60
+    if rem_secs > 0:
+        return f"{mins}m {rem_secs}s"
+    return f"{mins}m"
+
+
+def _format_action_table_detail(action: PipelineActionSummary) -> str:
+    """Format concise action status detail for breakdown table without buildspec dumps."""
+    if action.status != "Failed":
+        return ""
+
+    msg = action.error_message or action.summary or ""
+    if not msg:
+        return ""
+
+    # Check for exit status / code
+    exit_match = re.search(r"exit (?:status|code)\s+(\d+)", msg, flags=re.IGNORECASE)
+    if exit_match:
+        code = exit_match.group(1)
+        phase_match = re.search(r"\b([A-Z_]+)\s+phase\b", msg, flags=re.IGNORECASE)
+        phase = phase_match.group(1).upper() if phase_match else "BUILD"
+        return f"CodeBuild {phase} phase failed (exit status {code})"
+
+    if "COMMAND_EXECUTION_ERROR" in msg:
+        return "CodeBuild BUILD phase failed"
+
+    # Allow concise provider messages without raw shell commands or multi-line dumps
+    if (
+        len(msg) < 60
+        and "\n" not in msg
+        and "yarn" not in msg.lower()
+        and "npm" not in msg.lower()
+        and "ts-node" not in msg.lower()
+    ):
+        return msg.strip()
+
+    return ""
 
 
 class PipelineWatchMonitor:
@@ -123,7 +172,9 @@ def render_pipeline_watch_result(
     print_section(1, "Pipeline Execution Summary")
     print_kv("Pipeline Name", result.pipeline_name, bold_value=True)
     print_kv("Execution ID", result.execution_id, bold_value=True)
-    print_kv("Duration", f"{int(result.elapsed_seconds)} seconds")
+    dur_str = _format_duration(result.elapsed_seconds)
+    if dur_str:
+        print_kv("Duration", dur_str)
     color = _status_color(result.status)
     print_kv("Final Status", f"[{color}]{result.status}[/{color}]", bold_value=True)
 
@@ -178,7 +229,7 @@ def render_pipeline_watch_result(
 
                     for idx, action in enumerate(visible_actions):
                         act_color = _status_color(action.status)
-                        details = action.error_message or action.summary or ""
+                        details = _format_action_table_detail(action)
                         table.add_row(
                             stage.stage_name if idx == 0 else "",
                             action.action_name,
@@ -190,28 +241,33 @@ def render_pipeline_watch_result(
     if result.status == "Succeeded":
         print_success(f"Pipeline '{result.pipeline_name}' execution completed successfully.")
     elif result.status == "Failed":
-        print_notice(f"Pipeline '{result.pipeline_name}' execution failed.")
         if result.failed_actions:
             console.print()
-            console.print("[bold red]Action Failures & Root Cause Diagnostics:[/bold red]")
+            print_section(2, "Failure")
             for fa in result.failed_actions:
-                stage_prefix = (
-                    f"Stage: [bold cyan]{fa.stage_name}[/bold cyan] > " if fa.stage_name else ""
-                )
-                console.print(f"  ❌ {stage_prefix}Action: [bold]{fa.action_name}[/bold]")
+                if fa.stage_name:
+                    print_kv("Stage", fa.stage_name, bold_value=True)
+                print_kv("Action", fa.action_name, bold_value=True)
+                if fa.failed_resource:
+                    print_kv("Resource", fa.failed_resource)
+
                 if fa.diagnostic_details:
                     for diag in fa.diagnostic_details:
-                        console.print(f"     [red]{diag}[/red]")
+                        print_kv("Error", diag, style="red")
                 elif fa.error_message or fa.summary:
-                    console.print(f"     [red]{fa.error_message or fa.summary}[/red]")
+                    print_kv("Error", fa.error_message or fa.summary, style="red")
+
                 if verbose and fa.raw_diagnostic_details:
-                    console.print("     [dim]Raw Diagnostics:[/dim]")
+                    console.print("  [dim]Raw Diagnostics:[/dim]")
                     for raw in fa.raw_diagnostic_details:
-                        console.print(f"       [dim]{raw}[/dim]")
+                        console.print(f"    [dim]{raw}[/dim]")
+
                 if fa.external_execution_url:
-                    console.print(f"     [dim]Build Console:[/dim] {fa.external_execution_url}")
+                    print_kv("Build Console", fa.external_execution_url, style="dim")
         elif result.error_message:
-            console.print(f"[bold red]Failure details:[/bold red] {result.error_message}")
+            console.print()
+            print_section(2, "Failure")
+            print_kv("Error", result.error_message, style="red")
     else:
         print_notice(
             f"Pipeline '{result.pipeline_name}' execution finished with status: {result.status}"
@@ -241,9 +297,7 @@ def pipeline_watch_command(
 
     render_pipeline_watch_result(result, verbose=verbose)
     if result.status != "Succeeded":
-        raise LzaError(
-            f"Pipeline execution {result.execution_id} ended with status '{result.status}'."
-        )
+        raise LzaError(f"Pipeline execution {result.execution_id} failed.")
     return result
 
 
@@ -253,3 +307,4 @@ __all__ = [
     "render_pipeline_watch_result",
     "render_pipeline_watch_update",
 ]
+

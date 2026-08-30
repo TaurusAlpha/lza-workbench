@@ -184,6 +184,8 @@ def test_get_pipeline_execution_success() -> None:
     assert result.status == "Succeeded"
     assert result.execution_id == "exec-123"
     assert result.status_summary == "Done"
+    assert result.duration_seconds == 900.0
+
 
 
 def test_get_pipeline_execution_not_found() -> None:

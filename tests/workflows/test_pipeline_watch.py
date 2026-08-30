@@ -192,11 +192,12 @@ def test_watch_pipeline_failed_action_with_codebuild_diagnostics(
     assert result.status == "Failed"
     assert len(result.failed_actions) == 1
     assert result.failed_actions[0].action_name == "Prepare"
+    assert result.failed_actions[0].failed_resource == "AWSAccelerator-PrepareStack"
     assert len(result.failed_actions[0].diagnostic_details) == 1
-    assert (
-        "TerminationProtection is enabled" in result.failed_actions[0].diagnostic_details[0]
-    )
+    assert "TerminationProtection is enabled" in result.failed_actions[0].diagnostic_details[0]
+    assert "❌" not in result.failed_actions[0].diagnostic_details[0]
     assert "TerminationProtection is enabled" in (result.error_message or "")
+
 
 
 def test_watch_pipeline_no_execution_id(configured_workspace: Path) -> None:

@@ -186,10 +186,11 @@ def test_cli_config_deploy_pipeline_failed(
         result = cli_runner.invoke(app, ["config", "deploy"])
 
     assert result.exit_code == 1
-    assert "LZA deployment failed" in str(result.exception) or "LZA deployment failed" in (
-        result.output or ""
-    )
+    assert "Pipeline execution exec-cli-fail failed" in str(
+        result.exception
+    ) or "Pipeline execution exec-cli-fail failed" in (result.output or "")
     assert "CDK Synth error" in result.output
+
 
 
 def test_cli_config_deploy_verbose(

@@ -142,12 +142,12 @@ def deploy_configuration_workflow(
 
         if watch_res.status != "Succeeded":
             raise ConfigDeployError(
-                f"LZA deployment failed. Pipeline execution {watch_res.execution_id} "
-                f"ended with status '{watch_res.status}'.",
+                f"Pipeline execution {watch_res.execution_id} failed.",
                 push_result=push_res,
                 start_result=start_res,
                 watch_result=watch_res,
             )
+
 
     return ConfigDeployResult(
         push_result=push_res,
