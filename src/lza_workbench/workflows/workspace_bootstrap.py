@@ -184,8 +184,6 @@ def _build_bootstrap_plan(
     if not insp["exists"]:
         bucket_planned_operation = "CREATE"
         actions.append(f"Create S3 bucket '{bucket_name}' in region '{region}'")
-        actions.append(f"Enable versioning on S3 bucket '{bucket_name}'")
-        actions.append(f"Enable AWS-managed KMS encryption on S3 bucket '{bucket_name}'")
     else:
         if not insp["versioning_enabled"]:
             actions.append(f"Enable versioning on S3 bucket '{bucket_name}'")

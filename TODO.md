@@ -203,10 +203,6 @@ Future design checklist:
 
 Collect and persist installer CloudFormation parameters and workspace settings.
 
-- [x] Normalize LZA version strings (e.g. prefixing `v` for `vX.Y.Z`) when constructing the official AWS solutions-reference installer template download URL (`https://s3.amazonaws.com/solutions-reference/landing-zone-accelerator-on-aws/v{version}/AWSAccelerator-InstallerStack.template`) to prevent 404 download failures for un-prefixed version inputs (such as `1.15.5`).
-- [x] Prompt only for parameters applicable to the selected installer and configuration sources;
-  for example, do not prompt for a CodeConnection ARN when GitHub is selected.
-
 ### `lza installer plan`
 
 Inspect AWS and show the CloudFormation actions required for the initialized installer

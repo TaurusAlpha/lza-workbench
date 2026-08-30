@@ -44,9 +44,6 @@ def _render_bootstrap_plan(plan: BootstrapPlanResult) -> None:
         "EXISTS" if plan.bucket_exists else "DOES NOT EXIST",
         bold_value=True,
     )
-    if plan.bucket_exists:
-        print_kv("Versioning Enabled", str(plan.versioning_enabled))
-        print_kv("KMS Encryption Enabled", str(plan.encryption_enabled))
     print_kv("Bucket Planned Action", plan.bucket_planned_operation)
 
     if plan.codecommit_repo_name:
