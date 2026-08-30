@@ -178,22 +178,17 @@ def get_installer_status_workflow(
         region=resolved_config.aws.region,
         role_arn=resolved_config.aws.role_arn,
         expected_account_id=resolved_config.aws.account_id,
+        prime_credentials=resolved_config.aws.prime_credentials,
     )
     cfn_stack_name = resolved_config.installer.stack_name or "AWSAccelerator-InstallerStack"
-    cfn_client = (
-        aws_context.factory.get_client("cloudformation") if aws_context.identity else None
-    )
+    cfn_client = aws_context.factory.get_client("cloudformation") if aws_context.identity else None
     cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=cfn_stack_name)
     deployed_version = branch_to_version(
-        cfn_status.deployed_parameters.get("RepositoryBranchName", "")
-        if cfn_status.exists
-        else ""
+        cfn_status.deployed_parameters.get("RepositoryBranchName", "") if cfn_status.exists else ""
     )
 
     prefix = resolved_config.lza.accelerator_prefix or "AWSAccelerator"
-    installer_pipeline_name = (
-        resolved_config.pipelines.installer.name or f"{prefix}-Installer"
-    )
+    installer_pipeline_name = resolved_config.pipelines.installer.name or f"{prefix}-Installer"
     codepipeline_client = (
         aws_context.factory.get_client("codepipeline") if aws_context.identity else None
     )

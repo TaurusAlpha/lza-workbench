@@ -168,6 +168,7 @@ def _handle_s3_push(
         expected_account_id=config.aws.account_id,
         require_identity=True,
         require_expected_account=True,
+        prime_credentials=config.aws.prime_credentials,
     )
     s3_client = resolved_aws_context.factory.get_client("s3")
 

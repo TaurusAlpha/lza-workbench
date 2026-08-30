@@ -58,6 +58,7 @@ def start_pipeline_workflow(
         expected_account_id=config.aws.account_id,
         require_identity=not dry_run,
         require_expected_account=not dry_run,
+        prime_credentials=config.aws.prime_credentials,
     )
 
     region = resolved_aws_context.region

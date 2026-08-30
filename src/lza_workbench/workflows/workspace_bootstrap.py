@@ -149,6 +149,7 @@ def _resolve_bootstrap_aws_context(config: WorkspaceConfig) -> AwsExecutionConte
             expected_account_id=config.aws.account_id,
             require_identity=True,
             require_expected_account=True,
+            prime_credentials=config.aws.prime_credentials,
         )
     except LzaError:
         raise
@@ -262,9 +263,8 @@ def _build_bootstrap_plan(
         github_repo_name = (
             config.installer.source_code.repository_name or "landing-zone-accelerator-on-aws"
         )
-        github_repo_branch = (
-            config.installer.source_code.branch
-            or resolve_installer_source_branch("github", None, config.lza.version)
+        github_repo_branch = config.installer.source_code.branch or resolve_installer_source_branch(
+            "github", None, config.lza.version
         )
         sm_client = aws_ctx.factory.get_client("secretsmanager")
         secret_details = inspect_secret_details(github_secret_name, client=sm_client)

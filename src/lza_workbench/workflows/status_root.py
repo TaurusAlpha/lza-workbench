@@ -51,6 +51,7 @@ def get_root_status_workflow(
         region=config.aws.region,
         role_arn=config.aws.role_arn,
         expected_account_id=config.aws.account_id,
+        prime_credentials=config.aws.prime_credentials,
     )
     factory = aws_context.factory
     region = aws_context.region

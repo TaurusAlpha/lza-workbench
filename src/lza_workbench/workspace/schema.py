@@ -30,6 +30,7 @@ class AwsConfig(WorkspaceModel):
     region: str = "us-east-1"
     profile: str | None = None
     role_arn: str | None = None
+    prime_credentials: bool = False
 
     @model_validator(mode="after")
     def require_profile(self) -> AwsConfig:

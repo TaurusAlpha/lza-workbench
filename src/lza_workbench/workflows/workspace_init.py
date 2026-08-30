@@ -95,6 +95,7 @@ def init_workspace_workflow(
             role_arn=config.aws.role_arn,
             expected_account_id=config.aws.account_id,
             require_identity=True,
+            prime_credentials=config.aws.prime_credentials,
         ).identity
 
     state = WorkspaceState.from_config(config)

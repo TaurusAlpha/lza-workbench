@@ -114,6 +114,7 @@ def watch_pipeline_workflow(
         expected_account_id=config.aws.account_id,
         require_identity=True,
         require_expected_account=True,
+        prime_credentials=config.aws.prime_credentials,
     )
 
     region = resolved_aws_context.region
@@ -265,9 +266,7 @@ def watch_pipeline_workflow(
 
                 action_errs = []
                 for fa in failed_actions:
-                    stage_prefix = (
-                        f"Stage '{fa.stage_name}', action" if fa.stage_name else "Action"
-                    )
+                    stage_prefix = f"Stage '{fa.stage_name}', action" if fa.stage_name else "Action"
                     if fa.diagnostic_details:
                         diag_text = "\n  - ".join(fa.diagnostic_details)
                         action_errs.append(
@@ -292,7 +291,6 @@ def watch_pipeline_workflow(
         live_dur = time_provider() - start_time
         if live_dur >= 1.0:
             total_elapsed = live_dur
-
 
     watch_result = PipelineWatchResult(
         workspace_dir=workspace_dir,
@@ -329,4 +327,3 @@ __all__ = [
     "PipelineWatchUpdate",
     "watch_pipeline_workflow",
 ]
-

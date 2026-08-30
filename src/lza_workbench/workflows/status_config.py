@@ -133,6 +133,7 @@ def get_config_status_workflow(
         region=resolved_config.aws.region,
         role_arn=resolved_config.aws.role_arn,
         expected_account_id=resolved_config.aws.account_id,
+        prime_credentials=resolved_config.aws.prime_credentials,
     )
     factory = aws_context.factory
     region = aws_context.region

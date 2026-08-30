@@ -440,6 +440,7 @@ def import_workspace_workflow(
                             region=config.aws.region,
                             role_arn=config.aws.role_arn,
                             expected_account_id=config.aws.account_id,
+                            prime_credentials=config.aws.prime_credentials,
                         )
                         sm_client = aws_ctx.factory.get_client("secretsmanager")
                         secret_name = (
@@ -466,9 +467,7 @@ def import_workspace_workflow(
                                     f"GitHub repository check returned: {gh_res['error']}"
                                 )
                     except Exception as gh_exc:
-                        recommendations.append(
-                            f"GitHub token validation check skipped: {gh_exc}"
-                        )
+                        recommendations.append(f"GitHub token validation check skipped: {gh_exc}")
             elif installer_status.aws_error:
                 recommendations.append(
                     f"AWS connection check failed ({installer_status.aws_error}). "

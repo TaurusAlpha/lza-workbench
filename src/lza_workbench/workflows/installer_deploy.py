@@ -93,6 +93,7 @@ def prepare_installer_deployment(
             expected_account_id=config.aws.account_id,
             require_identity=True,
             require_expected_account=True,
+            prime_credentials=config.aws.prime_credentials,
         )
     except LzaError:
         raise

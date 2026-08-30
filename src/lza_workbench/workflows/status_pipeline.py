@@ -46,6 +46,7 @@ def get_pipeline_status_workflow(
         region=config.aws.region,
         role_arn=config.aws.role_arn,
         expected_account_id=config.aws.account_id,
+        prime_credentials=config.aws.prime_credentials,
     )
     region = aws_context.region
     aws_identity = aws_context.identity

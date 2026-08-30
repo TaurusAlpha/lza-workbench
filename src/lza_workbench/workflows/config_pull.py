@@ -199,11 +199,11 @@ def _handle_s3_pull(
         role_arn=config.aws.role_arn,
         expected_account_id=config.aws.account_id,
         require_identity=True,
+        prime_credentials=config.aws.prime_credentials,
     )
     s3_client = aws_context.factory.get_client("s3")
 
     download_s3_file(
-
         client=s3_client,
         bucket_name=destination.bucket,
         object_key=destination.object_key,
