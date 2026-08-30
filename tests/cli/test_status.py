@@ -192,7 +192,7 @@ def test_cli_status_commands(
     assert "Config Pipeline ARN" not in res_installer.output
     assert "Stack Outputs" not in res_installer.output
     assert "No stack outputs available" not in res_installer.output
-    assert "Installer Pipeline Status" in res_installer.output
+    assert "Pipeline Status" in res_installer.output
 
     # Test lza installer status alias
     res_installer_alias = runner.invoke(app, ["installer", "status"])
@@ -201,23 +201,28 @@ def test_cli_status_commands(
     assert "Config Pipeline ARN" not in res_installer_alias.output
     assert "Stack Outputs" not in res_installer_alias.output
     assert "No stack outputs available" not in res_installer_alias.output
-    assert "Installer Pipeline Status" in res_installer_alias.output
+    assert "Pipeline Status" in res_installer_alias.output
 
     res_config = runner.invoke(app, ["status", "config"])
     assert res_config.exit_code == 0
     assert "LZA Configuration Status - Test" in res_config.output
-    assert "Local Configuration & Working Tree" in res_config.output
-    assert "Configuration Repository & Remote State" in res_config.output
+    assert "Local Configuration" in res_config.output
+    assert "Repository Settings" in res_config.output
 
     # Test lza config status alias
     res_config_alias = runner.invoke(app, ["config", "status"])
     assert res_config_alias.exit_code == 0
     assert "LZA Configuration Status - Test" in res_config_alias.output
-    assert "Local Configuration & Working Tree" in res_config_alias.output
-    assert "Configuration Repository & Remote State" in res_config_alias.output
+    assert "Local Configuration" in res_config_alias.output
+    assert "Repository Settings" in res_config_alias.output
 
     res_pipeline = runner.invoke(app, ["status", "pipeline"])
     assert res_pipeline.exit_code == 0
+    assert "LZA Pipeline Status - Test" in res_pipeline.output
+    assert "1. Installer Pipeline" in res_pipeline.output
+    assert "2. Configuration Pipeline" in res_pipeline.output
+    assert "3. Execution History" in res_pipeline.output
+
 
 
 @patch("lza_workbench.workflows.status_installer.get_cloudformation_stack_status")

@@ -46,3 +46,9 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 - **Mirrored Test Hierarchy**: Reorganized flat test directory into package-aligned test packages matching source structure (`tests/aws/`, `tests/workspace/`, `tests/configuration/`, `tests/installer/`, `tests/workflows/`, `tests/cli/`).
 - **Centralized Test Fixtures (`conftest.py`)**: Consolidated duplicate setup logic and created reusable test fixtures for AWS caller identity, execution context, workspace configurations, and temporary initialized/configured workspaces.
 - **Deduplication & Layer Purity**: Eliminated redundant and duplicate tests across bootstrap, deploy, and S3 modules. Decoupled CLI tests from internal domain algorithm testing and isolated workflow orchestration tests.
+
+### CLI Presentation Standardization
+- **Unified Presentation Primitives (`cli/output.py`)**: Centralized `format_timestamp` (normalizing all datetime representations to `YYYY-MM-DD HH:MM:SS UTC`), `format_status` (humanizing raw AWS status enums e.g. `UPDATE_COMPLETE` -> `Update Complete` with standardized Rich color styles), `render_workspace_header` (standardizing top-level workspace banners), and `render_failure_section` (standardizing pipeline root cause failures).
+- **Normalized Command Renderers**: Standardized section titles, numbering, labels, and formatting across `status`, `status installer` (`installer status`), `status config` (`config status`), `status pipeline`, `pipeline watch`, and `config deploy`.
+- **Cleaned Storage Leaks & Unnecessary IDs**: Suppressed internal `.lza/state.json` file paths in section headings in favor of domain terms (`Synchronization History`, `Execution History`), and omitted full caller/stack ARNs from default views while retaining vital account/region/profile context.
+

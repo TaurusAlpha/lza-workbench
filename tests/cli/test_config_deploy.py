@@ -126,9 +126,10 @@ def test_cli_config_deploy_full_success(
         result = cli_runner.invoke(app, ["config", "deploy"])
 
     assert result.exit_code == 0
-    assert "Pipeline Execution Summary" in result.output
+    assert "3. Pipeline Monitoring" in result.output
     assert "Stage & Action Breakdown" in result.output
     assert "completed successfully" in result.output
+
 
 
 def test_cli_config_deploy_pipeline_failed(
@@ -242,6 +243,7 @@ def test_cli_config_deploy_verbose(
         result = cli_runner.invoke(app, ["config", "deploy", "--verbose"])
 
     assert result.exit_code == 0
-    assert "Pipeline Execution Summary" in result.output
+    assert "3. Pipeline Monitoring" in result.output
     assert "completed successfully" in result.output
+
 

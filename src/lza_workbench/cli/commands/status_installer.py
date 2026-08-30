@@ -4,17 +4,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rich.panel import Panel
 from rich.table import Table
 
 from lza_workbench.cli import params
 from lza_workbench.cli.output import (
     console,
+    format_status,
+    format_timestamp,
     print_info,
     print_kv,
     print_notice,
     print_section,
     print_success,
+    render_workspace_header,
 )
 from lza_workbench.workflows.status_installer import (
     InstallerStatusResult,
@@ -25,50 +27,21 @@ from lza_workbench.workflows.status_installer import (
 
 def _render_resources(result: InstallerStatusResult) -> None:
     console.print()
-    print_section(1, "CloudFormation Stack & Installer Pipeline Resources")
+    print_section(1, "Installer Stack")
     status = result.cfn_status.stack_status or "UNKNOWN"
-    account_id = result.aws_identity["account"] if result.aws_identity else "UNKNOWN_ACCOUNT"
     stack_name = result.config.installer.stack_name or "AWSAccelerator-InstallerStack"
-    stack_arn = (
-        result.cfn_status.stack_id
-        or f"arn:aws:cloudformation:{result.region}:{account_id}:stack/{stack_name}/*"
-    )
-    color = (
-        "green"
-        if result.cfn_status.exists and "COMPLETE" in status
-        else "yellow"
-        if result.cfn_status.exists
-        else "red"
-        if status == "UNKNOWN"
-        else "dim"
-    )
+
     print_kv("Target Region", result.region, bold_value=True)
-    print_kv("Installer CloudFormation Stack", stack_name, bold_value=True)
-    print_kv("Installer Stack ARN", stack_arn, style="dim")
-    console.print(f"Installer Stack Status: [{color}][bold]{status}[/bold][/{color}]")
+    print_kv("Installer Stack Name", stack_name, bold_value=True)
+    print_kv("Stack Status", format_status(status))
     print_kv("Installer Pipeline Name", result.installer_pipeline_name, bold_value=True)
-    print_kv(
-        "Installer Pipeline ARN",
-        f"arn:aws:codepipeline:{result.region}:{account_id}:{result.installer_pipeline_name}",
-        style="dim",
-    )
+
     if result.pipeline_state:
         pipe_status = result.pipeline_state.status or "UNKNOWN"
-        p_color = (
-            "green"
-            if pipe_status == "Succeeded"
-            else "yellow"
-            if pipe_status == "InProgress"
-            else "red"
-            if pipe_status in {"Failed", "Cancelled"}
-            else "dim"
-        )
-        console.print(
-            f"Installer Pipeline Status: [{p_color}][bold]{pipe_status}[/bold][/{p_color}]"
-        )
+        print_kv("Pipeline Status", format_status(pipe_status))
         if result.pipeline_state.latest_execution_id:
             print_kv(
-                "Latest Pipeline Execution ID",
+                "Latest Execution ID",
                 result.pipeline_state.latest_execution_id,
                 style="dim",
             )
@@ -76,23 +49,17 @@ def _render_resources(result: InstallerStatusResult) -> None:
             stage_parts = []
             for s in result.pipeline_state.stage_states:
                 s_status = s.status or "Unknown"
-                s_col = (
-                    "green"
-                    if s_status == "Succeeded"
-                    else "yellow"
-                    if s_status == "InProgress"
-                    else "red"
-                    if s_status == "Failed"
-                    else "dim"
-                )
-                stage_parts.append(f"{s.stage_name} ([{s_col}]{s_status}[/{s_col}])")
+                stage_parts.append(f"{s.stage_name} ({format_status(s_status)})")
             print_kv("Pipeline Stages", " -> ".join(stage_parts))
         if result.pipeline_state.error:
             print_notice(f"Pipeline Query Notice: {result.pipeline_state.error}")
-    if result.cfn_status.creation_time:
-        print_kv("Stack Creation Time", result.cfn_status.creation_time)
-    if result.cfn_status.last_updated_time:
-        print_kv("Stack Last Updated", result.cfn_status.last_updated_time)
+
+    created = format_timestamp(result.cfn_status.creation_time)
+    if created:
+        print_kv("Stack Creation Time", created)
+    updated = format_timestamp(result.cfn_status.last_updated_time)
+    if updated:
+        print_kv("Stack Last Updated", updated)
     if result.cfn_status.error:
         print_notice(f"CloudFormation Query Notice: {result.cfn_status.error}")
 
@@ -155,23 +122,30 @@ def _render_drift(result: InstallerStatusResult) -> None:
 
 def _render_state_alignment(result: InstallerStatusResult) -> None:
     console.print()
-    print_section(4, "Local State Metadata (.lza/state.json)")
+    print_section(4, "State Alignment")
     if not result.state:
-        print_info("No local state file found.", dim=True)
+        print_info("No recorded workspace state found.", dim=True)
         return
     state = result.state
+    rec_status = (
+        format_status(state.installer_stack_status)
+        if state.installer_stack_status
+        else None
+    )
     for label, value in (
-        ("State Stack ID", state.installer_stack_id),
-        ("State Stack Status", state.installer_stack_status),
-        ("State Stack Last Updated", state.installer_stack_updated_at),
-        ("Installer Downloaded At", state.installer_downloaded_at),
-        ("Installer Template Version", state.installer_template_version),
+        ("Recorded Stack ID", state.installer_stack_id),
+        ("Recorded Stack Status", rec_status),
+        ("Recorded Stack Updated", format_timestamp(state.installer_stack_updated_at)),
+        ("Installer Downloaded", format_timestamp(state.installer_downloaded_at)),
+        ("Template Version", state.installer_template_version),
     ):
-        print_kv(label, value or "Not recorded")
+
+        if value:
+            print_kv(label, value)
     if result.state_alignment:
         print_kv(
             "State Alignment",
-            "In Sync (.lza/state.json matches live AWS state)"
+            "In Sync (Recorded state matches live AWS deployment)"
             if result.state_alignment.in_sync
             else "Out of Sync",
             style="green" if result.state_alignment.in_sync else "yellow",
@@ -187,7 +161,7 @@ def _render_recommendations(result: InstallerStatusResult) -> None:
     if result.configuration_drift:
         console.print(
             "  [bold green]lza status installer --sync-config[/bold green]  "
-            "[dim](Synchronizes lza-workspace.yaml and .lza/state.json "
+            "[dim](Synchronizes lza-workspace.yaml and recorded state "
             "with live AWS settings)[/dim]"
         )
         console.print(
@@ -197,27 +171,22 @@ def _render_recommendations(result: InstallerStatusResult) -> None:
     else:
         console.print(
             "  [bold green]lza status installer --sync-state[/bold green]   "
-            "[dim](Synchronizes .lza/state.json with live AWS installer deployment state)[/dim]"
+            "[dim](Synchronizes recorded state with live AWS installer deployment state)[/dim]"
         )
 
 
 def render_installer_status(result: InstallerStatusResult) -> None:
     """Render prepared installer data without AWS calls or workspace writes."""
-    console.print(
-        Panel(
-            f"[bold cyan]LZA Installer Status - {result.config.customer.name}[/bold cyan]",
-            expand=False,
-        )
+    render_workspace_header(
+        "LZA Installer Status",
+        customer_name=result.config.customer.name,
+        workspace_dir=result.workspace_dir,
+        lza_version=result.config.lza.version,
+        profile=result.profile,
+        region=result.region,
+        aws_identity=result.aws_identity,
+        aws_error=result.aws_error,
     )
-    print_kv("Workspace", result.workspace_dir, bold_value=True)
-    print_kv("Configured LZA Version", result.config.lza.version, bold_value=True)
-    print_kv("AWS Profile", result.profile or "Not specified", bold_value=True)
-    print_kv("AWS Region", result.region, bold_value=True)
-    if result.aws_identity:
-        print_kv("AWS Account ID", result.aws_identity["account"], style="green")
-        print_kv("Caller Identity", result.aws_identity["arn"], style="dim")
-    elif result.aws_error:
-        print_notice(f"AWS Access Notice: {result.aws_error}")
     _render_resources(result)
     _render_deployed_details(result)
     _render_drift(result)
@@ -237,10 +206,15 @@ def status_installer_command(
         target_dir=target_dir,
     )
     if result.state_synced:
-        console.print(
-            "[bold green]Synchronized .lza/state.json with live AWS installer state.[/bold green]"
-        )
+        print_success("Synchronized workspace state with live AWS installer state.")
     if result.config_synced:
         print_success("Synchronized lza-workspace.yaml with deployed AWS installer configuration.")
 
     render_installer_status(result)
+
+
+__all__ = [
+    "render_installer_status",
+    "status_installer_command",
+]
+

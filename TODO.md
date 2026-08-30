@@ -431,12 +431,3 @@ AI features remain advisory by default; execution must be a separate explicit ac
 - [ ] Web interface.
 - [ ] Multi-user/server mode.
 
-## CLI Presentation Standardization
-
-- [ ] Standardize CLI presentation across status, pipeline, installer, and configuration commands.
-  - Define consistent headings, section numbering, labels, status wording, and timestamp formatting.
-  - Keep default output concise and operationally useful.
-  - Normalize shared concepts such as pipeline status, execution IDs, repository state, sync state, and AWS failures.
-  - Hide implementation-specific metadata and excessive AWS identifiers unless useful or requested.
-  - Reuse shared presentation helpers where this reduces duplication without moving Rich rendering outside the CLI layer.
-  - Preserve detailed/raw diagnostics for verbose output where appropriate.

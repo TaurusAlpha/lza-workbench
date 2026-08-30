@@ -50,9 +50,12 @@ def render_config_deploy_result(
         render_pipeline_start_result(result.start_result)
 
     if result.watch_result is not None:
-        console.print()
-        print_section(3, "Pipeline Monitoring")
-        render_pipeline_watch_result(result.watch_result, verbose=verbose)
+        render_pipeline_watch_result(
+            result.watch_result,
+            verbose=verbose,
+            start_section_number=3,
+        )
+
 
 
 def config_deploy_command(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC
 
 import pytest
 
@@ -102,3 +103,100 @@ def test_value_or_prompt_email_validation() -> None:
         validate_email("invalid-email")
     with pytest.raises(ValueError, match="Must be a valid email address"):
         validate_email("   ")
+
+
+def test_format_timestamp() -> None:
+    from datetime import datetime
+
+    from lza_workbench.cli.output import format_timestamp
+
+    assert format_timestamp(None) is None
+    assert format_timestamp("") is None
+    assert format_timestamp("None") is None
+
+    # Datetime object (UTC)
+    dt_utc = datetime(2026, 8, 30, 12, 34, 56, tzinfo=UTC)
+    assert format_timestamp(dt_utc) == "2026-08-30 12:34:56 UTC"
+
+    # Datetime object naive (assumed UTC)
+    dt_naive = datetime(2026, 8, 30, 12, 34, 56)
+    assert format_timestamp(dt_naive) == "2026-08-30 12:34:56 UTC"
+
+    # ISO string with Z
+    assert format_timestamp("2026-08-30T12:34:56Z") == "2026-08-30 12:34:56 UTC"
+
+    # ISO string with fractional seconds
+    assert format_timestamp("2026-08-30T12:34:56.789012+00:00") == "2026-08-30 12:34:56 UTC"
+
+    # Already formatted UTC string
+    assert format_timestamp("2026-08-30 12:34:56 UTC") == "2026-08-30 12:34:56 UTC"
+
+
+def test_format_status() -> None:
+    from lza_workbench.cli.output import format_status
+
+    assert "Update Complete" in format_status("UPDATE_COMPLETE")
+    assert "green" in format_status("UPDATE_COMPLETE")
+
+    assert "Create Complete" in format_status("CREATE_COMPLETE")
+    assert "green" in format_status("Succeeded")
+    assert "yellow" in format_status("InProgress")
+    assert "red" in format_status("Failed")
+    assert "red" in format_status("ROLLBACK_FAILED")
+    assert "dim" in format_status("Unknown")
+
+
+def test_render_workspace_header(capsys: pytest.CaptureFixture[str]) -> None:
+    from lza_workbench.cli.output import render_workspace_header
+
+    render_workspace_header(
+        "LZA Test Status",
+        customer_name="Acme Corp",
+        workspace_dir="/path/to/acme",
+        lza_version="1.10.0",
+        profile="acme-prod",
+        region="eu-west-1",
+        aws_identity={"account": "123456789012"},
+    )
+    captured = capsys.readouterr().out
+    assert "LZA Test Status - Acme Corp" in captured
+    assert "Workspace: /path/to/acme" in captured
+    assert "Configured LZA Version: 1.10.0" in captured
+    assert "AWS Profile: acme-prod" in captured
+    assert "AWS Region: eu-west-1" in captured
+    assert "AWS Account ID: 123456789012" in captured
+
+
+def test_render_failure_section(capsys: pytest.CaptureFixture[str]) -> None:
+    from dataclasses import dataclass
+
+    from lza_workbench.cli.output import render_failure_section
+
+    @dataclass
+    class DummyAction:
+        action_name: str
+        stage_name: str | None = None
+        failed_resource: str | None = None
+        diagnostic_details: list[str] | None = None
+        error_message: str | None = None
+        summary: str | None = None
+        external_execution_url: str | None = None
+        raw_diagnostic_details: list[str] | None = None
+
+    fa = DummyAction(
+        action_name="SynthAction",
+        stage_name="SynthStage",
+        failed_resource="AWSAccelerator-PrepareStack",
+        diagnostic_details=["ValidationError: Stack cannot be deleted"],
+        external_execution_url="https://console.aws.amazon.com/codebuild/build-123",
+    )
+
+    render_failure_section(2, [fa])
+    captured = capsys.readouterr().out
+    assert "2. Failure" in captured
+    assert "Stage: SynthStage" in captured
+    assert "Action: SynthAction" in captured
+    assert "Resource: AWSAccelerator-PrepareStack" in captured
+    assert "Error: ValidationError: Stack cannot be deleted" in captured
+    assert "Build Console: https://console.aws.amazon.com/codebuild/build-123" in captured
+

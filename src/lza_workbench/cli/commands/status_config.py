@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rich.panel import Panel
-
 from lza_workbench.cli.output import (
     console,
+    format_status,
+    format_timestamp,
     print_info,
     print_kv,
-    print_notice,
     print_section,
     print_warning,
+    render_workspace_header,
 )
 from lza_workbench.workflows.status_config import (
     ConfigurationStatusResult,
@@ -21,7 +21,7 @@ from lza_workbench.workflows.status_config import (
 
 
 def _render_local_config(result: ConfigurationStatusResult) -> None:
-    print_section(1, "Local Configuration & Working Tree")
+    print_section(1, "Local Configuration")
 
     exists_str = "[green]Present[/green]" if result.config_dir_exists else "[red]Missing[/red]"
     print_kv("Local Config Path", f"{result.config_dir} ({exists_str})")
@@ -34,7 +34,7 @@ def _render_local_config(result: ConfigurationStatusResult) -> None:
         print_kv("YAML Config Files", "0 files found", style="dim")
 
     if result.initialized_at:
-        init_str = result.initialized_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+        init_str = format_timestamp(result.initialized_at) or "Unknown"
         tmpl_str = result.template_name or "default"
         print_kv("Configuration Origin", f"Initialized from '{tmpl_str}' template ({init_str})")
     elif result.config_dir_exists:
@@ -60,26 +60,16 @@ def _render_local_config(result: ConfigurationStatusResult) -> None:
 
         if result.git_sync_status:
             sync = result.git_sync_status
-            sync_style = (
-                "green"
-                if sync.status == "Synchronized"
-                else "yellow"
-                if sync.status in {"Ahead", "Behind"}
-                else "red"
-                if sync.status == "Diverged"
-                else "dim"
-            )
-            print_kv("Remote Sync Status", sync.summary, style=sync_style)
+            print_kv("Remote Sync", format_status(sync.summary))
 
 
 def _render_repository_settings(result: ConfigurationStatusResult) -> None:
     console.print()
-    print_section(2, "Configuration Repository & Remote State")
+    print_section(2, "Repository Settings")
     print_kv("Repository Type", result.repository_type, bold_value=True)
 
     if result.repository_type == "s3":
         s3_bucket = result.repository_bucket or "Not configured"
-
 
         if result.s3_bucket_exists is True:
             ver_str = (
@@ -101,12 +91,7 @@ def _render_repository_settings(result: ConfigurationStatusResult) -> None:
 
         if result.s3_object_exists is True:
             size_kb = (result.s3_object_size or 0) / 1024
-            mod_dt = result.s3_object_last_modified
-            mod_str = (
-                mod_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
-                if mod_dt
-                else "Unknown"
-            )
+            mod_str = format_timestamp(result.s3_object_last_modified) or "Unknown"
             etag_str = f"ETag: {result.s3_object_etag}" if result.s3_object_etag else ""
             print_kv(
                 "Remote Archive Status",
@@ -114,7 +99,6 @@ def _render_repository_settings(result: ConfigurationStatusResult) -> None:
             )
         elif result.s3_object_exists is False:
             print_kv("Remote Archive Status", "Not uploaded yet", style="yellow")
-
 
     elif result.repository_type == "codecommit":
         repo_name = result.repository_name or "Not set"
@@ -139,15 +123,7 @@ def _render_repository_settings(result: ConfigurationStatusResult) -> None:
 
     elif result.repository_type == "codeconnection":
         conn_arn = result.codeconnection_arn or "Not set"
-        if result.codeconnection_status == "AVAILABLE":
-            conn_status = "[green]Available[/green]"
-        elif result.codeconnection_status == "PENDING":
-            conn_status = "[yellow]Pending Handshake[/yellow]"
-        elif result.codeconnection_status:
-            conn_status = f"[red]{result.codeconnection_status}[/red]"
-        else:
-            conn_status = "[dim]Not Checked[/dim]"
-
+        conn_status = format_status(result.codeconnection_status or "Configured")
         print_kv("CodeConnection ARN", f"{conn_arn} ({conn_status})")
         if result.codeconnection_provider:
             print_kv("Provider Type", result.codeconnection_provider)
@@ -162,21 +138,11 @@ def _render_repository_settings(result: ConfigurationStatusResult) -> None:
 
 def _render_pipeline_status(result: ConfigurationStatusResult) -> None:
     console.print()
-    print_section(3, "Configuration Pipeline Status")
+    print_section(3, "Configuration Pipeline")
     print_kv("Pipeline Name", result.pipeline_name, bold_value=True)
-    print_kv("Pipeline ARN", result.pipeline_arn, style="dim")
 
     pipe_status = result.pipeline_status or "Not Executed"
-    p_color = (
-        "green"
-        if pipe_status == "Succeeded"
-        else "yellow"
-        if pipe_status == "InProgress"
-        else "red"
-        if pipe_status in {"Failed", "Cancelled"}
-        else "dim"
-    )
-    console.print(f"Pipeline State: [{p_color}][bold]{pipe_status}[/bold][/{p_color}]")
+    print_kv("Pipeline Status", format_status(pipe_status))
 
     if result.pipeline_execution_id:
         print_kv("Latest Execution ID", result.pipeline_execution_id, style="dim")
@@ -192,35 +158,31 @@ def _render_pipeline_status(result: ConfigurationStatusResult) -> None:
             if line.strip()
         ]
         if len(error_lines) == 1:
-            print_kv("Latest Error", error_lines[0], style="red")
+            print_kv("Error", error_lines[0], style="red")
         elif error_lines:
-            console.print("[red]Latest Error:[/red]")
+            console.print("[red]Error:[/red]")
             for line in error_lines:
                 console.print(f"  [red]{line}[/red]")
     if result.pipeline_failed_build_url:
         print_kv("Build Console", result.pipeline_failed_build_url, style="dim")
 
 
-
-
 def _render_state_metadata(result: ConfigurationStatusResult, *, has_state: bool) -> None:
     console.print()
-    print_section(4, "Upload / Download State Metadata (.lza/state.json)")
+    print_section(4, "Synchronization History")
     if has_state:
-        print_kv("Last Uploaded At", result.uploaded_at or "Never")
-        print_kv("Last Downloaded At", result.downloaded_at or "Never")
-        if result.artifact_etag:
-            print_kv("Artifact ETag", result.artifact_etag, style="dim")
-        if result.artifact_version_id:
-            print_kv("Artifact Version ID", result.artifact_version_id, style="dim")
+        last_push = format_timestamp(result.uploaded_at) or "Never"
+        last_pull = format_timestamp(result.downloaded_at) or "Never"
+        print_kv("Last Push", last_push)
+        print_kv("Last Pull", last_pull)
         if result.recorded_pipeline_execution_id:
             print_kv(
-                "Recorded Pipeline Execution ID",
+                "Recorded Execution ID",
                 result.recorded_pipeline_execution_id,
                 style="dim",
             )
     else:
-        print_info("No local state file found (.lza/state.json).", dim=True)
+        print_info("No recorded workspace state found.", dim=True)
 
 
 def _render_warnings(result: ConfigurationStatusResult) -> None:
@@ -234,23 +196,16 @@ def _render_warnings(result: ConfigurationStatusResult) -> None:
 
 def render_config_status(result: ConfigurationStatusResult, *, has_state: bool) -> None:
     """Render prepared configuration status without inspecting the workspace."""
-    console.print(
-        Panel(
-            f"[bold cyan]LZA Configuration Status - {result.customer_name}[/bold cyan]",
-            expand=False,
-        )
+    render_workspace_header(
+        "LZA Configuration Status",
+        customer_name=result.customer_name,
+        workspace_dir=result.workspace_dir,
+        lza_version=result.lza_version,
+        profile=result.profile,
+        region=result.region,
+        aws_identity=result.aws_identity,
+        aws_error=result.aws_error,
     )
-
-    print_kv("Workspace", result.workspace_dir, bold_value=True)
-    print_kv("Configured LZA Version", result.lza_version, bold_value=True)
-    print_kv("AWS Profile", result.profile or "Not specified", bold_value=True)
-    print_kv("AWS Region", result.region, bold_value=True)
-
-    if result.aws_identity:
-        print_kv("AWS Account ID", result.aws_identity["account"], style="green")
-        print_kv("Caller Identity", result.aws_identity["arn"], style="dim")
-    elif result.aws_error:
-        print_notice(f"AWS Access Notice: {result.aws_error}")
 
     console.print()
     _render_local_config(result)
@@ -266,3 +221,10 @@ def status_config_command(
     """Query workspace configuration metadata and display configuration status."""
     result = get_config_status_workflow(target_dir=target_dir)
     render_config_status(result, has_state=result.has_state)
+
+
+__all__ = [
+    "render_config_status",
+    "status_config_command",
+]
+

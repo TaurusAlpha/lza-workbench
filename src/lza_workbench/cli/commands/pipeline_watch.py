@@ -11,11 +11,13 @@ from rich.table import Table
 from lza_workbench.cli import params
 from lza_workbench.cli.output import (
     console,
+    format_status,
     print_info,
     print_kv,
     print_notice,
     print_section,
     print_success,
+    render_failure_section,
 )
 from lza_workbench.errors import LzaError
 from lza_workbench.workflows.pipeline_watch import (
@@ -24,20 +26,6 @@ from lza_workbench.workflows.pipeline_watch import (
     PipelineWatchUpdate,
     watch_pipeline_workflow,
 )
-
-
-def _status_color(status: str | None) -> str:
-    if not status:
-        return "dim"
-    if status == "Succeeded":
-        return "green"
-    if status == "Failed":
-        return "bold red"
-    if status in {"InProgress", "Building"}:
-        return "yellow"
-    if status in {"Cancelled", "Stopped"}:
-        return "magenta"
-    return "white"
 
 
 def _format_duration(seconds: float | None) -> str | None:
@@ -103,8 +91,7 @@ class PipelineWatchMonitor:
             self._live_status = self._status_ctx.__enter__()
 
         elapsed_str = f"{int(update.elapsed_seconds)}s"
-        color = _status_color(update.status)
-        status_tag = f"[{color}]{update.status}[/{color}]"
+        status_tag = format_status(update.status)
 
         active_stage = None
         for s in update.stages:
@@ -133,8 +120,7 @@ class PipelineWatchMonitor:
 def render_pipeline_watch_update(update: PipelineWatchUpdate) -> None:
     """Render single update line (for fallback / test rendering)."""
     elapsed_str = f"{int(update.elapsed_seconds)}s"
-    color = _status_color(update.status)
-    status_tag = f"[{color}]{update.status}[/{color}]"
+    status_tag = format_status(update.status)
     print_info(
         f"Pipeline {status_tag} - Execution: {update.execution_id} ({elapsed_str})",
         dim=True,
@@ -166,17 +152,20 @@ def render_pipeline_watch_result(
     result: PipelineWatchResult,
     *,
     verbose: bool = False,
+    start_section_number: int = 1,
 ) -> None:
     """Render the final summary table and outcome of a pipeline watch."""
     console.print()
-    print_section(1, "Pipeline Execution Summary")
+    section_title = (
+        "Pipeline Execution Summary" if start_section_number == 1 else "Pipeline Monitoring"
+    )
+    print_section(start_section_number, section_title)
     print_kv("Pipeline Name", result.pipeline_name, bold_value=True)
     print_kv("Execution ID", result.execution_id, bold_value=True)
     dur_str = _format_duration(result.elapsed_seconds)
     if dur_str:
         print_kv("Duration", dur_str)
-    color = _status_color(result.status)
-    print_kv("Final Status", f"[{color}]{result.status}[/{color}]", bold_value=True)
+    print_kv("Final Status", format_status(result.status), bold_value=True)
 
     is_failed = result.status == "Failed"
 
@@ -197,12 +186,11 @@ def render_pipeline_watch_result(
             table.add_column("Details", style="dim")
 
             for stage in visible_stages:
-                stage_status_col = _status_color(stage.status)
                 if not stage.actions:
                     table.add_row(
                         stage.stage_name,
                         "-",
-                        f"[{stage_status_col}]{stage.status or 'NotStarted'}[/{stage_status_col}]",
+                        format_status(stage.status or "NotStarted"),
                         "",
                     )
                 else:
@@ -228,12 +216,11 @@ def render_pipeline_watch_result(
                         visible_actions = stage.actions
 
                     for idx, action in enumerate(visible_actions):
-                        act_color = _status_color(action.status)
                         details = _format_action_table_detail(action)
                         table.add_row(
                             stage.stage_name if idx == 0 else "",
                             action.action_name,
-                            f"[{act_color}]{action.status or 'Pending'}[/{act_color}]",
+                            format_status(action.status or "Pending"),
                             details,
                         )
             console.print(table)
@@ -241,37 +228,17 @@ def render_pipeline_watch_result(
     if result.status == "Succeeded":
         print_success(f"Pipeline '{result.pipeline_name}' execution completed successfully.")
     elif result.status == "Failed":
-        if result.failed_actions:
-            console.print()
-            print_section(2, "Failure")
-            for fa in result.failed_actions:
-                if fa.stage_name:
-                    print_kv("Stage", fa.stage_name, bold_value=True)
-                print_kv("Action", fa.action_name, bold_value=True)
-                if fa.failed_resource:
-                    print_kv("Resource", fa.failed_resource)
-
-                if fa.diagnostic_details:
-                    for diag in fa.diagnostic_details:
-                        print_kv("Error", diag, style="red")
-                elif fa.error_message or fa.summary:
-                    print_kv("Error", fa.error_message or fa.summary, style="red")
-
-                if verbose and fa.raw_diagnostic_details:
-                    console.print("  [dim]Raw Diagnostics:[/dim]")
-                    for raw in fa.raw_diagnostic_details:
-                        console.print(f"    [dim]{raw}[/dim]")
-
-                if fa.external_execution_url:
-                    print_kv("Build Console", fa.external_execution_url, style="dim")
-        elif result.error_message:
-            console.print()
-            print_section(2, "Failure")
-            print_kv("Error", result.error_message, style="red")
+        render_failure_section(
+            start_section_number + 1,
+            result.failed_actions,
+            result.error_message,
+            verbose=verbose,
+        )
     else:
         print_notice(
             f"Pipeline '{result.pipeline_name}' execution finished with status: {result.status}"
         )
+
 
 
 def pipeline_watch_command(

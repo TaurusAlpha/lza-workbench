@@ -33,7 +33,8 @@ def render_pipeline_start_result(result: PipelineStartResult) -> None:
     print_kv("Workspace", result.workspace_dir)
     print_kv("Pipeline ARN", result.pipeline_arn)
     print_kv("Execution ID", result.execution_id or "None", bold_value=True)
-    print_info("Recorded execution ID in .lza/state.json", dim=True)
+    print_info("Recorded execution ID in workspace state", dim=True)
+
 
 
 def pipeline_start_command(
