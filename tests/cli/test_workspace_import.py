@@ -297,3 +297,33 @@ def test_cli_import_live_aws_discovery_display(
     assert "Discovered installer stack" in result.output
     assert "CREATE_COMPLETE" in result.output
     assert "Next steps:" in result.output
+
+
+def test_cli_import_with_custom_installer_stack_name(
+    tmp_path: Path,
+    cli_runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    workspace_dir, _ = _make_configuration(tmp_path)
+
+    result = cli_runner.invoke(
+        app,
+        [
+            "import",
+            str(workspace_dir),
+            "--customer-name",
+            "Custom Stack Customer",
+            "--aws-profile",
+            "custom-root",
+            "--aws-region",
+            "eu-west-1",
+            "--installer-stack-name",
+            "MyCustom-InstallerStack",
+            "--skip-aws-check",
+        ],
+    )
+
+    assert result.exit_code == 0
+    persisted_config = load_workspace_config(workspace_dir)
+    assert persisted_config.installer.stack_name == "MyCustom-InstallerStack"

@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from lza_workbench.aws.cloudformation import get_cloudformation_stack_status
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.secrets_manager import inspect_secret_details
 from lza_workbench.configuration.archive import count_config_files
@@ -14,12 +15,12 @@ from lza_workbench.configuration.git import (
     GitProvenance,
     resolve_git_provenance,
 )
+from lza_workbench.configuration.repository import get_canonical_config_s3_bucket
 from lza_workbench.configuration.schema import (
     ConfigurationConfig,
     ConfigurationRepositoryConfig,
     ConfigurationTemplateConfig,
     PackagingExcludeConfig,
-    get_canonical_config_s3_bucket,
 )
 from lza_workbench.configuration.templates import validate_template
 from lza_workbench.configuration.validation import (
@@ -27,8 +28,10 @@ from lza_workbench.configuration.validation import (
     validate_yaml_syntax,
 )
 from lza_workbench.errors import LzaError
+from lza_workbench.installer.schema import LzaInstaller
 from lza_workbench.installer.source import validate_github_repository_access
-from lza_workbench.workflows.status_installer import get_installer_status_workflow
+from lza_workbench.installer.sync import sync_installer_config, sync_installer_state
+from lza_workbench.installer.versions import branch_to_version
 from lza_workbench.workspace.config import (
     WORKSPACE_CONFIG_FILE,
     load_workspace_config,
@@ -211,6 +214,8 @@ def build_import_workspace_config(
     config_dir: Path,
     existing_config: WorkspaceConfig | None,
     provenance: GitProvenance | None = None,
+    installer_stack_name: str | None = None,
+    prime_credentials: bool = False,
 ) -> WorkspaceConfig:
     """Build import metadata, incorporating Git provenance when available."""
     rel_config_path = str(config_dir.relative_to(workspace_dir))
@@ -251,14 +256,26 @@ def build_import_workspace_config(
         template=template,
         repository=repository,
     )
+    resolved_stack_name = (
+        installer_stack_name
+        or (existing_config.installer.stack_name if existing_config else None)
+        or "AWSAccelerator-InstallerStack"
+    )
+    installer = (
+        existing_config.installer.model_copy(update={"stack_name": resolved_stack_name})
+        if existing_config
+        else LzaInstaller(stack_name=resolved_stack_name)
+    )
     fields: dict[str, Any] = {
         "customer": CustomerConfig(name=customer_name, slug=customer_slug),
         "aws": AwsConfig(
             profile=aws_profile,
             region=aws_region,
+            prime_credentials=prime_credentials,
         ),
         "lza": LzaConfig(version=lza_version),
         "configuration": configuration,
+        "installer": installer,
     }
     if existing_config is not None:
         return existing_config.model_copy(update=fields)
@@ -300,10 +317,12 @@ def import_workspace_workflow(
     aws_profile: str | None = None,
     aws_region: str = "us-east-1",
     lza_version: str = "v1.15.5",
+    installer_stack_name: str | None = None,
     dry_run: bool = False,
     force: bool = False,
     repair: bool = False,
     skip_aws_check: bool = False,
+    prime_credentials: bool = False,
 ) -> WorkspaceImportResult:
     """Execute the pure workspace import workflow and return structured result."""
     discovery = discover_import_workspace(
@@ -379,6 +398,8 @@ def import_workspace_workflow(
         config_dir=resolved_config_dir,
         existing_config=existing.config if existing else None,
         provenance=provenance,
+        installer_stack_name=installer_stack_name,
+        prime_credentials=prime_credentials,
     )
 
     if existing and existing.state:
@@ -413,35 +434,42 @@ def import_workspace_workflow(
 
     if not skip_aws_check:
         try:
-            installer_status = get_installer_status_workflow(
-                workspace_dir=resolved_workspace_dir,
-                config=config,
-                state=state,
-                sync_config=not dry_run,
-                sync_state=not dry_run,
+            aws_ctx = resolve_aws_execution_context(
+                profile=config.aws.profile,
+                region=config.aws.region,
+                role_arn=config.aws.role_arn,
+                expected_account_id=config.aws.account_id,
+                prime_credentials=config.aws.prime_credentials,
             )
-            identity = installer_status.aws_identity
-            config = installer_status.config
-            state = installer_status.state or state
+            identity = aws_ctx.identity
             if identity:
                 state.management_account_id = identity.get("account")
                 state.caller_arn = identity.get("arn")
 
-            if installer_status.cfn_status.exists:
+            stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
+            cfn_client = aws_ctx.factory.get_client("cloudformation") if aws_ctx.identity else None
+            cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=stack_name)
+
+            if cfn_status.exists:
                 installer_discovered = True
-                discovered_stack_status = (
-                    f"{installer_status.cfn_status.stack_name} "
-                    f"({installer_status.cfn_status.stack_status})"
+                discovered_stack_status = f"{cfn_status.stack_name} ({cfn_status.stack_status})"
+                deployed_version = branch_to_version(
+                    cfn_status.deployed_parameters.get("RepositoryBranchName", "")
                 )
+                if not dry_run:
+                    config = sync_installer_config(
+                        workspace_dir=resolved_workspace_dir,
+                        config=config,
+                        cfn_status=cfn_status,
+                    )
+                    state = sync_installer_state(
+                        workspace_dir=resolved_workspace_dir,
+                        state=state,
+                        cfn_status=cfn_status,
+                        deployed_version=deployed_version,
+                    )
                 if config.installer.source_code.repository_type == "github":
                     try:
-                        aws_ctx = resolve_aws_execution_context(
-                            profile=config.aws.profile,
-                            region=config.aws.region,
-                            role_arn=config.aws.role_arn,
-                            expected_account_id=config.aws.account_id,
-                            prime_credentials=config.aws.prime_credentials,
-                        )
                         sm_client = aws_ctx.factory.get_client("secretsmanager")
                         secret_name = (
                             config.installer.source_code.github_secret_name
@@ -468,20 +496,20 @@ def import_workspace_workflow(
                                 )
                     except Exception as gh_exc:
                         recommendations.append(f"GitHub token validation check skipped: {gh_exc}")
-            elif installer_status.aws_error:
+            elif aws_ctx.error:
                 recommendations.append(
-                    f"AWS connection check failed ({installer_status.aws_error}). "
-                    "Verify credentials and run 'lza installer status --sync-config'."
+                    f"AWS connection check failed ({aws_ctx.error}). "
+                    "Verify credentials and run 'lza installer import'."
                 )
         except Exception as exc:
             recommendations.append(
                 f"Live AWS discovery skipped due to error: {exc}. "
-                "Run 'lza installer status --sync-config' to sync deployed installer parameters."
+                "Run 'lza installer import' to sync deployed installer parameters."
             )
     else:
         recommendations.append(
             "Live AWS discovery was skipped (--skip-aws-check). "
-            "Run 'lza installer status --sync-config' to synchronize deployed settings."
+            "Run 'lza installer import' to synchronize deployed settings."
         )
 
     # Next-step recommendations

@@ -10,6 +10,10 @@ import pytest
 from lza_workbench.aws.cloudformation import CfnStackStatusResult
 from lza_workbench.aws.codepipeline import PipelineStateResult
 from lza_workbench.errors import LzaError
+from lza_workbench.installer.sync import (
+    sync_installer_config,
+    sync_installer_state,
+)
 from lza_workbench.workflows.status_config import (
     ConfigurationStatusResult,
     get_config_status_workflow,
@@ -18,8 +22,6 @@ from lza_workbench.workflows.status_installer import (
     InstallerStatusResult,
     get_installer_status_workflow,
     prepare_installer_status,
-    sync_installer_config,
-    sync_installer_state,
 )
 from lza_workbench.workflows.status_pipeline import (
     PipelineStatusResult,

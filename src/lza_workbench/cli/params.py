@@ -47,6 +47,15 @@ AwsRegion = Annotated[
     typer.Option("--aws-region", help="AWS region for the workspace."),
 ]
 
+PrimeCredentials = Annotated[
+    bool,
+    typer.Option(
+        "--prime-credentials",
+        help="Use prime credentials for AWS operations. Used when opt-region is configured.",
+    ),
+]
+
+
 LzaVersion = Annotated[
     str | None,
     typer.Option("--lza-version", help="LZA version for the workspace."),
@@ -93,6 +102,15 @@ Repair = Annotated[
 SkipAwsCheck = Annotated[
     bool,
     typer.Option("--skip-aws-check", help="Skip STS caller identity validation."),
+]
+
+InstallerStackName = Annotated[
+    str | None,
+    typer.Option(
+        "--installer-stack-name",
+        "--stack-name",
+        help="CloudFormation installer stack name (default: AWSAccelerator-InstallerStack).",
+    ),
 ]
 
 LzaConfigDir = Annotated[
@@ -237,5 +255,3 @@ AllowMissingGithubSecret = Annotated[
         help="Allow bootstrap to proceed with a warning if the GitHub token secret does not exist.",
     ),
 ]
-
-

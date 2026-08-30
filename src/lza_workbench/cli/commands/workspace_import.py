@@ -97,10 +97,12 @@ def workspace_import_command(
     aws_profile: params.AwsProfile = "",
     aws_region: params.AwsRegion = "",
     lza_version: params.LzaVersion = None,
+    installer_stack_name: params.InstallerStackName = None,
     dry_run: params.DryRun = False,
     force: params.Force = False,
     repair: params.Repair = False,
     skip_aws_check: params.SkipAwsCheck = False,
+    prime_credentials: params.PrimeCredentials = False,
     interactive: bool = False,
 ) -> None:
     """Adopt an existing customer-owned LZA configuration."""
@@ -151,6 +153,17 @@ def workspace_import_command(
         existing.config.lza.version if existing and existing.config else LzaConfig().version,
         interactive,
     )
+    default_stack_name = (
+        existing.config.installer.stack_name
+        if existing and existing.config and existing.config.installer.stack_name
+        else "AWSAccelerator-InstallerStack"
+    )
+    resolved_stack_name = value_or_prompt(
+        "Installer stack name",
+        installer_stack_name,
+        default_stack_name,
+        interactive,
+    )
 
     result = import_workspace_workflow(
         workspace_dir=workspace_dir,
@@ -160,9 +173,11 @@ def workspace_import_command(
         aws_profile=resolved_profile,
         aws_region=resolved_region,
         lza_version=resolved_version,
+        installer_stack_name=resolved_stack_name,
         dry_run=dry_run,
         force=force,
         repair=repair,
         skip_aws_check=skip_aws_check,
+        prime_credentials=prime_credentials,
     )
     render_workspace_import_result(result)

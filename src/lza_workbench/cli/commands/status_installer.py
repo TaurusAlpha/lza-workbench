@@ -6,7 +6,6 @@ from pathlib import Path
 
 from rich.table import Table
 
-from lza_workbench.cli import params
 from lza_workbench.cli.output import (
     console,
     format_status,
@@ -15,7 +14,6 @@ from lza_workbench.cli.output import (
     print_kv,
     print_notice,
     print_section,
-    print_success,
     render_workspace_header,
 )
 from lza_workbench.workflows.status_installer import (
@@ -158,20 +156,15 @@ def _render_recommendations(result: InstallerStatusResult) -> None:
         return
     console.print()
     console.print("[bold cyan]Recommended Next Command:[/bold cyan]")
-    if result.configuration_drift:
+    if result.configuration_drift or state_out_of_sync:
         console.print(
-            "  [bold green]lza status installer --sync-config[/bold green]  "
+            "  [bold green]lza installer import[/bold green]  "
             "[dim](Synchronizes lza-workspace.yaml and recorded state "
             "with live AWS settings)[/dim]"
         )
         console.print(
             "  [bold green]lza installer deploy[/bold green]  "
             "[dim](Reconcile deployed installer stack with local configuration values)[/dim]"
-        )
-    else:
-        console.print(
-            "  [bold green]lza status installer --sync-state[/bold green]   "
-            "[dim](Synchronizes recorded state with live AWS installer deployment state)[/dim]"
         )
 
 
@@ -195,21 +188,12 @@ def render_installer_status(result: InstallerStatusResult) -> None:
 
 
 def status_installer_command(
-    sync_state: params.SyncState = False,
-    sync_config: params.SyncConfig = False,
     target_dir: Path | None = None,
 ) -> None:
-    """Query AWS, optionally synchronize, then render an installer status result."""
+    """Query AWS and render an installer status report."""
     result = get_installer_status_workflow(
-        sync_state=sync_state,
-        sync_config=sync_config,
         target_dir=target_dir,
     )
-    if result.state_synced:
-        print_success("Synchronized workspace state with live AWS installer state.")
-    if result.config_synced:
-        print_success("Synchronized lza-workspace.yaml with deployed AWS installer configuration.")
-
     render_installer_status(result)
 
 

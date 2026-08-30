@@ -32,6 +32,9 @@ from lza_workbench.cli.commands.config_upload import (
 from lza_workbench.cli.commands.installer_deploy import (
     installer_deploy_command as run_cli_installer_deploy,
 )
+from lza_workbench.cli.commands.installer_import import (
+    installer_import_command as run_cli_installer_import,
+)
 from lza_workbench.cli.commands.installer_plan import (
     installer_init_command as run_cli_installer_init,
 )
@@ -135,16 +138,22 @@ def installer_deploy_command(
     )
 
 
-@installer_app.command("status")
-def installer_status_command(
-    sync_state: params.SyncState = False,
-    sync_config: params.SyncConfig = False,
+@installer_app.command("import")
+def installer_import_command(
+    installer_stack_name: params.InstallerStackName = None,
+    dry_run: params.DryRun = False,
 ) -> None:
-    """Show the current installer deployment state (alias for `lza status installer`)."""
-    run_cli_status_installer(
-        sync_state=sync_state,
-        sync_config=sync_config,
+    """Import deployed CloudFormation installer parameters (alias for `lza import installer`)."""
+    run_cli_installer_import(
+        installer_stack_name=installer_stack_name,
+        dry_run=dry_run,
     )
+
+
+@installer_app.command("status")
+def installer_status_command() -> None:
+    """Show the current installer deployment state (alias for `lza status installer`)."""
+    run_cli_status_installer()
 
 
 @status_app.callback(invoke_without_command=True)
@@ -157,15 +166,9 @@ def status_root_callback(
 
 
 @status_app.command("installer")
-def status_installer_command(
-    sync_state: params.SyncState = False,
-    sync_config: params.SyncConfig = False,
-) -> None:
+def status_installer_command() -> None:
     """Show the current installer stack status details."""
-    run_cli_status_installer(
-        sync_state=sync_state,
-        sync_config=sync_config,
-    )
+    run_cli_status_installer()
 
 
 @config_app.command("status")
@@ -212,7 +215,6 @@ def pipeline_watch_command(
         poll_interval=poll_interval,
         verbose=verbose,
     )
-
 
 
 app.add_typer(config_app, name="config")
@@ -267,13 +269,14 @@ def import_command(
     aws_profile: params.AwsProfile = "",
     aws_region: params.AwsRegion = "",
     lza_version: params.LzaVersion = None,
+    installer_stack_name: params.InstallerStackName = None,
     dry_run: params.DryRun = False,
     force: params.Force = False,
     repair: params.Repair = False,
     skip_aws_check: params.SkipAwsCheck = False,
+    prime_credentials: params.PrimeCredentials = False,
 ) -> None:
     """Adopt an existing customer-owned LZA configuration."""
-
     run_cli_workspace_import(
         customer_name=customer_name,
         workspace_dir=workspace_dir,
@@ -282,10 +285,12 @@ def import_command(
         aws_profile=aws_profile,
         aws_region=aws_region,
         lza_version=lza_version,
+        installer_stack_name=installer_stack_name,
         dry_run=dry_run,
         force=force,
         repair=repair,
         skip_aws_check=skip_aws_check,
+        prime_credentials=prime_credentials,
         interactive=_is_interactive(),
     )
 
@@ -385,7 +390,6 @@ def config_deploy_command(
         no_watch=no_watch,
         verbose=verbose,
     )
-
 
 
 def main(argv: list[str] | None = None) -> int:
