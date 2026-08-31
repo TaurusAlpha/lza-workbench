@@ -68,7 +68,7 @@ def test_plan_bootstrap_workflow_create(initialized_workspace: Path) -> None:
         assert plan.account_id == "111222333444"
         assert plan.bucket_name == "s3-lza-workbench-assets-111222333444-eu-west-1"
         assert plan.bucket_exists is False
-        assert len(plan.actions) == 4
+        assert len(plan.actions) == 2
 
 
 def test_plan_bootstrap_workflow_no_change(initialized_workspace: Path) -> None:
