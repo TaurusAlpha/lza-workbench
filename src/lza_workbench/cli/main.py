@@ -195,11 +195,13 @@ def status_pipeline_command() -> None:
 def pipeline_start_command(
     pipeline_name: params.PipelineName = None,
     dry_run: params.DryRun = False,
+    allow_concurrent: params.AllowConcurrent = False,
 ) -> None:
     """Start an LZA CodePipeline execution."""
     run_cli_pipeline_start(
         pipeline_name=pipeline_name,
         dry_run=dry_run,
+        allow_concurrent=allow_concurrent,
     )
 
 

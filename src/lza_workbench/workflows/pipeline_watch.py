@@ -148,10 +148,15 @@ def watch_pipeline_workflow(
 
     resolved_execution_id = execution_id
     if not resolved_execution_id:
-        if pipeline_type == "installer" and state.installer_pipeline_execution_id:
-            resolved_execution_id = state.installer_pipeline_execution_id
-        elif pipeline_type == "configuration" and state.config_pipeline_execution_id:
-            resolved_execution_id = state.config_pipeline_execution_id
+        if pipeline_type == "installer":
+            recorded_execution_id = state.installer_pipeline_execution_id
+            recorded_pipeline_name = state.installer_pipeline_name
+        else:
+            recorded_execution_id = state.config_pipeline_execution_id
+            recorded_pipeline_name = state.config_pipeline_name
+
+        if recorded_execution_id and recorded_pipeline_name == resolved_pipeline_name:
+            resolved_execution_id = recorded_execution_id
         else:
             resolved_execution_id = get_latest_pipeline_execution_id(
                 client=client,
@@ -315,6 +320,7 @@ def watch_pipeline_workflow(
         record_pipeline_watch_result(
             state,
             execution_id=resolved_execution_id,
+            pipeline_name=resolved_pipeline_name,
             status=last_status,
             stages=stage_summaries,
             failed_actions=failed_actions,

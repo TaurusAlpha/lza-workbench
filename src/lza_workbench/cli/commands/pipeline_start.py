@@ -40,6 +40,7 @@ def render_pipeline_start_result(result: PipelineStartResult) -> None:
 def pipeline_start_command(
     pipeline_name: params.PipelineName = None,
     dry_run: params.DryRun = False,
+    allow_concurrent: params.AllowConcurrent = False,
     target_dir: Path | None = None,
 ) -> PipelineStartResult:
     """Start an LZA CodePipeline execution."""
@@ -48,6 +49,7 @@ def pipeline_start_command(
         pipeline_name=pipeline_name,
         pipeline_type="configuration",
         dry_run=dry_run,
+        allow_concurrent=allow_concurrent,
     )
     render_pipeline_start_result(result)
     return result

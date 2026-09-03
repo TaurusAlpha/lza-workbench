@@ -20,6 +20,7 @@ from lza_workbench.workspace.state import load_workspace_state, write_workspace_
 def test_watch_pipeline_success(configured_workspace: Path) -> None:
     state = load_workspace_state(configured_workspace)
     state.config_pipeline_execution_id = "exec-test-123"
+    state.config_pipeline_name = "AWSAccelerator-Pipeline"
     write_workspace_state(configured_workspace, state)
 
     mock_client = MagicMock()
@@ -65,6 +66,43 @@ def test_watch_pipeline_success(configured_workspace: Path) -> None:
     assert len(result.stages) == 1
     assert result.stages[0].stage_name == "Source"
     assert len(updates) == 1
+
+
+def test_watch_pipeline_ignores_execution_for_a_different_recorded_pipeline(
+    configured_workspace: Path,
+) -> None:
+    state = load_workspace_state(configured_workspace)
+    state.config_pipeline_execution_id = "exec-other-pipeline"
+    state.config_pipeline_name = "Other-Pipeline"
+    write_workspace_state(configured_workspace, state)
+
+    mock_client = MagicMock()
+    mock_client.get_pipeline_execution.return_value = {
+        "pipelineExecution": {
+            "pipelineExecutionId": "exec-current-pipeline",
+            "status": "Succeeded",
+        }
+    }
+    mock_client.get_pipeline_state.return_value = {"stageStates": []}
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+        ),
+        patch(
+            "lza_workbench.workflows.pipeline_watch.get_latest_pipeline_execution_id",
+            return_value="exec-current-pipeline",
+        ) as mock_latest,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        result = watch_pipeline_workflow(target_dir=configured_workspace)
+
+    assert result.execution_id == "exec-current-pipeline"
+    mock_latest.assert_called_once_with(
+        client=mock_client,
+        pipeline_name="AWSAccelerator-Pipeline",
+    )
 
 
 def test_watch_pipeline_failed_action(configured_workspace: Path) -> None:

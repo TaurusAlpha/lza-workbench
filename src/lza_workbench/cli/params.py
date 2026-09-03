@@ -66,6 +66,14 @@ DryRun = Annotated[
     typer.Option("--dry-run", help="Show planned actions without making changes."),
 ]
 
+AllowConcurrent = Annotated[
+    bool,
+    typer.Option(
+        "--allow-concurrent",
+        help="Start a new execution even when the selected pipeline is already in progress.",
+    ),
+]
+
 CustomerName = Annotated[
     str,
     typer.Argument(help="Customer name used for the workspace."),

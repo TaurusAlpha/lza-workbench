@@ -12,6 +12,7 @@ def record_pipeline_execution(
     state: WorkspaceState,
     *,
     execution_id: str,
+    pipeline_name: str,
     pipeline_type: str = "configuration",
     status: str = "InProgress",
 ) -> None:
@@ -20,6 +21,7 @@ def record_pipeline_execution(
     state.updated_at = now
     if pipeline_type == "installer":
         state.installer_pipeline_execution_id = execution_id
+        state.installer_pipeline_name = pipeline_name
         state.installer_pipeline_status = status
         state.installer_pipeline_failed_stage = None
         state.installer_pipeline_failed_action = None
@@ -27,6 +29,7 @@ def record_pipeline_execution(
         state.installer_pipeline_error = None
     else:
         state.config_pipeline_execution_id = execution_id
+        state.config_pipeline_name = pipeline_name
         state.config_pipeline_status = status
         state.config_pipeline_failed_stage = None
         state.config_pipeline_failed_action = None
@@ -38,6 +41,7 @@ def record_pipeline_watch_result(
     state: WorkspaceState,
     *,
     execution_id: str,
+    pipeline_name: str,
     status: str,
     stages: list[Any] | None = None,
     failed_actions: list[Any] | None = None,
@@ -102,6 +106,7 @@ def record_pipeline_watch_result(
 
     if pipeline_type == "installer":
         state.installer_pipeline_execution_id = execution_id
+        state.installer_pipeline_name = pipeline_name
         state.installer_pipeline_status = status
         state.installer_pipeline_failed_stage = failed_stage
         state.installer_pipeline_failed_action = failed_action
@@ -109,6 +114,7 @@ def record_pipeline_watch_result(
         state.installer_pipeline_error = resolved_error
     else:
         state.config_pipeline_execution_id = execution_id
+        state.config_pipeline_name = pipeline_name
         state.config_pipeline_status = status
         state.config_pipeline_failed_stage = failed_stage
         state.config_pipeline_failed_action = failed_action
@@ -120,5 +126,4 @@ __all__ = [
     "record_pipeline_execution",
     "record_pipeline_watch_result",
 ]
-
 

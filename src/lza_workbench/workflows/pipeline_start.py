@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from lza_workbench.aws.codepipeline import start_pipeline_execution
+from lza_workbench.aws.codepipeline import get_pipeline_state, start_pipeline_execution
 from lza_workbench.aws.context import AwsExecutionContext, resolve_aws_execution_context
 from lza_workbench.errors import LzaError
 from lza_workbench.pipeline.resolution import resolve_pipeline
@@ -39,6 +39,7 @@ def start_pipeline_workflow(
     pipeline_name: str | None = None,
     pipeline_type: str = "configuration",
     dry_run: bool = False,
+    allow_concurrent: bool = False,
     workspace_context: WorkspaceContext | None = None,
     aws_context: AwsExecutionContext | None = None,
 ) -> PipelineStartResult:
@@ -83,6 +84,14 @@ def start_pipeline_workflow(
         )
 
     client = resolved_aws_context.factory.get_client("codepipeline")
+    if not allow_concurrent:
+        pipeline_state = get_pipeline_state(client=client, pipeline_name=pipeline.name)
+        if pipeline_state.status == "InProgress":
+            raise LzaError(
+                f"Pipeline '{pipeline.name}' already has an execution in progress. "
+                "Wait for it to finish or use --allow-concurrent to start another execution."
+            )
+
     execution_id = start_pipeline_execution(
         client=client,
         pipeline_name=pipeline.name,
@@ -91,6 +100,7 @@ def start_pipeline_workflow(
     record_pipeline_execution(
         state,
         execution_id=execution_id,
+        pipeline_name=pipeline.name,
         pipeline_type=pipeline_type,
     )
     try:
