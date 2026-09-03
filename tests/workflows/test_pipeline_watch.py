@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from lza_workbench.aws.codepipeline import PipelineExecutionResult
 from lza_workbench.errors import LzaError
 from lza_workbench.workflows.pipeline_watch import (
     PipelineWatchResult,
@@ -217,6 +218,45 @@ def test_watch_pipeline_no_execution_id(configured_workspace: Path) -> None:
                 target_dir=configured_workspace,
                 sleeper=lambda _: None,
             )
+
+
+def test_watch_pipeline_stops_when_execution_is_not_found(configured_workspace: Path) -> None:
+    mock_client = MagicMock()
+    missing_execution = PipelineExecutionResult(
+        pipeline_name="AWSAccelerator-Pipeline",
+        execution_id="missing-execution",
+        status="NOT_FOUND",
+        error="Execution does not exist",
+    )
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+        ),
+        patch(
+            "lza_workbench.workflows.pipeline_watch.get_pipeline_execution",
+            return_value=missing_execution,
+        ),
+        patch("lza_workbench.workflows.pipeline_watch.get_pipeline_state") as mock_get_state,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        with pytest.raises(LzaError, match="was not found"):
+            watch_pipeline_workflow(
+                target_dir=configured_workspace,
+                execution_id="missing-execution",
+            )
+
+    mock_get_state.assert_not_called()
+
+
+def test_watch_pipeline_rejects_non_positive_poll_interval(configured_workspace: Path) -> None:
+    with pytest.raises(LzaError, match="greater than zero"):
+        watch_pipeline_workflow(
+            target_dir=configured_workspace,
+            execution_id="exec-test-123",
+            poll_interval_seconds=0,
+        )
 
 
 def test_watch_pipeline_timeout(configured_workspace: Path) -> None:

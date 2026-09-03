@@ -18,6 +18,7 @@ from lza_workbench.aws.codepipeline import (
 )
 from lza_workbench.aws.context import AwsExecutionContext, resolve_aws_execution_context
 from lza_workbench.errors import LzaError
+from lza_workbench.pipeline.failures import collect_pipeline_action_failures
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.pipeline.state import record_pipeline_watch_result
 from lza_workbench.workspace.context import (
@@ -83,6 +84,22 @@ class PipelineWatchResult:
 TERMINAL_STATUSES = {"Succeeded", "Failed", "Cancelled", "Stopped", "Superseded"}
 
 
+class PipelineWatchError(LzaError):
+    """Unsuccessful terminal pipeline result retained for interface rendering."""
+
+    def __init__(self, result: PipelineWatchResult) -> None:
+        self.result = result
+        super().__init__(
+            f"Pipeline execution '{result.execution_id}' ended with status '{result.status}'."
+        )
+
+
+def require_successful_pipeline_watch(result: PipelineWatchResult) -> None:
+    """Raise an application error when a watched execution did not succeed."""
+    if result.status != "Succeeded":
+        raise PipelineWatchError(result)
+
+
 def watch_pipeline_workflow(
     *,
     target_dir: Path | None = None,
@@ -98,6 +115,9 @@ def watch_pipeline_workflow(
     aws_context: AwsExecutionContext | None = None,
 ) -> PipelineWatchResult:
     """Monitor a CodePipeline execution until completion or timeout."""
+    if poll_interval_seconds is not None and poll_interval_seconds <= 0:
+        raise LzaError("Pipeline poll interval must be greater than zero seconds.")
+
     ctx = workspace_context or load_workspace_context(
         target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
     )
@@ -169,6 +189,12 @@ def watch_pipeline_workflow(
         )
         last_exec_res = exec_res
 
+        if exec_res.status == "NOT_FOUND":
+            raise LzaError(
+                f"Pipeline execution '{resolved_execution_id}' was not found for "
+                f"pipeline '{resolved_pipeline_name}'."
+            )
+
         state_res = get_pipeline_state(
             client=client,
             pipeline_name=resolved_pipeline_name,
@@ -220,49 +246,29 @@ def watch_pipeline_workflow(
 
         if last_status in TERMINAL_STATUSES:
             if last_status == "Failed" and failed_actions:
-                enriched_failed: list[PipelineActionSummary] = []
-                for fa in failed_actions:
-                    diagnostics: list[str] = []
-                    if fa.external_execution_id:
-                        diagnostics = fetch_codebuild_diagnostics(
-                            factory=resolved_aws_context.factory,
-                            build_id=fa.external_execution_id,
-                        )
-
-                    raw_diags = list(diagnostics)
-                    norm_diags: list[str] = []
-                    detected_resource: str | None = None
-
-                    if diagnostics:
-                        for d in diagnostics:
-                            norm_err, res = normalize_root_cause_and_resource(d)
-                            if res and not detected_resource:
-                                detected_resource = res
-                            if norm_err and norm_err not in norm_diags:
-                                norm_diags.append(norm_err)
-                    elif fa.error_message or fa.summary:
-                        raw_msg = str(fa.error_message or fa.summary)
-                        raw_diags = [raw_msg]
-                        norm_err, res = normalize_root_cause_and_resource(raw_msg)
-                        if res:
-                            detected_resource = res
-                        norm_diags = [norm_err] if norm_err else [raw_msg]
-
-                    fa_enriched = PipelineActionSummary(
-                        action_name=fa.action_name,
-                        stage_name=fa.stage_name,
-                        status=fa.status,
-                        summary=fa.summary,
-                        error_message=fa.error_message,
-                        external_execution_id=fa.external_execution_id,
-                        external_execution_url=fa.external_execution_url,
-                        diagnostic_details=norm_diags,
-                        raw_diagnostic_details=raw_diags,
-                        failed_resource=detected_resource,
+                failure_details = collect_pipeline_action_failures(
+                    stage_summaries,
+                    fetch_diagnostics=lambda build_id: fetch_codebuild_diagnostics(
+                        factory=resolved_aws_context.factory,
+                        build_id=build_id,
+                    ),
+                    normalize_diagnostic=normalize_root_cause_and_resource,
+                )
+                failed_actions = [
+                    PipelineActionSummary(
+                        action_name=failure.action_name,
+                        stage_name=failure.stage_name,
+                        status="Failed",
+                        summary=failure.summary,
+                        error_message=failure.error_message,
+                        external_execution_id=failure.external_execution_id,
+                        external_execution_url=failure.external_execution_url,
+                        diagnostic_details=failure.diagnostic_details,
+                        raw_diagnostic_details=failure.raw_diagnostic_details,
+                        failed_resource=failure.failed_resource,
                     )
-                    enriched_failed.append(fa_enriched)
-
-                failed_actions = enriched_failed
+                    for failure in failure_details
+                ]
 
                 action_errs = []
                 for fa in failed_actions:
@@ -322,8 +328,10 @@ def watch_pipeline_workflow(
 
 __all__ = [
     "PipelineActionSummary",
+    "PipelineWatchError",
     "PipelineStageSummary",
     "PipelineWatchResult",
     "PipelineWatchUpdate",
+    "require_successful_pipeline_watch",
     "watch_pipeline_workflow",
 ]

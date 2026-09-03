@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from lza_workbench.aws.codebuild import fetch_codebuild_diagnostics
+from lza_workbench.aws.codebuild import (
+    fetch_codebuild_diagnostics,
+    normalize_root_cause_and_resource,
+)
 from lza_workbench.aws.codecommit import inspect_codecommit_config_repository
 from lza_workbench.aws.codeconnections import inspect_codeconnection
 from lza_workbench.aws.codepipeline import PipelineStateResult, get_pipeline_state
@@ -24,6 +27,7 @@ from lza_workbench.configuration.repository import (
     resolve_s3_configuration_destination,
 )
 from lza_workbench.configuration.status import compile_configuration_warnings
+from lza_workbench.pipeline.failures import collect_pipeline_action_failures
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
@@ -278,24 +282,22 @@ def get_config_status_workflow(
             pipeline_status = pipeline_state.status
             pipeline_execution_id = pipeline_state.latest_execution_id
             if pipeline_state.status in {"Failed", "Cancelled"}:
-                for st in pipeline_state.stage_states:
-                    if st.status == "Failed":
-                        pipeline_failed_stage = st.stage_name
-                        for act in st.actions:
-                            if act.status == "Failed":
-                                pipeline_failed_action = act.action_name
-                                pipeline_failed_build_url = act.external_execution_url
-                                if act.external_execution_id:
-                                    diags = fetch_codebuild_diagnostics(
-                                        factory=factory,
-                                        build_id=act.external_execution_id,
-                                    )
-                                    if diags:
-                                        pipeline_error = "\n".join(diags)
-                                if not pipeline_error:
-                                    pipeline_error = act.error_message or act.summary
-                                break
-                        break
+                failures = collect_pipeline_action_failures(
+                    pipeline_state.stage_states,
+                    fetch_diagnostics=lambda build_id: fetch_codebuild_diagnostics(
+                        factory=factory,
+                        build_id=build_id,
+                    ),
+                    normalize_diagnostic=normalize_root_cause_and_resource,
+                )
+                if failures:
+                    failure = failures[0]
+                    pipeline_failed_stage = failure.stage_name
+                    pipeline_failed_action = failure.action_name
+                    pipeline_failed_build_url = failure.external_execution_url
+                    pipeline_error = "\n".join(failure.diagnostic_details) or (
+                        failure.error_message or failure.summary
+                    )
     elif resolved_state and resolved_state.config_pipeline_status:
         pipeline_status = resolved_state.config_pipeline_status
         pipeline_execution_id = resolved_state.config_pipeline_execution_id

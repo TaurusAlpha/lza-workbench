@@ -19,11 +19,11 @@ from lza_workbench.cli.output import (
     print_success,
     render_failure_section,
 )
-from lza_workbench.errors import LzaError
 from lza_workbench.workflows.pipeline_watch import (
     PipelineActionSummary,
     PipelineWatchResult,
     PipelineWatchUpdate,
+    require_successful_pipeline_watch,
     watch_pipeline_workflow,
 )
 
@@ -263,8 +263,7 @@ def pipeline_watch_command(
         monitor.stop()
 
     render_pipeline_watch_result(result, verbose=verbose)
-    if result.status != "Succeeded":
-        raise LzaError(f"Pipeline execution {result.execution_id} failed.")
+    require_successful_pipeline_watch(result)
     return result
 
 
@@ -274,4 +273,3 @@ __all__ = [
     "render_pipeline_watch_result",
     "render_pipeline_watch_update",
 ]
-

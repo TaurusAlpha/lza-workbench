@@ -18,8 +18,10 @@ from lza_workbench.workflows.pipeline_start import (
     start_pipeline_workflow,
 )
 from lza_workbench.workflows.pipeline_watch import (
+    PipelineWatchError,
     PipelineWatchResult,
     PipelineWatchUpdate,
+    require_successful_pipeline_watch,
     watch_pipeline_workflow,
 )
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
@@ -141,13 +143,15 @@ def deploy_configuration_workflow(
                 start_result=start_res,
             ) from exc
 
-        if watch_res.status != "Succeeded":
+        try:
+            require_successful_pipeline_watch(watch_res)
+        except PipelineWatchError as exc:
             raise ConfigDeployError(
-                f"Pipeline execution {watch_res.execution_id} failed.",
+                str(exc),
                 push_result=push_res,
                 start_result=start_res,
-                watch_result=watch_res,
-            )
+                watch_result=exc.result,
+            ) from exc
 
     return ConfigDeployResult(
         push_result=push_res,

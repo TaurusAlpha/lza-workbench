@@ -131,7 +131,6 @@ def test_cli_config_deploy_full_success(
     assert "completed successfully" in result.output
 
 
-
 def test_cli_config_deploy_pipeline_failed(
     configured_workspace: Path,
     cli_runner: CliRunner,
@@ -187,11 +186,10 @@ def test_cli_config_deploy_pipeline_failed(
         result = cli_runner.invoke(app, ["config", "deploy"])
 
     assert result.exit_code == 1
-    assert "Pipeline execution exec-cli-fail failed" in str(
+    assert "Pipeline execution 'exec-cli-fail' ended with status 'Failed'." in str(
         result.exception
-    ) or "Pipeline execution exec-cli-fail failed" in (result.output or "")
+    ) or "Pipeline execution 'exec-cli-fail' ended with status 'Failed'." in (result.output or "")
     assert "CDK Synth error" in result.output
-
 
 
 def test_cli_config_deploy_verbose(
@@ -245,5 +243,3 @@ def test_cli_config_deploy_verbose(
     assert result.exit_code == 0
     assert "3. Pipeline Monitoring" in result.output
     assert "completed successfully" in result.output
-
-

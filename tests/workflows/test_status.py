@@ -544,5 +544,8 @@ def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: 
         assert result.pipeline_failed_stage == "Build"
         assert result.pipeline_failed_action == "Synth"
         assert result.pipeline_error is not None
-        assert diag_msg in result.pipeline_error
+        assert "Stack AWSAccelerator-Network-Phase2 failed to deploy: ValidationError" in (
+            result.pipeline_error
+        )
+        assert "❌" not in result.pipeline_error
         assert result.pipeline_failed_build_url == "https://console.aws.amazon.com/codebuild/..."
