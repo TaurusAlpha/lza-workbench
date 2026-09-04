@@ -256,12 +256,6 @@ Implementation notes:
 
 Initialize the local `aws-accelerator-config` in the current workspace from a packaged configuration template.
 
-- [ ] Prompt for a packaged template when multiple templates exist and `--template` is omitted.
-- [ ] When the configured remote source is S3, initialize a local Git repository and initial commit
-  in the generated `aws-accelerator-config` directory.
-- [ ] Avoid creating a nested or competing Git repository when the configuration directory is
-  already tracked by Git, CodeCommit, or another supported repository.
-
 ### `lza config push`
 
 Synchronize the local customer `aws-accelerator-config` to the configured remote configuration source without starting the LZA pipeline.
