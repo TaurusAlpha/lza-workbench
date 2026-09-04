@@ -4,6 +4,17 @@ Concise historical record of completed features, major architecture decisions, a
 
 Work is moved here from `TODO.md` only after implementation, integration, code review, and validation/tests are complete.
 
+## 2026-09
+
+### Root Status Dashboard & Deprecation Cleanup (v0.28.0)
+- **Enhanced `lza status`**: Promoted `lza status` to the primary high-level operational overview across workspace identity, installer stack & pipeline, configuration repository & pipeline, and overall deployment health.
+  - Queries CloudFormation for installer stack status and deployed LZA version.
+  - Queries CodePipeline for both installer and configuration pipeline existence, latest execution status, execution ID, start time, duration, active stage/action (when in progress), and failed stage/action with normalized root cause diagnostics (when failed).
+  - Integrates configuration repository destination, local Git working tree state, and remote synchronization status.
+  - Derives concise overall deployment health (`Healthy`, `Running`, `Attention Required`, `Incomplete`).
+  - Provides graceful offline fallback when AWS authentication or live queries are unavailable, preserving existing AWS access warning notices, leveraging `.lza/state.json` runtime metadata with explicit `(Recorded)` labels, and reporting degraded visibility (`AWS Unavailable - Showing Last Known State`) without asserting health from cached data.
+- **Removed Deprecated `lza status pipeline`**: Completely eliminated `lza status pipeline` CLI registration, command handlers, dedicated workflow, and tests without deprecation aliases, shims, or hidden commands.
+
 ---
 
 ## 2026-08

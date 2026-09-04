@@ -19,6 +19,9 @@ from lza_workbench.cli.output import (
     print_success,
     render_failure_section,
 )
+from lza_workbench.cli.output import (
+    format_duration as _format_duration,
+)
 from lza_workbench.workflows.pipeline_watch import (
     PipelineActionSummary,
     PipelineWatchResult,
@@ -26,20 +29,6 @@ from lza_workbench.workflows.pipeline_watch import (
     require_successful_pipeline_watch,
     watch_pipeline_workflow,
 )
-
-
-def _format_duration(seconds: float | None) -> str | None:
-    """Format duration in seconds into human readable string (e.g. 2m 31s or 45s)."""
-    if seconds is None or seconds <= 0:
-        return None
-    total_secs = int(round(seconds))
-    if total_secs < 60:
-        return f"{total_secs}s"
-    mins = total_secs // 60
-    rem_secs = total_secs % 60
-    if rem_secs > 0:
-        return f"{mins}m {rem_secs}s"
-    return f"{mins}m"
 
 
 def _format_action_table_detail(action: PipelineActionSummary) -> str:

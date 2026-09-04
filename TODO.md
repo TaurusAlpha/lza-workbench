@@ -301,53 +301,7 @@ configuration.
 
 Show the read-only overall operational status of the current LZA workspace and deployment.
 
-The command should provide enough information to determine whether the LZA deployment is healthy
-without requiring the user to open a detailed component status command.
-
-Implementation checklist:
-
-- [ ] Show workspace identity, configured LZA version, AWS profile, Region, and account ID.
-- [ ] Attempt live AWS authentication and status discovery.
-- [ ] If AWS authentication or live queries are unavailable:
-  - Show the existing AWS access warning and remediation guidance.
-  - Continue rendering status instead of failing the command.
-  - Fall back to the latest relevant operational metadata from `.lza/state.json`.
-  - Clearly mark values as locally recorded/stale rather than live AWS state.
-  - Do not report locally recorded state as current AWS truth.
-
-#### Installer
-
-- [ ] Query CloudFormation for the installer stack when live AWS access is available.
-- [ ] Show installer stack name, current status, and deployed LZA version when available.
-- [ ] Query CodePipeline for installer pipeline existence and latest execution.
-- [ ] Show latest installer pipeline execution status, ID, start/completion time, and duration.
-- [ ] Show the current or failed stage/action when relevant.
-- [ ] When the latest execution failed, show one concise CodePipeline/CodeBuild failure summary.
-- [ ] When live AWS access is unavailable, show the latest installer stack and pipeline metadata
-  available from `.lza/state.json`.
-
-#### Configuration
-
-- [ ] Show configuration repository type, target, local Git state, and remote synchronization state.
-- [ ] Query CodePipeline for configuration pipeline existence and latest execution.
-- [ ] Show latest configuration pipeline execution status, ID, start/completion time, and duration.
-- [ ] Show the current or failed stage/action when relevant.
-- [ ] When the latest execution failed, show one concise CodePipeline/CodeBuild failure summary.
-- [ ] When live AWS access is unavailable, show the latest configuration synchronization and
-  pipeline metadata available from `.lza/state.json`.
-
-#### Overall status
-
-- [ ] Clearly distinguish live AWS status from locally recorded state.
-- [ ] Clearly distinguish missing, running, succeeded, and failed installer/configuration components.
-- [ ] Derive overall deployment health only from live state when available.
-- [ ] When only local state is available, report a degraded summary such as
-  `AWS Unavailable - Showing Last Known State` instead of asserting current health.
-- [ ] Reuse existing AWS authentication handling, pipeline execution inspection, and failure
-  diagnostic logic instead of implementing separate status-specific logic.
-- [ ] Keep detailed stack drift, repository diagnostics, stage/action history, CloudWatch logs,
-  and full failure diagnostics in `lza status installer` and `lza status config`.
-- [ ] Keep the command strictly read-only.
+Provides a consolidated high-level summary of workspace identity, installer CloudFormation stack and CodePipeline status, configuration repository and CodePipeline status, and overall deployment health with graceful offline fallback when AWS access is unavailable. Detailed diagnostics remain in `lza status installer` and `lza status config`.
 
 ### `lza status installer`
 

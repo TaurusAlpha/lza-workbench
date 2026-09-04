@@ -6,16 +6,64 @@ from pathlib import Path
 
 from lza_workbench.cli.output import (
     console,
+    format_duration,
     format_status,
+    format_timestamp,
     print_info,
     print_kv,
     print_section,
     render_workspace_header,
 )
 from lza_workbench.workflows.status_root import (
+    PipelineSummary,
     RootStatusResult,
     get_root_status_workflow,
 )
+
+
+def _render_pipeline_summary(
+    pipe: PipelineSummary,
+    *,
+    label_prefix: str,
+) -> None:
+    print_kv(f"{label_prefix} Pipeline", pipe.name, bold_value=True)
+    if not pipe.is_live:
+        if pipe.status:
+            print_kv("Latest Execution", f"{format_status(pipe.status)} (Recorded)")
+        else:
+            print_kv("Latest Execution", "None Recorded", style="dim")
+        if pipe.execution_id:
+            print_kv("Execution ID", f"{pipe.execution_id} (Recorded)", style="dim")
+        if pipe.failed_stage:
+            print_kv("Failed Stage", f"{pipe.failed_stage} (Recorded)", style="red")
+        if pipe.failed_action:
+            print_kv("Failed Action", f"{pipe.failed_action} (Recorded)", style="red")
+        if pipe.failure_summary:
+            print_kv("Failure", pipe.failure_summary, style="red")
+        return
+
+    if not pipe.exists:
+        print_kv("Latest Execution", "[dim]Not Deployed[/dim]")
+        return
+
+    print_kv("Latest Execution", format_status(pipe.status or "Unknown"))
+    if pipe.execution_id:
+        print_kv("Execution ID", pipe.execution_id, style="dim")
+    if pipe.start_time:
+        print_kv("Started", format_timestamp(pipe.start_time))
+    if pipe.duration_seconds is not None:
+        dur_str = format_duration(pipe.duration_seconds)
+        if dur_str:
+            print_kv("Duration", dur_str)
+    if pipe.current_stage or pipe.current_action:
+        stage_act = " / ".join(filter(None, [pipe.current_stage, pipe.current_action]))
+        print_kv("Current Stage/Action", stage_act, style="yellow")
+    if pipe.failed_stage:
+        print_kv("Failed Stage", pipe.failed_stage, style="red")
+    if pipe.failed_action:
+        print_kv("Failed Action", pipe.failed_action, style="red")
+    if pipe.failure_summary:
+        print_kv("Failure", pipe.failure_summary, style="red")
 
 
 def render_root_status(result: RootStatusResult) -> None:
@@ -33,69 +81,59 @@ def render_root_status(result: RootStatusResult) -> None:
 
     # 1. Installer Summary
     console.print()
-    print_section(1, "Installer Stack")
-    print_kv("Stack Name", result.stack_name, bold_value=True)
-    if result.stack_exists:
-        print_kv("Stack Status", format_status(result.stack_status))
+    print_section(1, "Installer")
+    inst_stack = result.installer
+    print_kv("Stack Name", inst_stack.name, bold_value=True)
+    if inst_stack.is_live:
+        if inst_stack.exists:
+            print_kv("Stack Status", format_status(inst_stack.status))
+            if inst_stack.deployed_version:
+                print_kv("Deployed Version", inst_stack.deployed_version, bold_value=True)
+        else:
+            print_info("Stack Status: Not Deployed / Not Found", dim=True)
     else:
-        print_info("Stack Status: Not Deployed / Not Found", dim=True)
+        if inst_stack.status:
+            print_kv("Stack Status", f"{format_status(inst_stack.status)} (Recorded)")
+        else:
+            print_kv("Stack Status", "Not Recorded", style="dim")
+        if inst_stack.deployed_version:
+            print_kv("Deployed Version", f"{inst_stack.deployed_version} (Recorded)")
+        else:
+            print_kv("Deployed Version", "Not Recorded", style="dim")
+
+    console.print()
+    _render_pipeline_summary(result.installer_pipeline, label_prefix="Installer")
 
     # 2. Configuration Summary
     console.print()
-    print_section(2, "Configuration Repository")
-    print_kv("Repository Type", result.repository_type, bold_value=True)
+    print_section(2, "Configuration")
+    crepo = result.configuration_repo
+    target_str = f"{crepo.repository_type} / {crepo.target or 'Not configured'}"
+    print_kv("Repository", target_str, bold_value=True)
 
-    exists_str = "[green]Present[/green]" if result.config_dir_exists else "[red]Missing[/red]"
-    print_kv("Local Config Path", f"{result.config_dir} ({exists_str})")
+    if crepo.local_git_branch:
+        tree_state = (
+            "[green]Clean[/green]"
+            if crepo.local_git_clean
+            else f"[yellow]Dirty ({crepo.local_git_uncommitted} uncommitted)[/yellow]"
+        )
+        print_kv("Local Git", f"{crepo.local_git_branch} ({tree_state})")
+    else:
+        print_kv("Local Git", "Not a git repository", style="dim")
 
-    if result.config_status:
-        cs = result.config_status
-        if cs.git_working_tree:
-            gwt = cs.git_working_tree
-            tree_str = (
-                "[green]Clean[/green]"
-                if not gwt.has_uncommitted
-                else f"[yellow]Dirty ({gwt.uncommitted_count} uncommitted)[/yellow]"
-            )
-            print_kv("Git Working Tree", f"Branch: {gwt.branch} ({tree_str})")
-            if cs.git_sync_status and cs.git_sync_status.status != "Not Git":
-                print_kv("Remote Sync", cs.git_sync_status.summary)
-        if cs.repository_type == "s3":
-            s3_status = (
-                "Available"
-                if cs.s3_bucket_exists
-                else "Not Found"
-                if cs.s3_bucket_exists is False
-                else "Inaccessible"
-                if cs.s3_bucket_accessible is False
-                else "Configured"
-            )
-            bucket_str = cs.repository_bucket or "Not configured"
-            print_kv("S3 Target", f"{bucket_str} ({format_status(s3_status)})")
-        elif cs.repository_type == "codecommit":
-            cc_status = (
-                "Available"
-                if cs.codecommit_exists
-                else "Not Found"
-                if cs.codecommit_exists is False
-                else "Inaccessible"
-                if cs.codecommit_accessible is False
-                else "Configured"
-            )
-            repo_str = cs.repository_name or "Not set"
-            print_kv("CodeCommit Target", f"{repo_str} ({format_status(cc_status)})")
-        elif cs.repository_type == "codeconnection":
-            c_status = cs.codeconnection_status or "Configured"
-            print_kv(
-                "CodeConnection Target",
-                f"{cs.owner}/{cs.repository_name} ({format_status(c_status)})",
-            )
+    if crepo.remote_sync_summary:
+        print_kv("Remote Sync", format_status(crepo.remote_sync_summary))
 
-    # 3. Pipelines Summary
     console.print()
-    print_section(3, "Pipelines")
-    print_kv("Installer Pipeline", result.installer_pipeline_name)
-    print_kv("Configuration Pipeline", result.config_pipeline_name)
+    _render_pipeline_summary(result.configuration_pipeline, label_prefix="Configuration")
+
+    # 3. Overall Status Summary
+    console.print()
+    print_section(3, "Overall Status")
+    health = result.health
+    print_kv("Installer", format_status(health.installer))
+    print_kv("Configuration", format_status(health.configuration))
+    print_kv("Workspace", format_status(health.workspace), bold_value=True)
 
     console.print()
     console.print("[bold cyan]Subcommands available for filtered status details:[/bold cyan]")
@@ -106,10 +144,6 @@ def render_root_status(result: RootStatusResult) -> None:
     console.print(
         "  [bold green]lza status config[/bold green]     "
         "[dim](Detailed configuration repo status & sync)[/dim]"
-    )
-    console.print(
-        "  [bold green]lza status pipeline[/bold green]   "
-        "[dim](Detailed CodePipeline execution status)[/dim]"
     )
 
 

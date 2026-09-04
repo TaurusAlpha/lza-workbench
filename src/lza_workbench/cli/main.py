@@ -53,9 +53,6 @@ from lza_workbench.cli.commands.status_config import (
 from lza_workbench.cli.commands.status_installer import (
     status_installer_command as run_cli_status_installer,
 )
-from lza_workbench.cli.commands.status_pipeline import (
-    status_pipeline_command as run_cli_status_pipeline,
-)
 from lza_workbench.cli.commands.status_root import (
     status_root_command as run_cli_status_root,
 )
@@ -183,12 +180,6 @@ def config_status_command() -> None:
 def status_config_command() -> None:
     """Show configuration repository status details."""
     run_cli_status_config()
-
-
-@status_app.command("pipeline")
-def status_pipeline_command() -> None:
-    """Show CodePipeline status details."""
-    run_cli_status_pipeline()
 
 
 @pipeline_app.command("start")

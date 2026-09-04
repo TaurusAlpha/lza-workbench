@@ -59,6 +59,20 @@ def _humanize_status_text(status: str) -> str:
     return cfn_map.get(status, status)
 
 
+def format_duration(seconds: float | None) -> str | None:
+    """Format duration in seconds into human readable string (e.g. 2m 31s or 45s)."""
+    if seconds is None or seconds <= 0:
+        return None
+    total_secs = int(round(seconds))
+    if total_secs < 60:
+        return f"{total_secs}s"
+    mins = total_secs // 60
+    rem_secs = total_secs % 60
+    if rem_secs > 0:
+        return f"{mins}m {rem_secs}s"
+    return f"{mins}m"
+
+
 def format_status(status: str | None) -> str:
     """Format a status with humanized wording and consistent Rich color tags."""
     if not status:
@@ -70,6 +84,7 @@ def format_status(status: str | None) -> str:
     if any(
         k in norm
         for k in (
+            "healthy",
             "succeeded",
             "complete",
             "available",
@@ -86,6 +101,9 @@ def format_status(status: str | None) -> str:
     if any(
         k in norm
         for k in (
+            "attention required",
+            "incomplete",
+            "running",
             "in progress",
             "inprogress",
             "building",
@@ -93,6 +111,9 @@ def format_status(status: str | None) -> str:
             "ahead",
             "behind",
             "dirty",
+            "aws unavailable",
+            "last known",
+            "recorded",
         )
     ):
         return f"[yellow]{human_text}[/yellow]"

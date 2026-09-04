@@ -23,10 +23,6 @@ from lza_workbench.workflows.status_installer import (
     get_installer_status_workflow,
     prepare_installer_status,
 )
-from lza_workbench.workflows.status_pipeline import (
-    PipelineStatusResult,
-    get_pipeline_status_workflow,
-)
 from lza_workbench.workflows.status_root import (
     RootStatusResult,
     get_root_status_workflow,
@@ -285,25 +281,145 @@ def test_git_working_tree_and_remote_sync_helpers(tmp_path: Path) -> None:
     assert sync.status == "No Upstream"
 
 
-def test_get_pipeline_status_workflow(configured_workspace: Path) -> None:
+def test_get_root_status_workflow_live_healthy(configured_workspace: Path) -> None:
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.workflows.status_pipeline.get_pipeline_state") as mock_state,
+        patch("lza_workbench.workflows.status_root.get_cloudformation_stack_status") as mock_cfn,
+        patch("lza_workbench.workflows.status_root.get_pipeline_state") as mock_pipe_state,
+        patch("lza_workbench.workflows.status_root.get_pipeline_execution") as mock_pipe_exec,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
-        mock_state.side_effect = [
-            PipelineStateResult("AWSAccelerator-Installer", True, status="Succeeded"),
-            PipelineStateResult("AWSAccelerator-Pipeline", True, status="InProgress"),
+        mock_cfn.return_value = CfnStackStatusResult(
+            stack_name="AWSAccelerator-InstallerStack",
+            exists=True,
+            stack_status="UPDATE_COMPLETE",
+            deployed_parameters={"RepositoryBranchName": "release/v1.16.0"},
+        )
+        mock_pipe_state.side_effect = [
+            PipelineStateResult(
+                "AWSAccelerator-Installer",
+                True,
+                status="Succeeded",
+                latest_execution_id="inst-exec-1",
+            ),
+            PipelineStateResult(
+                "AWSAccelerator-Pipeline",
+                True,
+                status="Succeeded",
+                latest_execution_id="cfg-exec-1",
+            ),
         ]
-        result = get_pipeline_status_workflow(target_dir=configured_workspace)
-        assert isinstance(result, PipelineStatusResult)
-        assert result.installer_pipeline_name == "AWSAccelerator-Installer"
-        assert result.config_pipeline_name == "AWSAccelerator-Pipeline"
-        assert result.installer_pipeline_state.status == "Succeeded"
-        assert result.config_pipeline_state.status == "InProgress"
-        assert mock_state.call_count == 2
+        mock_exec = MagicMock(start_time="2026-09-01T10:00:00Z", duration_seconds=125.0)
+        mock_pipe_exec.return_value = mock_exec
+
+        result = get_root_status_workflow(target_dir=configured_workspace)
+
+        assert result.installer.is_live is True
+        assert result.installer.exists is True
+        assert result.installer.status == "UPDATE_COMPLETE"
+        assert result.installer.deployed_version == "v1.16.0"
+
+        assert result.installer_pipeline.is_live is True
+        assert result.installer_pipeline.status == "Succeeded"
+        assert result.installer_pipeline.execution_id == "inst-exec-1"
+        assert result.installer_pipeline.duration_seconds == 125.0
+
+        assert result.configuration_pipeline.is_live is True
+        assert result.configuration_pipeline.status == "Succeeded"
+        assert result.configuration_pipeline.execution_id == "cfg-exec-1"
+
+        assert result.health.installer == "Healthy"
+        assert result.health.configuration == "Healthy"
+        assert result.health.workspace == "Healthy"
+        assert result.health.is_live is True
+
+
+def test_get_root_status_workflow_aws_unavailable_fallback_with_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Fallback Cust", slug="fallback-cust"),
+        aws=AwsConfig(profile="fail-profile", region="us-east-1"),
+    )
+    state = WorkspaceState(
+        installer_stack_status="UPDATE_COMPLETE",
+        installer_template_version="v1.16.0",
+        installer_pipeline_status="Succeeded",
+        installer_pipeline_execution_id="inst-exec-rec",
+        config_pipeline_status="Failed",
+        config_pipeline_execution_id="cfg-exec-rec",
+        config_pipeline_failed_stage="BuildStage",
+        config_pipeline_failed_action="SynthAction",
+        config_pipeline_error="CFN Stack synthesis error",
+    )
+    mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=state)
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.load_workspace_context",
+        lambda *_args, **_kwargs: mock_ctx,
+    )
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity=None,
+            error="AWS authentication validation failed: SSO session expired",
+        ),
+    )
+
+    result = get_root_status_workflow(target_dir=tmp_path)
+
+    assert result.aws_error == "AWS authentication validation failed: SSO session expired"
+    assert result.installer.is_live is False
+    assert result.installer.status == "UPDATE_COMPLETE"
+    assert result.installer.deployed_version == "v1.16.0"
+
+    assert result.installer_pipeline.is_live is False
+    assert result.installer_pipeline.status == "Succeeded"
+    assert result.installer_pipeline.execution_id == "inst-exec-rec"
+
+    assert result.configuration_pipeline.is_live is False
+    assert result.configuration_pipeline.status == "Failed"
+    assert result.configuration_pipeline.execution_id == "cfg-exec-rec"
+    assert result.configuration_pipeline.failed_stage == "BuildStage"
+    assert result.configuration_pipeline.failure_summary == "CFN Stack synthesis error"
+
+    assert result.health.is_live is False
+    assert result.health.workspace == "AWS Unavailable - Showing Last Known State"
+    assert result.health.workspace != "Healthy"
+    assert "Recorded: Succeeded" in result.health.installer
+    assert "Recorded: Failed" in result.health.configuration
+
+
+def test_get_root_status_workflow_aws_unavailable_fallback_no_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="No State Cust", slug="no-state-cust"),
+        aws=AwsConfig(profile="fail-profile", region="us-east-1"),
+    )
+    mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=None)
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.load_workspace_context",
+        lambda *_args, **_kwargs: mock_ctx,
+    )
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity=None,
+            error="No AWS credentials found",
+        ),
+    )
+
+    result = get_root_status_workflow(target_dir=tmp_path)
+
+    assert result.health.is_live is False
+    assert result.health.workspace == "AWS Unavailable - No Recorded State"
+    assert result.health.workspace != "Healthy"
 
 
 def test_get_installer_status_workflow(configured_workspace: Path) -> None:
