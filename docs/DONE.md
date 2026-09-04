@@ -6,6 +6,11 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### LZA Configuration Initialization Enhancements (v0.29.0)
+- **Interactive Template Selection**: In `lza config init`, prompts user interactively when multiple packaged templates exist and `--template` is omitted, while automatically selecting the single template when only one exists. Keeps terminal prompting decoupled within the CLI layer.
+- **S3-Backed Local Git Repository Initialization**: Automatically initializes a local Git repository and creates an initial commit containing generated configuration files when the remote repository type is Amazon S3.
+- **Worktree Detection & Repository Protection**: Inspects Git worktree top-level to detect whether `aws-accelerator-config` already has `.git`, is tracked inside an existing parent Git worktree, or uses a Git-backed remote provider (CodeCommit, CodeConnections, Git), skipping Git initialization with structured feedback to prevent nested or competing repositories. Preserves `.git` and Git configuration on `--force` re-runs.
+
 ### Root Status Dashboard & Deprecation Cleanup (v0.28.0)
 - **Enhanced `lza status`**: Promoted `lza status` to the primary high-level operational overview across workspace identity, installer stack & pipeline, configuration repository & pipeline, and overall deployment health.
   - Queries CloudFormation for installer stack status and deployed LZA version.

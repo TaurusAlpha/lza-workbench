@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
 from lza_workbench.errors import LzaError
 
 
-def _run_git_command(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+def _run_git_command(
+    args: list[str], cwd: Path, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     """Execute a git command in the specified directory."""
+    run_env = os.environ.copy()
+    if env:
+        run_env.update(env)
     try:
         return subprocess.run(
             ["git", *args],
@@ -17,6 +23,7 @@ def _run_git_command(args: list[str], cwd: Path) -> subprocess.CompletedProcess[
             capture_output=True,
             text=True,
             check=False,
+            env=run_env,
         )
     except FileNotFoundError as exc:
         raise LzaError("Git executable not found in PATH. Please ensure git is installed.") from exc
@@ -28,6 +35,32 @@ def is_git_repository(repo_dir: Path) -> bool:
         return False
     proc = _run_git_command(["rev-parse", "--is-inside-work-tree"], cwd=repo_dir)
     return proc.returncode == 0 and proc.stdout.strip() == "true"
+
+
+def get_git_toplevel(repo_dir: Path) -> Path | None:
+    """Get the top-level directory of the Git work tree, if inside one."""
+    if not repo_dir.exists() or not repo_dir.is_dir():
+        return None
+    proc = _run_git_command(["rev-parse", "--show-toplevel"], cwd=repo_dir)
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return None
+    return Path(proc.stdout.strip()).resolve()
+
+
+def is_git_root(repo_dir: Path) -> bool:
+    """Check if the directory is the root of its own Git repository."""
+    if (repo_dir / ".git").exists():
+        return True
+    toplevel = get_git_toplevel(repo_dir)
+    return toplevel is not None and toplevel == repo_dir.resolve()
+
+
+def is_inside_parent_git_repo(repo_dir: Path) -> bool:
+    """Check if the directory is inside a parent Git repository work tree."""
+    if (repo_dir / ".git").exists():
+        return False
+    toplevel = get_git_toplevel(repo_dir)
+    return toplevel is not None and toplevel != repo_dir.resolve()
 
 
 def has_commits(repo_dir: Path) -> bool:
@@ -42,6 +75,39 @@ def has_uncommitted_changes(repo_dir: Path) -> bool:
     if proc.returncode != 0:
         raise LzaError(f"Failed to check git status: {proc.stderr.strip()}")
     return bool(proc.stdout.strip())
+
+
+def create_initial_commit(
+    repo_dir: Path,
+    message: str = "Initial LZA configuration",
+) -> str:
+    """Stage all files in repo_dir and create an initial commit."""
+    add_proc = _run_git_command(["add", "."], cwd=repo_dir)
+    if add_proc.returncode != 0:
+        raise LzaError(f"Failed to stage files in '{repo_dir}': {add_proc.stderr.strip()}")
+
+    # Provide fallback author identity if not configured to prevent failures on clean systems
+    check_user = _run_git_command(["config", "user.name"], cwd=repo_dir)
+    env_override: dict[str, str] | None = None
+    if check_user.returncode != 0 or not check_user.stdout.strip():
+        check_global = _run_git_command(["config", "--global", "user.name"], cwd=repo_dir)
+        if check_global.returncode != 0 or not check_global.stdout.strip():
+            env_override = {
+                "GIT_AUTHOR_NAME": "LZA Workbench",
+                "GIT_AUTHOR_EMAIL": "workbench@local",
+                "GIT_COMMITTER_NAME": "LZA Workbench",
+                "GIT_COMMITTER_EMAIL": "workbench@local",
+            }
+
+    commit_proc = _run_git_command(
+        ["commit", "-m", message],
+        cwd=repo_dir,
+        env=env_override,
+    )
+    if commit_proc.returncode != 0:
+        raise LzaError(f"Failed to create initial git commit: {commit_proc.stderr.strip()}")
+
+    return get_git_commit(repo_dir)
 
 
 def get_git_branch(repo_dir: Path) -> str:

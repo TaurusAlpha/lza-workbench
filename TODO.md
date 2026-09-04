@@ -171,6 +171,10 @@ Future enhancements:
 - [ ] Structured LZA-aware YAML differences rather than only textual differences.
 - [ ] Export configuration diff reports.
 
+### `lza config init`
+
+Initialize local LZA configuration in the current workspace from a packaged configuration template.
+
 ### `lza config edit`
 
 Future command for safely modifying selected parts of the local LZA configuration through structured Workbench workflows.

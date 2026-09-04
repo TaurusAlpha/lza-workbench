@@ -301,3 +301,251 @@ def test_config_init_cli_existing_notice_and_force(
     res_force = runner.invoke(app, ["config", "init", "--force"])
     assert res_force.exit_code == 0
     assert "Initialized LZA configuration" in res_force.output
+
+
+def test_config_init_cli_single_template_no_prompt(
+    workspace_without_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(workspace_without_config)
+    monkeypatch.setattr(
+        "lza_workbench.cli.commands.config_init.list_packaged_templates",
+        lambda: ["default"],
+    )
+
+    res = runner.invoke(app, ["config", "init"])
+    assert res.exit_code == 0
+    assert "Available configuration templates" not in res.output
+    assert "Initialized LZA configuration" in res.output
+
+
+def test_config_init_cli_multiple_templates_explicit_flag(
+    workspace_without_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(workspace_without_config)
+    monkeypatch.setattr(
+        "lza_workbench.cli.commands.config_init.list_packaged_templates",
+        lambda: ["default", "custom-corp"],
+    )
+
+    res = runner.invoke(app, ["config", "init", "--template", "default"])
+    assert res.exit_code == 0
+    assert "Available configuration templates" not in res.output
+    assert "Template: default" in res.output
+
+
+def test_config_init_cli_multiple_templates_prompt_selection(
+    workspace_without_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(workspace_without_config)
+    monkeypatch.setattr(
+        "lza_workbench.cli.commands.config_init.list_packaged_templates",
+        lambda: ["default", "enterprise"],
+    )
+
+    # Simulate user entering 2 (or enterprise) when prompted
+    called_template: list[str] = []
+
+    def mock_init(*args: object, **kwargs: object) -> ConfigInitResult:
+        called_template.append(str(kwargs.get("template_name")))
+        from lza_workbench.configuration.templates import resolve_template_source
+
+        cfg = load_workspace_config(workspace_without_config)
+        return ConfigInitResult(
+            workspace_dir=workspace_without_config,
+            config_dir=workspace_without_config / "aws-accelerator-config",
+            template_source=resolve_template_source("default"),
+            written_paths=[],
+            unresolved_placeholders=[],
+            dry_run=False,
+            config=cfg,
+        )
+
+    monkeypatch.setattr("lza_workbench.cli.commands.config_init.init_config_workflow", mock_init)
+
+    res = runner.invoke(app, ["config", "init"], input="2\n")
+    assert res.exit_code == 0
+    assert "Available configuration templates:" in res.output
+    assert "1. default" in res.output
+    assert "2. enterprise" in res.output
+    assert called_template == ["enterprise"]
+
+
+def test_config_init_s3_initializes_git_repo_and_commits(
+    workspace_without_config: Path,
+) -> None:
+    cfg = load_workspace_config(workspace_without_config)
+    cfg.configuration.repository.type = "s3"
+    write_workspace_config(workspace_without_config, cfg)
+
+    result = init_config_workflow(
+        target_dir=workspace_without_config,
+        template_name="default",
+        dry_run=False,
+    )
+
+    assert result.git_initialized is True
+    assert result.git_committed is True
+    assert result.git_skipped is False
+    assert result.git_skip_reason is None
+
+    config_dir = workspace_without_config / "aws-accelerator-config"
+    assert (config_dir / ".git").is_dir()
+    from lza_workbench.configuration.git import get_git_commit, has_commits
+
+    assert has_commits(config_dir) is True
+    assert get_git_commit(config_dir) != ""
+
+
+def test_config_init_s3_dry_run_does_not_mutate_git(
+    workspace_without_config: Path,
+) -> None:
+    cfg = load_workspace_config(workspace_without_config)
+    cfg.configuration.repository.type = "s3"
+    write_workspace_config(workspace_without_config, cfg)
+
+    result = init_config_workflow(
+        target_dir=workspace_without_config,
+        template_name="default",
+        dry_run=True,
+    )
+
+    assert result.dry_run is True
+    assert result.git_initialized is False
+    assert result.git_committed is False
+    config_dir = workspace_without_config / "aws-accelerator-config"
+    assert not (config_dir / ".git").exists()
+
+
+def test_config_init_s3_skips_when_directory_already_has_git(
+    workspace_without_config: Path,
+) -> None:
+    cfg = load_workspace_config(workspace_without_config)
+    cfg.configuration.repository.type = "s3"
+    write_workspace_config(workspace_without_config, cfg)
+
+    config_dir = workspace_without_config / "aws-accelerator-config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    from lza_workbench.configuration.git import init_git_repository
+
+    init_git_repository(config_dir)
+    assert (config_dir / ".git").is_dir()
+
+    # Re-run with force to populate into existing git repo
+    result = init_config_workflow(
+        target_dir=workspace_without_config,
+        template_name="default",
+        force=True,
+        dry_run=False,
+    )
+
+    assert result.git_initialized is False
+    assert result.git_committed is False
+    assert result.git_skipped is True
+    assert result.git_skip_reason == "Directory already has a Git repository"
+    assert (config_dir / ".git").is_dir()
+
+
+def test_config_init_s3_skips_when_inside_parent_git_repo(
+    workspace_without_config: Path,
+) -> None:
+    cfg = load_workspace_config(workspace_without_config)
+    cfg.configuration.repository.type = "s3"
+    write_workspace_config(workspace_without_config, cfg)
+
+    # Initialize git in workspace root (parent)
+    from lza_workbench.configuration.git import init_git_repository
+
+    init_git_repository(workspace_without_config)
+    assert (workspace_without_config / ".git").is_dir()
+
+    result = init_config_workflow(
+        target_dir=workspace_without_config,
+        template_name="default",
+        dry_run=False,
+    )
+
+    assert result.git_initialized is False
+    assert result.git_committed is False
+    assert result.git_skipped is True
+    assert result.git_skip_reason == "Directory is inside an existing parent Git repository"
+
+    config_dir = workspace_without_config / "aws-accelerator-config"
+    assert not (config_dir / ".git").exists()
+
+
+def test_config_init_non_s3_skips_git_init(
+    workspace_without_config: Path,
+) -> None:
+    cfg = load_workspace_config(workspace_without_config)
+    cfg.configuration.repository.type = "codecommit"
+    write_workspace_config(workspace_without_config, cfg)
+
+    result = init_config_workflow(
+        target_dir=workspace_without_config,
+        template_name="default",
+        dry_run=False,
+    )
+
+    assert result.git_initialized is False
+    assert result.git_committed is False
+    assert result.git_skipped is True
+    assert "Remote configuration repository is 'codecommit'" in (result.git_skip_reason or "")
+
+    config_dir = workspace_without_config / "aws-accelerator-config"
+    assert not (config_dir / ".git").exists()
+
+
+def test_config_init_preserves_existing_git_on_force(
+    workspace_without_config: Path,
+) -> None:
+    cfg = load_workspace_config(workspace_without_config)
+    cfg.configuration.repository.type = "s3"
+    write_workspace_config(workspace_without_config, cfg)
+
+    # First init creates Git repo and initial commit
+    first_res = init_config_workflow(
+        target_dir=workspace_without_config,
+        template_name="default",
+        dry_run=False,
+    )
+    assert first_res.git_initialized is True
+
+    config_dir = workspace_without_config / "aws-accelerator-config"
+    assert (config_dir / ".git").is_dir()
+    from lza_workbench.configuration.git import get_git_commit
+
+    initial_commit = get_git_commit(config_dir)
+
+    # Re-init with --force
+    force_res = init_config_workflow(
+        target_dir=workspace_without_config,
+        template_name="default",
+        force=True,
+        dry_run=False,
+    )
+
+    assert force_res.git_skipped is True
+    assert (config_dir / ".git").is_dir()
+    assert get_git_commit(config_dir) == initial_commit
+
+
+def test_config_init_git_failure_surfaces_clean_error(
+    workspace_without_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from lza_workbench.errors import LzaError
+
+    cfg = load_workspace_config(workspace_without_config)
+    cfg.configuration.repository.type = "s3"
+    write_workspace_config(workspace_without_config, cfg)
+
+    def mock_fail(repo_dir: Path) -> None:
+        raise LzaError("Simulated git initialization failure")
+
+    monkeypatch.setattr("lza_workbench.workflows.config_init.init_git_repository", mock_fail)
+
+    with pytest.raises(LzaError, match="Simulated git initialization failure"):
+        init_config_workflow(
+            target_dir=workspace_without_config,
+            template_name="default",
+            dry_run=False,
+        )

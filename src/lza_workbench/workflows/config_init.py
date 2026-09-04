@@ -9,7 +9,11 @@ from pathlib import Path
 
 from lza_workbench.configuration.git import (
     configure_codecommit_credential_helper,
+    create_initial_commit,
+    init_git_repository,
     is_git_repository,
+    is_git_root,
+    is_inside_parent_git_repo,
 )
 from lza_workbench.configuration.rendering import (
     capture_init_values_snapshot,
@@ -44,6 +48,10 @@ class ConfigInitResult:
     is_managed: bool = False
     initialized_at: datetime | None = None
     drifted_fields: tuple[str, ...] = ()
+    git_initialized: bool = False
+    git_committed: bool = False
+    git_skipped: bool = False
+    git_skip_reason: str | None = None
 
 
 def init_config_workflow(
@@ -100,6 +108,8 @@ def init_config_workflow(
                     is_managed=True,
                     initialized_at=state.config_initialized_at,
                     drifted_fields=drifted,
+                    git_skipped=True,
+                    git_skip_reason="Configuration directory already exists",
                 )
             return ConfigInitResult(
                 workspace_dir=workspace_dir,
@@ -111,11 +121,15 @@ def init_config_workflow(
                 config=config,
                 skipped=True,
                 is_managed=False,
+                git_skipped=True,
+                git_skip_reason="Configuration directory already exists",
             )
 
     if not dry_run and force and target_config_dir.exists():
-        # Scoped cleanup of target directory to prevent orphaned files
+        # Scoped cleanup of target directory to prevent orphaned files, preserving .git
         for child in target_config_dir.iterdir():
+            if child.name == ".git":
+                continue
             if child.is_dir():
                 shutil.rmtree(child)
             else:
@@ -127,6 +141,28 @@ def init_config_workflow(
         config=config,
         dry_run=dry_run,
     )
+
+    git_initialized = False
+    git_committed = False
+    git_skipped = False
+    git_skip_reason: str | None = None
+
+    repo_type = config.configuration.repository.type
+    if repo_type == "s3":
+        if is_git_root(target_config_dir):
+            git_skipped = True
+            git_skip_reason = "Directory already has a Git repository"
+        elif is_inside_parent_git_repo(target_config_dir):
+            git_skipped = True
+            git_skip_reason = "Directory is inside an existing parent Git repository"
+        elif not dry_run:
+            init_git_repository(target_config_dir)
+            create_initial_commit(target_config_dir, "Initial LZA configuration")
+            git_initialized = True
+            git_committed = True
+    else:
+        git_skipped = True
+        git_skip_reason = f"Remote configuration repository is '{repo_type}'"
 
     if not dry_run:
         validate_template(target_config_dir)
@@ -147,7 +183,7 @@ def init_config_workflow(
             write_workspace_config(workspace_dir, config)
 
         if (
-            config.configuration.repository.type == "codecommit"
+            repo_type == "codecommit"
             and config.aws.profile
             and (is_git_repository(target_config_dir) or (target_config_dir / ".git").exists())
         ):
@@ -171,4 +207,8 @@ def init_config_workflow(
         dry_run=dry_run,
         config=config,
         skipped=False,
+        git_initialized=git_initialized,
+        git_committed=git_committed,
+        git_skipped=git_skipped,
+        git_skip_reason=git_skip_reason,
     )
