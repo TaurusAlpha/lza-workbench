@@ -8,14 +8,56 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
-from lza_workbench.pipeline.failures import (
-    clean_raw_diagnostic_text,
-)
 
 
 def _clean_log_line(raw_line: str) -> str:
     """Strip prefixes, timestamps, log-level wrappers, and ANSI escapes from a log line."""
-    return clean_raw_diagnostic_text(raw_line)
+    line = raw_line.strip()
+    if not line:
+        return ""
+
+    # Strip ANSI escape sequences
+    line = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", line)
+
+    # Strip [Container] timestamp prefix
+    line = re.sub(
+        r"^\[Container\]\s+\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?\s*",
+        "",
+        line,
+    )
+
+    # Strip ISO timestamps and general timestamps at line start
+    line = re.sub(
+        r"^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?\s*",
+        "",
+        line,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip pipe-delimited logger prefixes like "| status | runner |" or "| error | toolkit |"
+    line = re.sub(r"^(?:\|\s*[\w.-]+\s*)+\|\s*", "", line, flags=re.IGNORECASE)
+
+    # Strip bracketed log levels like "[ERROR]", "[error]", "[WARN]"
+    line = re.sub(
+        r"^\[(?:ERROR|error|WARN|warn|INFO|info|DEBUG|debug)\]:?\s*",
+        "",
+        line,
+        flags=re.IGNORECASE,
+    )
+
+    # Strip leading log prefixes like "ERROR:", "Deployment of Stack failed: "
+    prefix_pat = (
+        r"^(?:\[(?:ERROR|error|WARN|warn|INFO|info)\]\s*|"
+        r"ERROR:\s*|Deployment of Stack failed:\s*|Deployment of (?:Stack )?)+"
+    )
+    line = re.sub(prefix_pat, "", line, flags=re.IGNORECASE)
+
+    # Strip leading presentation emojis like ❌, ✖
+    line = re.sub(r"^[❌✖⚠️❗\s]+", "", line)
+
+    # Normalize double spaces
+    line = re.sub(r"\s+", " ", line).strip()
+    return line
 
 
 def _is_wrapper_or_noise(line: str) -> bool:

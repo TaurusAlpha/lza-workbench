@@ -182,24 +182,34 @@ def test_extract_log_error_diagnostics_wrapper_suppression_and_deduplication() -
     assert not any("npm ERR" in line for line in extracted)
 
 
-def test_normalize_root_cause_without_resource_in_deployment_wrapper() -> None:
+def test_normalize_root_cause_and_resource() -> None:
     from lza_workbench.pipeline.failures import normalize_root_cause_and_resource
 
-    # A deployment wrapper preserves the normalized root cause but does not expose
-    # a resource attribution when the nested stack name cannot be parsed reliably.
+    # Test case 1: Full toolkit error with emoji, deployment prefix, and stack name
     raw_1 = (
         "2026-08-23 16:47:44.027 | error | toolkit | Deployment of Stack failed: "
         "❌  AWSAccelerator-PrepareStack-123456789012-eu-west-1 failed: "
         "ValidationError: Stack cannot be deleted while TerminationProtection is enabled"
     )
     err_1, res_1 = normalize_root_cause_and_resource(raw_1)
-    assert res_1 is None
-    expected = "ValidationError: Stack cannot be deleted while TerminationProtection is enabled"
+    assert res_1 == "AWSAccelerator-PrepareStack-123456789012-eu-west-1"
+    expected = (
+        "ValidationError: Stack cannot be deleted while TerminationProtection is enabled"
+    )
     assert err_1 == expected
     assert "❌" not in err_1
     assert "Deployment of Stack failed" not in err_1
 
-    # Generic provider errors also have no resource attribution.
+    # Test case 2: Duplicated wrapper error
+    raw_2 = (
+        "Deployment of Stack failed: ❌  AWSAccelerator-AccountsStack-123 failed: "
+        "AWSAccelerator-AccountsStack-123 failed: StackPolicyException: Action Denied"
+    )
+    err_2, res_2 = normalize_root_cause_and_resource(raw_2)
+    assert res_2 == "AWSAccelerator-AccountsStack-123"
+    assert err_2 == "StackPolicyException: Action Denied"
+
+    # Test case 3: Generic error without resource
     raw_3 = "ClientError: An error occurred (AccessDenied) when calling the AssumeRole operation"
     err_3, res_3 = normalize_root_cause_and_resource(raw_3)
     assert res_3 is None
@@ -235,7 +245,7 @@ def test_extract_log_error_diagnostics_custom_resource_multiline() -> None:
     extracted = extract_log_error_diagnostics(raw_logs)
     assert len(extracted) >= 1
     err, res = normalize_root_cause_and_resource(extracted[0])
-    assert res is None
+    assert res == "AWSAccelerator-PrepareStack-123456789012-eu-west-1"
     expected_substring = (
         "Organizational Unit 'Security' with id of 'ou-ijz2-qoud7qvv' "
         "was not found in the organization configuration."

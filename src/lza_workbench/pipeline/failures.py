@@ -74,6 +74,19 @@ def clean_raw_diagnostic_text(raw_text: str) -> str:
     # Strip pipe-delimited logger prefixes like "| status | runner |" or "| error | toolkit |"
     line = re.sub(r"^(?:\|\s*[\w.-]+\s*)+\|\s*", "", line, flags=re.IGNORECASE)
 
+    # Strip leading deployment wrapper if followed by more content
+    while True:
+        prev_line = line
+        line = re.sub(
+            r"^(?:Deployment of (?:Stack )?(?:[\w\-]+ )?failed:\s*)+(?=[^\s])",
+            "",
+            line,
+            flags=re.IGNORECASE,
+        ).strip()
+        line = re.sub(r"^[❌✖⚠️❗\s]+", "", line).strip()
+        if line == prev_line:
+            break
+
     # Strip bracketed log levels like "[ERROR]", "[error]", "[WARN]"
     line = re.sub(
         r"^\[(?:ERROR|error|WARN|warn|INFO|info|DEBUG|debug)\]:?\s*",
@@ -110,11 +123,14 @@ def clean_raw_diagnostic_text(raw_text: str) -> str:
     )
 
     # Clean excessive exclamation punctuation (e.g. "!!!!.", "!!!!") -> "."
-    line = re.sub(r"[!]{2,}\.?", ".", line)
+    line = re.sub(r"\s*[!]{2,}\.?", ".", line)
 
     # Strip trailing punctuation noise like ".:" or trailing ":"
     line = re.sub(r"\.:\s*$", ".", line)
     line = re.sub(r":\s*$", "", line)
+
+    # Clean whitespace before periods
+    line = re.sub(r"\s+\.", ".", line)
 
     # Collapse repeated whitespace
     line = re.sub(r"\s+", " ", line).strip()
@@ -159,6 +175,19 @@ def _recognize_cloudformation(cleaned: str, raw_text: str) -> FailureDiagnostic 
     failed_resource: str | None = None
     msg = cleaned
 
+    # Strip leading deployment wrapper prefixes and emojis to uncover the target resource and error
+    while True:
+        prev = msg
+        msg = re.sub(
+            r"^(?:Deployment of (?:Stack )?(?:[\w\-]+ )?failed:\s*)+",
+            "",
+            msg,
+            flags=re.IGNORECASE,
+        ).strip()
+        msg = re.sub(r"^[❌✖⚠️❗\s]+", "", msg).strip()
+        if msg == prev:
+            break
+
     res_match = re.match(
         r"^(?P<resource>[A-Za-z0-9_\-]+(?:Stack|Resource|Project)[A-Za-z0-9_\-]*)\s+failed:\s*(?P<error>.*)$",
         msg,
@@ -176,6 +205,25 @@ def _recognize_cloudformation(cleaned: str, raw_text: str) -> FailureDiagnostic 
         if failed_resource and err.startswith(f"{failed_resource} failed:"):
             err = err[len(failed_resource) + 8 :].strip()
         msg = clean_raw_diagnostic_text(err)
+
+    # Clean generic "DeploymentError: Resource updates failed:" prefix if more details follow
+    if re.search(r"^DeploymentError:\s*Resource updates failed:\s*.+", msg, flags=re.IGNORECASE):
+        msg = re.sub(
+            r"^DeploymentError:\s*Resource updates failed:\s*", "", msg, flags=re.IGNORECASE
+        ).strip()
+
+    # Clean leading stack name path prefix from resource
+    # (e.g. "StackName/LogicalResourceId" -> "LogicalResourceId")
+    if failed_resource:
+        msg = re.sub(rf"^{re.escape(failed_resource)}/", "", msg)
+
+    # Clean duplicated custom resource type in parenthesis
+    # e.g. "(Custom::Type Type)" -> "(Custom::Type)"
+    msg = re.sub(
+        r"\(Custom::([A-Za-z0-9_]+)\s+[A-Za-z0-9_]+\)",
+        r"(Custom::\1)",
+        msg,
+    )
 
     # Check for TerminationProtection
     if "TerminationProtection" in msg or "TerminationProtection" in cleaned:
@@ -217,9 +265,6 @@ def _recognize_cloudformation(cleaned: str, raw_text: str) -> FailureDiagnostic 
             "The following resource(s) failed",
         )
     ):
-        if failed_resource:
-            msg = re.sub(rf"^{re.escape(failed_resource)}/", "", msg)
-        msg = re.sub(r"\(Custom::([A-Za-z0-9_]+)\s+[A-Za-z0-9_]+\)", r"(Custom::\1)", msg)
         return FailureDiagnostic(
             message=msg,
             category=FailureCategory.CLOUDFORMATION,
