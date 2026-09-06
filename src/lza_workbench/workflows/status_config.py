@@ -26,7 +26,6 @@ from lza_workbench.configuration.repository import (
 from lza_workbench.configuration.status import compile_configuration_warnings
 from lza_workbench.pipeline.failures import (
     collect_pipeline_action_failures,
-    normalize_root_cause_and_resource,
 )
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
@@ -288,7 +287,6 @@ def get_config_status_workflow(
                         factory=factory,
                         build_id=build_id,
                     ),
-                    normalize_diagnostic=normalize_root_cause_and_resource,
                 )
                 if failures:
                     failure = failures[0]

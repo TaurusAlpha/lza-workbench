@@ -96,7 +96,7 @@ def deploy_configuration_workflow(
             workspace_context=context,
             aws_context=aws_context,
         )
-    except Exception as exc:
+    except LzaError as exc:
         raise ConfigDeployError(f"Configuration push failed: {exc}") from exc
 
     start_res: PipelineStartResult | None = None
@@ -108,7 +108,7 @@ def deploy_configuration_workflow(
             workspace_context=context,
             aws_context=aws_context,
         )
-    except Exception as exc:
+    except LzaError as exc:
         raise ConfigDeployError(
             f"Configuration push succeeded, but pipeline start failed: {exc}",
             push_result=push_res,
@@ -137,7 +137,7 @@ def deploy_configuration_workflow(
                 push_result=push_res,
                 start_result=start_res,
             ) from exc
-        except Exception as exc:
+        except LzaError as exc:
             raise ConfigDeployError(
                 f"Pipeline execution started with ID '{start_res.execution_id}', "
                 f"but monitoring failed: {exc}",

@@ -183,7 +183,7 @@ def test_extract_log_error_diagnostics_wrapper_suppression_and_deduplication() -
 
 
 def test_normalize_root_cause_and_resource() -> None:
-    from lza_workbench.aws.codebuild import normalize_root_cause_and_resource
+    from lza_workbench.pipeline.failures import normalize_root_cause_and_resource
 
     # Test case 1: Full toolkit error with emoji, deployment prefix, and stack name
     raw_1 = (
@@ -220,8 +220,8 @@ def test_normalize_root_cause_and_resource() -> None:
 def test_extract_log_error_diagnostics_custom_resource_multiline() -> None:
     from lza_workbench.aws.codebuild import (
         extract_log_error_diagnostics,
-        normalize_root_cause_and_resource,
     )
+    from lza_workbench.pipeline.failures import normalize_root_cause_and_resource
 
     raw_logs = [
         (
@@ -253,7 +253,6 @@ def test_extract_log_error_diagnostics_custom_resource_multiline() -> None:
     )
     assert expected_substring in err
     assert "ValidateEnvironmentConfigValidateEnvironmentResourceD10DC179" in err
-
 
 
 

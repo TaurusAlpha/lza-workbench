@@ -144,6 +144,23 @@ def test_deploy_configuration_preserves_push_when_start_fails(configured_workspa
     assert raised.value.result.start_result is None
 
 
+def test_deploy_configuration_does_not_wrap_unexpected_push_errors(
+    configured_workspace: Path,
+) -> None:
+    with (
+        patch(
+            "lza_workbench.workflows.config_deploy.resolve_aws_execution_context",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "lza_workbench.workflows.config_deploy.push_configuration_workflow",
+            side_effect=RuntimeError("unexpected push defect"),
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="unexpected push defect"):
+            deploy_configuration_workflow(target_dir=configured_workspace, watch=False)
+
+
 def test_deploy_configuration_preserves_execution_when_watch_fails(
     configured_workspace: Path,
 ) -> None:

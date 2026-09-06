@@ -11,19 +11,11 @@ from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.pipeline.failures import (
     clean_raw_diagnostic_text,
 )
-from lza_workbench.pipeline.failures import (
-    normalize_root_cause_and_resource as _normalize_root_cause_and_resource,
-)
 
 
 def _clean_log_line(raw_line: str) -> str:
     """Strip prefixes, timestamps, log-level wrappers, and ANSI escapes from a log line."""
     return clean_raw_diagnostic_text(raw_line)
-
-
-def normalize_root_cause_and_resource(raw_error: str) -> tuple[str, str | None]:
-    """Normalize a diagnostic error line by stripping wrapper artifacts and extracting resource."""
-    return _normalize_root_cause_and_resource(raw_error)
 
 
 def _is_wrapper_or_noise(line: str) -> bool:
@@ -371,6 +363,4 @@ __all__ = [
     "fetch_codebuild_diagnostics",
     "get_cloudwatch_log_events",
     "get_codebuild_build_info",
-    "normalize_root_cause_and_resource",
 ]
-

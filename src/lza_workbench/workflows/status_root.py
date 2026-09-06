@@ -8,10 +8,7 @@ from typing import Any
 
 from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.cloudformation import get_cloudformation_stack_status
-from lza_workbench.aws.codebuild import (
-    fetch_codebuild_diagnostics,
-    normalize_root_cause_and_resource,
-)
+from lza_workbench.aws.codebuild import fetch_codebuild_diagnostics
 from lza_workbench.aws.codepipeline import (
     get_pipeline_execution,
     get_pipeline_state,
@@ -171,7 +168,6 @@ def _resolve_pipeline_summary(
                     if factory
                     else []
                 ),
-                normalize_diagnostic=normalize_root_cause_and_resource,
             )
             if failures:
                 failed_stage = failures[0].stage_name

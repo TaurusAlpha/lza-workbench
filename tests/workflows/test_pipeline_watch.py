@@ -9,6 +9,7 @@ import pytest
 
 from lza_workbench.aws.codepipeline import PipelineExecutionResult
 from lza_workbench.errors import LzaError
+from lza_workbench.pipeline.failures import PipelineActionFailure
 from lza_workbench.workflows.pipeline_watch import (
     PipelineWatchResult,
     PipelineWatchUpdate,
@@ -146,6 +147,7 @@ def test_watch_pipeline_failed_action(configured_workspace: Path) -> None:
 
     assert result.status == "Failed"
     assert len(result.failed_actions) == 1
+    assert isinstance(result.failed_actions[0], PipelineActionFailure)
     assert result.failed_actions[0].action_name == "CodeBuildSynthesize"
     assert "Build command exited with code 1" in (result.error_message or "")
 

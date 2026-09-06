@@ -430,7 +430,6 @@ def collect_pipeline_action_failures(
     stages: Iterable[Any],
     *,
     fetch_diagnostics: Callable[[str], list[str]],
-    normalize_diagnostic: Callable[[str], tuple[str, str | None]] | None = None,
 ) -> list[PipelineActionFailure]:
     """Collect failed actions and derive concise, normalized root-cause diagnostics."""
     failures: list[PipelineActionFailure] = []

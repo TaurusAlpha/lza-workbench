@@ -17,8 +17,8 @@ from lza_workbench.aws.context import AwsExecutionContext, resolve_aws_execution
 from lza_workbench.errors import LzaError
 from lza_workbench.pipeline.failures import (
     FailureDiagnostic,
+    PipelineActionFailure,
     collect_pipeline_action_failures,
-    normalize_root_cause_and_resource,
 )
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.pipeline.state import record_pipeline_watch_result
@@ -79,7 +79,7 @@ class PipelineWatchResult:
     execution_id: str
     status: str
     stages: list[PipelineStageSummary]
-    failed_actions: list[PipelineActionSummary]
+    failed_actions: list[PipelineActionFailure]
     elapsed_seconds: float | None = None
     error_message: str | None = None
 
@@ -185,7 +185,8 @@ def watch_pipeline_workflow(
     start_time = time_provider()
     last_status = "InProgress"
     stage_summaries: list[PipelineStageSummary] = []
-    failed_actions: list[PipelineActionSummary] = []
+    failed_action_summaries: list[PipelineActionSummary] = []
+    failed_actions: list[PipelineActionFailure] = []
     error_message: str | None = None
     last_exec_res = None
     not_found_attempts = 0
@@ -221,7 +222,7 @@ def watch_pipeline_workflow(
         )
 
         stage_summaries = []
-        failed_actions = []
+        failed_action_summaries = []
         for s in state_res.stage_states:
             if s.execution_id and s.execution_id != resolved_execution_id:
                 continue
@@ -240,7 +241,7 @@ def watch_pipeline_workflow(
                 )
                 actions.append(action_sum)
                 if a.status == "Failed":
-                    failed_actions.append(action_sum)
+                    failed_action_summaries.append(action_sum)
 
             stage_summaries.append(
                 PipelineStageSummary(
@@ -265,33 +266,17 @@ def watch_pipeline_workflow(
             )
 
         if last_status in TERMINAL_STATUSES:
-            if last_status == "Failed" and failed_actions:
+            if failed_action_summaries:
                 failure_details = collect_pipeline_action_failures(
                     stage_summaries,
                     fetch_diagnostics=lambda build_id: fetch_codebuild_diagnostics(
                         factory=resolved_aws_context.factory,
                         build_id=build_id,
                     ),
-                    normalize_diagnostic=normalize_root_cause_and_resource,
                 )
-                failed_actions = [
-                    PipelineActionSummary(
-                        action_name=failure.action_name,
-                        stage_name=failure.stage_name,
-                        status="Failed",
-                        summary=failure.summary,
-                        error_message=failure.error_message,
-                        external_execution_id=failure.external_execution_id,
-                        external_execution_url=failure.external_execution_url,
-                        diagnostic_details=failure.diagnostic_details,
-                        raw_diagnostic_details=failure.raw_diagnostic_details,
-                        failed_resource=failure.failed_resource,
-                        diagnostics=failure.diagnostics,
-                        root_cause=failure.root_cause,
-                    )
-                    for failure in failure_details
-                ]
+                failed_actions = failure_details
 
+            if last_status == "Failed" and failed_actions:
                 action_errs = []
                 for fa in failed_actions:
                     stage_prefix = f"Stage '{fa.stage_name}', action" if fa.stage_name else "Action"
