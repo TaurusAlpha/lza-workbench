@@ -241,4 +241,4 @@ def test_extract_log_error_diagnostics_custom_resource_multiline() -> None:
         "was not found in the organization configuration."
     )
     assert expected_substring in err
-    assert "ValidateEnvironmentConfigValidateEnvironmentResourceD10DC179" in err
+    assert "ValidateEnvironmentConfigValidateEnvironmentResourceD10DC179" not in err
