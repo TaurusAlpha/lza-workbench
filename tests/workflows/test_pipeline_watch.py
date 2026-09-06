@@ -335,3 +335,78 @@ def test_watch_pipeline_timeout(configured_workspace: Path) -> None:
 
     assert result.status == "TimedOut"
     assert "Watch timed out" in (result.error_message or "")
+
+
+def test_watch_pipeline_initial_delay_sleeps_before_first_status(
+    configured_workspace: Path,
+) -> None:
+    mock_client = MagicMock()
+    mock_client.get_pipeline_execution.return_value = {
+        "pipelineExecution": {
+            "pipelineExecutionId": "exec-delay-123",
+            "status": "Succeeded",
+        }
+    }
+    mock_client.get_pipeline_state.return_value = {"stageStates": []}
+
+    sleep_calls: list[float] = []
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+        ),
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        result = watch_pipeline_workflow(
+            target_dir=configured_workspace,
+            execution_id="exec-delay-123",
+            initial_delay_seconds=4.5,
+            sleeper=sleep_calls.append,
+        )
+
+    assert result.status == "Succeeded"
+    assert len(sleep_calls) >= 1
+    assert sleep_calls[0] == 4.5
+
+
+def test_watch_pipeline_retries_on_initial_not_found(
+    configured_workspace: Path,
+) -> None:
+    mock_client = MagicMock()
+    # First call returns NOT_FOUND (propagation delay), second call returns InProgress/Succeeded
+    mock_client.get_pipeline_execution.side_effect = [
+        {"pipelineExecution": {"pipelineExecutionId": "exec-retry-123", "status": "NOT_FOUND"}},
+        {"pipelineExecution": {"pipelineExecutionId": "exec-retry-123", "status": "Succeeded"}},
+    ]
+    mock_client.get_pipeline_state.return_value = {"stageStates": []}
+
+    sleep_calls: list[float] = []
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+        ),
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        result = watch_pipeline_workflow(
+            target_dir=configured_workspace,
+            execution_id="exec-retry-123",
+            poll_interval_seconds=5,
+            initial_delay_seconds=0.0,
+            sleeper=sleep_calls.append,
+        )
+
+    assert result.status == "Succeeded"
+    assert mock_client.get_pipeline_execution.call_count == 2
+    assert 5 in sleep_calls
+
+
+def test_watch_pipeline_rejects_negative_initial_delay(configured_workspace: Path) -> None:
+    with pytest.raises(LzaError, match="greater than or equal to zero"):
+        watch_pipeline_workflow(
+            target_dir=configured_workspace,
+            execution_id="exec-test-123",
+            initial_delay_seconds=-1.0,
+        )

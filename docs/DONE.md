@@ -13,6 +13,10 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 - Persisted missing standard S3 bucket names in workspace YAML during push and pull; dry runs remain non-mutating.
 - Validated packaging, CLI aliases, synchronization state, workspace persistence, and affected deployment/template behavior with focused regression tests.
 
+### Pipeline Watch Initial Delay & Propagation Tolerance (v0.29.3)
+- Added `initial_delay_seconds` (default 3.0s) in `watch_pipeline_workflow` and `deploy_configuration_workflow` before querying AWS CodePipeline for initial status, preventing race conditions immediately after pipeline start.
+- Added graceful retry tolerance for `NOT_FOUND` execution responses during early polling to accommodate AWS eventual consistency.
+
 ### LZA Configuration Initialization Enhancements (v0.29.0)
 - **Interactive Template Selection**: In `lza config init`, prompts user interactively when multiple packaged templates exist and `--template` is omitted, while automatically selecting the single template when only one exists. Keeps terminal prompting decoupled within the CLI layer.
 - **S3-Backed Local Git Repository Initialization**: Automatically initializes a local Git repository and creates an initial commit containing generated configuration files when the remote repository type is Amazon S3.
