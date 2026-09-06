@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -232,3 +233,49 @@ def test_push_codeconnection_dry_run_and_success(
 
     assert result.exit_code == 0
     mock_push.assert_called_once_with(config_dir, remote="origin", branch="main", dry_run=False)
+
+
+@pytest.mark.parametrize("command", ["push", "upload"])
+@pytest.mark.parametrize("mode", ["blocked", "force", "confirm", "decline", "dry-run"])
+def test_imported_s3_push_cli_safety(
+    s3_workspace,
+    cli_runner,
+    monkeypatch,
+    command,
+    mode,
+):
+    from lza_workbench.workspace.state import write_workspace_state
+
+    state = load_workspace_state(s3_workspace)
+    state.imported = True
+    write_workspace_state(s3_workspace, state)
+    monkeypatch.chdir(s3_workspace)
+    monkeypatch.setattr(
+        importlib.import_module("lza_workbench.cli.main"),
+        "_is_interactive",
+        lambda: mode in {"confirm", "decline"},
+    )
+    mock_s3 = MagicMock()
+    mock_s3.head_object.return_value = {}
+    args = ["config", command]
+    if mode in {"force", "dry-run"}:
+        args.append(f"--{mode}")
+    with (
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.validate_identity",
+            return_value={"account": "123456789012"},
+        ),
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_s3),
+    ):
+        result = cli_runner.invoke(app, args, input="y\n" if mode == "confirm" else "n\n")
+    assert result.exit_code == (1 if mode in {"blocked", "decline"} else 0), result.output
+    if mode != "force":
+        message = result.output or str(result.exception)
+        assert "has not been verified" in message
+        assert "lza config download" in message
+        assert "--force" in message
+    if mode in {"force", "confirm"}:
+        mock_s3.upload_file.assert_called_once()
+    else:
+        mock_s3.upload_file.assert_not_called()
+        assert not (s3_workspace / "aws-accelerator-config.zip").exists()

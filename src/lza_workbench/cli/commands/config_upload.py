@@ -16,12 +16,14 @@ render_config_upload_result = render_config_push_result
 
 def config_upload_command(
     dry_run: params.DryRun = False,
+    force: params.ConfigPushForce = False,
     interactive: bool = False,
     target_dir: Path | None = None,
 ) -> Path | None:
     """Upload LZA configuration to configured repository destination."""
     result: ConfigUploadResult = config_push_command(
         dry_run=dry_run,
+        force=force,
         interactive=interactive,
         target_dir=target_dir,
     )

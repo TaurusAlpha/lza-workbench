@@ -256,14 +256,6 @@ Implementation notes:
 
 Synchronize the local customer `aws-accelerator-config` to the configured remote configuration source without starting the LZA pipeline.
 
-- [ ] Fix default packaging exclusions: remove `"backup"` from `PackagingExcludeConfig.directories` so customer AWS Backup definitions (e.g. `backup/backup-*.json`) are not omitted from configuration archives. Default exclusions should only target `.git`, `.DS_Store`, etc.
-- [ ] Add support to parse and honor `.gitignore` / `.prettierignore` when packaging local configuration files for S3 upload.
-- [ ] Fix zip diff calculation: filter out directory-level records (entries ending with `/`) in `read_zip_manifest` so directory records from existing zip archives are not incorrectly reported as removed files.
-- [ ] Add safety check for S3-backed imported workspaces: if workspace was imported and has not yet synced/downloaded remote configuration from S3, warn the user that local configuration may overwrite unverified remote S3 state, requiring `--force` (or interactive confirmation) and recommending `lza config download` first.
-- [ ] Persist the derived standard S3 configuration bucket name to `lza-workspace.yaml` during
-  `config push` and `config pull`. Import and `status installer --sync-config` already derive and
-  persist `aws-accelerator-config-<account-id>-<region>`.
-
 ### `lza config pull`
 
 Synchronize the configured remote customer configuration source into the local

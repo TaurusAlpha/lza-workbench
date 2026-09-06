@@ -139,3 +139,100 @@ def test_is_path_excluded_and_count_config_files(tmp_path: Path) -> None:
     (config_dir / ".git" / "HEAD").write_text("ref", encoding="utf-8")
 
     assert count_config_files(config_dir, exclude_dirs={".git"}) == 1
+
+
+def test_default_packaging_includes_backup_and_ignores_directory_records(tmp_path: Path) -> None:
+    from lza_workbench.configuration.archive import read_zip_manifest
+    from lza_workbench.configuration.schema import PackagingExcludeConfig
+
+    config_dir = tmp_path / "config"
+    (config_dir / "backup").mkdir(parents=True)
+    files = {"backup/backup-config.json", "backup/backup-plans.json"}
+    for name in files:
+        (config_dir / name).write_text("{}")
+    zip_path = tmp_path / "config.zip"
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr("backup/", "")
+        archive.writestr("accounts/", "")
+        for name in files:
+            archive.writestr(name, "{}")
+    assert set(read_zip_manifest(zip_path)) == files
+    defaults = PackagingExcludeConfig()
+    diff, manifest = create_zip_archive(
+        config_dir=config_dir,
+        zip_path=zip_path,
+        exclude_dirs=set(defaults.directories),
+        exclude_files=set(defaults.files),
+    )
+    assert set(manifest) == files
+    assert not diff.has_changes
+
+
+def test_packaging_root_ignore_patterns(tmp_path: Path) -> None:
+    ignore_file = ".gitignore"
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    patterns = (
+        "# comment\n\nsecret.yaml\ncache/\n/root.json\nrelative/*.json\n"
+        "**/*.tmp\nbackup/*\n!backup/keep.json\nblocked/\n!blocked/keep.json\n"
+        "file?.txt\n[ab].txt\n\\#literal\n\\!literal\n"
+    )
+    (config_dir / ignore_file).write_text(patterns)
+    ignored = {
+        "secret.yaml",
+        "nested/secret.yaml",
+        "cache/data.json",
+        "nested/cache/data.json",
+        "root.json",
+        "relative/a.json",
+        "nested/file.tmp",
+        "root.tmp",
+        "backup/drop.json",
+        "blocked/keep.json",
+        "file1.txt",
+        "a.txt",
+        "#literal",
+        "!literal",
+    }
+    kept = {
+        "backup/keep.json",
+        "nested/root.json",
+        "relative/deep/a.json",
+        "global-config.yaml",
+        "c.txt",
+        "nested/.gitignore",
+        "nested/keep.yaml",
+    }
+    for name in ignored | kept:
+        path = config_dir / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("keep.yaml" if name == "nested/.gitignore" else "content")
+    _, manifest = create_zip_archive(
+        config_dir=config_dir,
+        zip_path=tmp_path / "archive.zip",
+        exclude_dirs=set(),
+        exclude_files=set(),
+    )
+    assert set(manifest) == kept | {ignore_file}
+    assert (config_dir / ignore_file).read_text() == patterns
+
+
+def test_packaging_ignore_overlap_and_explicit_exclusions(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text(
+        "*.json\ncache/\n!keep.json\n!cache/\n!cache/keep.json\n!backup/\n!.DS_Store\n"
+    )
+    prettier_rules = "keep.json\ncache/\n!drop.json\n"
+    (tmp_path / ".prettierignore").write_text(prettier_rules)
+    for name in ["keep.json", "drop.json", "cache/keep.json", "backup/keep.json", ".DS_Store"]:
+        path = tmp_path / name
+        path.parent.mkdir(exist_ok=True)
+        path.write_text("{}")
+    _, manifest = create_zip_archive(
+        config_dir=tmp_path,
+        zip_path=tmp_path.parent / "archive.zip",
+        exclude_dirs={"backup"},
+        exclude_files={".DS_Store"},
+    )
+    assert set(manifest) == {".gitignore", ".prettierignore", "keep.json", "cache/keep.json"}
+
+    assert (tmp_path / ".prettierignore").read_text() == prettier_rules

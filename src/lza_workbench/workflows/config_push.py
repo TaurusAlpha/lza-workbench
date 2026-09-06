@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,6 +32,7 @@ from lza_workbench.configuration.repository import (
 from lza_workbench.configuration.state import record_config_git_push, record_config_upload
 from lza_workbench.configuration.templates import validate_template
 from lza_workbench.errors import LzaError
+from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import (
     WorkspaceContext,
     WorkspaceReadinessLevel,
@@ -48,6 +50,8 @@ class ConfigPushResult:
     config_dir: Path
     repository_type: str
     dry_run: bool
+
+    safety_warning: str | None = None
 
     # S3 specific fields
     zip_path: Path | None = None
@@ -75,6 +79,8 @@ def push_configuration_workflow(
     *,
     target_dir: Path | None = None,
     dry_run: bool = False,
+    force: bool = False,
+    confirm_callback: Callable[[str], bool] | None = None,
     workspace_context: WorkspaceContext | None = None,
     aws_context: AwsExecutionContext | None = None,
 ) -> ConfigPushResult:
@@ -102,6 +108,8 @@ def push_configuration_workflow(
             state=state,
             dry_run=dry_run,
             aws_context=aws_context,
+            force=force,
+            confirm_callback=confirm_callback,
         )
 
     if repo_type in ("codecommit", "codeconnection", "git"):
@@ -125,6 +133,8 @@ def _handle_s3_push(
     state: WorkspaceState,
     dry_run: bool,
     aws_context: AwsExecutionContext | None,
+    force: bool,
+    confirm_callback: Callable[[str], bool] | None,
 ) -> ConfigPushResult:
     repo_cfg = config.configuration.repository
     destination = resolve_s3_configuration_destination(
@@ -132,6 +142,17 @@ def _handle_s3_push(
         account_id=config.aws.account_id or state.management_account_id,
         region=config.aws.region,
     )
+    safety_warning = None
+    if state.imported and state.config_sync_digest is None:
+        safety_warning = (
+            "Remote S3 configuration has not been verified for this imported workspace. "
+            "Local configuration may overwrite unknown remote state. "
+            "Run `lza config download` first, or use --force to explicitly override this check."
+        )
+        if not dry_run and not force:
+            if not confirm_callback or not confirm_callback(f"{safety_warning} Continue?"):
+                raise LzaError(safety_warning)
+
     zip_path = workspace_dir / CONFIG_ARCHIVE_FILENAME
 
     profile = config.aws.profile or ""
@@ -143,6 +164,7 @@ def _handle_s3_push(
             config_dir=config_dir,
             repository_type="s3",
             dry_run=True,
+            safety_warning=safety_warning,
             zip_path=zip_path,
             s3_bucket=destination.bucket,
             s3_key=destination.object_key,
@@ -171,6 +193,9 @@ def _handle_s3_push(
         prime_credentials=config.aws.prime_credentials,
     )
     s3_client = resolved_aws_context.factory.get_client("s3")
+    if repo_cfg.bucket is None:
+        repo_cfg.bucket = destination.bucket
+        write_workspace_config(workspace_dir, config)
 
     etag, version_id = upload_s3_file(
         client=s3_client,

@@ -115,6 +115,30 @@ When `lza init` finds an existing directory, it stops and directs you to use `lz
 `lza init --force` overwrites generated metadata only and leaves the customer configuration
 directory unchanged.
 
+## Configuration Synchronization
+
+`lza config push` (`upload`) packages local configuration for S3, including customer
+`backup/` files by default. ZIP exclusions come only from
+`configuration.packaging.exclude` in `lza-workspace.yaml` and the root `.gitignore`.
+Explicit packaging exclusions take precedence; later matching `.gitignore` rules win. Supported patterns include names, relative paths, wildcards, directory
+rules, comments, and negation. Nested ignore files and general backslash escaping
+are not supported. A child cannot be re-included while its parent remains ignored.
+These packaging rules do not change Git push behavior.
+
+Customer ignore files are never rewritten. `.prettierignore` does not affect ZIP
+contents. Remove an existing explicit `backup` packaging exclusion if you want to
+include your AWS Backup definitions.
+
+For an imported S3 workspace without a prior successful synchronization, push requires
+interactive confirmation or `--force`. Run `lza config download` first to synchronize
+remote configuration locally. Downloading with `--no-extract` alone does not clear this
+guard. `--dry-run` reports the warning and destination without changing files or S3.
+
+Both push and pull persist a missing standard S3 bucket name into
+`configuration.repository.bucket` in `lza-workspace.yaml`, using the configured account
+(or recorded management account) and region. Explicit buckets retain the existing
+standard-bucket validation. Dry runs show the derived bucket without saving it.
+
 ## Workspace Configuration
 
 `lza-workspace.yaml` is the declarative source of truth for a customer workspace. It is

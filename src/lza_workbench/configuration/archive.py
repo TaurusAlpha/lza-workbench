@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import shutil
 import tempfile
@@ -34,6 +35,7 @@ def create_zip_archive(
 ) -> tuple[ConfigDiffResult, dict[str, tuple[int, int]]]:
     """Create a zip archive from config_dir and compute its diff from the previous archive."""
     old_manifest = read_zip_manifest(zip_path)
+    ignore_rules = read_packaging_ignore_rules(config_dir)
 
     new_manifest: dict[str, tuple[int, int]] = {}
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
@@ -42,7 +44,7 @@ def create_zip_archive(
                 continue
 
             rel_path = path.relative_to(config_dir)
-            if is_path_excluded(rel_path, exclude_dirs, exclude_files):
+            if is_path_excluded(rel_path, exclude_dirs, exclude_files, ignore_rules):
                 continue
 
             arcname = str(rel_path)
@@ -163,6 +165,8 @@ def read_zip_manifest(path: Path) -> dict[str, tuple[int, int]]:
     try:
         with zipfile.ZipFile(path, "r") as archive:
             for info in archive.infolist():
+                if info.filename.endswith("/"):
+                    continue
                 manifest[info.filename] = (info.file_size, info.CRC)
     except zipfile.BadZipFile:
         pass
@@ -205,11 +209,17 @@ def is_path_excluded(
     rel_path: Path,
     exclude_dirs: set[str],
     exclude_files: set[str] | None = None,
+    ignore_rules: tuple[PackagingIgnoreRule, ...] = (),
 ) -> bool:
     """Check whether a relative path matches excluded directory or file rules."""
-    return any(part in exclude_dirs for part in rel_path.parts[:-1]) or bool(
+    if any(part in exclude_dirs for part in rel_path.parts[:-1]) or bool(
         exclude_files and rel_path.name in exclude_files
-    )
+    ):
+        return True
+    for parent in rel_path.parents:
+        if parent != Path(".") and _is_ignored(parent, True, ignore_rules):
+            return True
+    return _is_ignored(rel_path, False, ignore_rules)
 
 
 def count_config_files(
@@ -217,3 +227,51 @@ def count_config_files(
 ) -> int:
     """Count included configuration files."""
     return len(scan_directory_files(config_dir, exclude_dirs, exclude_files))
+
+
+@dataclass(frozen=True)
+class PackagingIgnoreRule:
+    """One root ignore-file rule for S3 packaging."""
+
+    pattern: str
+    negated: bool
+    directory_only: bool
+    anchored: bool
+
+
+def read_packaging_ignore_rules(config_dir: Path) -> tuple[PackagingIgnoreRule, ...]:
+    """Read root .gitignore; later matching rules win."""
+    ignore_file = config_dir / ".gitignore"
+    if not ignore_file.is_file():
+        return ()
+    rules = []
+    for line in ignore_file.read_text(encoding="utf-8").splitlines():
+        pattern = line.rstrip()
+        if not pattern or pattern.startswith("#"):
+            continue
+        negated = pattern.startswith("!")
+        if negated:
+            pattern = pattern[1:]
+        if pattern.startswith((r"\#", r"\!")):
+            pattern = pattern[1:]
+        directory_only = pattern.endswith("/")
+        anchored = pattern.startswith("/") or "/" in pattern.rstrip("/")
+        pattern = pattern.removeprefix("/").removesuffix("/")
+        if pattern:
+            rules.append(PackagingIgnoreRule(pattern, negated, directory_only, anchored))
+    return tuple(rules)
+
+
+def _is_ignored(path: Path, is_directory: bool, rules: tuple[PackagingIgnoreRule, ...]) -> bool:
+    ignored = False
+    for rule in rules:
+        if rule.directory_only and not is_directory:
+            continue
+        matches = (
+            path.full_match(rule.pattern)
+            if rule.anchored
+            else fnmatch.fnmatchcase(path.name, rule.pattern)
+        )
+        if matches:
+            ignored = not rule.negated
+    return ignored

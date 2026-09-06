@@ -78,7 +78,7 @@ class PackagingExcludeConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=False)
 
-    directories: list[str] = Field(default_factory=lambda: [".git", "backup"])
+    directories: list[str] = Field(default_factory=lambda: [".git"])
     files: list[str] = Field(default_factory=lambda: [".DS_Store"])
 
 

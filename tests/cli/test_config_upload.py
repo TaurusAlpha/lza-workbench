@@ -82,7 +82,7 @@ def test_cli_config_upload_success(
     with zipfile.ZipFile(zip_path, "r") as zf:
         namelist = zf.namelist()
         assert ".DS_Store" not in namelist
-        assert "backup/ignored.txt" not in namelist
+        assert "backup/ignored.txt" in namelist
         assert "global-config.yaml" in namelist
 
     mock_s3.upload_file.assert_called_once_with(

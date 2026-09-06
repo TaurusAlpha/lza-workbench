@@ -40,6 +40,7 @@ from lza_workbench.configuration.state import (
 )
 from lza_workbench.configuration.templates import validate_template
 from lza_workbench.errors import LzaError
+from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import (
     WorkspaceReadinessLevel,
     load_workspace_context,
@@ -202,6 +203,9 @@ def _handle_s3_pull(
         prime_credentials=config.aws.prime_credentials,
     )
     s3_client = aws_context.factory.get_client("s3")
+    if repo_cfg.bucket is None:
+        repo_cfg.bucket = destination.bucket
+        write_workspace_config(workspace_dir, config)
 
     download_s3_file(
         client=s3_client,

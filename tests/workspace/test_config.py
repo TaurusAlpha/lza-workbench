@@ -54,7 +54,7 @@ def test_full_workspace_preserves_explicit_values(tmp_path: Path) -> None:
     assert config.configuration.repository.bucket == (
         "aws-accelerator-config-123456789012-eu-west-1"
     )
-    assert config.configuration.packaging.exclude.directories == [".git", "backup"]
+    assert config.configuration.packaging.exclude.directories == [".git"]
 
 
 def test_workspace_rejects_unknown_settings(tmp_path: Path) -> None:

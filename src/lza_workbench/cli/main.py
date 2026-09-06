@@ -354,10 +354,12 @@ def config_pull_command(
 @config_app.command("push")
 def config_push_command(
     dry_run: params.DryRun = False,
+    force: params.ConfigPushForce = False,
 ) -> None:
     """Synchronize local LZA configuration to configured remote repository."""
     run_cli_push_config(
         dry_run=dry_run,
+        force=force,
         interactive=_is_interactive(),
     )
 
@@ -365,10 +367,12 @@ def config_push_command(
 @config_app.command("upload")
 def config_upload_command(
     dry_run: params.DryRun = False,
+    force: params.ConfigPushForce = False,
 ) -> None:
     """Upload LZA configuration to configured repository destination (alias for push)."""
     run_cli_upload_config(
         dry_run=dry_run,
+        force=force,
         interactive=_is_interactive(),
     )
 

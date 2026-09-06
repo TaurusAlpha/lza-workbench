@@ -102,6 +102,14 @@ Force = Annotated[
     typer.Option("--force", help="Reinitialize generated files in an existing workspace."),
 ]
 
+ConfigPushForce = Annotated[
+    bool,
+    typer.Option(
+        "--force",
+        help="Allow an imported S3 workspace to overwrite unverified remote configuration.",
+    ),
+]
+
 Repair = Annotated[
     bool,
     typer.Option("--repair", help="Repair missing, partial, or corrupted workspace metadata."),

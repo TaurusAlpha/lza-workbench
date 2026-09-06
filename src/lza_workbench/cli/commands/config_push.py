@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import typer
+
 from lza_workbench.cli import params
 from lza_workbench.cli.output import (
     print_diff_summary,
     print_dry_run_header,
     print_kv,
     print_success,
+    print_warning,
 )
 from lza_workbench.workflows.config_push import (
     ConfigPushResult,
@@ -21,6 +24,8 @@ def render_config_push_result(result: ConfigPushResult) -> None:
     """Render the results of a configuration push workflow."""
     if result.dry_run:
         print_dry_run_header("lza config push")
+        if result.safety_warning:
+            print_warning(result.safety_warning)
         print_kv("Workspace", result.workspace_dir)
         print_kv("Source Directory", result.config_dir)
         print_kv("Repository Type", result.repository_type)
@@ -59,6 +64,7 @@ def render_config_push_result(result: ConfigPushResult) -> None:
 
 def config_push_command(
     dry_run: params.DryRun = False,
+    force: params.ConfigPushForce = False,
     interactive: bool = False,
     target_dir: Path | None = None,
 ) -> ConfigPushResult:
@@ -66,6 +72,10 @@ def config_push_command(
     result = push_configuration_workflow(
         target_dir=target_dir,
         dry_run=dry_run,
+        force=force,
+        confirm_callback=(lambda msg: typer.confirm(msg, default=False))
+        if interactive
+        else None,
     )
     render_config_push_result(result)
     return result

@@ -36,7 +36,7 @@ def test_git_push_dry_run_does_not_add_remote_or_credential_helper(
         "https://git-codecommit.eu-west-1.amazonaws.com/v1/repos/deployable-config"
     )
     git_config = (config_dir / ".git" / "config").read_text(encoding="utf-8")
-    assert "[remote \"origin\"]" not in git_config
+    assert '[remote "origin"]' not in git_config
     assert "credential-helper" not in git_config
 
 
@@ -109,3 +109,77 @@ def test_git_push_updates_remote_and_state_for_configured_deployable_branch(
     state = load_workspace_state(configured_workspace)
     assert remote_commit == result.git_commit
     assert state.config_artifact_sha256 == remote_commit
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_imported_s3_push_without_sync_is_protected(
+    configured_workspace,
+    mock_aws_execution_context,
+    dry_run,
+):
+    from lza_workbench.workspace.state import write_workspace_state
+
+    state = load_workspace_state(configured_workspace)
+    state.imported = True
+    write_workspace_state(configured_workspace, state)
+    config = load_workspace_config(configured_workspace)
+    config.configuration.repository.bucket = None
+    write_workspace_config(configured_workspace, config)
+    before = {
+        p.relative_to(configured_workspace): p.read_bytes()
+        for p in configured_workspace.rglob("*")
+        if p.is_file()
+    }
+    if dry_run:
+        result = push_configuration_workflow(
+            target_dir=configured_workspace,
+            dry_run=True,
+            aws_context=mock_aws_execution_context,
+        )
+        assert result.safety_warning is not None
+        assert "has not been verified" in result.safety_warning
+        assert result.s3_bucket == "aws-accelerator-config-123456789012-eu-west-1"
+    else:
+        with pytest.raises(LzaError, match="lza config download.*--force"):
+            push_configuration_workflow(
+                target_dir=configured_workspace,
+                aws_context=mock_aws_execution_context,
+            )
+    after = {
+        p.relative_to(configured_workspace): p.read_bytes()
+        for p in configured_workspace.rglob("*")
+        if p.is_file()
+    }
+    assert before == after
+    mock_aws_execution_context.factory.get_client.assert_not_called()
+
+
+@pytest.mark.parametrize("override", ["force", "confirm", "decline"])
+def test_imported_s3_push_overrides(configured_workspace, mock_aws_execution_context, override):
+    from unittest.mock import Mock
+
+    from lza_workbench.workspace.state import write_workspace_state
+
+    state = load_workspace_state(configured_workspace)
+    state.imported = True
+    write_workspace_state(configured_workspace, state)
+    confirm = Mock(return_value=override == "confirm")
+    kwargs = dict(
+        target_dir=configured_workspace,
+        aws_context=mock_aws_execution_context,
+        force=override == "force",
+        confirm_callback=confirm,
+    )
+    mock_aws_execution_context.factory.get_client.return_value.head_object.return_value = {}
+    if override == "decline":
+        with pytest.raises(LzaError, match="has not been verified"):
+            push_configuration_workflow(**kwargs)
+        mock_aws_execution_context.factory.get_client.assert_not_called()
+    else:
+        push_configuration_workflow(**kwargs)
+        assert load_workspace_state(configured_workspace).config_sync_digest
+        mock_aws_execution_context.factory.get_client.return_value.upload_file.assert_called_once()
+    if override == "force":
+        confirm.assert_not_called()
+    else:
+        confirm.assert_called_once()
