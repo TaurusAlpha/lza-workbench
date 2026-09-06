@@ -205,7 +205,7 @@ def test_cli_pipeline_watch_with_diagnostics(
             {
                 "message": (
                     "2026-08-23 | error | toolkit | Deployment of Stack failed: "
-                    "❌  AWSAccelerator-PrepareStack-376564958706-eu-west-1 failed: "
+                    "❌  AWSAccelerator-PrepareStack-123456789012-eu-west-1 failed: "
                     "ValidationError: Stack cannot be deleted while "
                     "TerminationProtection is enabled"
                 )
@@ -245,16 +245,13 @@ def test_cli_pipeline_watch_with_diagnostics(
     assert "2. Failure" in result.output
     assert "Stage: Prepare" in result.output
     assert "Action: PrepareAction" in result.output
-    assert "Resource: AWSAccelerator-PrepareStack-376564958706-eu-west-1" in result.output
+    assert "Resource: AWSAccelerator-PrepareStack-123456789012-eu-west-1" in result.output
     assert "ValidationError: Stack cannot be deleted while" in result.output
     assert "TerminationProtection" in result.output
     assert "https://console.aws.amazon.com/codebuild/build-abc-123" in result.output
 
-
     # Presentation emoji ❌ should be stripped from domain error output
     assert "❌" not in result.output
-
-
 
 
 def test_cli_pipeline_watch_concise_omits_pending_stages_on_failure(
@@ -293,15 +290,11 @@ def test_cli_pipeline_watch_concise_omits_pending_stages_on_failure(
             },
             {
                 "stageName": "Accounts",
-                "actionStates": [
-                    {"actionName": "AccountsAction"}
-                ],
+                "actionStates": [{"actionName": "AccountsAction"}],
             },
             {
                 "stageName": "Network",
-                "actionStates": [
-                    {"actionName": "NetworkAction"}
-                ],
+                "actionStates": [{"actionName": "NetworkAction"}],
             },
         ]
     }
@@ -379,6 +372,3 @@ def test_cli_pipeline_watch_omits_duration_when_unknown(
     # When duration cannot be determined reliably, Duration line should be omitted
     assert "Duration:" not in result.output
     assert "Duration: 0 seconds" not in result.output
-
-
-

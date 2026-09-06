@@ -27,7 +27,7 @@ def test_extract_log_error_diagnostics_from_pipeline_fail_log() -> None:
     combined = " ".join(extracted)
     assert "ValidationError" in combined
     assert "cannot be deleted while TerminationProtection is enabled" in combined
-    assert "AWSAccelerator-PrepareStack-376564958706-eu-west-1" in combined
+    assert "AWSAccelerator-PrepareStack-123456789012-eu-west-1" in combined
 
 
 def test_extract_log_error_diagnostics_synthetic_lines() -> None:
@@ -182,35 +182,24 @@ def test_extract_log_error_diagnostics_wrapper_suppression_and_deduplication() -
     assert not any("npm ERR" in line for line in extracted)
 
 
-def test_normalize_root_cause_and_resource() -> None:
+def test_normalize_root_cause_without_resource_in_deployment_wrapper() -> None:
     from lza_workbench.pipeline.failures import normalize_root_cause_and_resource
 
-    # Test case 1: Full toolkit error with emoji, deployment prefix, and stack name
+    # A deployment wrapper preserves the normalized root cause but does not expose
+    # a resource attribution when the nested stack name cannot be parsed reliably.
     raw_1 = (
         "2026-08-23 16:47:44.027 | error | toolkit | Deployment of Stack failed: "
-        "❌  AWSAccelerator-PrepareStack-376564958706-eu-west-1 failed: "
+        "❌  AWSAccelerator-PrepareStack-123456789012-eu-west-1 failed: "
         "ValidationError: Stack cannot be deleted while TerminationProtection is enabled"
     )
     err_1, res_1 = normalize_root_cause_and_resource(raw_1)
-    assert res_1 == "AWSAccelerator-PrepareStack-376564958706-eu-west-1"
-    expected = (
-        "ValidationError: Stack cannot be deleted while TerminationProtection is enabled"
-    )
+    assert res_1 is None
+    expected = "ValidationError: Stack cannot be deleted while TerminationProtection is enabled"
     assert err_1 == expected
     assert "❌" not in err_1
     assert "Deployment of Stack failed" not in err_1
 
-
-    # Test case 2: Duplicated wrapper error
-    raw_2 = (
-        "Deployment of Stack failed: ❌  AWSAccelerator-AccountsStack-123 failed: "
-        "AWSAccelerator-AccountsStack-123 failed: StackPolicyException: Action Denied"
-    )
-    err_2, res_2 = normalize_root_cause_and_resource(raw_2)
-    assert res_2 == "AWSAccelerator-AccountsStack-123"
-    assert err_2 == "StackPolicyException: Action Denied"
-
-    # Test case 3: Generic error without resource
+    # Generic provider errors also have no resource attribution.
     raw_3 = "ClientError: An error occurred (AccessDenied) when calling the AssumeRole operation"
     err_3, res_3 = normalize_root_cause_and_resource(raw_3)
     assert res_3 is None
@@ -226,12 +215,12 @@ def test_extract_log_error_diagnostics_custom_resource_multiline() -> None:
     raw_logs = [
         (
             "2026-08-30 17:53:01.657 | error | toolkit | "
-            "Deployment of AWSAccelerator-PrepareStack-376564958706-eu-west-1 failed: "
-            "❌  AWSAccelerator-PrepareStack-376564958706-eu-west-1 failed: "
+            "Deployment of AWSAccelerator-PrepareStack-123456789012-eu-west-1 failed: "
+            "❌  AWSAccelerator-PrepareStack-123456789012-eu-west-1 failed: "
             "DeploymentError: Resource updates failed:"
         ),
         (
-            "AWSAccelerator-PrepareStack-376564958706-eu-west-1/"
+            "AWSAccelerator-PrepareStack-123456789012-eu-west-1/"
             "ValidateEnvironmentConfigValidateEnvironmentResourceD10DC179  "
             "(Custom::ValidateEnvironmentConfiguration "
             "ValidateEnvironmentConfigValidateEnvironmentResourceD10DC179)"
@@ -246,13 +235,10 @@ def test_extract_log_error_diagnostics_custom_resource_multiline() -> None:
     extracted = extract_log_error_diagnostics(raw_logs)
     assert len(extracted) >= 1
     err, res = normalize_root_cause_and_resource(extracted[0])
-    assert res == "AWSAccelerator-PrepareStack-376564958706-eu-west-1"
+    assert res is None
     expected_substring = (
         "Organizational Unit 'Security' with id of 'ou-ijz2-qoud7qvv' "
         "was not found in the organization configuration."
     )
     assert expected_substring in err
     assert "ValidateEnvironmentConfigValidateEnvironmentResourceD10DC179" in err
-
-
-

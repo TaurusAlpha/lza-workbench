@@ -61,9 +61,9 @@ def test_clean_raw_diagnostic_text_stack_traces() -> None:
 
 def test_control_tower_recognizer_and_operation_id_preservation() -> None:
     raw = (
-        '| status | runner | ❌ ServiceException: AWS Control Tower Landing Zone operation '
+        "| status | runner | ❌ ServiceException: AWS Control Tower Landing Zone operation "
         'with identifier "97258a7b-364e-4321-adcf-f8d860047dac" in "FAILED" state !!!!. '
-        'Before continuing, proceed to AWS Control Tower and evaluate the status.'
+        "Before continuing, proceed to AWS Control Tower and evaluate the status."
     )
     diag = interpret_failure_diagnostic(raw)
 
@@ -80,16 +80,16 @@ def test_control_tower_recognizer_and_operation_id_preservation() -> None:
 
 def test_deduplicate_equivalent_logger_and_raw_exception() -> None:
     line1 = (
-        '| status | runner | ❌ ServiceException: AWS Control Tower Landing Zone operation '
+        "| status | runner | ❌ ServiceException: AWS Control Tower Landing Zone operation "
         'with identifier "97258a7b-364e-4321-adcf-f8d860047dac" in "FAILED" state !!!!. '
-        'Before continuing, proceed to AWS Control Tower and evaluate the status.'
+        "Before continuing, proceed to AWS Control Tower and evaluate the status."
     )
     line2 = (
-        'Error: ServiceException: AWS Control Tower Landing Zone operation '
+        "Error: ServiceException: AWS Control Tower Landing Zone operation "
         'with identifier "97258a7b-364e-4321-adcf-f8d860047dac" in "FAILED" state !!!!. '
-        'Before continuing, proceed to AWS Control Tower and evaluate the status.:\n'
-        '    at Function.getLandingZoneOperationStatus (/opt/runner.js:10:5)\n'
-        '    at processTicksAndRejections (node:internal/process/task_queues:95:5)'
+        "Before continuing, proceed to AWS Control Tower and evaluate the status.:\n"
+        "    at Function.getLandingZoneOperationStatus (/opt/runner.js:10:5)\n"
+        "    at processTicksAndRejections (node:internal/process/task_queues:95:5)"
     )
 
     stage = MagicMock()
@@ -150,11 +150,11 @@ def test_distinct_additive_diagnostics_preserved() -> None:
 def test_termination_protection_preservation() -> None:
     raw = (
         "2026-08-23 16:47:44.027 | error | toolkit | Deployment of Stack failed: "
-        "❌  AWSAccelerator-PrepareStack-376564958706-eu-west-1 failed: "
+        "❌  AWSAccelerator-PrepareStack-123456789012-eu-west-1 failed: "
         "ValidationError: Stack cannot be deleted while TerminationProtection is enabled"
     )
     err, res = normalize_root_cause_and_resource(raw)
-    assert res == "AWSAccelerator-PrepareStack-376564958706-eu-west-1"
+    assert res == "AWSAccelerator-PrepareStack-123456789012-eu-west-1"
     assert err == "ValidationError: Stack cannot be deleted while TerminationProtection is enabled"
     assert "❌" not in err
 
