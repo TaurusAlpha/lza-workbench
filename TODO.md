@@ -252,10 +252,6 @@ Implementation notes:
 - AWS retains some data-bearing resources to avoid accidental data loss, so preservation and cleanup choices must be explicit.
 - Reference: <https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/uninstall-the-solution.html>.
 
-### `lza config init`
-
-Initialize the local `aws-accelerator-config` in the current workspace from a packaged configuration template.
-
 ### `lza config push`
 
 Synchronize the local customer `aws-accelerator-config` to the configured remote configuration source without starting the LZA pipeline.
