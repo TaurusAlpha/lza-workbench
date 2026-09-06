@@ -8,102 +8,22 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
+from lza_workbench.pipeline.failures import (
+    clean_raw_diagnostic_text,
+)
+from lza_workbench.pipeline.failures import (
+    normalize_root_cause_and_resource as _normalize_root_cause_and_resource,
+)
 
 
 def _clean_log_line(raw_line: str) -> str:
     """Strip prefixes, timestamps, log-level wrappers, and ANSI escapes from a log line."""
-    line = raw_line.strip()
-    if not line:
-        return ""
-
-    # Strip ANSI escape sequences
-    line = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", line)
-
-    # Strip [Container] timestamp prefix
-    line = re.sub(
-        r"^\[Container\]\s+\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+", "", line
-    )
-
-    # Strip ISO timestamps and toolkit/log level prefixes
-    # e.g. "2026-08-23 16:47:44.027 | error |" or "2026-08-23 | error |"
-    line = re.sub(
-        r"^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?)?\s*(?:\|\s*(?:error|warn|info)\s*\|\s*(?:toolkit\s*\|\s*)?)?",
-        "",
-        line,
-        flags=re.IGNORECASE,
-    )
-
-
-
-    # Strip leading log prefixes like "[ERROR]", "[error]", "ERROR:", "Deployment of Stack failed: "
-    prefix_pat = (
-        r"^(?:\[(?:ERROR|error|WARN|warn|INFO|info)\]\s*|"
-        r"ERROR:\s*|Deployment of Stack failed:\s*|Deployment of (?:Stack )?)+"
-    )
-    line = re.sub(prefix_pat, "", line, flags=re.IGNORECASE)
-
-
-    # Strip leading presentation emojis like ❌, ✖
-    line = re.sub(r"^[❌✖⚠️❗\s]+", "", line)
-
-    # Normalize double spaces
-    line = re.sub(r"\s+", " ", line).strip()
-    return line
+    return clean_raw_diagnostic_text(raw_line)
 
 
 def normalize_root_cause_and_resource(raw_error: str) -> tuple[str, str | None]:
     """Normalize a diagnostic error line by stripping wrapper artifacts and extracting resource."""
-    msg = _clean_log_line(raw_error)
-    if not msg:
-        return ("", None)
-
-    failed_resource: str | None = None
-
-    # Check for pattern "<Resource/StackName> failed: <ErrorDetails>"
-    res_match = re.match(
-        r"^(?P<resource>[A-Za-z0-9_\-]+(?:Stack|Resource|Project)[A-Za-z0-9_\-]*)\s+failed:\s*(?P<error>.*)$",
-        msg,
-        flags=re.IGNORECASE,
-    )
-    if res_match:
-        failed_resource = res_match.group("resource")
-        err = res_match.group("error").strip()
-        # Clean nested emojis or "Deployment of ... failed"
-        err = re.sub(r"^[❌✖⚠️❗\s]+", "", err).strip()
-        err = re.sub(
-            r"^(?:Deployment of (?:Stack )?(?:[\w\-]+ )?failed:\s*)+",
-            "",
-            err,
-            flags=re.IGNORECASE,
-        ).strip()
-        # Clean nested "<resource> failed: " if duplicated
-        if failed_resource and err.startswith(f"{failed_resource} failed:"):
-            err = err[len(failed_resource) + 8 :].strip()
-        msg = _clean_log_line(err)
-
-    # Clean generic "DeploymentError: Resource updates failed:" prefix if more details follow
-    if re.search(r"^DeploymentError:\s*Resource updates failed:\s*.+", msg, flags=re.IGNORECASE):
-        msg = re.sub(
-            r"^DeploymentError:\s*Resource updates failed:\s*", "", msg, flags=re.IGNORECASE
-        ).strip()
-
-    # Clean leading stack name path prefix from resource
-    # (e.g. "StackName/LogicalResourceId" -> "LogicalResourceId")
-    if failed_resource:
-        msg = re.sub(rf"^{re.escape(failed_resource)}/", "", msg)
-
-    # Clean duplicated custom resource type in parenthesis
-    # e.g. "(Custom::Type Type)" -> "(Custom::Type)"
-    msg = re.sub(
-        r"\(Custom::([A-Za-z0-9_]+)\s+[A-Za-z0-9_]+\)",
-        r"(Custom::\1)",
-        msg,
-    )
-
-
-    # Clean double spaces
-    msg = re.sub(r"\s+", " ", msg).strip()
-    return (msg, failed_resource)
+    return _normalize_root_cause_and_resource(raw_error)
 
 
 def _is_wrapper_or_noise(line: str) -> bool:
@@ -169,6 +89,10 @@ def _is_continuation_line(line: str, prev_cleaned: str) -> bool:
     """Check whether a line is a continuation of a preceding error message."""
     clean = line.strip()
     if not clean or _is_wrapper_or_noise(clean):
+        return False
+
+    # Do not treat JavaScript / TypeScript stack frames as continuation lines
+    if re.match(r"^at\s+(?:async\s+)?[A-Za-z0-9_$.<>[\]]+", clean):
         return False
 
     # Indented lines (e.g. starting with whitespace in raw log)

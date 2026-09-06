@@ -7,10 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from lza_workbench.aws.codebuild import (
-    fetch_codebuild_diagnostics,
-    normalize_root_cause_and_resource,
-)
+from lza_workbench.aws.codebuild import fetch_codebuild_diagnostics
 from lza_workbench.aws.codepipeline import (
     get_latest_pipeline_execution_id,
     get_pipeline_execution,
@@ -18,7 +15,11 @@ from lza_workbench.aws.codepipeline import (
 )
 from lza_workbench.aws.context import AwsExecutionContext, resolve_aws_execution_context
 from lza_workbench.errors import LzaError
-from lza_workbench.pipeline.failures import collect_pipeline_action_failures
+from lza_workbench.pipeline.failures import (
+    FailureDiagnostic,
+    collect_pipeline_action_failures,
+    normalize_root_cause_and_resource,
+)
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.pipeline.state import record_pipeline_watch_result
 from lza_workbench.workspace.context import (
@@ -43,6 +44,8 @@ class PipelineActionSummary:
     diagnostic_details: list[str] = field(default_factory=list)
     raw_diagnostic_details: list[str] = field(default_factory=list)
     failed_resource: str | None = None
+    diagnostics: list[FailureDiagnostic] = field(default_factory=list)
+    root_cause: FailureDiagnostic | None = None
 
 
 @dataclass(frozen=True)
@@ -271,6 +274,8 @@ def watch_pipeline_workflow(
                         diagnostic_details=failure.diagnostic_details,
                         raw_diagnostic_details=failure.raw_diagnostic_details,
                         failed_resource=failure.failed_resource,
+                        diagnostics=failure.diagnostics,
+                        root_cause=failure.root_cause,
                     )
                     for failure in failure_details
                 ]

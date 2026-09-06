@@ -6,10 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from lza_workbench.aws.codebuild import (
-    fetch_codebuild_diagnostics,
-    normalize_root_cause_and_resource,
-)
+from lza_workbench.aws.codebuild import fetch_codebuild_diagnostics
 from lza_workbench.aws.codecommit import inspect_codecommit_config_repository
 from lza_workbench.aws.codeconnections import inspect_codeconnection
 from lza_workbench.aws.codepipeline import PipelineStateResult, get_pipeline_state
@@ -27,7 +24,10 @@ from lza_workbench.configuration.repository import (
     resolve_s3_configuration_destination,
 )
 from lza_workbench.configuration.status import compile_configuration_warnings
-from lza_workbench.pipeline.failures import collect_pipeline_action_failures
+from lza_workbench.pipeline.failures import (
+    collect_pipeline_action_failures,
+    normalize_root_cause_and_resource,
+)
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
