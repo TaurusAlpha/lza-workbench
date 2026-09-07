@@ -258,10 +258,14 @@ def build_import_workspace_config(
         if account_id:
             repository.bucket = get_canonical_config_s3_bucket(account_id, aws_region)
 
-    configuration = ConfigurationConfig(
-        local_path=rel_config_path,
-        template=template,
-        repository=repository,
+    configuration = (
+        existing_config.configuration.model_copy(update={"local_path": rel_config_path})
+        if existing_config is not None
+        else ConfigurationConfig(
+            local_path=rel_config_path,
+            template=template,
+            repository=repository,
+        )
     )
     resolved_stack_name = (
         installer_stack_name
@@ -408,6 +412,11 @@ def import_workspace_workflow(
         installer_stack_name=installer_stack_name,
         prime_credentials=prime_credentials,
     )
+    if existing and existing.config and config.configuration != existing.config.configuration:
+        raise LzaError(
+            "Import would rewrite existing configuration metadata. "
+            "Re-run with --force to intentionally replace workspace metadata."
+        )
 
     if existing and existing.state:
         state = existing.state
