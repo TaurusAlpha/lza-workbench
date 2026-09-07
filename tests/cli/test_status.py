@@ -15,9 +15,11 @@ from lza_workbench.cli import app
 from lza_workbench.cli.commands.status_config import (
     status_config_command as run_config_status,
 )
+from lza_workbench.cli.commands.status_installer import _render_deployed_details
 from lza_workbench.cli.commands.status_root import (
     status_root_command as run_root_status,
 )
+from lza_workbench.workflows.status_installer import InstallerStatusResult
 from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,
@@ -52,6 +54,52 @@ def test_status_pipeline_command_is_completely_removed() -> None:
     result = runner.invoke(app, ["status", "pipeline"])
     assert result.exit_code != 0
     assert "No such command 'pipeline'" in result.output or "Error" in result.output
+
+
+def test_installer_status_renders_s3_source_without_retained_repository_fields(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    config.installer.source_code.repository_type = "s3"
+    config.installer.source_code.bucket = "configured-installer-source"
+    config.installer.source_code.key = "configured-lza.zip"
+    result = InstallerStatusResult(
+        workspace_dir=tmp_path,
+        config=config,
+        state=None,
+        profile="test-profile",
+        region="us-east-1",
+        aws_identity={"account": "123456789012"},
+        aws_error=None,
+        cfn_status=CfnStackStatusResult(
+            stack_name="AWSAccelerator-InstallerStack",
+            exists=True,
+            deployed_parameters={
+                "RepositorySource": "s3",
+                "RepositoryBucketName": "deployed-installer-source",
+                "RepositoryBucketObject": "lza-v1.15.5.zip",
+                "RepositoryOwner": "awslabs",
+                "RepositoryName": "landing-zone-accelerator-on-aws",
+                "RepositoryBranchName": "release/v1.12.3",
+            },
+        ),
+        deployed_version="v1.15.5",
+        configuration_drift={},
+        state_alignment=None,
+        installer_pipeline_name="AWSAccelerator-Installer",
+    )
+
+    _render_deployed_details(result)
+
+    rendered = capsys.readouterr().out
+    assert "Source Type: s3" in rendered
+    assert "Bucket: deployed-installer-source" in rendered
+    assert "Object Key: lza-v1.15.5.zip" in rendered
+    assert "Repository:" not in rendered
+    assert "Branch:" not in rendered
 
 
 @patch("lza_workbench.workflows.status_root.get_cloudformation_stack_status")

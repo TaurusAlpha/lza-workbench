@@ -67,24 +67,11 @@ def _render_deployed_details(result: InstallerStatusResult) -> None:
     print_section(2, "Deployed Installer Details")
     params_data = result.cfn_status.deployed_parameters
     if not result.cfn_status.exists or not params_data:
-        print_kv(
-            "Source Type", result.config.installer.source_code.repository_type, bold_value=True
-        )
-        print_kv("Repository", result.config.installer.source_code.repository_name or "N/A")
+        _render_installer_source_details(result, {})
         print_info("Deployed details unavailable (stack not deployed or unreadable).", dim=True)
         return
     print_kv("Deployed LZA Version", result.deployed_version, bold_value=True)
-    print_kv(
-        "Source Type",
-        params_data.get("RepositorySource", result.config.installer.source_code.repository_type),
-        bold_value=True,
-    )
-    owner = params_data.get("RepositoryOwner", result.config.installer.source_code.owner or "N/A")
-    repository_name = params_data.get(
-        "RepositoryName", result.config.installer.source_code.repository_name or "N/A"
-    )
-    print_kv("Repository", f"{owner}/{repository_name}")
-    print_kv("Branch", params_data.get("RepositoryBranchName", ""))
+    _render_installer_source_details(result, params_data)
     matches = normalize_lza_version(result.config.lza.version) == normalize_lza_version(
         result.deployed_version
     )
@@ -98,6 +85,41 @@ def _render_deployed_details(result: InstallerStatusResult) -> None:
         ),
         style="green" if matches else "yellow",
     )
+
+
+def _render_installer_source_details(
+    result: InstallerStatusResult, parameters: dict[str, str]
+) -> None:
+    """Render only the source fields that apply to the active installer source."""
+    source_config = result.config.installer.source_code
+    source_type = parameters.get("RepositorySource", source_config.repository_type).lower()
+    print_kv(
+        "Source Type",
+        source_type,
+        bold_value=True,
+    )
+    if source_type == "s3":
+        print_kv("Bucket", parameters.get("RepositoryBucketName", source_config.bucket or "N/A"))
+        print_kv("Object Key", parameters.get("RepositoryBucketObject", source_config.key or "N/A"))
+    elif source_type == "github":
+        owner = parameters.get("RepositoryOwner", source_config.owner or "N/A")
+        repository_name = parameters.get("RepositoryName", source_config.repository_name or "N/A")
+        print_kv("Repository", f"{owner}/{repository_name}")
+        print_kv("Branch", parameters.get("RepositoryBranchName", source_config.branch or "N/A"))
+    elif source_type == "codecommit":
+        print_kv(
+            "Repository",
+            parameters.get("RepositoryName", source_config.repository_name or "N/A"),
+        )
+        print_kv("Branch", parameters.get("RepositoryBranchName", source_config.branch or "N/A"))
+    elif source_type == "codeconnection":
+        connection_arn = (
+            parameters.get("RepositoryCodeConnectionArn")
+            or parameters.get("CodeConnectionArn")
+            or source_config.connection_arn
+            or "N/A"
+        )
+        print_kv("Connection ARN", connection_arn)
 
 
 def _render_drift(result: InstallerStatusResult) -> None:
@@ -201,4 +223,3 @@ __all__ = [
     "render_installer_status",
     "status_installer_command",
 ]
-
