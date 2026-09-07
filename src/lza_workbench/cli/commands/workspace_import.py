@@ -179,5 +179,6 @@ def workspace_import_command(
         repair=repair,
         skip_aws_check=skip_aws_check,
         prime_credentials=prime_credentials,
+        discovery=discovery,
     )
     render_workspace_import_result(result)

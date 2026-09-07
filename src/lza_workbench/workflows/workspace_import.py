@@ -35,9 +35,10 @@ from lza_workbench.installer.deployed_version import resolve_deployed_installer_
 from lza_workbench.installer.schema import LzaInstaller
 from lza_workbench.installer.source import validate_github_repository_access
 from lza_workbench.installer.sync import (
-    sync_installer_config,
-    sync_installer_state,
-    sync_installer_template,
+    apply_installer_config_sync,
+    apply_installer_state_sync,
+    prepare_installer_template_sync,
+    write_installer_template,
 )
 from lza_workbench.workspace.config import (
     WORKSPACE_CONFIG_FILE,
@@ -334,14 +335,16 @@ def import_workspace_workflow(
     repair: bool = False,
     skip_aws_check: bool = False,
     prime_credentials: bool = False,
+    discovery: ImportWorkspaceDiscovery | None = None,
 ) -> WorkspaceImportResult:
     """Execute the pure workspace import workflow and return structured result."""
-    discovery = discover_import_workspace(
-        workspace_dir=workspace_dir,
-        config_dir=config_dir,
-        force=force,
-        repair=repair,
-    )
+    if discovery is None:
+        discovery = discover_import_workspace(
+            workspace_dir=workspace_dir,
+            config_dir=config_dir,
+            force=force,
+            repair=repair,
+        )
     resolved_workspace_dir = discovery.workspace_dir
     resolved_config_dir = discovery.config_dir
     existing = discovery.existing
@@ -419,7 +422,7 @@ def import_workspace_workflow(
         )
 
     if existing and existing.state:
-        state = existing.state
+        state = existing.state.model_copy(deep=True)
     else:
         state = WorkspaceState.from_config(config)
 
@@ -447,6 +450,8 @@ def import_workspace_workflow(
     installer_discovered = False
     discovered_stack_status: str | None = None
     recommendations: list[str] = []
+    installer_template_path: Path | None = None
+    installer_template_body: str | None = None
 
     if not skip_aws_check:
         try:
@@ -489,20 +494,19 @@ def import_workspace_workflow(
                 )
                 if not dry_run:
                     if deployed_template is not None:
-                        sync_installer_template(
+                        installer_template_path = prepare_installer_template_sync(
                             workspace_dir=resolved_workspace_dir,
                             config=config,
                             state=state,
                             template_body=deployed_template,
                         )
-                    config = sync_installer_config(
-                        workspace_dir=resolved_workspace_dir,
+                        installer_template_body = deployed_template
+                    config = apply_installer_config_sync(
                         config=config,
                         cfn_status=cfn_status,
                         deployed_version=deployed_version,
                     )
-                    state = sync_installer_state(
-                        workspace_dir=resolved_workspace_dir,
+                    state = apply_installer_state_sync(
                         state=state,
                         cfn_status=cfn_status,
                         deployed_version=deployed_version,
@@ -569,6 +573,15 @@ def import_workspace_workflow(
             )
 
     paths = _metadata_paths(resolved_workspace_dir, existing, config, state)
+    if (
+        installer_template_path is not None
+        and installer_template_body is not None
+        and (
+            not installer_template_path.is_file()
+            or installer_template_path.read_text(encoding="utf-8") != installer_template_body
+        )
+    ):
+        paths.append(installer_template_path)
     is_repaired = bool(existing and existing.is_repaired)
 
     if dry_run:
@@ -608,6 +621,11 @@ def import_workspace_workflow(
         )
 
     (resolved_workspace_dir / ".lza").mkdir(parents=True, exist_ok=True)
+    if installer_template_path in paths and installer_template_body is not None:
+        write_installer_template(
+            template_path=installer_template_path,
+            template_body=installer_template_body,
+        )
     if resolved_workspace_dir / "lza-workspace.yaml" in paths:
         write_workspace_config(resolved_workspace_dir, config)
     if resolved_workspace_dir / ".lza" / "state.json" in paths:
