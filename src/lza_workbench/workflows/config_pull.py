@@ -77,10 +77,6 @@ class ConfigPullResult:
     restored_changes: bool = False
 
 
-# Alias for backwards compatibility / download command
-ConfigDownloadResult = ConfigPullResult
-
-
 def pull_configuration_workflow(
     *,
     target_dir: Path | None = None,

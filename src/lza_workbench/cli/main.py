@@ -14,9 +14,6 @@ from lza_workbench.cli import params
 from lza_workbench.cli.commands.config_deploy import (
     config_deploy_command as run_cli_deploy_config,
 )
-from lza_workbench.cli.commands.config_download import (
-    config_download_command as run_cli_download_config,
-)
 from lza_workbench.cli.commands.config_init import (
     config_init_command as run_cli_init_config,
 )
@@ -25,9 +22,6 @@ from lza_workbench.cli.commands.config_pull import (
 )
 from lza_workbench.cli.commands.config_push import (
     config_push_command as run_cli_push_config,
-)
-from lza_workbench.cli.commands.config_upload import (
-    config_upload_command as run_cli_upload_config,
 )
 from lza_workbench.cli.commands.installer_deploy import (
     installer_deploy_command as run_cli_installer_deploy,
@@ -322,20 +316,6 @@ def config_init_command(
 
 
 @config_app.command("download")
-def config_download_command(
-    dry_run: params.DryRun = False,
-    force: params.Force = False,
-    extract: params.Extract = True,
-) -> None:
-    """Download LZA configuration from configured repository source."""
-    run_cli_download_config(
-        dry_run=dry_run,
-        force=force,
-        extract=extract,
-        interactive=_is_interactive(),
-    )
-
-
 @config_app.command("pull")
 def config_pull_command(
     dry_run: params.DryRun = False,
@@ -351,6 +331,7 @@ def config_pull_command(
     )
 
 
+@config_app.command("upload")
 @config_app.command("push")
 def config_push_command(
     dry_run: params.DryRun = False,
@@ -358,19 +339,6 @@ def config_push_command(
 ) -> None:
     """Synchronize local LZA configuration to configured remote repository."""
     run_cli_push_config(
-        dry_run=dry_run,
-        force=force,
-        interactive=_is_interactive(),
-    )
-
-
-@config_app.command("upload")
-def config_upload_command(
-    dry_run: params.DryRun = False,
-    force: params.ConfigPushForce = False,
-) -> None:
-    """Upload LZA configuration to configured repository destination (alias for push)."""
-    run_cli_upload_config(
         dry_run=dry_run,
         force=force,
         interactive=_is_interactive(),

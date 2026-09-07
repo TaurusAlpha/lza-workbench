@@ -71,10 +71,6 @@ class ConfigPushResult:
     files_count: int | None = None
 
 
-# Alias for backwards compatibility
-ConfigUploadResult = ConfigPushResult
-
-
 def push_configuration_workflow(
     *,
     target_dir: Path | None = None,
