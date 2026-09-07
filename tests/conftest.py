@@ -26,6 +26,29 @@ from lza_workbench.workspace.schema import (
 from lza_workbench.workspace.state import write_workspace_state
 
 
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Classify tests by their exercised behavior for focused local runs."""
+    for item in items:
+        path = item.path
+        parts = path.parts
+        name = item.name
+
+        if "workflows" in parts:
+            item.add_marker(pytest.mark.workflow)
+        elif "cli" in parts:
+            item.add_marker(pytest.mark.cli)
+        elif path.name == "test_package.py":
+            item.add_marker(pytest.mark.arch)
+        else:
+            item.add_marker(pytest.mark.unit)
+
+        if any(term in name for term in ("git", "codecommit", "codeconnection")):
+            item.add_marker(pytest.mark.git)
+
+        if path.name == "test_client_factory.py":
+            item.add_marker(pytest.mark.arch)
+
+
 @pytest.fixture
 def cli_runner() -> CliRunner:
     """Fixture providing an isolated Typer CLI runner."""

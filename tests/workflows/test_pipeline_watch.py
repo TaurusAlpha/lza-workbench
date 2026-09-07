@@ -97,7 +97,7 @@ def test_watch_pipeline_ignores_execution_for_a_different_recorded_pipeline(
         ) as mock_latest,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
-        result = watch_pipeline_workflow(target_dir=configured_workspace)
+        result = watch_pipeline_workflow(target_dir=configured_workspace, sleeper=lambda _: None)
 
     assert result.execution_id == "exec-current-pipeline"
     mock_latest.assert_called_once_with(
@@ -285,6 +285,7 @@ def test_watch_pipeline_stops_when_execution_is_not_found(configured_workspace: 
             watch_pipeline_workflow(
                 target_dir=configured_workspace,
                 execution_id="missing-execution",
+                sleeper=lambda _: None,
             )
 
     mock_get_state.assert_not_called()

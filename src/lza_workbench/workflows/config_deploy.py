@@ -65,7 +65,7 @@ def deploy_configuration_workflow(
     poll_interval_seconds: int | None = None,
     initial_delay_seconds: float = 3.0,
     timeout_seconds: int | None = 7200,
-    sleeper: Callable[[float], None] = time.sleep,
+    sleeper: Callable[[float], None] | None = None,
     time_provider: Callable[[], float] = time.time,
     on_watch_update: Callable[[PipelineWatchUpdate], None] | None = None,
 ) -> ConfigDeployResult:

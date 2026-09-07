@@ -112,7 +112,7 @@ def watch_pipeline_workflow(
     poll_interval_seconds: int | None = None,
     initial_delay_seconds: float = 3.0,
     timeout_seconds: int | None = 7200,
-    sleeper: Callable[[float], None] = time.sleep,
+    sleeper: Callable[[float], None] | None = None,
     time_provider: Callable[[], float] = time.time,
     on_update: Callable[[PipelineWatchUpdate], None] | None = None,
     workspace_context: WorkspaceContext | None = None,
@@ -123,6 +123,8 @@ def watch_pipeline_workflow(
         raise LzaError("Pipeline poll interval must be greater than zero seconds.")
     if initial_delay_seconds < 0:
         raise LzaError("Pipeline initial delay must be greater than or equal to zero seconds.")
+
+    resolved_sleeper = sleeper or time.sleep
 
     ctx = workspace_context or load_workspace_context(
         target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
@@ -176,7 +178,7 @@ def watch_pipeline_workflow(
         )
 
     if initial_delay_seconds > 0:
-        sleeper(initial_delay_seconds)
+        resolved_sleeper(initial_delay_seconds)
 
     interval = poll_interval_seconds
     if interval is None:
@@ -209,7 +211,7 @@ def watch_pipeline_workflow(
         if exec_res.status == "NOT_FOUND":
             not_found_attempts += 1
             if not_found_attempts < max_not_found_attempts:
-                sleeper(interval)
+                resolved_sleeper(interval)
                 continue
             raise LzaError(
                 f"Pipeline execution '{resolved_execution_id}' was not found for "
@@ -291,7 +293,7 @@ def watch_pipeline_workflow(
                 error_message = "\n".join(action_errs)
             break
 
-        sleeper(interval)
+        resolved_sleeper(interval)
 
     total_elapsed: float | None = None
     if (

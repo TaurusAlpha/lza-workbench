@@ -33,6 +33,13 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+markers = [
+  "unit: deterministic component behavior with mocked external boundaries",
+  "workflow: local workspace, state, archive, and service-orchestration behavior",
+  "cli: command parsing, prompts, rendering, and exit-status behavior",
+  "git: tests that execute local Git commands against temporary repositories",
+  "arch: static architectural and dependency-boundary invariants",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lza_workbench"]

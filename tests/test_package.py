@@ -9,10 +9,6 @@ PROJECT_ROOT = Path(__file__).parent.parent
 SOURCE_ROOT = PROJECT_ROOT / "src" / "lza_workbench"
 
 
-def test_smoke() -> None:
-    assert True
-
-
 def test_cli_main_returns_success() -> None:
     from lza_workbench.cli import main
 
@@ -148,4 +144,3 @@ def test_cli_commands_do_not_import_aws_or_installer_internals() -> None:
     assert (
         not violations
     ), f"CLI command handlers import directly from AWS or installer internals: {violations}"
-

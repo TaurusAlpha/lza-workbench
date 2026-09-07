@@ -28,6 +28,25 @@ from lza_workbench.workspace.schema import (
 runner = CliRunner()
 
 
+@pytest.fixture(autouse=True)
+def isolate_status_command_layers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep root-command rendering tests out of the detailed status workflow."""
+    unavailable_context = AwsExecutionContext(
+        region="us-east-1",
+        factory=MagicMock(),
+        identity=None,
+        error="AWS access is not configured for this test",
+    )
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.get_config_status_workflow",
+        MagicMock(),
+    )
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_config.resolve_aws_execution_context",
+        lambda **_: unavailable_context,
+    )
+
+
 def test_status_pipeline_command_is_completely_removed() -> None:
     """Verify lza status pipeline is not registered and returns a non-zero exit code."""
     result = runner.invoke(app, ["status", "pipeline"])
@@ -610,5 +629,4 @@ def test_cli_status_aws_unavailable_no_state(
     assert "AWS Access Notice: No credentials found" in out
     assert "Workspace: AWS Unavailable - No Recorded State" in out
     assert "Workspace: Healthy" not in out
-
 

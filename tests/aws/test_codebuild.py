@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock
 
 from lza_workbench.aws.codebuild import (
@@ -11,23 +10,6 @@ from lza_workbench.aws.codebuild import (
     get_cloudwatch_log_events,
     get_codebuild_build_info,
 )
-
-
-def test_extract_log_error_diagnostics_from_pipeline_fail_log() -> None:
-    import pytest
-
-    log_path = Path(__file__).parents[2] / "pipeline-fail.log"
-    if not log_path.exists():
-        pytest.skip("pipeline-fail.log not present in workspace")
-    lines = log_path.read_text(encoding="utf-8").splitlines()
-
-    extracted = extract_log_error_diagnostics(lines)
-    assert len(extracted) > 0
-
-    combined = " ".join(extracted)
-    assert "ValidationError" in combined
-    assert "cannot be deleted while TerminationProtection is enabled" in combined
-    assert "AWSAccelerator-PrepareStack-123456789012-eu-west-1" in combined
 
 
 def test_extract_log_error_diagnostics_synthetic_lines() -> None:
