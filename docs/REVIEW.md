@@ -30,6 +30,8 @@ Evaluate the code for:
 - Prefer the simplest solution that satisfies the requirements.
 - Prioritize readability over brevity.
 - Identify unnecessary abstractions, indirection, or overengineering.
+- Flag test shims, mock callbacks (e.g. injected sleeper/printer lambdas), or test-only parameters introduced into production code.
+- Ensure production code is not warped or made needlessly complex to satisfy automated tests.
 - Do not recommend redesign solely based on personal preference.
 
 ### Maintainability
@@ -53,6 +55,7 @@ Evaluate the code for:
 - Keep AWS authentication external.
 - Assume customer projects are created outside this repository.
 - Do not recommend speculative, placeholder, or future functionality.
+- Do not add speculative unit tests alongside feature implementation unless explicitly requested.
 - Do not introduce new dependencies unless clearly justified.
 
 ## Severity Guidelines

@@ -21,7 +21,7 @@ Clone the repository, install the development dependencies, and run the quality 
 ```bash
 uv sync --group dev
 uv run ruff check .
-uv run pytest
+uv run pytest tests/test_package.py
 ```
 
 Create a customer workspace metadata structure:
@@ -196,7 +196,8 @@ Run checks:
 
 ```bash
 uv run ruff check .
-uv run pytest
+uv run pytest tests/test_package.py   # Fast architectural boundary checks (<1s)
+# uv run pytest                       # Full regression test suite (optional/on-demand)
 ```
 
 ## Local CLI Installation

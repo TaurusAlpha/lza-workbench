@@ -22,18 +22,23 @@
 Before finishing:
 
 - Run `uv run ruff check . --fix`.
-- Do not run the full test suite by default.
-- Run targeted tests only when they materially validate the requested change.
-- Run the full `uv run pytest` suite only when explicitly requested.
+- Run `uv run pytest tests/test_package.py` to enforce static architectural import boundaries.
+- Validate implemented CLI behavior by exercising the real CLI command against a temporary workspace or directory.
+- Verify real command outputs, exit codes, and file effects rather than relying on mocks or test suites.
+- Do not run the full `pytest` suite unless explicitly requested.
 
-## Testing
+## Testing Policy
 
-- Do not add or update tests automatically for every implementation change.
-- Add or update tests when they protect important stable behavior, reproduce a defect, or cover high-risk logic.
-- Prefer behavior-focused tests over tests coupled to implementation details.
-- Do not change production code solely to satisfy tests when the existing test encodes obsolete behavior.
-- When behavior intentionally changes, update or remove obsolete tests rather than preserving them for compatibility.
-- Prefer focused targeted tests over broad integration coverage during normal feature development.
+Automated tests are secondary to real CLI behavior and must not drive production-code design.
+
+### Core Rules
+
+- Do not create tests automatically when implementing features unless explicitly requested.
+- Never alter production function signatures (e.g. injecting sleep/print callbacks or mock hooks), add production branches, or introduce indirection solely to make code testable.
+- Requirements, command semantics, and real runtime behavior are the source of truth. Tests are supporting evidence only.
+- When an intentional requirement or behavior change causes existing tests to fail, update or delete the obsolete tests immediately. Do not preserve obsolete behavior or write production shims to keep stale tests passing.
+- Static architecture tests (`tests/test_package.py`) and pure schema/logic validations are always valid and run fast (<1s).
+- When tests are explicitly requested, focus on pure domain logic, deterministic transformations, or defect reproduction. Avoid mocking external systems (`boto3`, AWS APIs, subprocess Git calls).
 
 ## Responses
 

@@ -343,6 +343,8 @@ Future design decision:
 
 ## Testing & Quality Assurance
 
+- [ ] Audit and streamline the existing test suite: profile test execution (`pytest --durations=20`), eliminate slow Git subprocess fixture churn, purge brittle mock-heavy AWS tests, and target <5s total runtime.
+- [ ] Remove test-only parameters and shims from production code (e.g. remove `sleeper` parameters from pipeline workflows).
 - [ ] Add unified End-to-End Workspace Lifecycle integration test (`tests/cli/test_lifecycle_e2e.py`) covering sequential execution: `lza init` -> `lza config init` -> `lza bootstrap` -> `lza installer init` -> `lza installer plan` -> `lza installer deploy` -> `lza config push` -> `lza status`.
 - [ ] Add error resilience tests for corrupted/partial `.lza/state.json` and malformed `lza-workspace.yaml` files to verify clean recovery guidance.
 - [ ] Add error reporting tests for Git merge conflicts and remote authentication failures during `lza config pull`.

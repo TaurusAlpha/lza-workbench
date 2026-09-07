@@ -154,6 +154,14 @@ Documentation therefore has intentionally separate responsibilities:
 
 Detailed feature specifications should not be duplicated in `PROJECT.md`.
 
+### Testing and Verification Philosophy
+
+- Real CLI command execution and declarative workspace outcomes are the primary sources of truth for behavior.
+- Automated tests are supporting regression tools, not feature design drivers.
+- Production code must never be compromised or complicated (e.g. via mock hooks, test callbacks, or artificial indirection) solely to satisfy tests.
+- Static architectural tests (`tests/test_package.py`) enforce layer boundaries and import rules without mocking.
+- Heavy unit testing of external integrations (AWS, Git subprocesses) is discouraged in favor of focused contract checks and manual/smoke CLI execution.
+
 ## Architectural Change Rule
 
 Update this document only when a change affects a durable project-wide assumption or architectural boundary.
