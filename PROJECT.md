@@ -70,6 +70,7 @@ Runtime state must not duplicate declarative configuration already stored in `lz
 ### AWS Client Management
 
 AWS SDK initialization is centralized.
+AWS authentication is external to LZA Workbench. Workspaces must not persist AWS credentials or secrets; profiles, assumed roles, environment credentials, and workload identity are supplied by the execution environment.
 
 - `AwsClientFactory` is the single mechanism for creating boto3 sessions and service clients.
 - Each AWS-backed workflow invocation resolves and reuses one request-scoped AWS execution context.
