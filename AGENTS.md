@@ -19,9 +19,21 @@
 
 ## Validation
 
-Before finishing
-Run: `uv run ruff check . --fix`.
-Run only if requested: `uv run pytest`.
+Before finishing:
+
+- Run `uv run ruff check . --fix`.
+- Do not run the full test suite by default.
+- Run targeted tests only when they materially validate the requested change.
+- Run the full `uv run pytest` suite only when explicitly requested.
+
+## Testing
+
+- Do not add or update tests automatically for every implementation change.
+- Add or update tests when they protect important stable behavior, reproduce a defect, or cover high-risk logic.
+- Prefer behavior-focused tests over tests coupled to implementation details.
+- Do not change production code solely to satisfy tests when the existing test encodes obsolete behavior.
+- When behavior intentionally changes, update or remove obsolete tests rather than preserving them for compatibility.
+- Prefer focused targeted tests over broad integration coverage during normal feature development.
 
 ## Responses
 
