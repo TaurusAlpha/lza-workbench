@@ -12,6 +12,8 @@ KNOWN_INSTALLER_PARAMETER_NAMES = frozenset(
         "RepositoryOwner",
         "RepositoryName",
         "RepositoryBranchName",
+        "RepositoryBucketName",
+        "RepositoryBucketObject",
         "EnableApprovalStage",
         "ApprovalStageNotifyEmailList",
         "ManagementAccountEmail",
@@ -34,6 +36,8 @@ INSTALLER_PARAMETER_LABELS = {
     "RepositoryOwner": "Repository owner",
     "RepositoryName": "Repository name",
     "RepositoryBranchName": "Branch name",
+    "RepositoryBucketName": "Source S3 bucket",
+    "RepositoryBucketObject": "Source S3 object key",
     "EnableApprovalStage": "Enable approval stage",
     "ApprovalStageNotifyEmailList": "Approval notification emails",
     "ManagementAccountEmail": "Management account email",
@@ -109,6 +113,9 @@ def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: s
     if parameter_name in {"RepositoryName", "RepositoryBranchName"}:
         return source_type in {"github", "codecommit", "codeconnection"}
 
+    if parameter_name in {"RepositoryBucketName", "RepositoryBucketObject"}:
+        return source_type == "s3"
+
     if parameter_name == "ApprovalStageNotifyEmailList":
         return bool(approval_enabled)
 
@@ -139,6 +146,10 @@ def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, valu
         source_code.repository_name = value
     elif parameter_name == "RepositoryBranchName":
         source_code.branch = value if value else version_to_branch(config.lza.version)
+    elif parameter_name == "RepositoryBucketName":
+        source_code.bucket = value or None
+    elif parameter_name == "RepositoryBucketObject":
+        source_code.key = value or None
     elif parameter_name == "EnableApprovalStage":
         options.enable_approval_stage = value == "Yes"
     elif parameter_name == "ApprovalStageNotifyEmailList":

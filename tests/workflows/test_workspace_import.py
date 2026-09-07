@@ -291,6 +291,8 @@ def test_import_workspace_live_aws_discovery_s3_repository(tmp_path: Path) -> No
     assert result.config.lza.version == "v1.15.5"
     assert result.state.installer_template_version == "v1.15.5"
     assert result.config.installer.source_code.repository_type == "s3"
+    assert result.config.installer.source_code.bucket == "s3-aws-accelerator-source-123456789012"
+    assert result.config.installer.source_code.key == "lza-v1.15.5.zip"
     assert result.config.configuration.repository.type == "s3"
     assert (
         result.config.configuration.repository.bucket

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import (
     apply_installer_parameter,
     build_installer_cfn_parameters,
@@ -50,6 +51,24 @@ def test_collecting_repository_branch_persists_the_resolved_default() -> None:
     assert config.installer.source_code.branch == "release/v1.16.0"
 
 
+def test_collecting_s3_source_parameters_populates_plan_configuration() -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="S3 Customer", slug="s3-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    config.installer.options.management_account_email = "mgmt@example.com"
+    config.installer.options.log_archive_account_email = "log@example.com"
+    config.installer.options.audit_account_email = "audit@example.com"
+
+    apply_installer_parameter(config, "RepositorySource", "s3")
+    apply_installer_parameter(config, "RepositoryBucketName", "installer-source")
+    apply_installer_parameter(config, "RepositoryBucketObject", "lza-v1.15.5.zip")
+
+    assert config.installer.source_code.bucket == "installer-source"
+    assert config.installer.source_code.key == "lza-v1.15.5.zip"
+    assert validate_installer_configuration(config).is_complete is True
+
+
 def test_is_installer_parameter_applicable_github_and_s3() -> None:
     """GitHub source and S3 config repo filter out inapplicable parameters."""
     config = WorkspaceConfig(
@@ -64,6 +83,8 @@ def test_is_installer_parameter_applicable_github_and_s3() -> None:
     assert is_installer_parameter_applicable(config, "RepositoryOwner") is True
     assert is_installer_parameter_applicable(config, "RepositoryName") is True
     assert is_installer_parameter_applicable(config, "RepositoryBranchName") is True
+    assert is_installer_parameter_applicable(config, "RepositoryBucketName") is False
+    assert is_installer_parameter_applicable(config, "RepositoryBucketObject") is False
     assert is_installer_parameter_applicable(config, "EnableApprovalStage") is True
     assert is_installer_parameter_applicable(config, "ApprovalStageNotifyEmailList") is False
     assert is_installer_parameter_applicable(config, "ManagementAccountEmail") is True
@@ -94,4 +115,3 @@ def test_is_installer_parameter_applicable_codecommit_and_codeconnection() -> No
     assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryOwner") is True
     assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryName") is True
     assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryBranchName") is True
-
