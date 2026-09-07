@@ -6,6 +6,13 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### Testing Strategy Overhaul & Production Shim Removal (v0.30.1)
+- Removed production test shims (`sleeper` and `time_provider` parameters) from `pipeline_watch_workflow` and `deploy_configuration_workflow`, restoring clean production signatures and direct `time.sleep`/`time.time` calls.
+- Deleted `tests/aws/` suite (8 files) and 11 mock-heavy `tests/cli/` test files that asserted internal `unittest.mock` dictionaries against external AWS services.
+- Migrated the critical `boto3` centralization invariant check into `tests/test_package.py` as a fast AST architectural test.
+- Preserved real CLI and domain tests (`test_output.py`, `test_workspace_init.py`, `test_workspace_import.py`, `test_config_init.py`, `test_package.py`, schemas, and templates), cutting test suite execution to ~6 seconds (279 passed, 0 failures).
+- Updated `AGENTS.md`, `PROJECT.md`, `README.md`, `TODO.md`, and `docs/REVIEW.md` to codify the CLI-first validation policy and zero test pollution rules.
+
 ### S3 Configuration Synchronization Safeguards (v0.30.0)
 - Included customer AWS Backup configuration by default and added root `.gitignore` packaging rules, preserving explicit workspace YAML exclusions. `.prettierignore` does not affect archive contents.
 - Corrected archive diffs to compare files only, ignoring explicit ZIP directory records.

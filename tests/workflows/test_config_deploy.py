@@ -102,13 +102,13 @@ def test_deploy_configuration_full(configured_workspace: Path) -> None:
             "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
             side_effect=get_client_side_effect,
         ),
+        patch("time.sleep"),
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         result = deploy_configuration_workflow(
             target_dir=configured_workspace,
             dry_run=False,
             watch=True,
-            sleeper=lambda _: None,
         )
 
     assert result.dry_run is False

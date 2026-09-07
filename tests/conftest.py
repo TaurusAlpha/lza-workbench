@@ -45,9 +45,6 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         if any(term in name for term in ("git", "codecommit", "codeconnection")):
             item.add_marker(pytest.mark.git)
 
-        if path.name == "test_client_factory.py":
-            item.add_marker(pytest.mark.arch)
-
 
 @pytest.fixture
 def cli_runner() -> CliRunner:

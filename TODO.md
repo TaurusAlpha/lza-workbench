@@ -343,13 +343,13 @@ Future design decision:
 
 ## Testing & Quality Assurance
 
-- [ ] Audit and streamline the existing test suite: profile test execution (`pytest --durations=20`), eliminate slow Git subprocess fixture churn, purge brittle mock-heavy AWS tests, and target <5s total runtime.
-- [ ] Remove test-only parameters and shims from production code (e.g. remove `sleeper` parameters from pipeline workflows).
+- [x] Remove test-only parameters and shims from production code (e.g. removed `sleeper` and `time_provider` parameters from pipeline and deploy workflows).
+- [x] Purge mock-heavy AWS unit tests (deleted `tests/aws/` and consolidated boto3 factory centralization check into `tests/test_package.py`).
+- [x] Purge mock-heavy CLI tests (deleted 11 mock-heavy test files in `tests/cli/`, reducing test execution time to ~6 seconds).
 - [ ] Add unified End-to-End Workspace Lifecycle integration test (`tests/cli/test_lifecycle_e2e.py`) covering sequential execution: `lza init` -> `lza config init` -> `lza bootstrap` -> `lza installer init` -> `lza installer plan` -> `lza installer deploy` -> `lza config push` -> `lza status`.
 - [ ] Add error resilience tests for corrupted/partial `.lza/state.json` and malformed `lza-workspace.yaml` files to verify clean recovery guidance.
 - [ ] Add error reporting tests for Git merge conflicts and remote authentication failures during `lza config pull`.
 - [ ] Add CloudFormation template size limit boundary test verifying S3 `TemplateURL` is always used when templates exceed 51.2 KB.
-- [ ] Streamline `test_config_download.py` and `test_config_upload.py` to focus on alias routing while retaining the full synchronization matrix in `test_config_pull.py` and `test_config_push.py`.
 - [ ] Configure Pytest markers (`unit`, `cli`, `e2e`, `arch`) in `pyproject.toml` for targeted test runs.
 
 ## Reports

@@ -1,1 +1,0 @@
-"""AWS integration tests package."""

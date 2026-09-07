@@ -112,8 +112,6 @@ def watch_pipeline_workflow(
     poll_interval_seconds: int | None = None,
     initial_delay_seconds: float = 3.0,
     timeout_seconds: int | None = 7200,
-    sleeper: Callable[[float], None] | None = None,
-    time_provider: Callable[[], float] = time.time,
     on_update: Callable[[PipelineWatchUpdate], None] | None = None,
     workspace_context: WorkspaceContext | None = None,
     aws_context: AwsExecutionContext | None = None,
@@ -123,8 +121,6 @@ def watch_pipeline_workflow(
         raise LzaError("Pipeline poll interval must be greater than zero seconds.")
     if initial_delay_seconds < 0:
         raise LzaError("Pipeline initial delay must be greater than or equal to zero seconds.")
-
-    resolved_sleeper = sleeper or time.sleep
 
     ctx = workspace_context or load_workspace_context(
         target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
@@ -178,13 +174,13 @@ def watch_pipeline_workflow(
         )
 
     if initial_delay_seconds > 0:
-        resolved_sleeper(initial_delay_seconds)
+        time.sleep(initial_delay_seconds)
 
     interval = poll_interval_seconds
     if interval is None:
         interval = config.pipelines.configuration.poll_interval_seconds or 15
 
-    start_time = time_provider()
+    start_time = time.time()
     last_status = "InProgress"
     stage_summaries: list[PipelineStageSummary] = []
     failed_action_summaries: list[PipelineActionSummary] = []
@@ -195,7 +191,7 @@ def watch_pipeline_workflow(
     max_not_found_attempts = 3
 
     while True:
-        elapsed = time_provider() - start_time
+        elapsed = time.time() - start_time
         if timeout_seconds and elapsed > timeout_seconds:
             last_status = "TimedOut"
             error_message = f"Watch timed out after {int(elapsed)} seconds."
@@ -211,7 +207,7 @@ def watch_pipeline_workflow(
         if exec_res.status == "NOT_FOUND":
             not_found_attempts += 1
             if not_found_attempts < max_not_found_attempts:
-                resolved_sleeper(interval)
+                time.sleep(interval)
                 continue
             raise LzaError(
                 f"Pipeline execution '{resolved_execution_id}' was not found for "
@@ -293,7 +289,7 @@ def watch_pipeline_workflow(
                 error_message = "\n".join(action_errs)
             break
 
-        resolved_sleeper(interval)
+        time.sleep(interval)
 
     total_elapsed: float | None = None
     if (
@@ -303,7 +299,7 @@ def watch_pipeline_workflow(
     ):
         total_elapsed = last_exec_res.duration_seconds
     else:
-        live_dur = time_provider() - start_time
+        live_dur = time.time() - start_time
         if live_dur >= 1.0:
             total_elapsed = live_dur
 

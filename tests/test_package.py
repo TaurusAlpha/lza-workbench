@@ -144,3 +144,27 @@ def test_cli_commands_do_not_import_aws_or_installer_internals() -> None:
     assert (
         not violations
     ), f"CLI command handlers import directly from AWS or installer internals: {violations}"
+
+
+def test_no_direct_boto3_session_or_client_outside_factory() -> None:
+    """Verify no file in src/lza_workbench/aws/ except client_factory calls boto3.Session/client."""
+    aws_dir = SOURCE_ROOT / "aws"
+    forbidden_calls = []
+
+    for path in aws_dir.glob("*.py"):
+        if path.name == "client_factory.py":
+            continue
+
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+                    if node.func.value.id == "boto3" and node.func.attr in ("Session", "client"):
+                        forbidden_calls.append((path.name, node.lineno, f"boto3.{node.func.attr}"))
+                if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+                    if node.func.value.id == "session" and node.func.attr == "client":
+                        forbidden_calls.append((path.name, node.lineno, "session.client"))
+
+    assert (
+        not forbidden_calls
+    ), f"Direct boto3 session/client calls outside client_factory: {forbidden_calls}"
