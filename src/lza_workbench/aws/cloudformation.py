@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -246,8 +247,14 @@ def get_cloudformation_stack_template(
         return None
 
     try:
-        template_body = cfn.get_template(StackName=clean_stack_name).get("TemplateBody")
-        return template_body if isinstance(template_body, str) else None
+        template_body = cfn.get_template(
+            StackName=clean_stack_name, TemplateStage="Original"
+        ).get("TemplateBody")
+        if isinstance(template_body, str):
+            return template_body
+        if isinstance(template_body, Mapping):
+            return json.dumps(template_body, indent=2) + "\n"
+        return None
     except (ClientError, BotoCoreError):
         return None
 

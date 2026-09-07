@@ -50,9 +50,7 @@ def import_installer_workflow(
     dry_run: bool = False,
 ) -> InstallerImportResult:
     """Query live CloudFormation installer stack and synchronize local workspace configuration."""
-    ctx = load_workspace_context(
-        target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
-    )
+    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
     resolved_stack_name = (
@@ -71,12 +69,8 @@ def import_installer_workflow(
         prime_credentials=config.aws.prime_credentials,
         require_identity=True,
     )
-    cfn_client = (
-        aws_context.factory.get_client("cloudformation") if aws_context.identity else None
-    )
-    cfn_status = get_cloudformation_stack_status(
-        client=cfn_client, stack_name=resolved_stack_name
-    )
+    cfn_client = aws_context.factory.get_client("cloudformation") if aws_context.identity else None
+    cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=resolved_stack_name)
 
     if not cfn_status.exists:
         raise LzaError(
@@ -103,9 +97,7 @@ def import_installer_workflow(
     )
 
     prefix = config.lza.accelerator_prefix or "AWSAccelerator"
-    installer_pipeline_name = (
-        config.pipelines.installer.name or f"{prefix}-Installer"
-    )
+    installer_pipeline_name = config.pipelines.installer.name or f"{prefix}-Installer"
     codepipeline_client = (
         aws_context.factory.get_client("codepipeline") if aws_context.identity else None
     )

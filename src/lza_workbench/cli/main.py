@@ -142,7 +142,7 @@ def installer_import_command(
     installer_stack_name: params.InstallerStackName = None,
     dry_run: params.DryRun = False,
 ) -> None:
-    """Import deployed CloudFormation installer parameters (alias for `lza import installer`)."""
+    """Import deployed CloudFormation installer parameters and template data."""
     run_cli_installer_import(
         installer_stack_name=installer_stack_name,
         dry_run=dry_run,
