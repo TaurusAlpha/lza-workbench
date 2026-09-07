@@ -7,8 +7,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import lza_workbench.workflows.status_root as status_root_mod
 from lza_workbench.aws.cloudformation import CfnStackStatusResult
 from lza_workbench.aws.codepipeline import PipelineStateResult
+from lza_workbench.cli.commands.status_root import render_root_status
+from lza_workbench.configuration.git import GitRemoteSyncStatus
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.sync import (
     sync_installer_config,
@@ -24,7 +27,11 @@ from lza_workbench.workflows.status_installer import (
     prepare_installer_status,
 )
 from lza_workbench.workflows.status_root import (
+    ConfigurationRepoSummary,
+    InstallerStackSummary,
+    PipelineSummary,
     RootStatusResult,
+    _derive_overall_health,
     get_root_status_workflow,
 )
 from lza_workbench.workspace.config import load_workspace_config
@@ -39,8 +46,16 @@ from lza_workbench.workspace.state import load_workspace_state
 
 def test_get_root_status_workflow(configured_workspace: Path) -> None:
     with (
+        patch(
+            "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+            wraps=status_root_mod.resolve_aws_execution_context,
+        ) as mock_resolve_aws,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch(
+            "lza_workbench.workflows.status_root.get_pipeline_state",
+            wraps=status_root_mod.get_pipeline_state,
+        ) as mock_pipe_state,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -49,6 +64,30 @@ def test_get_root_status_workflow(configured_workspace: Path) -> None:
         assert result.customer_name == "Acme Corp"
         assert result.profile == "acme-root"
         assert result.region == "eu-west-1"
+
+        # Verify exactly one AWS context resolution occurs for root status
+        mock_resolve_aws.assert_called_once()
+
+        # Verify exactly one pair of pipeline state observations occurs
+        assert mock_pipe_state.call_count == 2
+        pipe_names = [call.kwargs.get("pipeline_name") for call in mock_pipe_state.call_args_list]
+        assert pipe_names == ["AWSAccelerator-Installer", "AWSAccelerator-Pipeline"]
+
+        # Verify status_root does not import or expose detailed config workflow
+        assert not hasattr(status_root_mod, "get_config_status_workflow")
+        assert not hasattr(status_root_mod, "ConfigurationStatusResult")
+        assert not hasattr(result, "config_status")
+        for field in (
+            "stack_name",
+            "stack_status",
+            "stack_exists",
+            "repository_type",
+            "config_dir",
+            "config_dir_exists",
+            "installer_pipeline_name",
+            "config_pipeline_name",
+        ):
+            assert not hasattr(result, field)
 
 
 def test_get_config_status_workflow(configured_workspace: Path) -> None:
@@ -420,6 +459,197 @@ def test_get_root_status_workflow_aws_unavailable_fallback_no_state(
     assert result.health.is_live is False
     assert result.health.workspace == "AWS Unavailable - No Recorded State"
     assert result.health.workspace != "Healthy"
+
+
+def test_derive_overall_health_diverged_and_summary_independence() -> None:
+    live_installer_stack = InstallerStackSummary(
+        name="Stack", status="CREATE_COMPLETE", exists=True
+    )
+    live_installer_pipe = PipelineSummary(name="InstPipe", exists=True, status="Succeeded")
+    live_config_pipe = PipelineSummary(name="CfgPipe", exists=True, status="Succeeded")
+
+    # Diverged git status yields Attention Required
+    repo_diverged = ConfigurationRepoSummary(
+        repository_type="codecommit",
+        local_git_clean=True,
+        git_sync_status=GitRemoteSyncStatus(
+            status="Diverged", ahead=2, behind=1, summary="Completely custom message"
+        ),
+    )
+    health_diverged = _derive_overall_health(
+        is_live=True,
+        installer_stack=live_installer_stack,
+        installer_pipe=live_installer_pipe,
+        config_repo=repo_diverged,
+        config_pipe=live_config_pipe,
+    )
+    assert health_diverged.configuration == "Attention Required"
+    assert health_diverged.workspace == "Attention Required"
+
+    # Health does not depend on text in summary: text contains Diverged but status is Synchronized
+    repo_synced = ConfigurationRepoSummary(
+        repository_type="codecommit",
+        local_git_clean=True,
+        git_sync_status=GitRemoteSyncStatus(
+            status="Synchronized", ahead=0, behind=0, summary="Arbitrary string containing Diverged"
+        ),
+    )
+    health_synced = _derive_overall_health(
+        is_live=True,
+        installer_stack=live_installer_stack,
+        installer_pipe=live_installer_pipe,
+        config_repo=repo_synced,
+        config_pipe=live_config_pipe,
+    )
+    assert health_synced.configuration == "Healthy"
+    assert health_synced.workspace == "Healthy"
+
+
+def test_get_root_status_evaluates_git_sync_when_aws_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Git Offline Cust", slug="git-offline-cust"),
+        aws=AwsConfig(profile="fail-profile", region="us-east-1"),
+    )
+    config_dir = tmp_path / config.configuration.local_path
+    config_dir.mkdir(parents=True)
+
+    mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=None)
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.load_workspace_context",
+        lambda *_args, **_kwargs: mock_ctx,
+    )
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity=None,
+            error="No AWS credentials found",
+        ),
+    )
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.get_git_working_tree_status",
+        lambda _dir: MagicMock(branch="main", has_uncommitted=False, uncommitted_count=0),
+    )
+    sync_status = GitRemoteSyncStatus(
+        status="Synchronized",
+        ahead=0,
+        behind=0,
+        summary="In Sync",
+    )
+    mock_get_sync = MagicMock(return_value=sync_status)
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.get_git_remote_sync_status",
+        mock_get_sync,
+    )
+
+    result = get_root_status_workflow(target_dir=tmp_path)
+
+    mock_get_sync.assert_called_once_with(
+        config_dir, branch=config.configuration.repository.branch
+    )
+    assert result.configuration_repo.git_sync_status == sync_status
+    assert result.configuration_repo.git_sync_status.status == "Synchronized"
+    assert result.configuration_repo.git_sync_status.summary == "In Sync"
+
+
+def test_root_status_non_git_directory_renders_remote_sync_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Non Git Cust", slug="non-git-cust"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    config_dir = tmp_path / config.configuration.local_path
+    config_dir.mkdir(parents=True)
+    (config_dir / "dummy.txt").write_text("not a git repo")
+
+    mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=None)
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.load_workspace_context",
+        lambda *_args, **_kwargs: mock_ctx,
+    )
+
+    # 1. AWS Live -> Remote Sync displays Not Git
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity={"account": "123456789012", "arn": "arn:aws:iam::123:user/test"},
+            error=None,
+        ),
+    )
+    result_live = get_root_status_workflow(target_dir=tmp_path)
+    assert result_live.configuration_repo.git_sync_status is None
+    render_root_status(result_live)
+    captured_live = capsys.readouterr().out
+    assert "Remote Sync: Not Git" in captured_live
+
+    # 2. AWS Unavailable -> Remote Sync displays Not Checked (AWS Unavailable)
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity=None,
+            error="No AWS credentials found",
+        ),
+    )
+    result_offline = get_root_status_workflow(target_dir=tmp_path)
+    assert result_offline.configuration_repo.git_sync_status is None
+    render_root_status(result_offline)
+    captured_offline = capsys.readouterr().out
+    assert "Remote Sync: Not Checked (AWS Unavailable)" in captured_offline
+
+
+def test_root_status_missing_directory_renders_remote_sync_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Missing Dir Cust", slug="missing-dir-cust"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+
+    mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=None)
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.load_workspace_context",
+        lambda *_args, **_kwargs: mock_ctx,
+    )
+
+    # 1. AWS Live -> Remote Sync displays Not Git
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity={"account": "123456789012", "arn": "arn:aws:iam::123:user/test"},
+            error=None,
+        ),
+    )
+    result_live = get_root_status_workflow(target_dir=tmp_path)
+    assert result_live.configuration_repo.git_sync_status is None
+    render_root_status(result_live)
+    captured_live = capsys.readouterr().out
+    assert "Remote Sync: Not Git" in captured_live
+
+    # 2. AWS Unavailable -> Remote Sync displays Not Checked (AWS Unavailable)
+    monkeypatch.setattr(
+        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity=None,
+            error="No AWS credentials found",
+        ),
+    )
+    result_offline = get_root_status_workflow(target_dir=tmp_path)
+    assert result_offline.configuration_repo.git_sync_status is None
+    render_root_status(result_offline)
+    captured_offline = capsys.readouterr().out
+    assert "Remote Sync: Not Checked (AWS Unavailable)" in captured_offline
 
 
 def test_get_installer_status_workflow(configured_workspace: Path) -> None:

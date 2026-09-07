@@ -1,7 +1,7 @@
 # LZA Workbench GUI-First Work Plan
 
-Status: the architecture audit and project-direction update are complete. The approved required
-workflow refactors in `GEMINI-PLAN.MD` must be completed before Web dependencies are added.
+Status: the architecture audit, project-direction update, and required pre-Web workflow refactors
+are complete. Web stack selection and the first read-only vertical slice are next.
 
 1. **Audit the current architecture — complete**
    - Review workflows, CLI handlers, feature packages, and AWS adapters.
@@ -9,7 +9,7 @@ workflow refactors in `GEMINI-PLAN.MD` must be completed before Web dependencies
    - Evaluate classes/OOP, DTOs, protocols, plan/apply patterns, and other design patterns only where they clearly simplify the code.
    - Preserve `web/cli -> workflows -> features/AWS`.
 
-2. **Implement the required reusable workflow fixes**
+2. **Implement the required reusable workflow fixes — complete**
    - Complete only the approved pre-Web refactors in `GEMINI-PLAN.MD`.
    - Ensure important workflows can be called independently from CLI or Web.
    - Remove Typer, Rich, prompting, and terminal rendering from reusable logic.

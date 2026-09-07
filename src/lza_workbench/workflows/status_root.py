@@ -15,6 +15,7 @@ from lza_workbench.aws.codepipeline import (
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.configuration.git import (
+    GitRemoteSyncStatus,
     get_git_remote_sync_status,
     get_git_working_tree_status,
 )
@@ -22,10 +23,6 @@ from lza_workbench.configuration.repository import resolve_s3_configuration_dest
 from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.pipeline.failures import collect_pipeline_action_failures
 from lza_workbench.pipeline.resolution import resolve_pipeline
-from lza_workbench.workflows.status_config import (
-    ConfigurationStatusResult,
-    get_config_status_workflow,
-)
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceState
 
@@ -68,7 +65,7 @@ class ConfigurationRepoSummary:
     local_git_branch: str | None = None
     local_git_clean: bool = True
     local_git_uncommitted: int = 0
-    remote_sync_summary: str | None = None
+    git_sync_status: GitRemoteSyncStatus | None = None
     is_live: bool = True
 
 
@@ -98,15 +95,6 @@ class RootStatusResult:
     configuration_repo: ConfigurationRepoSummary
     configuration_pipeline: PipelineSummary
     health: OverallHealthSummary
-    stack_name: str
-    stack_status: str | None
-    stack_exists: bool
-    repository_type: str
-    config_dir: Path
-    config_dir_exists: bool
-    installer_pipeline_name: str
-    config_pipeline_name: str
-    config_status: ConfigurationStatusResult | None = None
 
 
 def _resolve_pipeline_summary(
@@ -296,7 +284,8 @@ def _derive_overall_health(
     elif config_pipe.status in ("Failed", "Cancelled"):
         configuration_health = "Failed"
     elif not config_repo.local_git_clean or (
-        config_repo.remote_sync_summary and "Diverged" in config_repo.remote_sync_summary
+        config_repo.git_sync_status is not None
+        and config_repo.git_sync_status.status == "Diverged"
     ):
         configuration_health = "Attention Required"
     elif config_pipe.status == "Succeeded":
@@ -446,13 +435,11 @@ def get_root_status_workflow(
     local_git_clean = not gwt.has_uncommitted if gwt else True
     local_git_uncommitted = gwt.uncommitted_count if gwt else 0
 
-    if gwt and is_live:
-        sync_res = get_git_remote_sync_status(config_dir, branch=repo.branch)
-        remote_sync_summary = sync_res.summary if sync_res else None
-    elif not is_live:
-        remote_sync_summary = "Not Checked (AWS Unavailable)"
-    else:
-        remote_sync_summary = "Not Git"
+    git_sync_status = (
+        get_git_remote_sync_status(config_dir, branch=repo.branch)
+        if gwt is not None
+        else None
+    )
 
     config_repo_summary = ConfigurationRepoSummary(
         repository_type=repo.type,
@@ -460,7 +447,7 @@ def get_root_status_workflow(
         local_git_branch=local_git_branch,
         local_git_clean=local_git_clean,
         local_git_uncommitted=local_git_uncommitted,
-        remote_sync_summary=remote_sync_summary,
+        git_sync_status=git_sync_status,
         is_live=is_live,
     )
 
@@ -471,13 +458,6 @@ def get_root_status_workflow(
         installer_pipe=installer_pipe_summary,
         config_repo=config_repo_summary,
         config_pipe=config_pipe_summary,
-    )
-
-    # Full ConfigurationStatusResult for detailed inspection or compatibility
-    config_status = get_config_status_workflow(
-        config=config,
-        state=state,
-        workspace_dir=workspace_dir,
     )
 
     return RootStatusResult(
@@ -493,15 +473,6 @@ def get_root_status_workflow(
         configuration_repo=config_repo_summary,
         configuration_pipeline=config_pipe_summary,
         health=health,
-        stack_name=installer_stack_summary.name,
-        stack_status=installer_stack_summary.status,
-        stack_exists=installer_stack_summary.exists,
-        repository_type=repo.type,
-        config_dir=config_dir,
-        config_dir_exists=config_dir_exists,
-        installer_pipeline_name=installer_pipeline_name,
-        config_pipeline_name=config_pipeline_name,
-        config_status=config_status,
     )
 
 

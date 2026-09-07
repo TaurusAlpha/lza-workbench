@@ -6,6 +6,13 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### Root Status Workflow Coherence & Git Health Independence
+- Unified `get_root_status_workflow` into a single coherent observation pass, loading one `WorkspaceContext` and resolving one `AwsExecutionContext` without nesting `get_config_status_workflow`.
+- Removed redundant compatibility fields and `config_status` from `RootStatusResult`, preserving structured summaries (`installer`, `installer_pipeline`, `configuration_repo`, `configuration_pipeline`, `health`).
+- Replaced string `remote_sync_summary` in `ConfigurationRepoSummary` with structured `GitRemoteSyncStatus | None` model (`git_sync_status`), decoupling divergence health logic from human-readable summary text (`status == "Diverged"`).
+- Decoupled local Git sync evaluation from AWS availability, allowing local tracking branch status to be observed even when AWS credentials or sessions are expired/unavailable.
+- Preserved CLI presentation logic in `render_root_status`, reading `git_sync_status.summary` directly.
+
 ### Testing Strategy Overhaul & Production Shim Removal (v0.30.1)
 - Removed production test shims (`sleeper` and `time_provider` parameters) from `pipeline_watch_workflow` and `deploy_configuration_workflow`, restoring clean production signatures and direct `time.sleep`/`time.time` calls.
 - Deleted `tests/aws/` suite (8 files) and 11 mock-heavy `tests/cli/` test files that asserted internal `unittest.mock` dictionaries against external AWS services.
