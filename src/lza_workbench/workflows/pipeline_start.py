@@ -11,8 +11,8 @@ from lza_workbench.errors import LzaError
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.pipeline.state import record_pipeline_execution
 from lza_workbench.workspace.context import (
+    WorkspaceCapability,
     WorkspaceContext,
-    WorkspaceReadinessLevel,
     load_workspace_context,
 )
 from lza_workbench.workspace.state import write_workspace_state
@@ -45,7 +45,7 @@ def start_pipeline_workflow(
 ) -> PipelineStartResult:
     """Start an LZA CodePipeline execution and record execution ID in workspace state."""
     ctx = workspace_context or load_workspace_context(
-        target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
+        target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
     )
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 

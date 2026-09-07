@@ -23,7 +23,7 @@ from lza_workbench.configuration.repository import resolve_s3_configuration_dest
 from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.pipeline.failures import collect_pipeline_action_failures
 from lza_workbench.pipeline.resolution import resolve_pipeline
-from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceState
 
 
@@ -325,7 +325,9 @@ def get_root_status_workflow(
     target_dir: Path | None = None,
 ) -> RootStatusResult:
     """Query workspace and AWS to collect root summary status."""
-    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
+    ctx = load_workspace_context(
+        target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
+    )
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
     profile = config.aws.profile or ""

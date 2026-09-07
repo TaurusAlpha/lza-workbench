@@ -23,7 +23,7 @@ from lza_workbench.workflows.pipeline_watch import (
     require_successful_pipeline_watch,
     watch_pipeline_workflow,
 )
-from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
 
 
 @dataclass(frozen=True)
@@ -68,7 +68,7 @@ def deploy_configuration_workflow(
 ) -> ConfigDeployResult:
     """Synchronize configuration to remote source, start pipeline, and watch execution."""
     context = load_workspace_context(
-        target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
+        target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
     )
     try:
         aws_context = resolve_aws_execution_context(

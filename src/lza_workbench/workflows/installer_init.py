@@ -23,7 +23,7 @@ from lza_workbench.installer.templates import (
     validate_parameters_against_schema,
 )
 from lza_workbench.workspace.config import write_workspace_config
-from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig
 from lza_workbench.workspace.state import write_workspace_state
 
@@ -52,7 +52,7 @@ def initialize_installer_workflow(
 ) -> InstallerInitResult:
     """Collect template parameters, validate them, and persist accepted local settings."""
     ctx = load_workspace_context(
-        target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
+        target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
     )
     workspace_dir, config = ctx.workspace_dir, ctx.config
     options = config.installer.options

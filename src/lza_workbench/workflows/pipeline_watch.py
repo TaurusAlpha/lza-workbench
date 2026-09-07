@@ -23,8 +23,8 @@ from lza_workbench.pipeline.failures import (
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.pipeline.state import record_pipeline_watch_result
 from lza_workbench.workspace.context import (
+    WorkspaceCapability,
     WorkspaceContext,
-    WorkspaceReadinessLevel,
     load_workspace_context,
 )
 from lza_workbench.workspace.state import write_workspace_state
@@ -123,7 +123,7 @@ def watch_pipeline_workflow(
         raise LzaError("Pipeline initial delay must be greater than or equal to zero seconds.")
 
     ctx = workspace_context or load_workspace_context(
-        target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
+        target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
     )
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 

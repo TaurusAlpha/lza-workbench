@@ -28,7 +28,7 @@ from lza_workbench.configuration.templates import (
 )
 from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import write_workspace_config
-from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig
 from lza_workbench.workspace.state import write_workspace_state
 
@@ -64,7 +64,7 @@ def init_config_workflow(
     """Execute configuration initialization and return structured result."""
     context = load_workspace_context(
         target_dir=target_dir,
-        min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED,
+        required_capabilities=(WorkspaceCapability.METADATA_VALID,),
     )
     workspace_dir = context.workspace_dir
     config = context.config

@@ -22,7 +22,7 @@ from lza_workbench.installer.sync import (
     sync_installer_state,
     sync_installer_template,
 )
-from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
 
@@ -50,7 +50,9 @@ def import_installer_workflow(
     dry_run: bool = False,
 ) -> InstallerImportResult:
     """Query live CloudFormation installer stack and synchronize local workspace configuration."""
-    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED)
+    ctx = load_workspace_context(
+        target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
+    )
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 
     resolved_stack_name = (

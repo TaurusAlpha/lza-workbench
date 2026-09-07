@@ -34,7 +34,7 @@ from lza_workbench.installer.state import (
     record_installer_deployment,
     record_installer_deployment_failure,
 )
-from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig
 from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
@@ -79,7 +79,14 @@ def prepare_installer_deployment(
     dry_run: bool = False,
 ) -> InstallerDeploymentPreparation:
     """Prepare one validated installer deployment for confirmation and application."""
-    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.CONFIGURED)
+    ctx = load_workspace_context(
+        target_dir,
+        required_capabilities=(
+            WorkspaceCapability.METADATA_VALID,
+            WorkspaceCapability.CONFIGURATION_PRESENT,
+            WorkspaceCapability.INSTALLER_CONFIGURED,
+        ),
+    )
     workspace_dir, config = ctx.workspace_dir, ctx.config
     profile = config.aws.profile or ""
 

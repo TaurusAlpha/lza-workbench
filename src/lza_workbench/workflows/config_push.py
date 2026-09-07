@@ -34,8 +34,8 @@ from lza_workbench.configuration.templates import validate_template
 from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import (
+    WorkspaceCapability,
     WorkspaceContext,
-    WorkspaceReadinessLevel,
     load_workspace_context,
 )
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
@@ -82,7 +82,7 @@ def push_configuration_workflow(
 ) -> ConfigPushResult:
     """Synchronize local configuration to configured remote repository."""
     ctx = workspace_context or load_workspace_context(
-        target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
+        target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
     )
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
 

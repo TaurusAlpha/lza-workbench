@@ -27,7 +27,7 @@ from lza_workbench.configuration.status import compile_configuration_warnings
 from lza_workbench.pipeline.failures import (
     collect_pipeline_action_failures,
 )
-from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
 
@@ -110,7 +110,7 @@ def get_config_status_workflow(
         resolved_state = state
     else:
         ctx = load_workspace_context(
-            target_dir, min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED
+            target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
         )
         resolved_workspace_dir = ctx.workspace_dir
         resolved_config = ctx.config

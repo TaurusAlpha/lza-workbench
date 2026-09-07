@@ -27,8 +27,8 @@ from lza_workbench.installer.parameters import resolve_installer_source_branch
 from lza_workbench.installer.source import validate_github_repository_access
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import (
+    WorkspaceCapability,
     WorkspaceContext,
-    WorkspaceReadinessLevel,
     load_workspace_context,
 )
 from lza_workbench.workspace.schema import WorkspaceConfig
@@ -400,7 +400,7 @@ def prepare_bootstrap_workflow(
     """Resolve one workspace and AWS target for bootstrap planning and execution."""
     context = load_workspace_context(
         target_dir=target_dir,
-        min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED,
+        required_capabilities=(WorkspaceCapability.METADATA_VALID,),
     )
     aws_context = _resolve_bootstrap_aws_context(context.config)
     plan = _build_bootstrap_plan(
@@ -425,7 +425,7 @@ def plan_bootstrap_workflow(
     """Inspect AWS resources and plan bootstrap actions without mutating AWS."""
     ctx = load_workspace_context(
         target_dir=target_dir,
-        min_readiness=WorkspaceReadinessLevel.CORE_CONFIGURED,
+        required_capabilities=(WorkspaceCapability.METADATA_VALID,),
     )
     workspace_dir, config = ctx.workspace_dir, ctx.config
 

@@ -32,7 +32,7 @@ from lza_workbench.installer.templates import (
     resolve_installer_template,
     validate_parameters_against_schema,
 )
-from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
+from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
 
 
 def plan_installer_workflow(
@@ -41,7 +41,13 @@ def plan_installer_workflow(
     dry_run: bool = False,
 ) -> InstallerPlanResult:
     """Inspect AWS and return a plan for the persisted installer configuration."""
-    ctx = load_workspace_context(target_dir, min_readiness=WorkspaceReadinessLevel.IMPORTED)
+    ctx = load_workspace_context(
+        target_dir,
+        required_capabilities=(
+            WorkspaceCapability.METADATA_VALID,
+            WorkspaceCapability.CONFIGURATION_PRESENT,
+        ),
+    )
     workspace_dir, config = ctx.workspace_dir, ctx.config
 
     validation = validate_installer_configuration(config)
