@@ -199,6 +199,7 @@ def test_import_workspace_live_aws_discovery(tmp_path: Path) -> None:
             }
         ]
     }
+    mock_cfn.get_parameter.return_value = {"Parameter": {"Value": "1.15.5"}}
 
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
@@ -254,12 +255,18 @@ def test_import_workspace_live_aws_discovery_s3_repository(tmp_path: Path) -> No
                 "StackStatus": "UPDATE_COMPLETE",
                 "Parameters": [
                     {"ParameterKey": "ConfigurationRepositoryLocation", "ParameterValue": "s3"},
-                    {"ParameterKey": "RepositorySource", "ParameterValue": "github"},
-                    {"ParameterKey": "RepositoryBranchName", "ParameterValue": "release/v1.15.5"},
+                    {"ParameterKey": "RepositorySource", "ParameterValue": "s3"},
+                    {"ParameterKey": "RepositoryBranchName", "ParameterValue": "release/v1.12.3"},
+                    {
+                        "ParameterKey": "RepositoryBucketName",
+                        "ParameterValue": "s3-aws-accelerator-source-123456789012",
+                    },
+                    {"ParameterKey": "RepositoryBucketObject", "ParameterValue": "lza-v1.15.5.zip"},
                 ],
             }
         ]
     }
+    mock_cfn.get_parameter.return_value = {"Parameter": {"Value": "1.15.5"}}
 
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
@@ -281,6 +288,9 @@ def test_import_workspace_live_aws_discovery_s3_repository(tmp_path: Path) -> No
         )
 
     assert result.installer_discovered is True
+    assert result.config.lza.version == "v1.15.5"
+    assert result.state.installer_template_version == "v1.15.5"
+    assert result.config.installer.source_code.repository_type == "s3"
     assert result.config.configuration.repository.type == "s3"
     assert (
         result.config.configuration.repository.bucket

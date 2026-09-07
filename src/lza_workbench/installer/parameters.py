@@ -3,7 +3,7 @@
 from typing import Any
 
 from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
-from lza_workbench.installer.versions import branch_to_version, version_to_branch
+from lza_workbench.installer.versions import version_to_branch
 from lza_workbench.workspace.schema import WorkspaceConfig
 
 KNOWN_INSTALLER_PARAMETER_NAMES = frozenset(
@@ -205,11 +205,6 @@ def apply_deployed_installer_parameters(
                 )
         elif not config.installer.options.existing_config_repository_name:
             config.configuration.repository.repository_name = "aws-accelerator-config"
-
-    deployed_version = branch_to_version(parameters.get("RepositoryBranchName", ""))
-    if deployed_version != "Unknown":
-        config.lza.version = deployed_version
-
 
 def build_installer_cfn_parameters(
     config: WorkspaceConfig, schema: dict[str, dict[str, Any]] | None = None

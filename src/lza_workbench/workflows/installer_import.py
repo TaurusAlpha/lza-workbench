@@ -15,8 +15,8 @@ from lza_workbench.aws.codepipeline import (
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.errors import LzaError
+from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.installer.sync import sync_installer_config, sync_installer_state
-from lza_workbench.installer.versions import branch_to_version
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
@@ -79,8 +79,14 @@ def import_installer_workflow(
             f"in region '{aws_context.region}' for profile '{config.aws.profile}'."
         )
 
-    deployed_version = branch_to_version(
-        cfn_status.deployed_parameters.get("RepositoryBranchName", "")
+    ssm_client = aws_context.factory.get_client("ssm") if aws_context.identity else None
+    deployed_version = resolve_deployed_installer_version(
+        cfn_client=cfn_client,
+        ssm_client=ssm_client,
+        stack_name=resolved_stack_name,
+        accelerator_prefix=(
+            cfn_status.deployed_parameters.get("AcceleratorPrefix") or config.lza.accelerator_prefix
+        ),
     )
 
     prefix = config.lza.accelerator_prefix or "AWSAccelerator"
@@ -99,6 +105,7 @@ def import_installer_workflow(
             workspace_dir=workspace_dir,
             config=config,
             cfn_status=cfn_status,
+            deployed_version=deployed_version,
         )
         state = sync_installer_state(
             workspace_dir=workspace_dir,
@@ -113,7 +120,7 @@ def import_installer_workflow(
         state=state,
         stack_name=resolved_stack_name,
         cfn_status=cfn_status,
-        deployed_version=deployed_version,
+        deployed_version=deployed_version or config.lza.version,
         aws_identity=aws_context.identity,
         aws_error=aws_context.error,
         dry_run=dry_run,

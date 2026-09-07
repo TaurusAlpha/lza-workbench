@@ -8,6 +8,7 @@ from pathlib import Path
 from lza_workbench.aws.cloudformation import CfnStackStatusResult
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.parameters import apply_deployed_installer_parameters
+from lza_workbench.installer.versions import normalize_lza_version
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.state import write_workspace_state
@@ -18,7 +19,7 @@ def sync_installer_state(
     workspace_dir: Path,
     state: WorkspaceState,
     cfn_status: CfnStackStatusResult,
-    deployed_version: str,
+    deployed_version: str | None,
 ) -> WorkspaceState:
     """Synchronize .lza/state.json deployment metadata with live installer state."""
     if not cfn_status.exists:
@@ -28,7 +29,8 @@ def sync_installer_state(
         )
     state.installer_stack_id = cfn_status.stack_id
     state.installer_stack_status = cfn_status.stack_status
-    state.installer_template_version = deployed_version
+    if deployed_version is not None:
+        state.installer_template_version = deployed_version
     state.updated_at = datetime.now(UTC)
     write_workspace_state(workspace_dir, state)
     return state
@@ -39,6 +41,7 @@ def sync_installer_config(
     workspace_dir: Path,
     config: WorkspaceConfig,
     cfn_status: CfnStackStatusResult,
+    deployed_version: str | None,
 ) -> WorkspaceConfig:
     """Synchronize lza-workspace.yaml with deployed installer parameters."""
     if not cfn_status.exists or not cfn_status.deployed_parameters:
@@ -51,6 +54,8 @@ def sync_installer_config(
         cfn_status.deployed_parameters,
         stack_id=cfn_status.stack_id,
     )
+    if deployed_version is not None:
+        config.lza.version = normalize_lza_version(deployed_version)
     write_workspace_config(workspace_dir, config)
     return config
 

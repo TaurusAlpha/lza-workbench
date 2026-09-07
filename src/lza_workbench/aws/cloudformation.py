@@ -230,6 +230,28 @@ def get_cloudformation_stack_status(
         )
 
 
+def get_cloudformation_stack_template(
+    *,
+    factory: AwsClientFactory | None = None,
+    client: Any | None = None,
+    stack_name: str,
+) -> str | None:
+    """Return a deployed stack template body when it can be read."""
+    clean_stack_name = (stack_name or "").strip()
+    if not clean_stack_name:
+        return None
+
+    cfn = _get_cfn_client(factory=factory, client=client)
+    if cfn is None:
+        return None
+
+    try:
+        template_body = cfn.get_template(StackName=clean_stack_name).get("TemplateBody")
+        return template_body if isinstance(template_body, str) else None
+    except (ClientError, BotoCoreError):
+        return None
+
+
 def deploy_cloudformation_stack(
     *,
     factory: AwsClientFactory | None = None,
@@ -439,6 +461,7 @@ __all__ = [
     "delete_cloudformation_stack",
     "deploy_cloudformation_stack",
     "get_cloudformation_stack_status",
+    "get_cloudformation_stack_template",
     "inspect_cloudformation_stack",
     "stream_cloudformation_stack_events",
 ]

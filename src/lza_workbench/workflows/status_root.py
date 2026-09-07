@@ -19,7 +19,7 @@ from lza_workbench.configuration.git import (
     get_git_working_tree_status,
 )
 from lza_workbench.configuration.repository import resolve_s3_configuration_destination
-from lza_workbench.installer.versions import branch_to_version
+from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.pipeline.failures import collect_pipeline_action_failures
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.workflows.status_config import (
@@ -358,8 +358,17 @@ def get_root_status_workflow(
     if is_live:
         cfn_client = factory.get_client("cloudformation")
         cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=cfn_stack_name)
+        ssm_client = factory.get_client("ssm") if cfn_status.exists else None
         deployed_version = (
-            branch_to_version(cfn_status.deployed_parameters.get("RepositoryBranchName", ""))
+            resolve_deployed_installer_version(
+                cfn_client=cfn_client,
+                ssm_client=ssm_client,
+                stack_name=cfn_stack_name,
+                accelerator_prefix=(
+                    cfn_status.deployed_parameters.get("AcceleratorPrefix")
+                    or config.lza.accelerator_prefix
+                ),
+            )
             if cfn_status.exists
             else None
         )
@@ -367,7 +376,7 @@ def get_root_status_workflow(
             name=cfn_stack_name,
             status=cfn_status.stack_status,
             exists=cfn_status.exists,
-            deployed_version=deployed_version,
+            deployed_version=deployed_version or config.lza.version,
             is_live=True,
         )
     else:

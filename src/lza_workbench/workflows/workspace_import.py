@@ -28,10 +28,10 @@ from lza_workbench.configuration.validation import (
     validate_yaml_syntax,
 )
 from lza_workbench.errors import LzaError
+from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.installer.schema import LzaInstaller
 from lza_workbench.installer.source import validate_github_repository_access
 from lza_workbench.installer.sync import sync_installer_config, sync_installer_state
-from lza_workbench.installer.versions import branch_to_version
 from lza_workbench.workspace.config import (
     WORKSPACE_CONFIG_FILE,
     load_workspace_config,
@@ -453,14 +453,22 @@ def import_workspace_workflow(
             if cfn_status.exists:
                 installer_discovered = True
                 discovered_stack_status = f"{cfn_status.stack_name} ({cfn_status.stack_status})"
-                deployed_version = branch_to_version(
-                    cfn_status.deployed_parameters.get("RepositoryBranchName", "")
+                ssm_client = aws_ctx.factory.get_client("ssm") if aws_ctx.identity else None
+                deployed_version = resolve_deployed_installer_version(
+                    cfn_client=cfn_client,
+                    ssm_client=ssm_client,
+                    stack_name=stack_name,
+                    accelerator_prefix=(
+                        cfn_status.deployed_parameters.get("AcceleratorPrefix")
+                        or config.lza.accelerator_prefix
+                    ),
                 )
                 if not dry_run:
                     config = sync_installer_config(
                         workspace_dir=resolved_workspace_dir,
                         config=config,
                         cfn_status=cfn_status,
+                        deployed_version=deployed_version,
                     )
                     state = sync_installer_state(
                         workspace_dir=resolved_workspace_dir,

@@ -261,6 +261,11 @@ def test_cli_status_live_success_summary(
         "configuration:\n  repository:\n    type: codecommit\n    repository_name: acme-config\n"
     )
     mock_factory = MagicMock()
+    mock_ssm = MagicMock()
+    mock_ssm.get_parameter.return_value = {"Parameter": {"Value": "1.16.0"}}
+    mock_factory.get_client.side_effect = lambda service: (
+        mock_ssm if service == "ssm" else MagicMock()
+    )
     mock_root_context.return_value = AwsExecutionContext(
         region="us-east-1",
         factory=mock_factory,
@@ -271,7 +276,7 @@ def test_cli_status_live_success_summary(
         stack_name="AWSAccelerator-InstallerStack",
         exists=True,
         stack_status="UPDATE_COMPLETE",
-        deployed_parameters={"RepositoryBranchName": "release/v1.16.0"},
+        deployed_parameters={"RepositoryBranchName": "release/v1.12.3", "RepositorySource": "s3"},
     )
     mock_get_pipe_state.side_effect = [
         MagicMock(
@@ -629,4 +634,3 @@ def test_cli_status_aws_unavailable_no_state(
     assert "AWS Access Notice: No credentials found" in out
     assert "Workspace: AWS Unavailable - No Recorded State" in out
     assert "Workspace: Healthy" not in out
-

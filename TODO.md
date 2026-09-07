@@ -91,6 +91,8 @@ The future implementation should preserve the following behavior:
 
 #### Configuration repository
 
+- [x] `ConfigurationRepositoryLocation=codecommit`
+
 - [ ] `ConfigurationRepositoryLocation=codeconnection`
   - On init, changed configuration, and import:
     - Require `ConfigCodeConnectionArn`.

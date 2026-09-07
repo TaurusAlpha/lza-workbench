@@ -508,6 +508,7 @@ def test_sync_installer_config_success(tmp_path: Path) -> None:
         workspace_dir=tmp_path,
         config=config,
         cfn_status=cfn_status,
+        deployed_version="v1.15.5",
     )
     assert new_config.installer.source_code.repository_type == "codecommit"
     assert new_config.installer.options.management_account_email == "mgmt@example.com"
@@ -533,6 +534,7 @@ def test_sync_installer_config_accepts_codeconnection_repository(tmp_path: Path)
         workspace_dir=tmp_path,
         config=config,
         cfn_status=cfn_status,
+        deployed_version=None,
     )
 
     assert new_config.configuration.repository.type == "codeconnection"
@@ -563,6 +565,7 @@ def test_prepare_installer_status_separates_comparisons_from_rendering(tmp_path:
         aws_identity=None,
         aws_error="No credentials",
         cfn_status=cfn_status,
+        deployed_version="v1.15.5",
     )
 
     assert result.deployed_version == "v1.15.5"

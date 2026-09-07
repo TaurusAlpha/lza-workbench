@@ -14,12 +14,13 @@ from lza_workbench.aws.codepipeline import (
     get_pipeline_state,
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
+from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.installer.status import (
     StateAlignment,
     calculate_configuration_drift,
     calculate_state_alignment,
 )
-from lza_workbench.installer.versions import branch_to_version, normalize_lza_version
+from lza_workbench.installer.versions import normalize_lza_version
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
@@ -53,12 +54,10 @@ def prepare_installer_status(
     aws_identity: dict[str, str] | None,
     aws_error: str | None,
     cfn_status: CfnStackStatusResult,
+    deployed_version: str,
     pipeline_state: PipelineStateResult | None = None,
 ) -> InstallerStatusResult:
     """Prepare report data without calling AWS, writing files, or rendering output."""
-    deployed_version = branch_to_version(
-        cfn_status.deployed_parameters.get("RepositoryBranchName", "") if cfn_status.exists else ""
-    )
     drift = (
         calculate_configuration_drift(config, cfn_status.deployed_parameters)
         if cfn_status.exists and cfn_status.deployed_parameters
@@ -130,6 +129,20 @@ def get_installer_status_workflow(
         aws_context.factory.get_client("cloudformation") if aws_context.identity else None
     )
     cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=cfn_stack_name)
+    ssm_client = aws_context.factory.get_client("ssm") if cfn_status.exists else None
+    deployed_version = (
+        resolve_deployed_installer_version(
+            cfn_client=cfn_client,
+            ssm_client=ssm_client,
+            stack_name=cfn_stack_name,
+            accelerator_prefix=(
+                cfn_status.deployed_parameters.get("AcceleratorPrefix")
+                or resolved_config.lza.accelerator_prefix
+            ),
+        )
+        if cfn_status.exists
+        else None
+    )
 
     prefix = resolved_config.lza.accelerator_prefix or "AWSAccelerator"
     installer_pipeline_name = (
@@ -151,6 +164,7 @@ def get_installer_status_workflow(
         aws_identity=aws_context.identity,
         aws_error=aws_context.error,
         cfn_status=cfn_status,
+        deployed_version=deployed_version or resolved_config.lza.version,
         pipeline_state=pipeline_state,
     )
 
