@@ -2,9 +2,13 @@
 
 ## Purpose
 
-LZA Workbench is a local, workspace-based CLI toolkit for AWS Landing Zone Accelerator engineers.
+LZA Workbench is a local, workspace-based application for AWS Landing Zone Accelerator engineers.
 
 It assists with creating and managing customer-specific LZA workspaces and automates common LZA bootstrap, configuration, deployment, validation, and troubleshooting workflows.
+
+The current implementation is CLI-based. The project is transitioning to a local Web GUI as its
+primary interactive interface, while retaining the CLI for automation, debugging, SSH, and
+advanced use.
 
 The project is initially a personal engineering productivity tool, but its structure should remain suitable for wider use.
 
@@ -68,13 +72,14 @@ Runtime state must not duplicate declarative configuration already stored in `lz
 AWS SDK initialization is centralized.
 
 - `AwsClientFactory` is the single mechanism for creating boto3 sessions and service clients.
-- Commands create and reuse a factory for their execution context.
+- Each AWS-backed workflow invocation resolves and reuses one request-scoped AWS execution context.
+- Interface handlers pass user intent into workflows rather than constructing AWS clients.
 - AWS service modules receive clients rather than creating their own sessions.
 - Authentication resolution, retry configuration, and shared AWS client behavior belong in the centralized factory.
 
 ### Application Boundaries
 
-- CLI command handlers should coordinate workflows rather than contain substantial business logic.
+- Web and CLI handlers should coordinate workflows rather than contain substantial business logic.
 - Business logic should live in appropriate Python modules outside the CLI layer.
 - AWS-specific behavior should remain separated from workspace/configuration logic where practical.
 - Customer-owned LZA configuration is independent from installer source-code management.
@@ -84,6 +89,8 @@ AWS SDK initialization is centralized.
 The application follows a feature-oriented structure with explicit interface and workflow
 boundaries:
 
+- `web`, when introduced, owns HTTP routing, Web request/response translation, browser-facing
+  presentation, and session concerns. It must not own LZA business policy.
 - `cli` owns command registration, parameters, prompting, confirmation, terminal rendering, and
   translation of application errors into process results.
 - `workflows` own reusable application use cases. They coordinate workspace loading, feature
@@ -96,13 +103,13 @@ boundaries:
 - `resources` contains packaged data only; customer-owned workspaces and configuration remain
   outside the package.
 
-Dependencies point from interfaces toward workflows and from workflows toward feature packages
-and AWS adapters. Feature and AWS packages must not import CLI or workflow modules. AWS adapters
+Dependencies point from Web and CLI interfaces toward workflows and from workflows toward feature
+packages and AWS adapters. Feature and AWS packages must not import interface or workflow modules. AWS adapters
 must not import workspace or feature policy. Shared behavior belongs to the feature that owns the
 rule rather than generic `core`, `utils`, or `helpers` modules.
 
-Future CLI, API, worker, or MCP interfaces should reuse the same workflows instead of duplicating
-business logic.
+Web, CLI, worker, and MCP interfaces should reuse the same workflows instead of duplicating
+business logic. The dependency direction is `web/cli -> workflows -> features/AWS`.
 
 ### Error Handling
 
@@ -110,7 +117,8 @@ Application errors must remain independent of presentation and execution interfa
 
 - Business logic should raise application-specific exceptions rather than Typer, Rich, HTTP, or other interface-specific errors.
 - CLI handlers translate application errors into user-facing output and exit codes.
-- Future API or headless-service interfaces may translate the same errors into HTTP responses, structured results, logs, or worker status.
+- Web handlers translate the same errors into HTTP responses and browser-facing messages.
+- Headless-service interfaces may translate the same errors into structured results, logs, or worker status.
 - Typer/Click usage exceptions should be reserved for invalid command-line arguments or invocation syntax.
 - Unexpected programming errors should remain distinguishable from expected application failures.
 
@@ -124,13 +132,16 @@ Other commands should validate the minimum workspace state they require and fail
 
 AWS authentication validity and deployed-resource health are separate from workspace readiness.
 
-## CLI Design Principles
+## Interface Design Principles
 
-The CLI should follow LZA workflow domains rather than expose low-level AWS resource operations directly.
+The Web GUI is the primary planned interactive interface. The CLI remains a supported interface
+for automation, debugging, SSH, and advanced use. Both should expose LZA workflows rather than
+low-level AWS resource operations directly.
 
 General principles:
 
-- Prefer commands that represent meaningful LZA workflows.
+- Prefer interface actions that represent meaningful LZA workflows.
+- Keep Web routes and CLI command handlers thin; neither interface should duplicate orchestration.
 - Keep planning/read-only behavior separate from mutation where practical.
 - AWS-mutating operations must have clear command intent.
 - Prefer reconciliation semantics when initial deployment and later updates represent the same operation.
@@ -156,11 +167,11 @@ Detailed feature specifications should not be duplicated in `PROJECT.md`.
 
 ### Testing and Verification Philosophy
 
-- Real CLI command execution and declarative workspace outcomes are the primary sources of truth for behavior.
+- Real execution through the affected interface and declarative workspace outcomes are the primary sources of truth for behavior.
 - Automated tests are supporting regression tools, not feature design drivers.
 - Production code must never be compromised or complicated (e.g. via mock hooks, test callbacks, or artificial indirection) solely to satisfy tests.
 - Static architectural tests (`tests/test_package.py`) enforce layer boundaries and import rules without mocking.
-- Heavy unit testing of external integrations (AWS, Git subprocesses) is discouraged in favor of focused contract checks and manual/smoke CLI execution.
+- Heavy unit testing of external integrations (AWS, Git subprocesses) is discouraged in favor of focused contract checks and manual/smoke execution through the affected interface.
 
 ## Architectural Change Rule
 
@@ -172,7 +183,7 @@ Examples include:
 - changing the workspace/source-of-truth model;
 - changing AWS client construction;
 - changing major application-layer responsibilities;
-- changing fundamental CLI design principles.
+- changing fundamental interface design principles.
 
 Feature behavior, individual commands, implementation details, repository refactors, and temporary design decisions belong elsewhere.
 

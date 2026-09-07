@@ -316,6 +316,18 @@ Future design decision:
 
 - [ ] Decide whether to add an explicit `--fix` mode. Do not implement mutation as part of the current diagnostic command.
 
+## Web Interface — Active
+
+The local Web GUI is the primary planned interactive interface. The CLI remains supported for
+automation, debugging, SSH, and advanced use. Implementation follows
+[`docs/CODEX-GUI-IMPLEMENTATION.md`](docs/CODEX-GUI-IMPLEMENTATION.md).
+
+- [ ] Complete the approved root-status workflow readiness refactors before adding Web dependencies.
+- [ ] Choose the minimal local Web stack after the reusable workflow boundary is ready.
+- [ ] Deliver the first read-only vertical slice for workspace selection and overview status.
+- [ ] Add detailed read-only installer, configuration, and pipeline views before mutation flows.
+- [ ] Keep multi-user/server operation out of the current scope.
+
 ## Workspace
 
 - [ ] Support workspace schema migration.
@@ -404,6 +416,4 @@ AI features remain advisory by default; execution must be a separate explicit ac
 
 ## Backlog
 
-- [ ] GUI or TUI.
-- [ ] Web interface.
 - [ ] Multi-user/server mode.

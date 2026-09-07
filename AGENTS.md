@@ -23,13 +23,15 @@ Before finishing:
 
 - Run `uv run ruff check . --fix`.
 - Run `uv run pytest tests/test_package.py` to enforce static architectural import boundaries.
-- Validate implemented CLI behavior by exercising the real CLI command against a temporary workspace or directory.
-- Verify real command outputs, exit codes, and file effects rather than relying on mocks or test suites.
+- Validate changed interface behavior through the real interface: exercise CLI changes against a
+  temporary workspace or directory, and exercise Web changes through the real local application.
+- Verify real outputs or responses, process/HTTP status, and file effects rather than relying on
+  mocks or test suites.
 - Do not run the full `pytest` suite unless explicitly requested.
 
 ## Testing Policy
 
-Automated tests are secondary to real CLI behavior and must not drive production-code design.
+Automated tests are secondary to real interface behavior and must not drive production-code design.
 
 ### Core Rules
 
@@ -74,14 +76,15 @@ Every implementation must leave the project in a releasable state.
 - Write small, focused functions with a single responsibility.
 - Place new logic in the appropriate feature package rather than in command handlers or generic
   `core`/`utils` modules.
-- Keep Typer, Rich, prompting, confirmation, and terminal rendering in the CLI layer.
+- Keep HTTP routing and browser-facing presentation in the Web layer; keep Typer, Rich, prompting,
+  confirmation, and terminal rendering in the CLI layer.
 - Implement reusable application use cases as workflows that return structured results.
 - Keep workspace, installer, configuration, and pipeline rules in their owning feature packages.
 - Keep AWS modules as thin boto3 adapters; pass resolved values into them instead of importing
   workspace or feature policy.
 - Do not introduce generic `core`, `utils`, or `helpers` modules when a feature owner exists.
-- Preserve the dependency direction `cli -> workflows -> features/AWS`; lower layers must not
-  import CLI or workflows.
+- Preserve the dependency direction `web/cli -> workflows -> features/AWS`; lower layers must not
+  import interface or workflow modules.
 - Extend existing modules when appropriate; create new modules when they improve organization.
 - Follow existing project structure and coding patterns.
 

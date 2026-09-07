@@ -1,23 +1,26 @@
 # LZA Workbench GUI-First Work Plan
 
-1. **Audit the current architecture**
+Status: the architecture audit and project-direction update are complete. The approved required
+workflow refactors in `GEMINI-PLAN.MD` must be completed before Web dependencies are added.
+
+1. **Audit the current architecture — complete**
    - Review workflows, CLI handlers, feature packages, and AWS adapters.
    - Identify CLI leakage, duplicated orchestration, oversized responsibilities, inconsistent workflow inputs/results, and unnecessary abstractions.
    - Evaluate classes/OOP, DTOs, protocols, plan/apply patterns, and other design patterns only where they clearly simplify the code.
-   - Refactor confirmed problems before adding GUI dependencies.
-   - Preserve `cli -> workflows -> features/AWS`. 
+   - Preserve `web/cli -> workflows -> features/AWS`.
 
-2. **Standardize reusable workflow boundaries**
+2. **Implement the required reusable workflow fixes**
+   - Complete only the approved pre-Web refactors in `GEMINI-PLAN.MD`.
    - Ensure important workflows can be called independently from CLI or Web.
    - Remove Typer, Rich, prompting, and terminal rendering from reusable logic.
    - Introduce structured request/result models only where current signatures are genuinely cumbersome.
    - Keep models close to the workflow or feature that owns them; avoid a generic DTO/schema dumping ground.
 
-3. **Update project direction**
-   - `PROJECT.md`: Web GUI becomes the primary interactive interface; CLI remains secondary for automation, debugging, SSH, and advanced use.
-   - `TODO.md`: move Web Interface into active work.
+3. **Update project direction — complete**
+   - Web GUI is the primary planned interactive interface; CLI remains supported for automation, debugging, SSH, and advanced use.
+   - Web Interface work is active in `TODO.md`.
    - Keep multi-user/server mode out of scope for now.
-   - Preserve external AWS authentication and local customer workspaces. 
+   - Preserve external AWS authentication and local customer workspaces.
 
 4. **Choose the minimal Web stack**
    - Prefer a local Python backend.
