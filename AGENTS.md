@@ -102,7 +102,7 @@ Every implementation must leave the project in a releasable state.
 - **Workspace Model**: Each customer has an independent local workspace (e.g., `example/`).
 - **Source of Truth**: `lza-workspace.yaml` is the declarative source of truth for a workspace. `.lza/state.json` stores runtime/execution metadata.
 - **AWS Client Factory**: All `boto3` sessions and clients MUST be created via `AwsClientFactory`. Service modules should not create their own sessions.
-- **Readiness Levels**: Commands should validate the workspace readiness level (Uninitialized, Core configured, Imported, Configured, Deployed) before execution.
+- **Readiness:** Commands validate required workspace state before executing. The current representation is being migrated from an ordinal readiness level to explicit capability checks — see TODO.md for status before relying on either model.
 
 ## Documentation
 

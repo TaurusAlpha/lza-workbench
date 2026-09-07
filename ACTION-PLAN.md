@@ -56,7 +56,7 @@ Each item lists: the concrete problem, the target design, why it must land befor
 
 **On ordering:** the only hard rule is that each refactor must precede the GUI feature that depends on the weak contract it fixes — these are feature-gated, not globally sequenced. Phase 1 comes first (it's a foundational, cross-cutting model). Within Phase 2, the item order below follows the currently-planned GUI build order (Configuration Status → Installer Settings → Config Sync → Pipeline Monitoring → Bootstrap → Workspace Import) and is a *default*, not a dependency chain. If GUI priorities change — e.g. Pipeline Monitoring gets built before Installer Settings — reorder items 2.1–2.6 to match; there is no architectural reason 2.2 must land before 2.4. Do not treat this list as a linear migration program.
 
-### Phase 0 — Do this anytime, no GUI dependency, near-zero risk
+### Phase 0 — Do this anytime, no GUI dependency, near-zero risk - **COMPLETE**
 
 **0.1 Delete zero-value alias modules.**
 

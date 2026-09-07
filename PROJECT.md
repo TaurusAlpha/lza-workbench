@@ -95,7 +95,7 @@ boundaries:
 - `cli` owns command registration, parameters, prompting, confirmation, terminal rendering, and
   translation of application errors into process results.
 - `workflows` own reusable application use cases. They coordinate workspace loading, feature
-  rules, AWS adapters, mutation, and structured results without depending on Typer or Rich.
+  rules, AWS adapters, mutation, and structured results without depending on Typer or Rich. Reusable workflows must not accept interface-specific control flow — including synchronous prompt or confirmation callbacks — or embed interface-specific presentation (such as terminal markup) in their results. Interfaces collect input and render output; workflows return structured data and, where a decision is required mid-operation, an explicit typed outcome describing what confirmation or input is needed.
 - `workspace` owns workspace schema composition, runtime state, persistence, paths, readiness,
   and workspace lifecycle.
 - `installer`, `configuration`, and `pipeline` own their respective schemas and business rules.
