@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 
 from lza_workbench.aws.cloudformation import CfnStackStatusResult
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.parameters import apply_deployed_installer_parameters
+from lza_workbench.installer.templates import INSTALLER_TEMPLATE_FILENAME
 from lza_workbench.installer.versions import normalize_lza_version
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
@@ -60,7 +62,35 @@ def sync_installer_config(
     return config
 
 
+def sync_installer_template(
+    *,
+    workspace_dir: Path,
+    config: WorkspaceConfig,
+    state: WorkspaceState,
+    template_body: str,
+) -> Path:
+    """Persist the live installer template used by an imported stack."""
+    installer_dir = workspace_dir / config.installer.local_path
+    template_path = installer_dir / INSTALLER_TEMPLATE_FILENAME
+    try:
+        installer_dir.mkdir(parents=True, exist_ok=True)
+        template_path.write_text(template_body, encoding="utf-8")
+    except OSError as exc:
+        raise LzaError(
+            f"Unable to save imported installer template to {template_path}: {exc}"
+        ) from exc
+
+    config.installer.stack_template.source = "local"
+    config.installer.stack_template.path = str(template_path.relative_to(workspace_dir))
+    config.installer.stack_template.repository = None
+    config.installer.stack_template.ref = None
+    state.installer_template_digest = sha256(template_body.encode("utf-8")).hexdigest()
+    state.installer_downloaded_at = datetime.now(UTC)
+    return template_path
+
+
 __all__ = [
     "sync_installer_config",
     "sync_installer_state",
+    "sync_installer_template",
 ]

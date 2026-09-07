@@ -8,6 +8,7 @@ from pathlib import Path
 from lza_workbench.aws.cloudformation import (
     CfnStackStatusResult,
     get_cloudformation_stack_status,
+    get_cloudformation_stack_template,
 )
 from lza_workbench.aws.codepipeline import (
     PipelineStateResult,
@@ -16,7 +17,11 @@ from lza_workbench.aws.codepipeline import (
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
-from lza_workbench.installer.sync import sync_installer_config, sync_installer_state
+from lza_workbench.installer.sync import (
+    sync_installer_config,
+    sync_installer_state,
+    sync_installer_template,
+)
 from lza_workbench.workspace.context import WorkspaceReadinessLevel, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
@@ -80,6 +85,14 @@ def import_installer_workflow(
         )
 
     ssm_client = aws_context.factory.get_client("ssm") if aws_context.identity else None
+    deployed_template = get_cloudformation_stack_template(
+        client=cfn_client, stack_name=resolved_stack_name
+    )
+    if deployed_template is None and not dry_run:
+        raise LzaError(
+            "Cannot import installer configuration because the live CloudFormation template "
+            "could not be retrieved. Ensure the AWS identity has cloudformation:GetTemplate."
+        )
     deployed_version = resolve_deployed_installer_version(
         cfn_client=cfn_client,
         ssm_client=ssm_client,
@@ -101,6 +114,13 @@ def import_installer_workflow(
     )
 
     if not dry_run:
+        if deployed_template is not None:
+            sync_installer_template(
+                workspace_dir=workspace_dir,
+                config=config,
+                state=state,
+                template_body=deployed_template,
+            )
         config = sync_installer_config(
             workspace_dir=workspace_dir,
             config=config,

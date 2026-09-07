@@ -7,7 +7,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from lza_workbench.aws.cloudformation import get_cloudformation_stack_status
+from lza_workbench.aws.cloudformation import (
+    get_cloudformation_stack_status,
+    get_cloudformation_stack_template,
+)
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.secrets_manager import inspect_secret_details
 from lza_workbench.configuration.archive import count_config_files
@@ -31,7 +34,11 @@ from lza_workbench.errors import LzaError
 from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.installer.schema import LzaInstaller
 from lza_workbench.installer.source import validate_github_repository_access
-from lza_workbench.installer.sync import sync_installer_config, sync_installer_state
+from lza_workbench.installer.sync import (
+    sync_installer_config,
+    sync_installer_state,
+    sync_installer_template,
+)
 from lza_workbench.workspace.config import (
     WORKSPACE_CONFIG_FILE,
     load_workspace_config,
@@ -454,6 +461,14 @@ def import_workspace_workflow(
                 installer_discovered = True
                 discovered_stack_status = f"{cfn_status.stack_name} ({cfn_status.stack_status})"
                 ssm_client = aws_ctx.factory.get_client("ssm") if aws_ctx.identity else None
+                deployed_template = get_cloudformation_stack_template(
+                    client=cfn_client, stack_name=stack_name
+                )
+                if deployed_template is None:
+                    recommendations.append(
+                        "Live installer template could not be retrieved. Ensure the AWS identity "
+                        "has cloudformation:GetTemplate, then run 'lza installer import'."
+                    )
                 deployed_version = resolve_deployed_installer_version(
                     cfn_client=cfn_client,
                     ssm_client=ssm_client,
@@ -464,6 +479,13 @@ def import_workspace_workflow(
                     ),
                 )
                 if not dry_run:
+                    if deployed_template is not None:
+                        sync_installer_template(
+                            workspace_dir=resolved_workspace_dir,
+                            config=config,
+                            state=state,
+                            template_body=deployed_template,
+                        )
                     config = sync_installer_config(
                         workspace_dir=resolved_workspace_dir,
                         config=config,

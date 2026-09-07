@@ -75,6 +75,8 @@ def test_import_installer_workflow_success(tmp_path: Path) -> None:
             }
         ]
     }
+    template_body = '{"Description": "Imported installer", "Parameters": {}}'
+    mock_cfn.get_template.return_value = {"TemplateBody": template_body}
 
     mock_cp = MagicMock()
     mock_cp.get_pipeline_state.return_value = {
@@ -117,8 +119,15 @@ def test_import_installer_workflow_success(tmp_path: Path) -> None:
     # Verify persisted to disk
     persisted_config = load_workspace_config(ws_dir)
     assert persisted_config.installer.options.management_account_email == "mgmt@example.com"
+    assert persisted_config.installer.stack_template.source == "local"
+    assert persisted_config.installer.stack_template.path == (
+        "aws-accelerator-installer/AWSAccelerator-InstallerStack.template"
+    )
+    template_path = ws_dir / persisted_config.installer.stack_template.path
+    assert template_path.read_text(encoding="utf-8") == template_body
     persisted_state = load_workspace_state(ws_dir)
     assert persisted_state.installer_stack_id == stack_id
+    assert persisted_state.installer_template_digest is not None
 
 
 def test_import_installer_workflow_dry_run(tmp_path: Path) -> None:
@@ -161,6 +170,37 @@ def test_import_installer_workflow_dry_run(tmp_path: Path) -> None:
     assert result.dry_run is True
     persisted_config = load_workspace_config(ws_dir)
     assert persisted_config.installer.options.management_account_email is None
+
+
+def test_import_installer_requires_live_template_for_sync(tmp_path: Path) -> None:
+    ws_dir = tmp_path / "ws-template-unavailable"
+    _setup_test_workspace(ws_dir)
+
+    mock_cfn = MagicMock()
+    mock_cfn.describe_stacks.return_value = {
+        "Stacks": [
+            {
+                "StackName": "AWSAccelerator-InstallerStack",
+                "StackStatus": "UPDATE_COMPLETE",
+                "Parameters": [],
+            }
+        ]
+    }
+    mock_cfn.get_template.return_value = {}
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            return_value=mock_cfn,
+        ),
+    ):
+        mock_val.return_value = {
+            "account": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/admin",
+        }
+        with pytest.raises(LzaError, match="cloudformation:GetTemplate"):
+            import_installer_workflow(target_dir=ws_dir)
 
 
 def test_import_installer_workflow_missing_stack_raises(tmp_path: Path) -> None:

@@ -10,6 +10,7 @@ import pytest
 from lza_workbench.configuration.git import init_git_repository, set_git_remote_url
 from lza_workbench.configuration.templates import resolve_template_source
 from lza_workbench.errors import LzaError
+from lza_workbench.workflows.installer_plan import plan_installer_workflow
 from lza_workbench.workflows.workspace_import import (
     WorkspaceImportResult,
     import_workspace_workflow,
@@ -200,6 +201,9 @@ def test_import_workspace_live_aws_discovery(tmp_path: Path) -> None:
         ]
     }
     mock_cfn.get_parameter.return_value = {"Parameter": {"Value": "1.15.5"}}
+    mock_cfn.get_template.return_value = {
+        "TemplateBody": '{"Description": "Imported installer", "Parameters": {}}'
+    }
 
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
@@ -262,11 +266,26 @@ def test_import_workspace_live_aws_discovery_s3_repository(tmp_path: Path) -> No
                         "ParameterValue": "s3-aws-accelerator-source-123456789012",
                     },
                     {"ParameterKey": "RepositoryBucketObject", "ParameterValue": "lza-v1.15.5.zip"},
+                    {
+                        "ParameterKey": "ManagementAccountEmail",
+                        "ParameterValue": "mgmt@example.com",
+                    },
+                    {
+                        "ParameterKey": "LogArchiveAccountEmail",
+                        "ParameterValue": "log@example.com",
+                    },
+                    {
+                        "ParameterKey": "AuditAccountEmail",
+                        "ParameterValue": "audit@example.com",
+                    },
                 ],
             }
         ]
     }
     mock_cfn.get_parameter.return_value = {"Parameter": {"Value": "1.15.5"}}
+    mock_cfn.get_template.return_value = {
+        "TemplateBody": '{"Description": "Imported S3 installer", "Parameters": {}}'
+    }
 
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
@@ -293,6 +312,23 @@ def test_import_workspace_live_aws_discovery_s3_repository(tmp_path: Path) -> No
     assert result.config.installer.source_code.repository_type == "s3"
     assert result.config.installer.source_code.bucket == "s3-aws-accelerator-source-123456789012"
     assert result.config.installer.source_code.key == "lza-v1.15.5.zip"
+    assert result.config.installer.stack_template.source == "local"
+    assert result.config.installer.stack_template.path == (
+        "aws-accelerator-installer/AWSAccelerator-InstallerStack.template"
+    )
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {
+            "account": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/admin",
+        }
+        mock_client.return_value = MagicMock()
+        plan = plan_installer_workflow(target_dir=ws_dir, dry_run=True)
+
+    assert plan.config.installer.source_code.repository_type == "s3"
     assert result.config.configuration.repository.type == "s3"
     assert (
         result.config.configuration.repository.bucket
