@@ -138,6 +138,11 @@ body {
   padding: 0.75rem 1rem;
 }
 
+.notice:empty,
+.notice[hidden] {
+  display: none !important;
+}
+
 .notice.warning {
   background-color: #fffbeb;
   border-color: #fde68a;
@@ -612,14 +617,64 @@ body {
   background-color: #f1f5f9;
 }
 
+.btn-danger {
+  background-color: #dc2626;
+  border-color: #dc2626;
+  color: #ffffff;
+}
+
+.btn-danger:hover {
+  background-color: #b91c1c;
+  border-color: #b91c1c;
+  color: #ffffff;
+}
+
 .installer-settings-card {
   margin-top: 1.5rem;
 }
 
-.form-grid {
+.form-sections-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-section {
+  background-color: #ffffff;
+  border: 1px solid var(--border-card);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.form-section-header {
+  background-color: var(--bg-page);
+  border-bottom: 1px solid var(--border-card);
+  padding: 0.875rem 1.25rem;
+}
+
+.form-section-title {
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.form-section-desc {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin: 0.25rem 0 0 0;
+}
+
+.form-section-body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
   gap: 1.25rem;
+  padding: 1.25rem;
+}
+
+.form-group-hidden {
+  display: none !important;
 }
 
 .form-group {

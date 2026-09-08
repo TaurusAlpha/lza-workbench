@@ -11,6 +11,7 @@ from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import (
+    UNSUPPORTED_INSTALLER_PARAMETERS,
     apply_installer_parameter,
     build_installer_cfn_parameters,
     get_installer_parameter_label,
@@ -96,6 +97,7 @@ def get_installer_parameters_schema(
     target_dir: Path | None = None,
     values: dict[str, str] | None = None,
     dry_run: bool = False,
+    all_fields: bool = False,
 ) -> InstallerForm:
     """Return applicable, template-derived fields without writing workspace config or state."""
     ctx = load_workspace_context(
@@ -125,7 +127,11 @@ def get_installer_parameters_schema(
             description=(str(definition["Description"]) if definition.get("Description") else None),
         )
         for name, definition in schema.items()
-        if is_installer_parameter_applicable(candidate, name)
+        if (
+            name not in UNSUPPORTED_INSTALLER_PARAMETERS
+            if all_fields
+            else is_installer_parameter_applicable(candidate, name)
+        )
     )
     return InstallerForm(
         workspace_dir=ctx.workspace_dir,
@@ -169,6 +175,13 @@ def apply_installer_settings(request: InstallerSettingsRequest) -> InstallerSett
             ctx.state.installer_downloaded_at = datetime.fromtimestamp(
                 template_path.stat().st_mtime, tz=UTC
             )
+        deployed = ctx.state.installer_deployed_parameters or {}
+        changed = {
+            k: v
+            for k, v in resolved_parameters.items()
+            if k not in deployed or deployed.get(k) != v
+        }
+        ctx.state.pending_installer_parameters = changed if changed else None
         write_workspace_state(ctx.workspace_dir, ctx.state)
 
     return InstallerSettingsResult(

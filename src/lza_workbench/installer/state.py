@@ -27,6 +27,7 @@ def record_installer_deployment(
     state.installer_template_digest = template_digest
     if downloaded_at:
         state.installer_downloaded_at = downloaded_at
+    state.pending_installer_parameters = None
     state.installer_stack_updated_at = now
     state.updated_at = now
 

@@ -384,3 +384,45 @@ def test_installer_init_populates_s3_config_bucket(tmp_path: Path) -> None:
 
     saved_config = load_workspace_config(ws_dir)
     assert saved_config.configuration.repository.bucket == expected_bucket
+
+
+def test_apply_installer_settings_tracks_pending_parameters(tmp_path: Path) -> None:
+    """Saving installer settings records pending parameters in state relative to deployed."""
+    ws_dir = tmp_path / "pending-ws"
+    ws_dir.mkdir(parents=True, exist_ok=True)
+    (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
+    (ws_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Pending Test", slug="pending-test"),
+        aws=AwsConfig(profile="default", region="us-east-1"),
+        lza=LzaConfig(version="v1.16.0"),
+    )
+    config.installer.options.management_account_email = "mgmt@example.com"
+    config.installer.options.log_archive_account_email = "log@example.com"
+    config.installer.options.audit_account_email = "audit@example.com"
+    write_workspace_config(ws_dir, config)
+
+    state = WorkspaceState.from_config(config)
+    state.installer_deployed_parameters = {
+        "EnableApprovalStage": "No",
+        "AcceleratorPrefix": "AWSAccelerator",
+    }
+    write_workspace_state(ws_dir, state)
+
+    apply_installer_settings(
+        InstallerSettingsRequest(
+            target_dir=ws_dir,
+            values={
+                "EnableApprovalStage": "Yes",
+                "ApprovalStageNotifyEmailList": "ops@example.com",
+            },
+        )
+    )
+
+    from lza_workbench.workspace.state import load_workspace_state
+
+    saved_state = load_workspace_state(ws_dir)
+    assert saved_state.pending_installer_parameters is not None
+    assert saved_state.pending_installer_parameters.get("EnableApprovalStage") == "Yes"
+

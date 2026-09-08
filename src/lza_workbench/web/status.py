@@ -56,7 +56,7 @@ def create_status_router(*, workspace_dir: Path) -> APIRouter:
     @router.get("/api/status/installer")
     def get_installer_status() -> dict[str, Any]:
         status_res = get_installer_status_workflow(target_dir=workspace_dir)
-        form_res = get_installer_parameters_schema(target_dir=workspace_dir)
+        form_res = get_installer_parameters_schema(target_dir=workspace_dir, all_fields=True)
         return serialize_installer_status(status_res, form_res)
 
     @router.post("/api/installer/settings")

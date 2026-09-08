@@ -154,6 +154,8 @@ class WorkspaceState(WorkspaceModel):
     installer_downloaded_at: datetime | None = None
     installer_template_version: str | None = None
     installer_template_digest: str | None = None
+    installer_deployed_parameters: dict[str, str] | None = None
+    pending_installer_parameters: dict[str, str] | None = None
     imported: bool | None = None
     imported_at: datetime | None = None
 

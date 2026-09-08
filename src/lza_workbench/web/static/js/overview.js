@@ -9,6 +9,47 @@ export function getStatusVariant(status) {
   if (!status) return "neutral";
   const norm = String(status).toLowerCase();
 
+  // 1. Danger states (failures, errors, rollback, inaccessible)
+  if (
+    norm.includes("failed") ||
+    norm.includes("cancelled") ||
+    norm.includes("stopped") ||
+    norm.includes("missing") ||
+    norm.includes("inaccessible") ||
+    norm.includes("diverged") ||
+    norm.includes("out of sync") ||
+    norm.includes("mismatch") ||
+    norm.includes("error") ||
+    norm === "offline" ||
+    norm.includes("rollback")
+  ) {
+    return "danger";
+  }
+
+  // 2. Warning states (recorded/offline data, attention, drift, in-progress)
+  if (
+    norm.includes("recorded") ||
+    norm.includes("last known") ||
+    norm.includes("offline") ||
+    norm.includes("not live") ||
+    norm.includes("attention") ||
+    norm.includes("incomplete") ||
+    norm.includes("running") ||
+    norm.includes("in progress") ||
+    norm.includes("inprogress") ||
+    norm.includes("building") ||
+    norm.includes("pending") ||
+    norm.includes("ahead") ||
+    norm.includes("behind") ||
+    norm.includes("dirty") ||
+    norm.includes("drift") ||
+    norm.includes("local changes") ||
+    norm.includes("aws unavailable")
+  ) {
+    return "warning";
+  }
+
+  // 3. Success states (only live positive outcomes)
   if (
     norm.includes("healthy") ||
     norm.includes("succeeded") ||
@@ -23,42 +64,6 @@ export function getStatusVariant(status) {
     norm === "0"
   ) {
     return "success";
-  }
-
-  if (
-    norm.includes("attention") ||
-    norm.includes("incomplete") ||
-    norm.includes("running") ||
-    norm.includes("in progress") ||
-    norm.includes("inprogress") ||
-    norm.includes("building") ||
-    norm.includes("pending") ||
-    norm.includes("ahead") ||
-    norm.includes("behind") ||
-    norm.includes("dirty") ||
-    norm.includes("drift") ||
-    norm.includes("local changes") ||
-    norm.includes("aws unavailable") ||
-    norm.includes("recorded") ||
-    norm.includes("last known")
-  ) {
-    return "warning";
-  }
-
-  if (
-    norm.includes("failed") ||
-    norm.includes("cancelled") ||
-    norm.includes("stopped") ||
-    norm.includes("missing") ||
-    norm.includes("inaccessible") ||
-    norm.includes("diverged") ||
-    norm.includes("out of sync") ||
-    norm.includes("mismatch") ||
-    norm.includes("error") ||
-    norm.includes("offline") ||
-    norm.includes("rollback")
-  ) {
-    return "danger";
   }
 
   return "neutral";
@@ -132,15 +137,25 @@ export function card(title, fields, status, options = {}) {
 }
 
 function pipelineFields(pipeline) {
+  const isRecorded = !pipeline.isLive && pipeline.status && pipeline.status !== "—";
+  const execStatus = isRecorded ? `Recorded: ${pipeline.status}` : pipeline.status;
   return [
     ["Pipeline", pipeline.name, { mono: true, truncate: true }],
-    ["Latest execution", pipeline.status, { statusIndicator: Boolean(pipeline.status) }],
+    ["Latest execution", execStatus, { statusIndicator: Boolean(pipeline.status) }],
     ["Current work", [pipeline.currentStage, pipeline.currentAction].filter(Boolean).join(" / ") || null, { truncate: true }],
     ["Failure", pipeline.failureSummary, { truncate: true }],
   ];
 }
 
-function configurationSyncStatus(configuration) {
+function pipelineBadge(pipeline) {
+  if (!pipeline.exists || !pipeline.status || pipeline.status === "—") return pipeline.status;
+  if (!pipeline.isLive) {
+    return `Recorded: ${pipeline.status}`;
+  }
+  return pipeline.status;
+}
+
+function configurationSyncStatus(configuration, isLive = true) {
   if (!configuration.localGitClean) {
     return "Local changes";
   }
@@ -152,7 +167,7 @@ function configurationSyncStatus(configuration) {
 
   switch (sync.status) {
     case "Synchronized":
-      return "In sync";
+      return isLive ? "In sync" : "Recorded: In sync";
     case "Ahead":
     case "Behind":
     case "Diverged":
@@ -180,6 +195,10 @@ export function renderOverview(container, status) {
   const remoteSyncSummary =
     status.configuration.remoteSync?.summary || status.configuration.gitSync?.summary;
 
+  const installerStatusDisplay = !status.aws.isLive && status.installer.status && status.installer.status !== "—"
+    ? `Recorded: ${status.installer.status}`
+    : status.installer.status;
+
   container.innerHTML = [
     card("Workspace", [
       ["Customer", status.workspace.customerName],
@@ -195,7 +214,7 @@ export function renderOverview(container, status) {
     ], status.aws.isLive ? "Live" : "Offline"),
     card("Installer", [
       ["Stack", status.installer.name, { mono: true, truncate: true }],
-      ["Stack status", status.installer.status, { statusIndicator: Boolean(status.installer.status) }],
+      ["Stack status", installerStatusDisplay, { statusIndicator: Boolean(status.installer.status) }],
       ["Deployed version", status.installer.deployedVersion, { mono: true }],
     ], status.health.installer, { href: "#/installer" }),
     card("Configuration", [
@@ -203,9 +222,9 @@ export function renderOverview(container, status) {
       ["Local Git", status.configuration.localGitBranch, { mono: true }],
       ["Uncommitted", uncommittedValue, { statusIndicator: !status.configuration.localGitClean }],
       ["Remote sync", remoteSyncSummary, { truncate: true }],
-    ], configurationSyncStatus(status.configuration), { href: "#/configuration" }),
-    card("Installer pipeline", pipelineFields(status.installerPipeline), status.installerPipeline.status),
-    card("Configuration pipeline", pipelineFields(status.configurationPipeline), status.configurationPipeline.status, { href: "#/configuration-pipeline" }),
+    ], configurationSyncStatus(status.configuration, status.aws.isLive), { href: "#/configuration" }),
+    card("Installer pipeline", pipelineFields(status.installerPipeline), pipelineBadge(status.installerPipeline)),
+    card("Configuration pipeline", pipelineFields(status.configurationPipeline), pipelineBadge(status.configurationPipeline), { href: "#/configuration-pipeline" }),
   ].join("");
 
   container.querySelectorAll(".card-interactive").forEach((interactiveCard) => {

@@ -31,10 +31,28 @@ function parseRoute() {
   return "overview";
 }
 
+function clearNotice() {
+  notice.replaceChildren();
+  notice.textContent = "";
+  notice.className = "notice";
+  notice.hidden = true;
+}
+
+function showNotice(text, type = "warning") {
+  notice.textContent = text;
+  notice.className = `notice ${type}`;
+  notice.hidden = false;
+}
+
+function getOfflineWarning(awsError) {
+  const reason = awsError ? `: ${awsError}` : "";
+  return `AWS is offline${reason}. Displayed deployment, stack, and pipeline statuses are not live and reflect the last recorded state.`;
+}
+
 async function loadOverview() {
   viewContent.className = "card-grid";
   viewContent.setAttribute("aria-busy", "true");
-  notice.replaceChildren();
+  clearNotice();
   refresh.disabled = true;
   if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench";
   if (pageTitle) pageTitle.textContent = "Workspace Overview";
@@ -46,15 +64,15 @@ async function loadOverview() {
     workspacePath.title = status.workspace.directory;
     renderOverview(viewContent, status);
     if (!status.aws.isLive) {
-      notice.textContent = status.aws.error ?? "AWS is unavailable; showing recorded status.";
-      notice.className = "notice warning";
+      showNotice(getOfflineWarning(status.aws.error), "warning");
+    } else {
+      clearNotice();
     }
   } catch (error) {
     workspacePath.textContent = "Workspace status unavailable";
     workspacePath.removeAttribute("title");
     viewContent.replaceChildren();
-    notice.textContent = error.message;
-    notice.className = "notice error";
+    showNotice(error.message, "error");
   } finally {
     viewContent.setAttribute("aria-busy", "false");
     refresh.disabled = false;
@@ -64,7 +82,7 @@ async function loadOverview() {
 async function loadConfiguration() {
   viewContent.className = "view-container";
   viewContent.setAttribute("aria-busy", "true");
-  notice.replaceChildren();
+  clearNotice();
   refresh.disabled = true;
   if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench / Configuration";
   if (pageTitle) pageTitle.textContent = "Configuration Details";
@@ -76,15 +94,15 @@ async function loadConfiguration() {
     workspacePath.title = status.workspace.directory;
     renderConfigurationDetails(viewContent, status);
     if (!status.workspace.isLive) {
-      notice.textContent = status.workspace.error ?? "AWS is unavailable; showing recorded status.";
-      notice.className = "notice warning";
+      showNotice(getOfflineWarning(status.workspace.error), "warning");
+    } else {
+      clearNotice();
     }
   } catch (error) {
     workspacePath.textContent = "Configuration status unavailable";
     workspacePath.removeAttribute("title");
     viewContent.replaceChildren();
-    notice.textContent = error.message;
-    notice.className = "notice error";
+    showNotice(error.message, "error");
   } finally {
     viewContent.setAttribute("aria-busy", "false");
     refresh.disabled = false;
@@ -94,7 +112,7 @@ async function loadConfiguration() {
 async function loadPipeline() {
   viewContent.className = "view-container";
   viewContent.setAttribute("aria-busy", "true");
-  notice.replaceChildren();
+  clearNotice();
   refresh.disabled = true;
   if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench / Configuration Pipeline";
   if (pageTitle) pageTitle.textContent = "Configuration Pipeline Details";
@@ -106,15 +124,15 @@ async function loadPipeline() {
     workspacePath.title = status.workspace.directory;
     renderPipelineDetails(viewContent, status);
     if (!status.workspace.isLive) {
-      notice.textContent = status.workspace.error ?? "AWS is unavailable; showing recorded status.";
-      notice.className = "notice warning";
+      showNotice(getOfflineWarning(status.workspace.error), "warning");
+    } else {
+      clearNotice();
     }
   } catch (error) {
     workspacePath.textContent = "Pipeline status unavailable";
     workspacePath.removeAttribute("title");
     viewContent.replaceChildren();
-    notice.textContent = error.message;
-    notice.className = "notice error";
+    showNotice(error.message, "error");
   } finally {
     viewContent.setAttribute("aria-busy", "false");
     refresh.disabled = false;
@@ -124,7 +142,7 @@ async function loadPipeline() {
 async function loadInstaller() {
   viewContent.className = "view-container";
   viewContent.setAttribute("aria-busy", "true");
-  notice.replaceChildren();
+  clearNotice();
   refresh.disabled = true;
   if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench / Installer";
   if (pageTitle) pageTitle.textContent = "Installer Settings & Deployment";
@@ -136,15 +154,15 @@ async function loadInstaller() {
     workspacePath.title = status.workspace.directory;
     renderInstallerDetails(viewContent, status, loadInstaller);
     if (!status.aws.isLive) {
-      notice.textContent = status.aws.error ?? "AWS is unavailable; showing recorded status.";
-      notice.className = "notice warning";
+      showNotice(getOfflineWarning(status.aws.error), "warning");
+    } else {
+      clearNotice();
     }
   } catch (error) {
     workspacePath.textContent = "Installer status unavailable";
     workspacePath.removeAttribute("title");
     viewContent.replaceChildren();
-    notice.textContent = error.message;
-    notice.className = "notice error";
+    showNotice(error.message, "error");
   } finally {
     viewContent.setAttribute("aria-busy", "false");
     refresh.disabled = false;

@@ -6,6 +6,13 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### Web UI & Installer Settings Bugfixes (v0.33.1)
+- **Bug 1 & 2 (Offline mode notices & recorded badge color)**: Fixed empty yellow notice box persisting after login/refresh/back when offline; displayed clear warning that statuses are not live but last recorded states; ensured recorded offline states are styled amber (warning) rather than misleading green (success).
+- **Bug 3 (Card naming)**: Renamed "Canonical Settings" card on the Installer page to "Current Settings" for concise readability.
+- **Bug 4 (Structured form layout)**: Refactored flat 2-column parameter inputs into 4 titled, structured card sections: "Source & Repository", "Mandatory Accounts", "Architecture & Environment", and "Pipeline & Operations".
+- **Bug 5 (Reactive conditional fields)**: Added instantaneous client-side show/hide toggling for conditional inputs: toggling `EnableApprovalStage` shows/hides `ApprovalStageNotifyEmailList` and manages required status; toggling `RepositorySource` switches between GitHub, CodeCommit, and S3 parameters; hidden fields are omitted from client validation.
+- **Bug 6 (Reset to written configuration)**: Implemented confirmation modal dialog before resetting installer settings; form fields revert directly to the written parameters from `lza-workspace.yaml` with reactive conditional updates and zero AWS calls; added `pending_installer_parameters` tracking in `WorkspaceState` to record changed parameters relative to deployed state until deployment.
+
 ### Installer Settings & Deployment Web Page (v0.33.0)
 - Built the Installer Settings and Deployment page in the Web interface, accessible from the Overview Installer card (`#/installer`) with breadcrumb and hash-based navigation.
 - Rendered canonical settings, deployed CloudFormation stack status, deployed version, state alignment, configuration drift warnings, and pipeline summary.

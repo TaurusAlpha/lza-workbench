@@ -1,6 +1,51 @@
 import { getInstallerPlan, saveInstallerSettings } from "./api.js";
 import { card, escapeHtml, formatFieldValue, renderBadge } from "./overview.js";
 
+const FORM_SECTIONS = [
+  {
+    id: "source-repo",
+    title: "Source & Repository",
+    description: "Configuration repository source location, repository name, and branch settings.",
+    fields: [
+      "RepositorySource",
+      "RepositoryOwner",
+      "RepositoryName",
+      "RepositoryBranchName",
+      "RepositoryBucketName",
+      "RepositoryBucketObject",
+    ],
+  },
+  {
+    id: "mandatory-accounts",
+    title: "Mandatory Accounts",
+    description: "Required AWS core account email addresses for the landing zone.",
+    fields: [
+      "ManagementAccountEmail",
+      "LogArchiveAccountEmail",
+      "AuditAccountEmail",
+    ],
+  },
+  {
+    id: "arch-env",
+    title: "Architecture & Environment",
+    description: "Landing Zone Accelerator resource prefix and AWS Control Tower integration.",
+    fields: [
+      "AcceleratorPrefix",
+      "ControlTowerEnabled",
+    ],
+  },
+  {
+    id: "pipeline-ops",
+    title: "Pipeline & Operations",
+    description: "Deployment pipeline manual approval gates, notifications, and diagnostics.",
+    fields: [
+      "EnableApprovalStage",
+      "ApprovalStageNotifyEmailList",
+      "EnableDiagnosticsPack",
+    ],
+  },
+];
+
 function formatTimestamp(isoStr) {
   if (!isoStr) return "—";
   try {
@@ -38,7 +83,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     ["Last Updated", formatTimestamp(deployed.lastUpdatedTime || deployed.creationTime)],
   ];
 
-  // 2. Canonical Configuration Summary Fields
+  // 2. Current Configuration Summary Fields (Bug 3: renamed from Canonical Settings to Current Settings)
   const canonicalFields = [
     ["Source Type", canonicalSettings.repositorySource?.toUpperCase() || "—", { mono: true }],
     ["Repository Name", canonicalSettings.repositoryName || "—", { mono: true }],
@@ -83,71 +128,117 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     `;
   }
 
-  // 4. Build Dynamic Settings Form Fields
+  // 4. Build Dynamic Settings Form Fields (Bug 4: Section-grouped Layout)
   const currentParams = form.resolvedParameters || {};
-  const formFieldHtml = form.fields
-    .map((field) => {
-      const fieldId = `installer-field-${escapeHtml(field.name)}`;
-      const currentValue = currentParams[field.name] ?? field.default ?? "";
-      const requiredMark = field.required ? '<span class="required-indicator" title="Required">*</span>' : "";
-      const helpText = field.description
-        ? `<p class="form-help">${escapeHtml(field.description)}</p>`
-        : "";
+  const fieldHtmlMap = {};
 
-      let inputControlHtml = "";
-      if (field.allowedValues && field.allowedValues.length > 0) {
-        const optionsHtml = field.allowedValues
-          .map((opt) => {
-            const selected = String(opt) === String(currentValue) ? " selected" : "";
-            return `<option value="${escapeHtml(opt)}"${selected}>${escapeHtml(opt)}</option>`;
-          })
-          .join("");
-        inputControlHtml = `
-          <select id="${fieldId}" name="${escapeHtml(field.name)}" class="form-select"${field.required ? " required" : ""}>
-            ${optionsHtml}
-          </select>
-        `;
-      } else {
-        const patternAttr = field.allowedPattern ? ` data-pattern="${escapeHtml(field.allowedPattern)}"` : "";
-        inputControlHtml = `
-          <input
-            type="text"
-            id="${fieldId}"
-            name="${escapeHtml(field.name)}"
-            value="${escapeHtml(currentValue)}"
-            class="form-input"
-            ${patternAttr}
-            ${field.required ? "required" : ""}
-          />
-        `;
-      }
+  form.fields.forEach((field) => {
+    const fieldId = `installer-field-${escapeHtml(field.name)}`;
+    const currentValue = currentParams[field.name] ?? field.default ?? "";
+    const requiredMark = field.required ? '<span class="required-indicator" title="Required">*</span>' : '<span class="required-indicator" style="display:none;" title="Required">*</span>';
+    const helpText = field.description
+      ? `<p class="form-help">${escapeHtml(field.description)}</p>`
+      : "";
 
-      return `
-        <div class="form-group" data-field-name="${escapeHtml(field.name)}">
-          <label for="${fieldId}" class="form-label">
-            ${escapeHtml(field.label || field.name)} ${requiredMark}
-          </label>
-          ${inputControlHtml}
-          ${helpText}
-          <div class="form-field-error" id="error-${fieldId}" hidden></div>
-        </div>
+    let inputControlHtml = "";
+    if (field.allowedValues && field.allowedValues.length > 0) {
+      const optionsHtml = field.allowedValues
+        .map((opt) => {
+          const selected = String(opt) === String(currentValue) ? " selected" : "";
+          return `<option value="${escapeHtml(opt)}"${selected}>${escapeHtml(opt)}</option>`;
+        })
+        .join("");
+      inputControlHtml = `
+        <select id="${fieldId}" name="${escapeHtml(field.name)}" class="form-select"${field.required ? " required" : ""}>
+          ${optionsHtml}
+        </select>
       `;
-    })
+    } else {
+      const patternAttr = field.allowedPattern ? ` data-pattern="${escapeHtml(field.allowedPattern)}"` : "";
+      inputControlHtml = `
+        <input
+          type="text"
+          id="${fieldId}"
+          name="${escapeHtml(field.name)}"
+          value="${escapeHtml(currentValue)}"
+          class="form-input"
+          ${patternAttr}
+          ${field.required ? "required" : ""}
+        />
+      `;
+    }
+
+    fieldHtmlMap[field.name] = `
+      <div class="form-group" data-field-name="${escapeHtml(field.name)}">
+        <label for="${fieldId}" class="form-label">
+          ${escapeHtml(field.label || field.name)} ${requiredMark}
+        </label>
+        ${inputControlHtml}
+        ${helpText}
+        <div class="form-field-error" id="error-${fieldId}" hidden></div>
+      </div>
+    `;
+  });
+
+  // Render configured sections
+  const assignedFieldNames = new Set();
+  const renderedSectionsHtml = FORM_SECTIONS.map((section) => {
+    const fieldsInSec = section.fields
+      .filter((name) => Boolean(fieldHtmlMap[name]))
+      .map((name) => {
+        assignedFieldNames.add(name);
+        return fieldHtmlMap[name];
+      })
+      .join("");
+
+    if (!fieldsInSec) return "";
+
+    return `
+      <div class="form-section" id="section-${escapeHtml(section.id)}">
+        <div class="form-section-header">
+          <h3 class="form-section-title">${escapeHtml(section.title)}</h3>
+          <p class="form-section-desc">${escapeHtml(section.description)}</p>
+        </div>
+        <div class="form-section-body">
+          ${fieldsInSec}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  // Check for any unassigned fields
+  const unassignedFieldsHtml = form.fields
+    .filter((f) => !assignedFieldNames.has(f.name) && Boolean(fieldHtmlMap[f.name]))
+    .map((f) => fieldHtmlMap[f.name])
     .join("");
 
-  // Construct whole page layout
+  const extraSectionHtml = unassignedFieldsHtml
+    ? `
+      <div class="form-section" id="section-additional">
+        <div class="form-section-header">
+          <h3 class="form-section-title">Additional Parameters</h3>
+          <p class="form-section-desc">Additional CloudFormation parameters defined in the template.</p>
+        </div>
+        <div class="form-section-body">
+          ${unassignedFieldsHtml}
+        </div>
+      </div>
+    `
+    : "";
+
+  // Construct whole page layout (Bug 3: "Current Settings" card title)
   container.innerHTML = `
     <div class="installer-view">
       <!-- Summary Cards -->
       <section class="card-grid" style="margin-bottom: 1.5rem;">
         ${card("Deployed Stack", deployedFields, deployed.exists ? "Deployed" : "Not Deployed")}
-        ${card("Canonical Settings", canonicalFields, canonicalSettings.lzaVersion)}
+        ${card("Current Settings", canonicalFields, canonicalSettings.lzaVersion)}
         ${card("Installer Pipeline", pipelineFields, pipeline.status)}
       </section>
 
       ${driftBannerHtml}
 
-      <!-- Settings & Form Section -->
+      <!-- Settings & Form Section (Bug 4: structured sections) -->
       <section class="card installer-settings-card">
         <div class="card-header">
           <div>
@@ -158,11 +249,12 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
         <div class="card-body">
           <div id="installer-form-alert" aria-live="polite"></div>
           <form id="installer-settings-form" novalidate>
-            <div class="form-grid">
-              ${formFieldHtml}
+            <div class="form-sections-container">
+              ${renderedSectionsHtml}
+              ${extraSectionHtml}
             </div>
 
-            <div class="form-actions">
+            <div class="form-actions" style="margin-top: 1.75rem;">
               <button type="submit" id="btn-save-installer" class="btn btn-primary">
                 <span>Save Settings</span>
               </button>
@@ -177,8 +269,11 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
         </div>
       </section>
 
-      <!-- Deployment Plan Modal / Panel Container -->
+      <!-- Deployment Plan Modal Container -->
       <div id="installer-plan-modal-container" hidden></div>
+
+      <!-- Reset Confirmation Modal Container (Bug 6) -->
+      <div id="installer-reset-modal-container" hidden></div>
     </div>
   `;
 
@@ -189,6 +284,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
   const btnReset = container.querySelector("#btn-reset-installer");
   const btnPreview = container.querySelector("#btn-preview-installer-plan");
   const planContainer = container.querySelector("#installer-plan-modal-container");
+  const resetModalContainer = container.querySelector("#installer-reset-modal-container");
 
   function clearErrors() {
     formAlert.innerHTML = "";
@@ -201,22 +297,94 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     });
   }
 
+  function setFieldVisibility(fieldName, isVisible, isRequired) {
+    const group = container.querySelector(`.form-group[data-field-name="${fieldName}"]`);
+    if (!group) return;
+    const input = group.querySelector("input, select");
+    const errorEl = group.querySelector(".form-field-error");
+    const reqIndicator = group.querySelector(".required-indicator");
+
+    if (isVisible) {
+      group.classList.remove("form-group-hidden");
+      if (input) {
+        input.disabled = false;
+        if (isRequired) {
+          input.setAttribute("required", "");
+          if (reqIndicator) reqIndicator.style.display = "";
+        } else {
+          input.removeAttribute("required");
+          if (reqIndicator) reqIndicator.style.display = "none";
+        }
+      }
+    } else {
+      group.classList.add("form-group-hidden");
+      if (input) {
+        input.disabled = true;
+        input.removeAttribute("required");
+        input.classList.remove("has-error");
+      }
+      if (reqIndicator) reqIndicator.style.display = "none";
+      if (errorEl) {
+        errorEl.textContent = "";
+        errorEl.hidden = true;
+      }
+    }
+  }
+
+  function updateFieldVisibility() {
+    // 1. Repository Source conditional visibility
+    const repoSourceEl = container.querySelector("#installer-field-RepositorySource");
+    const repoSource = (repoSourceEl ? repoSourceEl.value : "codecommit").toLowerCase();
+
+    if (repoSource === "github") {
+      setFieldVisibility("RepositoryOwner", true, true);
+      setFieldVisibility("RepositoryName", true, true);
+      setFieldVisibility("RepositoryBranchName", true, true);
+      setFieldVisibility("RepositoryBucketName", false, false);
+      setFieldVisibility("RepositoryBucketObject", false, false);
+    } else if (repoSource === "s3") {
+      setFieldVisibility("RepositoryOwner", false, false);
+      setFieldVisibility("RepositoryName", false, false);
+      setFieldVisibility("RepositoryBranchName", false, false);
+      setFieldVisibility("RepositoryBucketName", true, true);
+      setFieldVisibility("RepositoryBucketObject", true, true);
+    } else {
+      // codecommit or codeconnection
+      setFieldVisibility("RepositoryOwner", false, false);
+      setFieldVisibility("RepositoryName", true, true);
+      setFieldVisibility("RepositoryBranchName", true, true);
+      setFieldVisibility("RepositoryBucketName", false, false);
+      setFieldVisibility("RepositoryBucketObject", false, false);
+    }
+
+    // 2. EnableApprovalStage conditional visibility
+    const approvalEl = container.querySelector("#installer-field-EnableApprovalStage");
+    const approvalVal = approvalEl ? approvalEl.value : "No";
+    const approvalEnabled = approvalVal === "Yes";
+    setFieldVisibility("ApprovalStageNotifyEmailList", approvalEnabled, approvalEnabled);
+  }
+
   function validateForm() {
     clearErrors();
     let hasError = false;
     const values = {};
 
     form.fields.forEach((field) => {
+      const group = container.querySelector(`.form-group[data-field-name="${field.name}"]`);
+      if (!group || group.classList.contains("form-group-hidden")) {
+        return; // skip hidden fields from validation
+      }
       const fieldId = `installer-field-${field.name}`;
       const input = container.querySelector(`#${fieldId}`);
-      if (!input) return;
+      if (!input || input.disabled) return;
 
       const val = input.value.trim();
       values[field.name] = val;
 
       const errorEl = container.querySelector(`#error-${fieldId}`);
+      const isRequired = input.hasAttribute("required");
 
-      if (field.required && !val) {
+      if (isRequired && !val) {
         hasError = true;
         input.classList.add("has-error");
         if (errorEl) {
@@ -248,6 +416,16 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     return { isValid: !hasError, values };
   }
 
+  // Reactive visibility updates on change/input
+  formElement.addEventListener("change", () => {
+    updateFieldVisibility();
+  });
+  formElement.addEventListener("input", () => {
+    updateFieldVisibility();
+  });
+  // Run initial visibility update to reflect current loaded state
+  updateFieldVisibility();
+
   // Handle Form Submission / Save
   formElement.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -270,7 +448,10 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     `;
 
     try {
-      await saveInstallerSettings(values);
+      const saveRes = await saveInstallerSettings(values);
+      if (saveRes && saveRes.resolvedParameters) {
+        Object.assign(currentParams, saveRes.resolvedParameters);
+      }
       formAlert.innerHTML = `
         <div class="notice success">
           Installer settings saved successfully.
@@ -290,24 +471,72 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     }
   });
 
-  // Handle Reset
-  btnReset.addEventListener("click", () => {
-    clearErrors();
-    form.fields.forEach((field) => {
-      const fieldId = `installer-field-${field.name}`;
-      const input = container.querySelector(`#${fieldId}`);
-      if (input) {
-        input.value = currentParams[field.name] ?? field.default ?? "";
-      }
-    });
-    formAlert.innerHTML = `
-      <div class="notice info">
-        Form values reset to original settings.
+  // Handle Reset Modal: Revert form fields to written configuration in lza-workspace.yaml
+  function showResetModal() {
+    resetModalContainer.hidden = false;
+    resetModalContainer.innerHTML = `
+      <div class="plan-modal-overlay">
+        <div class="plan-modal-card" style="max-width: 32rem;">
+          <div class="plan-modal-header">
+            <h3 class="plan-modal-title">Reset Installer Form</h3>
+            <button type="button" class="btn btn-sm btn-close-reset" title="Cancel">✕</button>
+          </div>
+          <div class="plan-modal-body">
+            <p style="margin-bottom: 0.75rem; line-height: 1.5;">
+              Are you sure you want to reset all form settings?
+            </p>
+            <div class="notice info" style="margin-bottom: 0.75rem;">
+              Form inputs will be reverted to the written configuration from <code>lza-workspace.yaml</code>. All unsaved changes will be discarded.
+            </div>
+          </div>
+          <div class="plan-modal-footer" style="gap: 0.75rem;">
+            <button type="button" class="btn btn-close-reset">Cancel</button>
+            <button type="button" id="btn-confirm-revert" class="btn btn-primary">Reset to Written Settings</button>
+          </div>
+        </div>
       </div>
     `;
-    setTimeout(() => {
-      if (formAlert.querySelector(".info")) formAlert.innerHTML = "";
-    }, 2500);
+
+    const closeButtons = resetModalContainer.querySelectorAll(".btn-close-reset");
+    closeButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        resetModalContainer.hidden = true;
+        resetModalContainer.innerHTML = "";
+      });
+    });
+
+    const confirmBtn = resetModalContainer.querySelector("#btn-confirm-revert");
+
+    confirmBtn.addEventListener("click", () => {
+      resetModalContainer.hidden = true;
+      resetModalContainer.innerHTML = "";
+      clearErrors();
+
+      // Revert each input to written configuration parameter from lza-workspace.yaml
+      form.fields.forEach((field) => {
+        const fieldId = `installer-field-${field.name}`;
+        const input = container.querySelector(`#${fieldId}`);
+        if (input) {
+          input.value = currentParams[field.name] ?? "";
+        }
+      });
+
+      // Reactively update conditional fields visibility
+      updateFieldVisibility();
+
+      formAlert.innerHTML = `
+        <div class="notice info">
+          Form values reset to written configuration from <code>lza-workspace.yaml</code>.
+        </div>
+      `;
+      setTimeout(() => {
+        if (formAlert.querySelector(".info")) formAlert.innerHTML = "";
+      }, 2500);
+    });
+  }
+
+  btnReset.addEventListener("click", () => {
+    showResetModal();
   });
 
   // Handle Preview Deployment Plan

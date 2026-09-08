@@ -30,6 +30,8 @@ def apply_installer_state_sync(
         )
     state.installer_stack_id = cfn_status.stack_id
     state.installer_stack_status = cfn_status.stack_status
+    if cfn_status.deployed_parameters:
+        state.installer_deployed_parameters = dict(cfn_status.deployed_parameters)
     if deployed_version is not None:
         state.installer_template_version = deployed_version
     state.updated_at = datetime.now(UTC)

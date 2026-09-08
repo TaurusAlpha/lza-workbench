@@ -455,3 +455,4 @@ def test_installer_plan_api_serializes_plan() -> None:
     assert data["codecommit"]["repositoryName"] == "aws-accelerator-codecommit"
     assert data["codecommit"]["status"] == "EXISTS"
 
+

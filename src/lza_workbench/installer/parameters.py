@@ -58,6 +58,16 @@ def resolve_installer_source_branch(
     return "main"
 
 
+UNSUPPORTED_INSTALLER_PARAMETERS: frozenset[str] = frozenset({
+    "ConfigurationRepositoryLocation",
+    "UseExistingConfigRepo",
+    "ConfigCodeConnectionArn",
+    "ExistingConfigRepositoryOwner",
+    "ExistingConfigRepositoryName",
+    "ExistingConfigRepositoryBranchName",
+})
+
+
 def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: str) -> bool:
     """Return whether a template parameter applies to the current configuration."""
     source_type = config.installer.source_code.repository_type
@@ -75,14 +85,7 @@ def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: s
     if parameter_name == "ApprovalStageNotifyEmailList":
         return bool(approval_enabled)
 
-    if parameter_name in {
-        "ConfigurationRepositoryLocation",
-        "UseExistingConfigRepo",
-        "ConfigCodeConnectionArn",
-        "ExistingConfigRepositoryOwner",
-        "ExistingConfigRepositoryName",
-        "ExistingConfigRepositoryBranchName",
-    }:
+    if parameter_name in UNSUPPORTED_INSTALLER_PARAMETERS:
         return False
 
     return True
