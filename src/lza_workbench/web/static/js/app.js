@@ -14,6 +14,7 @@ async function loadStatus() {
   try {
     const status = await getStatus();
     workspacePath.textContent = status.workspace.directory;
+    workspacePath.title = status.workspace.directory;
     renderOverview(overview, status);
     if (!status.aws.isLive) {
       notice.textContent = status.aws.error ?? "AWS is unavailable; showing recorded status.";
@@ -21,6 +22,7 @@ async function loadStatus() {
     }
   } catch (error) {
     workspacePath.textContent = "Workspace status unavailable";
+    workspacePath.removeAttribute("title");
     overview.replaceChildren();
     notice.textContent = error.message;
     notice.className = "notice error";
