@@ -318,15 +318,10 @@ Future design decision:
 
 - [ ] Decide whether to add an explicit `--fix` mode. Do not implement mutation as part of the current diagnostic command.
 
-## Web Interface — Active
+## Web Interface
 
-The local Web GUI is the primary planned interactive interface. The CLI remains supported for
-automation, debugging, SSH, and advanced use. Implementation follows
-[`docs/CODEX-GUI-IMPLEMENTATION.md`](docs/CODEX-GUI-IMPLEMENTATION.md).
+The local Web GUI
 
-- [x] Complete the approved root-status workflow readiness refactors before adding Web dependencies.
-- [x] Choose FastAPI/Uvicorn with static HTML, CSS, and native ES modules for the minimal local Web stack.
-- [x] Deliver the first read-only vertical slice for one launch-selected workspace and overview status.
 - [ ] Add detailed read-only installer, configuration, and pipeline views before mutation flows.
 - [ ] Keep multi-user/server operation out of the current scope.
 

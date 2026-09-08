@@ -73,9 +73,12 @@ def _render_local_config(result: ConfigurationStatusResult) -> None:
         else:
             print_kv("Working Tree", "Clean", style="green")
 
-        if local_git.sync_status:
-            sync = local_git.sync_status
-            print_kv("Remote Sync", format_status(sync.summary))
+        if not isinstance(result.repository, S3ConfigurationRepositoryStatus):
+            if result.remote_sync:
+                print_kv("Remote Sync", format_status(result.remote_sync.summary))
+            elif local_git.sync_status:
+                print_kv("Remote Sync", format_status(local_git.sync_status.summary))
+
 
 
 def _render_repository_settings(result: ConfigurationStatusResult) -> None:
@@ -122,7 +125,11 @@ def _render_repository_settings(result: ConfigurationStatusResult) -> None:
         elif repository.object_exists is False:
             print_kv("Remote Archive Status", "Not uploaded yet", style="yellow")
 
+        if result.remote_sync:
+            print_kv("Remote Sync", format_status(result.remote_sync.summary))
+
     elif isinstance(repository, CodeCommitConfigurationRepositoryStatus):
+
         repo_name = repository.repository_name or "Not set"
         if repository.exists is True:
             repo_status = "[green]Available[/green]"
@@ -248,6 +255,7 @@ def status_config_command(
     """Query workspace configuration metadata and display configuration status."""
     result = get_config_status_workflow(target_dir=target_dir)
     render_config_status(result, has_state=result.synchronization.has_state)
+
 
 
 __all__ = [

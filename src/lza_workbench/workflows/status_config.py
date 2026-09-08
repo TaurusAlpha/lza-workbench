@@ -32,6 +32,10 @@ from lza_workbench.configuration.status import (
     S3ConfigurationRepositoryStatus,
     compile_configuration_warnings,
 )
+from lza_workbench.configuration.sync import (
+    RemoteSyncStatus,
+    evaluate_s3_remote_sync,
+)
 from lza_workbench.pipeline.failures import (
     collect_pipeline_action_failures,
 )
@@ -46,6 +50,7 @@ def get_config_status_workflow(
     state: WorkspaceState | None = None,
     workspace_dir: Path | None = None,
 ) -> ConfigurationStatusResult:
+
     """Query workspace configuration and remote/pipeline status data."""
     if config is not None and workspace_dir is not None:
         resolved_workspace_dir = workspace_dir
@@ -131,6 +136,7 @@ def get_config_status_workflow(
     codeconnection_provider = None
     codeconnection_owner_account = None
     codeconnection_error = None
+    remote_sync: RemoteSyncStatus | None = None
 
     if repo.type == "s3":
         s3_bucket_name = None
@@ -147,6 +153,7 @@ def get_config_status_workflow(
         except Exception as exc:
             s3_error = str(exc)
 
+        obj_info = None
         if s3_bucket_name and aws_identity:
             try:
                 s3_client = factory.get_client("s3")
@@ -167,10 +174,18 @@ def get_config_status_workflow(
                     s3_object_version_id = obj_info.get("version_id")
                     s3_object_last_modified = obj_info.get("last_modified")
                     s3_object_size = obj_info.get("content_length")
-                    s3_error = obj_info.get("error")
             except Exception as exc:
                 s3_error = str(exc)
                 s3_bucket_accessible = False
+
+        remote_sync = evaluate_s3_remote_sync(
+            config_dir=config_dir,
+            exclude_dirs=set(resolved_config.configuration.packaging.exclude.directories),
+            exclude_files=set(resolved_config.configuration.packaging.exclude.files),
+            s3_object_info=obj_info,
+            state=resolved_state,
+            is_live=bool(aws_identity),
+        )
 
     elif repo.type == "codecommit":
         repo_name = repo.repository_name or "aws-accelerator-config"
@@ -199,6 +214,9 @@ def get_config_status_workflow(
             codeconnection_provider = conn_res.provider_type
             codeconnection_owner_account = conn_res.owner_account_id
             codeconnection_error = conn_res.error
+
+    if repo.type != "s3" and git_sync_status is not None:
+        remote_sync = RemoteSyncStatus.from_git_sync(git_sync_status)
 
     # Configuration Pipeline Status
     prefix = resolved_config.lza.accelerator_prefix or "AWSAccelerator"
@@ -326,6 +344,9 @@ def get_config_status_workflow(
         artifact_etag=resolved_state.config_artifact_etag if resolved_state else None,
         artifact_version_id=resolved_state.config_artifact_version_id if resolved_state else None,
     )
+
+
+
     warnings = compile_configuration_warnings(
         workspace=workspace,
         local_git=local_git,
@@ -339,7 +360,9 @@ def get_config_status_workflow(
         pipeline=pipeline,
         synchronization=synchronization,
         warnings=warnings,
+        remote_sync=remote_sync,
     )
+
 
 
 __all__ = [

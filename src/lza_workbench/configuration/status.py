@@ -8,6 +8,7 @@ from pathlib import Path
 
 from lza_workbench.aws.codepipeline import PipelineStateResult
 from lza_workbench.configuration.git import GitRemoteSyncStatus, GitWorkingTreeStatus
+from lza_workbench.configuration.sync import RemoteSyncStatus
 
 
 @dataclass(frozen=True)
@@ -136,6 +137,8 @@ class ConfigurationStatusResult:
     pipeline: ConfigurationPipelineStatus
     synchronization: ConfigurationSynchronizationStatus
     warnings: tuple[str, ...]
+    remote_sync: RemoteSyncStatus | None = None
+
 
 
 def compile_configuration_warnings(

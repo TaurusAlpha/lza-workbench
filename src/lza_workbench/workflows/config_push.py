@@ -10,6 +10,7 @@ from lza_workbench.aws.context import AwsExecutionContext, resolve_aws_execution
 from lza_workbench.aws.s3 import upload_s3_file
 from lza_workbench.configuration.archive import (
     ConfigDiffResult,
+    compute_config_directory_digest,
     create_zip_archive,
 )
 from lza_workbench.configuration.git import (
@@ -193,12 +194,15 @@ def _handle_s3_push(
         repo_cfg.bucket = destination.bucket
         write_workspace_config(workspace_dir, config)
 
+    sync_digest = compute_config_directory_digest(config_dir, exclude_dirs, exclude_files)
     etag, version_id = upload_s3_file(
         client=s3_client,
         file_path=zip_path,
         bucket_name=destination.bucket,
         object_key=destination.object_key,
+        extra_args={"Metadata": {"lza-content-digest": sync_digest}},
     )
+
 
     record_config_upload(
         state,

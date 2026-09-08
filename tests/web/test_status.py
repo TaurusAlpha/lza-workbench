@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from lza_workbench.configuration.sync import RemoteSyncStatus
 from lza_workbench.errors import LzaError
 from lza_workbench.web.app import create_app
 from lza_workbench.workflows.status_root import (
@@ -34,7 +35,15 @@ def _status_result() -> RootStatusResult:
             deployed_version="1.11.0",
         ),
         installer_pipeline=PipelineSummary(name="AWSAccelerator-Installer", status="Succeeded"),
-        configuration_repo=ConfigurationRepoSummary(repository_type="s3", target="acme-config"),
+        configuration_repo=ConfigurationRepoSummary(
+            repository_type="s3",
+            target="acme-config",
+            remote_sync=RemoteSyncStatus(
+                status="Synchronized",
+                is_synced=True,
+                summary="In Sync with S3 (ETag: 123)",
+            ),
+        ),
         configuration_pipeline=PipelineSummary(name="AWSAccelerator-Pipeline", status="Succeeded"),
         health=OverallHealthSummary(
             installer="Healthy",
@@ -56,6 +65,14 @@ def test_status_api_serializes_root_status() -> None:
         "lzaVersion": "1.11.0",
     }
     assert response.json()["installerPipeline"]["status"] == "Succeeded"
+    assert response.json()["configuration"]["remoteSync"] == {
+        "status": "Synchronized",
+        "ahead": 0,
+        "behind": 0,
+        "summary": "In Sync with S3 (ETag: 123)",
+        "isSynced": True,
+    }
+
 
 
 def test_status_api_translates_expected_workspace_error() -> None:

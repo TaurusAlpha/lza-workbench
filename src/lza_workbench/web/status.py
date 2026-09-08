@@ -28,6 +28,7 @@ def create_status_router(*, workspace_dir: Path) -> APIRouter:
 def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
     """Translate the root-status workflow result into the browser API contract."""
     sync = result.configuration_repo.git_sync_status
+    rsync = result.configuration_repo.remote_sync
     return {
         "workspace": {
             "directory": str(result.workspace_dir),
@@ -65,8 +66,20 @@ def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
                 if sync
                 else None
             ),
+            "remoteSync": (
+                {
+                    "status": rsync.status,
+                    "ahead": rsync.ahead,
+                    "behind": rsync.behind,
+                    "summary": rsync.summary,
+                    "isSynced": rsync.is_synced,
+                }
+                if rsync
+                else None
+            ),
             "isLive": result.configuration_repo.is_live,
         },
+
         "configurationPipeline": _serialize_pipeline(result.configuration_pipeline),
         "health": {
             "installer": result.health.installer,

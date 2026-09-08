@@ -121,12 +121,15 @@ def render_root_status(result: RootStatusResult) -> None:
     else:
         print_kv("Local Git", "Not a git repository", style="dim")
 
-    if crepo.git_sync_status:
+    if crepo.remote_sync:
+        print_kv("Remote Sync", format_status(crepo.remote_sync.summary))
+    elif crepo.git_sync_status:
         print_kv("Remote Sync", format_status(crepo.git_sync_status.summary))
     elif crepo.is_live:
         print_kv("Remote Sync", format_status("Not Git"))
     else:
         print_kv("Remote Sync", format_status("Not Checked (AWS Unavailable)"))
+
 
     console.print()
     _render_pipeline_summary(result.configuration_pipeline, label_prefix="Configuration")

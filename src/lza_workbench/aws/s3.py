@@ -282,10 +282,6 @@ def download_s3_file(
 
         raise LzaError(f"AWS S3 error [{error_code}]: {error_message}") from exc
 
-    except BotoCoreError as exc:
-        raise LzaError(f"AWS connection/client failure: {exc}") from exc
-
-
 def inspect_s3_object_safe(
     *,
     client: Any,
@@ -303,6 +299,7 @@ def inspect_s3_object_safe(
             "version_id": head.get("VersionId"),
             "content_length": head.get("ContentLength"),
             "last_modified": head.get("LastModified"),
+            "metadata": head.get("Metadata") or {},
             "error": None,
         }
     except ClientError as exc:
@@ -314,6 +311,7 @@ def inspect_s3_object_safe(
                 "version_id": None,
                 "content_length": None,
                 "last_modified": None,
+                "metadata": {},
                 "error": None,
             }
         return {
@@ -322,6 +320,7 @@ def inspect_s3_object_safe(
             "version_id": None,
             "content_length": None,
             "last_modified": None,
+            "metadata": {},
             "error": f"[{code}] {exc}",
         }
     except BotoCoreError as exc:
@@ -331,6 +330,7 @@ def inspect_s3_object_safe(
             "version_id": None,
             "content_length": None,
             "last_modified": None,
+            "metadata": {},
             "error": f"Connection failure: {exc}",
         }
 
@@ -347,4 +347,5 @@ __all__ = [
     "put_s3_bucket_versioning",
     "upload_s3_file",
 ]
+
 

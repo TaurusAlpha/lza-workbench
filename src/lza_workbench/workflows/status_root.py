@@ -14,12 +14,20 @@ from lza_workbench.aws.codepipeline import (
     get_pipeline_state,
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
+from lza_workbench.aws.s3 import inspect_s3_object_safe
 from lza_workbench.configuration.git import (
     GitRemoteSyncStatus,
     get_git_remote_sync_status,
     get_git_working_tree_status,
 )
-from lza_workbench.configuration.repository import resolve_s3_configuration_destination
+from lza_workbench.configuration.repository import (
+    CONFIG_S3_OBJECT_KEY,
+    resolve_s3_configuration_destination,
+)
+from lza_workbench.configuration.sync import (
+    RemoteSyncStatus,
+    evaluate_s3_remote_sync,
+)
 from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.pipeline.failures import collect_pipeline_action_failures
 from lza_workbench.pipeline.resolution import resolve_pipeline
@@ -66,7 +74,9 @@ class ConfigurationRepoSummary:
     local_git_clean: bool = True
     local_git_uncommitted: int = 0
     git_sync_status: GitRemoteSyncStatus | None = None
+    remote_sync: RemoteSyncStatus | None = None
     is_live: bool = True
+
 
 
 @dataclass(frozen=True)
@@ -284,9 +294,13 @@ def _derive_overall_health(
     elif config_pipe.status in ("Failed", "Cancelled"):
         configuration_health = "Failed"
     elif not config_repo.local_git_clean or (
+        config_repo.remote_sync is not None
+        and config_repo.remote_sync.status == "Diverged"
+    ) or (
         config_repo.git_sync_status is not None
         and config_repo.git_sync_status.status == "Diverged"
     ):
+
         configuration_health = "Attention Required"
     elif config_pipe.status == "Succeeded":
         configuration_health = "Healthy"
@@ -294,6 +308,7 @@ def _derive_overall_health(
         configuration_health = "Incomplete"
     else:
         configuration_health = "Attention Required"
+
 
     # 3. Overall workspace health
     if (
@@ -443,6 +458,35 @@ def get_root_status_workflow(
         else None
     )
 
+    remote_sync: RemoteSyncStatus | None = None
+    if repo.type == "s3":
+        s3_info = None
+        if is_live and target and target != "Not configured":
+            try:
+                s3_client = factory.get_client("s3")
+                s3_info = inspect_s3_object_safe(
+                    client=s3_client,
+                    bucket_name=target,
+                    object_key=CONFIG_S3_OBJECT_KEY,
+                )
+            except Exception:
+                s3_info = None
+        exclude_dirs = set(config.configuration.packaging.exclude.directories)
+        exclude_files = set(config.configuration.packaging.exclude.files)
+        remote_sync = evaluate_s3_remote_sync(
+            config_dir=config_dir,
+            exclude_dirs=exclude_dirs,
+            exclude_files=exclude_files,
+            s3_object_info=s3_info,
+            state=state,
+            is_live=is_live,
+        )
+    elif git_sync_status is not None:
+        remote_sync = RemoteSyncStatus.from_git_sync(git_sync_status)
+    else:
+        remote_sync = None
+
+
     config_repo_summary = ConfigurationRepoSummary(
         repository_type=repo.type,
         target=target,
@@ -450,8 +494,10 @@ def get_root_status_workflow(
         local_git_clean=local_git_clean,
         local_git_uncommitted=local_git_uncommitted,
         git_sync_status=git_sync_status,
+        remote_sync=remote_sync,
         is_live=is_live,
     )
+
 
     # Overall Health
     health = _derive_overall_health(

@@ -6,6 +6,13 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### S3 Configuration Remote Synchronization & Status Workflow (v0.30.8)
+- Added S3 remote sync parity tracking comparing local configuration against canonical remote S3 archives without downloading objects into memory.
+- Tracked transfer state in `.lza/state.json` (`config_artifact_etag`, `config_sync_digest`, `config_artifact_version_id`) across `lza config push` and `lza config pull`.
+- Attached `x-amz-meta-lza-content-digest` user metadata on S3 uploads for stateless parity checks across workstations.
+- Unified `RemoteSyncStatus` model across Git and S3 repositories for CLI (`lza status`, `lza status config`) and Web UI (`overview.js` green status pill).
+- Simplified sync evaluation to fast AWS S3 header checks (`head_object`) and state comparison; untracked remote archives cleanly report `Unknown` ("Never synced with workspace").
+
 ### Local Web Overview Skeleton
 - Added `lza ui`, an on-demand loopback FastAPI/Uvicorn server for one launch-selected workspace.
 - Added a framework-free static Overview page backed by `GET /api/status`, reusing the root-status workflow and presenting workspace, AWS, installer, configuration, pipeline, and health summaries.

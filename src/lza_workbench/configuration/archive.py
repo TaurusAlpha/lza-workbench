@@ -275,3 +275,6 @@ def _is_ignored(path: Path, is_directory: bool, rules: tuple[PackagingIgnoreRule
         if matches:
             ignored = not rule.negated
     return ignored
+
+
+

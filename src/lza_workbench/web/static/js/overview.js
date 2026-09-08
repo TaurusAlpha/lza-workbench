@@ -140,17 +140,26 @@ function configurationSyncStatus(configuration) {
     return "Local changes";
   }
 
-  switch (configuration.gitSync?.status) {
+  const sync = configuration.remoteSync || configuration.gitSync;
+  if (!sync) {
+    return "Sync unavailable";
+  }
+
+  switch (sync.status) {
     case "Synchronized":
       return "In sync";
     case "Ahead":
     case "Behind":
     case "Diverged":
       return "Drift detected";
+    case "Not Uploaded":
+      return "Not deployed";
+    case "No Upstream":
+      return "No Upstream";
     case undefined:
       return "Sync unavailable";
     default:
-      return configuration.gitSync.status;
+      return sync.status;
   }
 }
 
@@ -162,6 +171,9 @@ export function renderOverview(container, status) {
   const uncommittedValue = status.configuration.localGitClean
     ? "0 (Clean)"
     : `${status.configuration.localGitUncommitted} uncommitted`;
+
+  const remoteSyncSummary =
+    status.configuration.remoteSync?.summary || status.configuration.gitSync?.summary;
 
   container.innerHTML = [
     card("Workspace", [
@@ -185,9 +197,10 @@ export function renderOverview(container, status) {
       ["Repository", repoTarget, { mono: true, truncate: true }],
       ["Local Git", status.configuration.localGitBranch, { mono: true }],
       ["Uncommitted", uncommittedValue, { statusIndicator: !status.configuration.localGitClean }],
-      ["Remote sync", status.configuration.gitSync?.summary, { truncate: true }],
+      ["Remote sync", remoteSyncSummary, { truncate: true }],
     ], configurationSyncStatus(status.configuration)),
     card("Installer pipeline", pipelineFields(status.installerPipeline), status.installerPipeline.status),
     card("Configuration pipeline", pipelineFields(status.configurationPipeline), status.configurationPipeline.status),
   ].join("");
 }
+

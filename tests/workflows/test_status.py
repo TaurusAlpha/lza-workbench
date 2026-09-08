@@ -904,3 +904,52 @@ def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: 
         )
         assert "❌" not in result.pipeline.error
         assert result.pipeline.failed_build_url == "https://console.aws.amazon.com/codebuild/..."
+
+
+def test_get_config_status_workflow_s3_remote_sync(tmp_path: Path) -> None:
+    from lza_workbench.configuration.archive import compute_config_directory_digest
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="S3 Sync Customer", slug="s3-sync-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1", account_id="123456789012"),
+    )
+    config.configuration.repository.type = "s3"
+    config.configuration.repository.bucket = "aws-accelerator-config-123456789012-us-east-1"
+
+    config_dir = tmp_path / config.configuration.local_path
+    config_dir.mkdir(parents=True)
+    (config_dir / "global-config.yaml").write_text("homeRegion: us-east-1\n", encoding="utf-8")
+
+    digest = compute_config_directory_digest(config_dir, set(), set())
+    state = WorkspaceState()
+    state.config_sync_digest = digest
+    state.config_artifact_etag = "s3-etag-123"
+
+    mock_s3 = MagicMock()
+    mock_s3.head_bucket.return_value = {}
+    mock_s3.get_bucket_versioning.return_value = {"Status": "Enabled"}
+    mock_s3.get_bucket_encryption.return_value = {}
+    mock_s3.head_object.return_value = {
+        "ETag": '"s3-etag-123"',
+        "VersionId": "v1",
+        "ContentLength": 1024,
+        "Metadata": {"lza-content-digest": digest},
+    }
+
+    with (
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = mock_s3
+
+        result = get_config_status_workflow(
+            config=config,
+            state=state,
+            workspace_dir=tmp_path,
+        )
+        assert result.remote_sync is not None
+        assert result.remote_sync.status == "Synchronized"
+        assert result.remote_sync.is_synced is True
+        assert "s3-etag-123" in result.remote_sync.summary
+
