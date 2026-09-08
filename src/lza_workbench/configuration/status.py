@@ -121,8 +121,8 @@ class ConfigurationSynchronizationStatus:
 
     has_state: bool
     recorded_pipeline_execution_id: str | None
-    uploaded_at: object | None
-    downloaded_at: object | None
+    uploaded_at: datetime | None
+    downloaded_at: datetime | None
     artifact_etag: str | None
     artifact_version_id: str | None
     remote_sync: RemoteSyncStatus | None
@@ -138,7 +138,6 @@ class ConfigurationStatusResult:
     pipeline: ConfigurationPipelineStatus
     synchronization: ConfigurationSynchronizationStatus
     warnings: tuple[str, ...]
-
 
 
 def compile_configuration_warnings(

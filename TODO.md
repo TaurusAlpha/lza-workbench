@@ -314,7 +314,9 @@ Future design decision:
 The local Web GUI
 
 - [x] Add detailed read-only configuration details view (accessible from Configuration card).
-- [ ] Add detailed read-only installer and pipeline views before mutation flows.
+- [x] Add configuration pipeline details view (accessible from Configuration pipeline card).
+- [x] Add installer settings and deployment preview view (accessible from Installer card).
+- [ ] Add installer deployment mutation flow.
 - [ ] Keep multi-user/server operation out of the current scope.
 
 ## Workspace

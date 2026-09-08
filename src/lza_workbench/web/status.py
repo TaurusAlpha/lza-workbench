@@ -6,7 +6,18 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
+from pydantic import BaseModel
 
+from lza_workbench.workflows.installer_init import (
+    InstallerForm,
+    InstallerSettingsRequest,
+    apply_installer_settings,
+    get_installer_parameters_schema,
+)
+from lza_workbench.workflows.installer_plan import (
+    InstallerPlanResult,
+    plan_installer_workflow,
+)
 from lza_workbench.workflows.status_config import (
     CodeCommitConfigurationRepositoryStatus,
     CodeConnectionConfigurationRepositoryStatus,
@@ -15,11 +26,19 @@ from lza_workbench.workflows.status_config import (
     S3ConfigurationRepositoryStatus,
     get_config_status_workflow,
 )
+from lza_workbench.workflows.status_installer import (
+    InstallerStatusResult,
+    get_installer_status_workflow,
+)
 from lza_workbench.workflows.status_root import (
     PipelineSummary,
     RootStatusResult,
     get_root_status_workflow,
 )
+
+
+class InstallerSettingsPayload(BaseModel):
+    values: dict[str, str]
 
 
 def create_status_router(*, workspace_dir: Path) -> APIRouter:
@@ -33,6 +52,29 @@ def create_status_router(*, workspace_dir: Path) -> APIRouter:
     @router.get("/api/status/config")
     def get_config_status() -> dict[str, Any]:
         return serialize_configuration_status(get_config_status_workflow(target_dir=workspace_dir))
+
+    @router.get("/api/status/installer")
+    def get_installer_status() -> dict[str, Any]:
+        status_res = get_installer_status_workflow(target_dir=workspace_dir)
+        form_res = get_installer_parameters_schema(target_dir=workspace_dir)
+        return serialize_installer_status(status_res, form_res)
+
+    @router.post("/api/installer/settings")
+    def save_installer_settings(payload: InstallerSettingsPayload) -> dict[str, Any]:
+        result = apply_installer_settings(
+            InstallerSettingsRequest(target_dir=workspace_dir, values=payload.values)
+        )
+        return {
+            "success": True,
+            "message": "Installer settings saved successfully.",
+            "resolvedParameters": result.resolved_parameters,
+        }
+
+    @router.post("/api/installer/plan")
+    def get_installer_plan() -> dict[str, Any]:
+        return serialize_installer_plan(
+            plan_installer_workflow(target_dir=workspace_dir, dry_run=True)
+        )
 
     return router
 
@@ -91,7 +133,6 @@ def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
             ),
             "isLive": result.configuration_repo.is_live,
         },
-
         "configurationPipeline": _serialize_pipeline(result.configuration_pipeline),
         "health": {
             "installer": result.health.installer,
@@ -247,11 +288,13 @@ def serialize_configuration_status(result: ConfigurationStatusResult) -> dict[st
                 }
                 for a in stage.actions
             ]
-            pipe_stages.append({
-                "name": stage.stage_name,
-                "status": stage.status,
-                "actions": actions,
-            })
+            pipe_stages.append(
+                {
+                    "name": stage.stage_name,
+                    "status": stage.status,
+                    "actions": actions,
+                }
+            )
 
     pipeline_data = {
         "name": pipe.name,
@@ -268,20 +311,8 @@ def serialize_configuration_status(result: ConfigurationStatusResult) -> dict[st
     synchronization_data = {
         "hasState": sync_obj.has_state,
         "recordedPipelineExecutionId": sync_obj.recorded_pipeline_execution_id,
-        "uploadedAt": (
-            sync_obj.uploaded_at.isoformat()
-            if hasattr(sync_obj.uploaded_at, "isoformat")
-            else str(sync_obj.uploaded_at)
-            if sync_obj.uploaded_at
-            else None
-        ),
-        "downloadedAt": (
-            sync_obj.downloaded_at.isoformat()
-            if hasattr(sync_obj.downloaded_at, "isoformat")
-            else str(sync_obj.downloaded_at)
-            if sync_obj.downloaded_at
-            else None
-        ),
+        "uploadedAt": (sync_obj.uploaded_at.isoformat() if sync_obj.uploaded_at else None),
+        "downloadedAt": (sync_obj.downloaded_at.isoformat() if sync_obj.downloaded_at else None),
         "artifactEtag": sync_obj.artifact_etag,
         "artifactVersionId": sync_obj.artifact_version_id,
     }
@@ -294,4 +325,157 @@ def serialize_configuration_status(result: ConfigurationStatusResult) -> dict[st
         "pipeline": pipeline_data,
         "synchronization": synchronization_data,
         "warnings": list(result.warnings),
+    }
+
+
+def serialize_installer_status(
+    result: InstallerStatusResult, form: InstallerForm
+) -> dict[str, Any]:
+    """Translate installer status and schema into browser API contract."""
+    cfg = result.config
+    cfn = result.cfn_status
+    pipe = result.pipeline_state
+    align = result.state_alignment
+
+    canonical = {
+        "stackName": cfg.installer.stack_name or "AWSAccelerator-InstallerStack",
+        "lzaVersion": cfg.lza.version,
+        "acceleratorPrefix": cfg.lza.accelerator_prefix,
+        "repositorySource": cfg.installer.source_code.repository_type,
+        "repositoryName": cfg.installer.source_code.repository_name,
+        "repositoryBranch": cfg.installer.source_code.branch,
+        "repositoryOwner": cfg.installer.source_code.owner,
+        "managementAccountEmail": cfg.installer.options.management_account_email,
+        "logArchiveAccountEmail": cfg.installer.options.log_archive_account_email,
+        "auditAccountEmail": cfg.installer.options.audit_account_email,
+        "controlTowerEnabled": cfg.installer.options.control_tower_enabled,
+        "enableApprovalStage": cfg.installer.options.enable_approval_stage,
+        "approvalStageNotifyEmailList": cfg.installer.options.approval_stage_notify_email_list,
+    }
+
+    deployed = {
+        "stackName": cfn.stack_name,
+        "exists": cfn.exists,
+        "stackStatus": cfn.stack_status,
+        "stackId": cfn.stack_id,
+        "deployedVersion": result.deployed_version,
+        "creationTime": cfn.creation_time,
+        "lastUpdatedTime": cfn.last_updated_time,
+        "deployedParameters": dict(cfn.deployed_parameters),
+        "outputs": dict(cfn.outputs),
+        "error": cfn.error,
+    }
+
+    alignment_data = {
+        "status": "In Sync" if (align and align.in_sync) else "Out of Sync" if align else "UNKNOWN",
+        "inSync": align.in_sync if align else None,
+        "configurationDrift": {
+            k: {"deployed": v[0], "target": v[1]} for k, v in result.configuration_drift.items()
+        },
+    }
+
+    current_stage = None
+    current_action = None
+    failed_stage = None
+    failed_action = None
+    failure_summary = None
+
+    if pipe and pipe.stage_states:
+        for stage in pipe.stage_states:
+            for action in stage.actions:
+                if action.status == "InProgress":
+                    current_stage = stage.stage_name
+                    current_action = action.action_name
+                elif action.status == "Failed":
+                    failed_stage = stage.stage_name
+                    failed_action = action.action_name
+                    failure_summary = action.error_message or action.summary
+
+    pipeline_data = {
+        "name": result.installer_pipeline_name,
+        "exists": pipe.exists if pipe else False,
+        "status": pipe.status if pipe else "NOT_CHECKED",
+        "currentStage": current_stage,
+        "currentAction": current_action,
+        "failedStage": failed_stage,
+        "failedAction": failed_action,
+        "failureSummary": failure_summary,
+        "isLive": (pipe.error is None) if pipe else False,
+        "latestExecutionId": pipe.latest_execution_id if pipe else None,
+    }
+
+    form_fields = [
+        {
+            "name": f.name,
+            "label": f.label,
+            "default": f.default,
+            "required": f.required,
+            "allowedValues": list(f.allowed_values),
+            "allowedPattern": f.allowed_pattern,
+            "description": f.description,
+        }
+        for f in form.fields
+    ]
+
+    form_data = {
+        "fields": form_fields,
+        "resolvedParameters": dict(form.resolved_parameters),
+    }
+
+    aws_data = {
+        "profile": result.profile,
+        "region": result.region,
+        "identity": result.aws_identity,
+        "error": result.aws_error,
+        "isLive": result.aws_identity is not None,
+    }
+
+    return {
+        "workspace": {
+            "directory": str(result.workspace_dir),
+            "customerName": cfg.customer.name,
+            "lzaVersion": cfg.lza.version,
+        },
+        "canonicalSettings": canonical,
+        "deployed": deployed,
+        "alignment": alignment_data,
+        "pipeline": pipeline_data,
+        "form": form_data,
+        "aws": aws_data,
+    }
+
+
+def serialize_installer_plan(plan: InstallerPlanResult) -> dict[str, Any]:
+    """Translate installer deployment plan into browser API contract."""
+    cfn = plan.cloudformation_plan
+    cc = plan.codecommit_plan
+
+    return {
+        "cloudformation": {
+            "stackName": cfn.stack_name,
+            "operation": cfn.operation,
+            "stackStatus": cfn.stack_status,
+            "parameterDiffs": {
+                k: {"deployed": v[0], "target": v[1]} for k, v in cfn.parameter_diffs.items()
+            },
+            "resolvedParameters": dict(cfn.resolved_parameters),
+        },
+        "codecommit": {
+            "repositoryName": cc.repository_name,
+            "branchName": cc.branch_name,
+            "status": cc.status,
+            "creationRequired": cc.creation_required,
+            "syncRequired": cc.sync_required,
+            "officialRepoUrl": cc.official_repo_url,
+            "officialVersionRef": cc.official_version_ref,
+            "actions": list(cc.actions),
+        },
+        "githubSecretWarning": plan.github_secret_warning,
+        "aws": {
+            "profile": plan.profile,
+            "region": plan.region,
+            "identity": plan.aws_identity,
+            "error": plan.aws_error,
+            "isLive": plan.aws_identity is not None,
+        },
     }

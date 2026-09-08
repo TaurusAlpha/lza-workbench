@@ -6,6 +6,14 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### Installer Settings & Deployment Web Page (v0.33.0)
+- Built the Installer Settings and Deployment page in the Web interface, accessible from the Overview Installer card (`#/installer`) with breadcrumb and hash-based navigation.
+- Rendered canonical settings, deployed CloudFormation stack status, deployed version, state alignment, configuration drift warnings, and pipeline summary.
+- Rendered dynamic settings form controls generated from the installer CloudFormation template schema (`InstallerForm`), with `<select>` dropdowns for allowed values, input patterns, and descriptions.
+- Added client-side and server-side validation before saving installer settings to `lza-workspace.yaml`.
+- Integrated read-only deployment preview action (`POST /api/installer/plan`) displaying CloudFormation operation, parameter diffs, CodeCommit source plan, and GitHub secret warnings without executing mutations.
+- Enforced strict architectural layering (`web` -> `workflows` only) with tests in `test_package.py` and `test_status.py`.
+
 ### Configuration Details Web Page (v0.31.0)
 - Built a dedicated read-only Configuration Details page in the Web interface, opened from the Overview Configuration card or direct link/hash navigation (`#/configuration`).
 - Supported unified hash routing (`#/` and `#/overview` for Overview, `#/configuration` for Configuration Details) with back button and browser history support.

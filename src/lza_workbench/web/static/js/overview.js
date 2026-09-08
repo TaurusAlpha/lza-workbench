@@ -197,7 +197,7 @@ export function renderOverview(container, status) {
       ["Stack", status.installer.name, { mono: true, truncate: true }],
       ["Stack status", status.installer.status, { statusIndicator: Boolean(status.installer.status) }],
       ["Deployed version", status.installer.deployedVersion, { mono: true }],
-    ], status.health.installer),
+    ], status.health.installer, { href: "#/installer" }),
     card("Configuration", [
       ["Repository", repoTarget, { mono: true, truncate: true }],
       ["Local Git", status.configuration.localGitBranch, { mono: true }],

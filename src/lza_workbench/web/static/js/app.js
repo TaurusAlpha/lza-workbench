@@ -1,5 +1,6 @@
-import { getConfigurationStatus, getStatus } from "./api.js";
+import { getConfigurationStatus, getInstallerStatus, getStatus } from "./api.js";
 import { renderConfigurationDetails } from "./configuration.js";
+import { renderInstallerDetails } from "./installer.js";
 import { renderOverview } from "./overview.js";
 import { renderPipelineDetails } from "./pipeline.js";
 
@@ -17,6 +18,9 @@ function parseRoute() {
   const clean = hash.replace(/^\/?/, "/");
   if (clean === "/" || clean === "/overview") {
     return "overview";
+  }
+  if (clean === "/installer") {
+    return "installer";
   }
   if (clean === "/configuration") {
     return "configuration";
@@ -117,9 +121,41 @@ async function loadPipeline() {
   }
 }
 
+async function loadInstaller() {
+  viewContent.className = "view-container";
+  viewContent.setAttribute("aria-busy", "true");
+  notice.replaceChildren();
+  refresh.disabled = true;
+  if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench / Installer";
+  if (pageTitle) pageTitle.textContent = "Installer Settings & Deployment";
+  if (breadcrumb) breadcrumb.hidden = false;
+
+  try {
+    const status = await getInstallerStatus();
+    workspacePath.textContent = status.workspace.directory;
+    workspacePath.title = status.workspace.directory;
+    renderInstallerDetails(viewContent, status, loadInstaller);
+    if (!status.aws.isLive) {
+      notice.textContent = status.aws.error ?? "AWS is unavailable; showing recorded status.";
+      notice.className = "notice warning";
+    }
+  } catch (error) {
+    workspacePath.textContent = "Installer status unavailable";
+    workspacePath.removeAttribute("title");
+    viewContent.replaceChildren();
+    notice.textContent = error.message;
+    notice.className = "notice error";
+  } finally {
+    viewContent.setAttribute("aria-busy", "false");
+    refresh.disabled = false;
+  }
+}
+
 function handleRoute() {
   const route = parseRoute();
-  if (route === "configuration") {
+  if (route === "installer") {
+    loadInstaller();
+  } else if (route === "configuration") {
     loadConfiguration();
   } else if (route === "configuration-pipeline") {
     loadPipeline();

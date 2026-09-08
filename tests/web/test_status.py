@@ -8,6 +8,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackStatusResult
+from lza_workbench.aws.codepipeline import PipelineStateResult
 from lza_workbench.configuration.git import GitRemoteSyncStatus, GitWorkingTreeStatus
 from lza_workbench.configuration.status import (
     ConfigurationPipelineStatus,
@@ -19,7 +21,16 @@ from lza_workbench.configuration.status import (
 )
 from lza_workbench.configuration.sync import RemoteSyncStatus
 from lza_workbench.errors import LzaError
+from lza_workbench.installer.planning import InstallerPlanResult
+from lza_workbench.installer.source import CodeCommitPlanResult
+from lza_workbench.installer.status import StateAlignment
 from lza_workbench.web.app import create_app
+from lza_workbench.workflows.installer_init import (
+    InstallerForm,
+    InstallerFormField,
+    InstallerSettingsResult,
+)
+from lza_workbench.workflows.status_installer import InstallerStatusResult
 from lza_workbench.workflows.status_root import (
     ConfigurationRepoSummary,
     InstallerStackSummary,
@@ -27,6 +38,7 @@ from lza_workbench.workflows.status_root import (
     PipelineSummary,
     RootStatusResult,
 )
+from lza_workbench.workspace.schema import WorkspaceConfig
 
 
 def _config_status_result() -> ConfigurationStatusResult:
@@ -225,3 +237,221 @@ def test_config_status_api_translates_expected_workspace_error() -> None:
     assert response.json() == {
         "error": {"code": "workspace_unavailable", "message": "Configuration directory missing."}
     }
+
+
+def _workspace_config() -> WorkspaceConfig:
+    return WorkspaceConfig.model_validate({
+        "schema_version": 2,
+        "customer": {"name": "Acme", "slug": "acme"},
+        "lza": {"version": "1.11.0", "accelerator_prefix": "AWSAccelerator"},
+        "aws": {"profile": "acme-admin", "region": "eu-west-1", "account_id": "123456789012"},
+        "installer": {
+            "stack_name": "AWSAccelerator-InstallerStack",
+            "source_code": {
+                "repository_type": "codecommit",
+                "repository_name": "aws-accelerator-codecommit",
+                "branch": "main",
+            },
+            "options": {
+                "management_account_email": "mgmt@acme.com",
+                "log_archive_account_email": "log@acme.com",
+                "audit_account_email": "audit@acme.com",
+                "control_tower_enabled": True,
+                "enable_approval_stage": False,
+            },
+        },
+    })
+
+
+def _installer_status_result() -> InstallerStatusResult:
+    cfg = _workspace_config()
+    return InstallerStatusResult(
+        workspace_dir=Path("/workspaces/acme"),
+        config=cfg,
+        state=None,
+        profile="acme-admin",
+        region="eu-west-1",
+        aws_identity={"account": "123456789012", "arn": "arn:aws:iam::123456789012:user/admin"},
+        aws_error=None,
+        cfn_status=CfnStackStatusResult(
+            stack_name="AWSAccelerator-InstallerStack",
+            exists=True,
+            stack_status="CREATE_COMPLETE",
+            stack_id="arn:aws:cloudformation:eu-west-1:123456789012:stack/AWSAccelerator-InstallerStack/xyz",
+            deployed_parameters={"AcceleratorPrefix": "AWSAccelerator"},
+        ),
+        deployed_version="1.11.0",
+        configuration_drift={"AcceleratorPrefix": ("AWSAccelerator-Old", "AWSAccelerator")},
+        state_alignment=StateAlignment(
+            in_sync=True,
+        ),
+        installer_pipeline_name="AWSAccelerator-Installer",
+        pipeline_state=PipelineStateResult(
+            pipeline_name="AWSAccelerator-Installer",
+            exists=True,
+            status="Succeeded",
+        ),
+    )
+
+
+def _installer_form() -> InstallerForm:
+    return InstallerForm(
+        workspace_dir=Path("/workspaces/acme"),
+        template_path=Path("/workspaces/acme/.lza/template.yaml"),
+        fields=(
+            InstallerFormField(
+                name="RepositorySource",
+                label="Source location",
+                default="codecommit",
+                required=True,
+                allowed_values=("codecommit", "s3", "github"),
+                allowed_pattern=None,
+                description="Repository source type",
+            ),
+            InstallerFormField(
+                name="ManagementAccountEmail",
+                label="Management account email",
+                default="mgmt@acme.com",
+                required=True,
+                allowed_values=(),
+                allowed_pattern="^.+@.+$",
+                description="Management email",
+            ),
+        ),
+        resolved_parameters={
+            "RepositorySource": "codecommit",
+            "ManagementAccountEmail": "mgmt@acme.com",
+        },
+    )
+
+
+def _installer_plan_result() -> InstallerPlanResult:
+    cfg = _workspace_config()
+    return InstallerPlanResult(
+        workspace_dir=Path("/workspaces/acme"),
+        config=cfg,
+        profile="acme-admin",
+        region="eu-west-1",
+        aws_identity={"account": "123456789012", "arn": "arn:aws:iam::123456789012:user/admin"},
+        aws_error=None,
+        codecommit_plan=CodeCommitPlanResult(
+            repository_name="aws-accelerator-codecommit",
+            branch_name="main",
+            status="EXISTS",
+            creation_required=False,
+            sync_required=False,
+            official_repo_url="https://github.com/awslabs/landing-zone-accelerator-on-aws",
+            official_version_ref="v1.11.0",
+            actions=[],
+        ),
+        cloudformation_plan=CfnDeploymentPlanResult(
+            stack_name="AWSAccelerator-InstallerStack",
+            operation="UPDATE",
+            stack_status="CREATE_COMPLETE",
+            resolved_parameters={"AcceleratorPrefix": "AWSAccelerator"},
+            parameter_diffs={"AcceleratorPrefix": ("AWSAccelerator-Old", "AWSAccelerator")},
+        ),
+        dry_run=True,
+        github_secret_warning=None,
+    )
+
+
+def test_installer_status_api_serializes_status_and_form() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    with (
+        patch(
+            "lza_workbench.web.status.get_installer_status_workflow",
+            return_value=_installer_status_result(),
+        ),
+        patch(
+            "lza_workbench.web.status.get_installer_parameters_schema",
+            return_value=_installer_form(),
+        ),
+    ):
+        response = TestClient(app).get("/api/status/installer")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["workspace"]["customerName"] == "Acme"
+    assert data["canonicalSettings"]["acceleratorPrefix"] == "AWSAccelerator"
+    assert data["canonicalSettings"]["managementAccountEmail"] == "mgmt@acme.com"
+    assert data["canonicalSettings"]["controlTowerEnabled"] is True
+    assert data["deployed"]["stackName"] == "AWSAccelerator-InstallerStack"
+    assert data["deployed"]["stackStatus"] == "CREATE_COMPLETE"
+    assert data["deployed"]["deployedVersion"] == "1.11.0"
+    assert data["alignment"]["status"] == "In Sync"
+    assert data["alignment"]["inSync"] is True
+    assert "AcceleratorPrefix" in data["alignment"]["configurationDrift"]
+    assert data["pipeline"]["name"] == "AWSAccelerator-Installer"
+    assert data["pipeline"]["status"] == "Succeeded"
+    assert len(data["form"]["fields"]) == 2
+    assert data["form"]["fields"][0]["name"] == "RepositorySource"
+    assert data["form"]["fields"][0]["allowedValues"] == ["codecommit", "s3", "github"]
+    assert data["form"]["fields"][1]["allowedPattern"] == "^.+@.+$"
+    assert data["form"]["resolvedParameters"]["ManagementAccountEmail"] == "mgmt@acme.com"
+
+
+def test_save_installer_settings_api_success() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    cfg = _workspace_config()
+    mock_res = InstallerSettingsResult(
+        workspace_dir=Path("/workspaces/acme"),
+        config=cfg,
+        template_path=Path("/workspaces/acme/.lza/template.yaml"),
+        resolved_parameters={"RepositorySource": "codecommit"},
+        dry_run=False,
+        no_save=False,
+    )
+    with patch(
+        "lza_workbench.web.status.apply_installer_settings",
+        return_value=mock_res,
+    ):
+        response = TestClient(app).post(
+            "/api/installer/settings",
+            json={"values": {"RepositorySource": "codecommit"}},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["message"] == "Installer settings saved successfully."
+    assert data["resolvedParameters"] == {"RepositorySource": "codecommit"}
+
+
+def test_save_installer_settings_api_validation_error() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    with patch(
+        "lza_workbench.web.status.apply_installer_settings",
+        side_effect=LzaError("Missing required parameter: ManagementAccountEmail"),
+    ):
+        response = TestClient(app).post(
+            "/api/installer/settings",
+            json={"values": {"RepositorySource": "codecommit"}},
+        )
+
+    assert response.status_code == 422
+    assert (
+        response.json()["error"]["message"]
+        == "Missing required parameter: ManagementAccountEmail"
+    )
+
+
+def test_installer_plan_api_serializes_plan() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    with patch(
+        "lza_workbench.web.status.plan_installer_workflow",
+        return_value=_installer_plan_result(),
+    ):
+        response = TestClient(app).post("/api/installer/plan")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["cloudformation"]["stackName"] == "AWSAccelerator-InstallerStack"
+    assert data["cloudformation"]["operation"] == "UPDATE"
+    assert data["cloudformation"]["parameterDiffs"]["AcceleratorPrefix"] == {
+        "deployed": "AWSAccelerator-Old",
+        "target": "AWSAccelerator",
+    }
+    assert data["codecommit"]["repositoryName"] == "aws-accelerator-codecommit"
+    assert data["codecommit"]["status"] == "EXISTS"
+
