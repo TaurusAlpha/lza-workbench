@@ -56,6 +56,12 @@ from lza_workbench.workflows.status_root import (
     RootStatusResult,
     get_root_status_workflow,
 )
+from lza_workbench.workflows.workspace_bootstrap import (
+    BootstrapPlanResult,
+    WorkspaceBootstrapResult,
+    bootstrap_workspace_workflow,
+    plan_bootstrap_workflow,
+)
 
 
 class InstallerSettingsPayload(BaseModel):
@@ -65,6 +71,11 @@ class InstallerSettingsPayload(BaseModel):
 class ConfigActionApplyPayload(BaseModel):
     overwrite_confirmed: bool = False
     force: bool = False
+
+
+class BootstrapApplyPayload(BaseModel):
+    github_token: str | None = None
+    allow_missing_github_secret: bool = False
 
 
 def create_status_router(*, workspace_dir: Path) -> APIRouter:
@@ -191,6 +202,22 @@ def create_status_router(*, workspace_dir: Path) -> APIRouter:
             "executionId": execution_id,
             "message": message,
         }
+
+    @router.get("/api/bootstrap/plan")
+    def get_bootstrap_plan() -> dict[str, Any]:
+        return serialize_bootstrap_plan(
+            plan_bootstrap_workflow(target_dir=workspace_dir, dry_run=True)
+        )
+
+    @router.post("/api/bootstrap/apply")
+    def apply_bootstrap(payload: BootstrapApplyPayload | None = None) -> dict[str, Any]:
+        result = bootstrap_workspace_workflow(
+            target_dir=workspace_dir,
+            dry_run=False,
+            github_token=payload.github_token if payload else None,
+            allow_missing_github_secret=payload.allow_missing_github_secret if payload else False,
+        )
+        return serialize_bootstrap_result(result)
 
     return router
 
@@ -805,4 +832,83 @@ def serialize_pipeline_diagnostics(
             }
         )
     return results
+
+
+def serialize_bootstrap_plan(plan: BootstrapPlanResult) -> dict[str, Any]:
+    """Translate bootstrap plan workflow result into the browser API contract."""
+    is_mutation_required = (
+        plan.bucket_planned_operation in {"CREATE", "UPDATE"}
+        or plan.codecommit_repo_planned_operation == "CREATE"
+        or plan.github_planned_operation == "CREATE"
+    )
+    is_blocked = (
+        plan.codecommit_repo_planned_operation == "MISSING"
+        or plan.github_planned_operation in {"MISSING", "INACCESSIBLE"}
+    )
+    return {
+        "awsProfile": plan.aws_profile,
+        "awsRegion": plan.aws_region,
+        "accountId": plan.account_id,
+        "plannedOperation": plan.planned_operation,
+        "isMutationRequired": is_mutation_required and plan.is_live,
+        "isBlocked": is_blocked,
+        "imported": plan.imported,
+        "isLive": plan.is_live,
+        "error": plan.error,
+        "resources": {
+            "bucket": {
+                "name": plan.bucket_name,
+                "exists": plan.bucket_exists,
+                "versioningEnabled": plan.versioning_enabled,
+                "encryptionEnabled": plan.encryption_enabled,
+                "plannedOperation": plan.bucket_planned_operation,
+            },
+            "codecommit": {
+                "name": plan.codecommit_repo_name,
+                "branch": plan.codecommit_branch_name,
+                "exists": plan.codecommit_repo_exists,
+                "branchExists": plan.codecommit_branch_exists,
+                "plannedOperation": plan.codecommit_repo_planned_operation,
+            }
+            if plan.codecommit_repo_name
+            else None,
+            "github": {
+                "secretName": plan.github_secret_name,
+                "secretExists": plan.github_secret_exists,
+                "secretAccessible": plan.github_secret_accessible,
+                "repoOwner": plan.github_repo_owner,
+                "repoName": plan.github_repo_name,
+                "repoBranch": plan.github_repo_branch,
+                "repoAccessible": plan.github_repo_accessible,
+                "plannedOperation": plan.github_planned_operation,
+            }
+            if (plan.github_secret_name or plan.github_repo_name)
+            else None,
+        },
+        "actions": [
+            {
+                "subject": a.subject,
+                "operation": a.operation,
+                "message": a.message,
+                "severity": a.severity,
+            }
+            for a in plan.actions
+        ],
+        "warnings": plan.warnings,
+    }
+
+
+def serialize_bootstrap_result(result: WorkspaceBootstrapResult) -> dict[str, Any]:
+    """Translate workspace bootstrap execution result into the browser API contract."""
+    return {
+        "success": True,
+        "plannedOperation": result.planned_operation,
+        "skipped": result.skipped,
+        "actionsTaken": result.actions_taken,
+        "warnings": result.warnings,
+        "bucketName": result.bucket_name,
+        "codecommitRepoName": result.codecommit_repo_name,
+        "githubSecretName": result.github_secret_name,
+        "githubSecretCreated": result.github_secret_created,
+    }
 

@@ -6,6 +6,18 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### Workspace Bootstrap Offline Graceful Handling & Overview Indicator Fix (v0.36.1)
+- **Offline Bootstrap Page Support**: Made `plan_bootstrap_workflow` return an offline `BootstrapPlanResult` (`is_live=False`, `error=...`) instead of raising `LzaError` when AWS authentication/SSO has expired; allows `GET /api/bootstrap/plan` to return HTTP 200 and renders the Bootstrap page gracefully with configured resources, offline badges, and standard offline banner without a blank screen or 422 error.
+- **Dynamic Overview Workspace Indicator**: Replaced static grey "Bootstrap" card badge with dynamic plan status (`In sync` in green when no changes are needed, `Bootstrap required` / `Action required` in amber when actions are planned, `Missing resources` when blocked, and `Offline` when unauthenticated).
+
+### Workspace Bootstrap Web Page (v0.36.0)
+- **Bootstrap Page**: Built dedicated Workspace Bootstrap view (`#/bootstrap`) accessible from the Overview Workspace card and direct hash routing.
+- **Plan First**: Runs existing `plan_bootstrap_workflow(..., dry_run=True)` on load (`GET /api/bootstrap/plan`) to inspect prerequisite AWS resources without mutating anything.
+- **Resource Breakdown**: Groups prerequisite resources by type (Workbench Assets Bucket, Configuration Repository, GitHub Secret) with structured operation badges (`NO_CHANGE`, `CREATE`, `UPDATE`, `MISSING`, `WARNING`).
+- **Imported Workspace Protection**: Surfaces validation-only callout when workspace is imported; strictly preserves existing protections against automatically recreating missing imported resources.
+- **Explicit Apply**: Provides "Apply Bootstrap" workflow (`POST /api/bootstrap/apply`) gated by confirmation modal detailing target AWS account, region, planned operations, and optional GitHub token input; applies non-blocking loading state and refreshes live status on completion.
+- **Architectural Isolation**: Maintained clean layering (`web` -> `workflows` only) validated with tests in `tests/test_package.py` and `tests/web/test_status.py`.
+
 ### Pipeline Details & Config Deploy Web Flow (v0.35.0)
 - **Pipeline Details Page**: Built a dedicated, comprehensive Pipeline Details view for both Installer and Configuration pipelines (`#/pipeline/installer`, `#/pipeline/configuration`).
 - **Single-Pass Observation & Client Polling**: Implemented `GET /api/pipeline/snapshot` wrapping a non-blocking observation workflow; frontend periodically polls every 3s while execution is active (`!isTerminal`) without server-side blocking loops.

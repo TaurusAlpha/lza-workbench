@@ -1,10 +1,13 @@
 import {
+  applyConfigDeploy,
+  getBootstrapPlan,
   getConfigurationStatus,
   getInstallerStatus,
   getPipelineDiagnostics,
   getPipelineSnapshot,
   getStatus,
 } from "./api.js";
+import { renderBootstrapDetails } from "./bootstrap.js";
 import { renderConfigurationDetails } from "./configuration.js";
 import { renderInstallerDetails } from "./installer.js";
 import { renderOverview } from "./overview.js";
@@ -43,6 +46,9 @@ function parseRoute() {
   if (clean === "/configuration") {
     return { name: "configuration" };
   }
+  if (clean === "/bootstrap") {
+    return { name: "bootstrap" };
+  }
   if (clean === "/pipeline/installer") {
     return { name: "pipeline", pipelineType: "installer", executionId };
   }
@@ -80,10 +86,13 @@ async function loadOverview() {
   if (breadcrumb) breadcrumb.hidden = true;
 
   try {
-    const status = await getStatus();
+    const [status, bootstrapPlan] = await Promise.all([
+      getStatus(),
+      getBootstrapPlan().catch(() => null),
+    ]);
     workspacePath.textContent = status.workspace.directory;
     workspacePath.title = status.workspace.directory;
-    renderOverview(viewContent, status);
+    renderOverview(viewContent, status, bootstrapPlan);
     if (!status.aws.isLive) {
       showNotice(getOfflineWarning(status.aws.error), "warning");
     } else {
@@ -275,6 +284,33 @@ async function loadInstaller() {
   }
 }
 
+async function loadBootstrap() {
+  stopPipelinePolling();
+  viewContent.className = "view-container";
+  viewContent.setAttribute("aria-busy", "true");
+  clearNotice();
+  refresh.disabled = true;
+  if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench / Bootstrap";
+  if (pageTitle) pageTitle.textContent = "Workspace Bootstrap";
+  if (breadcrumb) breadcrumb.hidden = false;
+
+  try {
+    const plan = await getBootstrapPlan();
+    renderBootstrapDetails(viewContent, plan, loadBootstrap);
+    if (!plan.isLive) {
+      showNotice(getOfflineWarning(plan.error), "warning");
+    } else {
+      clearNotice();
+    }
+  } catch (error) {
+    viewContent.replaceChildren();
+    showNotice(error.message, "error");
+  } finally {
+    viewContent.setAttribute("aria-busy", "false");
+    refresh.disabled = false;
+  }
+}
+
 function handleRoute() {
   stopPipelinePolling();
   const route = parseRoute();
@@ -282,6 +318,8 @@ function handleRoute() {
     loadInstaller();
   } else if (route.name === "configuration") {
     loadConfiguration();
+  } else if (route.name === "bootstrap") {
+    loadBootstrap();
   } else if (route.name === "pipeline") {
     loadPipeline(route.pipelineType, route.executionId);
   } else {

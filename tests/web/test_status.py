@@ -49,7 +49,12 @@ from lza_workbench.workflows.status_root import (
     PipelineSummary,
     RootStatusResult,
 )
-from lza_workbench.workspace.schema import WorkspaceConfig
+from lza_workbench.workflows.workspace_bootstrap import (
+    BootstrapAction,
+    BootstrapPlanResult,
+    WorkspaceBootstrapResult,
+)
+from lza_workbench.workspace.schema import AwsConfig, CustomerConfig, WorkspaceConfig
 
 
 def _config_status_result() -> ConfigurationStatusResult:
@@ -713,6 +718,159 @@ def test_config_deploy_api_success() -> None:
     assert data["pipelineStarted"] is True
     assert data["executionId"] == "exec-new-999"
     assert data["pushResult"]["filesCount"] == 10
+
+
+def _sample_bootstrap_plan(
+    *,
+    imported: bool = False,
+    cc_planned_op: str = "NO_CHANGE",
+    is_live: bool = True,
+    error: str | None = None,
+) -> BootstrapPlanResult:
+    return BootstrapPlanResult(
+        workspace_dir=Path("/workspaces/acme"),
+        config=WorkspaceConfig(
+            customer=CustomerConfig(name="Acme", slug="acme"),
+            aws=AwsConfig(profile="acme-admin", region="eu-west-1"),
+        ),
+        aws_profile="acme-admin",
+        aws_region="eu-west-1",
+        account_id="123456789012",
+        bucket_name="lza-workbench-assets-123456789012-eu-west-1",
+        bucket_exists=True,
+        versioning_enabled=True,
+        encryption_enabled=True,
+        bucket_planned_operation="NO_CHANGE",
+        codecommit_repo_name="aws-accelerator-config",
+        codecommit_branch_name="main",
+        codecommit_repo_exists=True if cc_planned_op != "MISSING" else False,
+        codecommit_branch_exists=True if cc_planned_op != "MISSING" else False,
+        codecommit_repo_planned_operation=cc_planned_op,
+        github_secret_name=None,
+        github_secret_exists=False,
+        github_secret_accessible=False,
+        github_repo_owner=None,
+        github_repo_name=None,
+        github_repo_branch=None,
+        github_repo_accessible=False,
+        github_planned_operation="NO_CHANGE",
+        planned_operation=cc_planned_op if cc_planned_op != "NO_CHANGE" else "NO_CHANGE",
+        actions=[
+            BootstrapAction(
+                subject="S3 Bucket",
+                operation="NO_CHANGE",
+                message="Bucket exists and is configured.",
+            )
+        ],
+        warnings=[],
+        dry_run=True,
+        imported=imported,
+        is_live=is_live,
+        error=error,
+    )
+
+
+def test_bootstrap_plan_api_success() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    plan = _sample_bootstrap_plan()
+    with patch("lza_workbench.web.status.plan_bootstrap_workflow", return_value=plan):
+        response = TestClient(app).get("/api/bootstrap/plan")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["awsProfile"] == "acme-admin"
+    assert data["accountId"] == "123456789012"
+    assert data["plannedOperation"] == "NO_CHANGE"
+    assert data["isMutationRequired"] is False
+    assert data["imported"] is False
+    assert data["isLive"] is True
+    assert data["error"] is None
+    assert data["resources"]["bucket"]["name"] == "lza-workbench-assets-123456789012-eu-west-1"
+    assert len(data["actions"]) == 1
+    assert data["actions"][0]["operation"] == "NO_CHANGE"
+
+
+def test_bootstrap_plan_api_imported_missing() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    plan = _sample_bootstrap_plan(imported=True, cc_planned_op="MISSING")
+    with patch("lza_workbench.web.status.plan_bootstrap_workflow", return_value=plan):
+        response = TestClient(app).get("/api/bootstrap/plan")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["imported"] is True
+    assert data["isBlocked"] is True
+    assert data["resources"]["codecommit"]["plannedOperation"] == "MISSING"
+
+
+def test_bootstrap_plan_api_offline() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    plan = _sample_bootstrap_plan(
+        is_live=False,
+        error="SSO session expired",
+    )
+    with patch("lza_workbench.web.status.plan_bootstrap_workflow", return_value=plan):
+        response = TestClient(app).get("/api/bootstrap/plan")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["isLive"] is False
+    assert data["error"] == "SSO session expired"
+    assert data["isMutationRequired"] is False
+
+
+def test_bootstrap_apply_api_success() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    result = WorkspaceBootstrapResult(
+        workspace_dir=Path("/workspaces/acme"),
+        config=WorkspaceConfig(
+            customer=CustomerConfig(name="Acme", slug="acme"),
+            aws=AwsConfig(profile="acme-admin", region="eu-west-1"),
+        ),
+        aws_profile="acme-admin",
+        aws_region="eu-west-1",
+        account_id="123456789012",
+        bucket_name="lza-workbench-assets-123456789012-eu-west-1",
+        codecommit_repo_name="aws-accelerator-config",
+        codecommit_branch_name="main",
+        codecommit_repo_planned_operation="NO_CHANGE",
+        github_secret_name=None,
+        github_secret_created=False,
+        github_repo_owner=None,
+        github_repo_name=None,
+        github_repo_branch=None,
+        github_repo_accessible=False,
+        github_planned_operation="NO_CHANGE",
+        planned_operation="NO_CHANGE",
+        dry_run=False,
+        skipped=False,
+        actions_taken=["Verified S3 bucket"],
+        warnings=[],
+    )
+    with patch("lza_workbench.web.status.bootstrap_workspace_workflow", return_value=result):
+        response = TestClient(app).post(
+            "/api/bootstrap/apply",
+            json={"allow_missing_github_secret": False},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["actionsTaken"] == ["Verified S3 bucket"]
+
+
+def test_bootstrap_apply_api_error() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    with patch(
+        "lza_workbench.web.status.bootstrap_workspace_workflow",
+        side_effect=LzaError("Missing imported CodeCommit repository cannot be recreated."),
+    ):
+        response = TestClient(app).post("/api/bootstrap/apply", json={})
+
+    assert response.status_code == 422
+    data = response.json()
+    assert data["error"]["code"] == "workspace_unavailable"
+    assert "Missing imported CodeCommit repository" in data["error"]["message"]
 
 
 

@@ -272,6 +272,12 @@ body {
   color: #991b1b;
 }
 
+.badge-info {
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
 .badge-neutral {
   background-color: #f8fafc;
   border-color: var(--border-card);

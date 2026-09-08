@@ -44,7 +44,9 @@ export function getStatusVariant(status) {
     norm.includes("dirty") ||
     norm.includes("drift") ||
     norm.includes("local changes") ||
-    norm.includes("aws unavailable")
+    norm.includes("aws unavailable") ||
+    norm.includes("bootstrap required") ||
+    norm.includes("action required")
   ) {
     return "warning";
   }
@@ -183,7 +185,7 @@ function configurationSyncStatus(configuration, isLive = true) {
   }
 }
 
-export function renderOverview(container, status) {
+export function renderOverview(container, status, bootstrapPlan = null) {
   const repoTarget = status.configuration.target
     ? `${status.configuration.repositoryType} / ${status.configuration.target}`
     : status.configuration.repositoryType;
@@ -199,13 +201,36 @@ export function renderOverview(container, status) {
     ? `Recorded: ${status.installer.status}`
     : status.installer.status;
 
+  let workspaceBadge = "In sync";
+  let prerequisitesDisplay = "In sync";
+  let hasPrerequisitesIndicator = true;
+
+  if (!status.aws.isLive) {
+    workspaceBadge = "Offline";
+    prerequisitesDisplay = "Offline";
+  } else if (bootstrapPlan) {
+    if (bootstrapPlan.isBlocked) {
+      workspaceBadge = "Attention required";
+      prerequisitesDisplay = "Missing resources";
+    } else if (bootstrapPlan.isMutationRequired) {
+      workspaceBadge = "Action required";
+      prerequisitesDisplay = "Bootstrap required";
+    } else {
+      workspaceBadge = "In sync";
+      prerequisitesDisplay = "In sync";
+    }
+  } else if (status.health && status.health.workspace) {
+    workspaceBadge = status.health.workspace;
+    prerequisitesDisplay = "In sync";
+  }
+
   container.innerHTML = [
     card("Workspace", [
       ["Customer", status.workspace.customerName],
       ["LZA version", status.workspace.lzaVersion, { mono: true }],
       ["Directory", status.workspace.directory, { mono: true, truncate: true }],
-      ["Validation", "Not implemented yet"],
-    ], "Validation pending"),
+      ["Prerequisites", prerequisitesDisplay, { statusIndicator: hasPrerequisitesIndicator }],
+    ], workspaceBadge, { href: "#/bootstrap" }),
     card("AWS context", [
       ["Profile", status.aws.profile, { mono: true }],
       ["Region", status.aws.region, { mono: true }],

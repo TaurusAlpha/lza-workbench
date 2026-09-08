@@ -111,6 +111,9 @@ class BootstrapPlanResult:
     actions: list[BootstrapAction]
     warnings: list[str]
     dry_run: bool
+    imported: bool = False
+    is_live: bool = True
+    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -149,7 +152,10 @@ class BootstrapPreparation:
     plan: BootstrapPlanResult
 
 
-def _resolve_bootstrap_aws_context(config: WorkspaceConfig) -> AwsExecutionContext:
+def _resolve_bootstrap_aws_context(
+    config: WorkspaceConfig,
+    require_identity: bool = True,
+) -> AwsExecutionContext:
     """Resolve the authenticated AWS target required for bootstrap operations."""
     try:
         return resolve_aws_execution_context(
@@ -157,8 +163,8 @@ def _resolve_bootstrap_aws_context(config: WorkspaceConfig) -> AwsExecutionConte
             region=config.aws.region,
             role_arn=config.aws.role_arn,
             expected_account_id=config.aws.account_id,
-            require_identity=True,
-            require_expected_account=True,
+            require_identity=require_identity,
+            require_expected_account=require_identity,
             prime_credentials=config.aws.prime_credentials,
         )
     except LzaError:
@@ -179,6 +185,85 @@ def _build_bootstrap_plan(
 ) -> BootstrapPlanResult:
     """Inspect bootstrap resources using one resolved workspace and AWS context."""
     aws_ctx = aws_context
+    if not aws_ctx.is_live:
+        account_id = config.aws.account_id or "Unknown"
+        region = aws_ctx.region or config.aws.region or "Unknown"
+        profile = config.aws.profile or ""
+        bucket_name = (
+            get_workbench_assets_bucket_name(account_id, region)
+            if account_id != "Unknown" and region != "Unknown"
+            else f"lza-workbench-assets-{region}"
+        )
+        is_codecommit_config = config.configuration.repository.type == "codecommit"
+        cc_repo_name = (
+            config.configuration.repository.repository_name or "lza-config-source"
+            if is_codecommit_config
+            else None
+        )
+        cc_branch_name = (
+            config.configuration.repository.branch or "main"
+            if is_codecommit_config
+            else None
+        )
+        is_github_source = config.installer.source_code.repository_type == "github"
+        gh_secret_name = (
+            config.installer.source_code.github_secret_name or "accelerator/github-token"
+            if is_github_source
+            else None
+        )
+        gh_repo_owner = (
+            config.installer.source_code.owner or "awslabs" if is_github_source else None
+        )
+        gh_repo_name = (
+            config.installer.source_code.repository_name or "landing-zone-accelerator-on-aws"
+            if is_github_source
+            else None
+        )
+        gh_repo_branch = (
+            config.installer.source_code.branch
+            or resolve_installer_source_branch("github", None, config.lza.version)
+            if is_github_source
+            else None
+        )
+
+        return BootstrapPlanResult(
+            workspace_dir=workspace_dir,
+            config=config,
+            aws_profile=profile,
+            aws_region=region,
+            account_id=account_id,
+            bucket_name=bucket_name,
+            bucket_exists=False,
+            versioning_enabled=False,
+            encryption_enabled=False,
+            bucket_planned_operation="OFFLINE",
+            codecommit_repo_name=cc_repo_name,
+            codecommit_branch_name=cc_branch_name,
+            codecommit_repo_exists=False,
+            codecommit_branch_exists=False,
+            codecommit_repo_planned_operation="OFFLINE" if cc_repo_name else "N/A",
+            github_secret_name=gh_secret_name,
+            github_secret_exists=False,
+            github_secret_accessible=False,
+            github_repo_owner=gh_repo_owner,
+            github_repo_name=gh_repo_name,
+            github_repo_branch=gh_repo_branch,
+            github_repo_accessible=False,
+            github_planned_operation="OFFLINE" if is_github_source else "N/A",
+            planned_operation="OFFLINE",
+            actions=[],
+            warnings=[
+                (
+                    f"AWS is offline: {aws_ctx.error or 'Authentication required'}. "
+                    "Displayed prerequisite resource plans are not live."
+                )
+            ],
+            dry_run=dry_run,
+            imported=imported,
+            is_live=False,
+            error=aws_ctx.error,
+        )
+
     assert aws_ctx.identity is not None
     account_id = aws_ctx.identity["account"]
     region = aws_ctx.region
@@ -442,6 +527,9 @@ def _build_bootstrap_plan(
         actions=actions,
         warnings=warnings,
         dry_run=dry_run,
+        imported=imported,
+        is_live=True,
+        error=None,
     )
 
 
@@ -456,7 +544,7 @@ def prepare_bootstrap_workflow(
         target_dir=target_dir,
         required_capabilities=(WorkspaceCapability.METADATA_VALID,),
     )
-    aws_context = _resolve_bootstrap_aws_context(context.config)
+    aws_context = _resolve_bootstrap_aws_context(context.config, require_identity=True)
     plan = _build_bootstrap_plan(
         workspace_dir=context.workspace_dir,
         config=context.config,
@@ -475,6 +563,7 @@ def plan_bootstrap_workflow(
     aws_context: AwsExecutionContext | None = None,
     github_token: str | None = None,
     allow_missing_github_secret: bool = False,
+    require_identity: bool = False,
 ) -> BootstrapPlanResult:
     """Inspect AWS resources and plan bootstrap actions without mutating AWS."""
     ctx = load_workspace_context(
@@ -483,7 +572,9 @@ def plan_bootstrap_workflow(
     )
     workspace_dir, config = ctx.workspace_dir, ctx.config
 
-    aws_ctx = aws_context or _resolve_bootstrap_aws_context(config)
+    aws_ctx = aws_context or _resolve_bootstrap_aws_context(
+        config, require_identity=require_identity
+    )
     return _build_bootstrap_plan(
         workspace_dir=workspace_dir,
         config=config,
