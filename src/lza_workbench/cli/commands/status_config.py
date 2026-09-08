@@ -14,34 +14,49 @@ from lza_workbench.cli.output import (
     print_warning,
     render_workspace_header,
 )
-from lza_workbench.workflows.status_config import (
+from lza_workbench.configuration.status import (
+    CodeCommitConfigurationRepositoryStatus,
+    CodeConnectionConfigurationRepositoryStatus,
     ConfigurationStatusResult,
+    GitConfigurationRepositoryStatus,
+    S3ConfigurationRepositoryStatus,
+)
+from lza_workbench.workflows.status_config import (
     get_config_status_workflow,
 )
 
 
 def _render_local_config(result: ConfigurationStatusResult) -> None:
     print_section(1, "Local Configuration")
+    workspace = result.workspace
+    local_git = result.local_git
 
-    exists_str = "[green]Present[/green]" if result.config_dir_exists else "[red]Missing[/red]"
-    print_kv("Local Config Path", f"{result.config_dir} ({exists_str})")
+    exists_str = "[green]Present[/green]" if workspace.config_dir_exists else "[red]Missing[/red]"
+    print_kv("Local Config Path", f"{workspace.config_dir} ({exists_str})")
 
-    if result.yaml_files:
-        files_preview = ", ".join(result.yaml_files[:5])
-        suffix = f" ... (+{len(result.yaml_files) - 5} more)" if len(result.yaml_files) > 5 else ""
-        print_kv("YAML Config Files", f"{len(result.yaml_files)} files ({files_preview}{suffix})")
+    if workspace.yaml_files:
+        files_preview = ", ".join(workspace.yaml_files[:5])
+        suffix = (
+            f" ... (+{len(workspace.yaml_files) - 5} more)"
+            if len(workspace.yaml_files) > 5
+            else ""
+        )
+        print_kv(
+            "YAML Config Files",
+            f"{len(workspace.yaml_files)} files ({files_preview}{suffix})",
+        )
     else:
         print_kv("YAML Config Files", "0 files found", style="dim")
 
-    if result.initialized_at:
-        init_str = format_timestamp(result.initialized_at) or "Unknown"
-        tmpl_str = result.template_name or "default"
+    if workspace.initialized_at:
+        init_str = format_timestamp(workspace.initialized_at) or "Unknown"
+        tmpl_str = workspace.template_name or "default"
         print_kv("Configuration Origin", f"Initialized from '{tmpl_str}' template ({init_str})")
-    elif result.config_dir_exists:
+    elif workspace.config_dir_exists:
         print_kv("Configuration Origin", "Imported / Unmanaged")
 
-    if result.git_working_tree:
-        gwt = result.git_working_tree
+    if local_git.working_tree:
+        gwt = local_git.working_tree
         print_kv("Git Branch", gwt.branch, bold_value=True)
         commit_str = gwt.commit or "No commits"
         if gwt.commit_subject:
@@ -58,103 +73,114 @@ def _render_local_config(result: ConfigurationStatusResult) -> None:
         else:
             print_kv("Working Tree", "Clean", style="green")
 
-        if result.git_sync_status:
-            sync = result.git_sync_status
+        if local_git.sync_status:
+            sync = local_git.sync_status
             print_kv("Remote Sync", format_status(sync.summary))
 
 
 def _render_repository_settings(result: ConfigurationStatusResult) -> None:
     console.print()
     print_section(2, "Repository Settings")
-    print_kv("Repository Type", result.repository_type, bold_value=True)
+    repository = result.repository
+    repository_type = {
+        S3ConfigurationRepositoryStatus: "s3",
+        CodeCommitConfigurationRepositoryStatus: "codecommit",
+        CodeConnectionConfigurationRepositoryStatus: "codeconnection",
+        GitConfigurationRepositoryStatus: "git",
+    }[type(repository)]
+    print_kv("Repository Type", repository_type, bold_value=True)
 
-    if result.repository_type == "s3":
-        s3_bucket = result.repository_bucket or "Not configured"
+    if isinstance(repository, S3ConfigurationRepositoryStatus):
+        s3_bucket = repository.bucket or "Not configured"
 
-        if result.s3_bucket_exists is True:
+        if repository.bucket_exists is True:
             ver_str = (
                 "Versioning: Enabled"
-                if result.s3_bucket_versioning
+                if repository.bucket_versioning
                 else "Versioning: Disabled"
             )
-            enc_str = "Encrypted" if result.s3_bucket_encryption else "Unencrypted"
+            enc_str = "Encrypted" if repository.bucket_encryption else "Unencrypted"
             bucket_status = f"[green]Available[/green] ({ver_str}, {enc_str})"
-        elif result.s3_bucket_exists is False:
+        elif repository.bucket_exists is False:
             bucket_status = "[red]Bucket Not Found / Missing[/red]"
-        elif result.s3_bucket_accessible is False:
-            bucket_status = f"[red]Inaccessible[/red] ({result.s3_error or 'Access Denied'})"
+        elif repository.bucket_accessible is False:
+            bucket_status = f"[red]Inaccessible[/red] ({repository.error or 'Access Denied'})"
         else:
             bucket_status = "[dim]Not Checked[/dim]"
 
         print_kv("S3 Bucket", f"{s3_bucket} ({bucket_status})")
-        print_kv("S3 Object Key", result.repository_object_key)
+        print_kv("S3 Object Key", repository.object_key)
 
-        if result.s3_object_exists is True:
-            size_kb = (result.s3_object_size or 0) / 1024
-            mod_str = format_timestamp(result.s3_object_last_modified) or "Unknown"
-            etag_str = f"ETag: {result.s3_object_etag}" if result.s3_object_etag else ""
+        if repository.object_exists is True:
+            size_kb = (repository.object_size or 0) / 1024
+            mod_str = format_timestamp(repository.object_last_modified) or "Unknown"
+            etag_str = f"ETag: {repository.object_etag}" if repository.object_etag else ""
             print_kv(
                 "Remote Archive Status",
                 f"[green]Present[/green] ({size_kb:.1f} KB, {etag_str}, Last Modified: {mod_str})",
             )
-        elif result.s3_object_exists is False:
+        elif repository.object_exists is False:
             print_kv("Remote Archive Status", "Not uploaded yet", style="yellow")
 
-    elif result.repository_type == "codecommit":
-        repo_name = result.repository_name or "Not set"
-        if result.codecommit_exists is True:
+    elif isinstance(repository, CodeCommitConfigurationRepositoryStatus):
+        repo_name = repository.repository_name or "Not set"
+        if repository.exists is True:
             repo_status = "[green]Available[/green]"
-        elif result.codecommit_exists is False:
+        elif repository.exists is False:
             repo_status = "[red]Repository Not Found[/red]"
-        elif result.codecommit_accessible is False:
-            repo_status = f"[red]Inaccessible[/red] ({result.codecommit_error or 'Access Denied'})"
+        elif repository.accessible is False:
+            repo_status = f"[red]Inaccessible[/red] ({repository.error or 'Access Denied'})"
         else:
             repo_status = "[dim]Not Checked[/dim]"
 
         print_kv("CodeCommit Repository", f"{repo_name} ({repo_status})")
-        branch_str = result.repository_branch or "main"
-        if result.codecommit_branch_exists is True:
+        branch_str = repository.branch_name or "main"
+        if repository.branch_exists is True:
             branch_status = "[green]Exists[/green]"
-        elif result.codecommit_branch_exists is False:
+        elif repository.branch_exists is False:
             branch_status = "[yellow]Branch Not Found[/yellow]"
         else:
             branch_status = "[dim]Not Checked[/dim]"
         print_kv("Branch", f"{branch_str} ({branch_status})")
 
-    elif result.repository_type == "codeconnection":
-        conn_arn = result.codeconnection_arn or "Not set"
-        conn_status = format_status(result.codeconnection_status or "Configured")
+    elif isinstance(repository, CodeConnectionConfigurationRepositoryStatus):
+        conn_arn = repository.connection_arn or "Not set"
+        conn_status = format_status(repository.status or "Configured")
         print_kv("CodeConnection ARN", f"{conn_arn} ({conn_status})")
-        if result.codeconnection_provider:
-            print_kv("Provider Type", result.codeconnection_provider)
-        print_kv("Repository Owner", result.owner or "Not set")
-        print_kv("Repository Name", result.repository_name or "Not set")
-        print_kv("Branch", result.repository_branch or "main")
+        if repository.provider:
+            print_kv("Provider Type", repository.provider)
+        print_kv("Repository Owner", repository.owner or "Not set")
+        print_kv("Repository Name", repository.repository_name or "Not set")
+        print_kv("Branch", repository.branch_name or "main")
 
-    elif result.repository_type == "git":
-        print_kv("Git Repository URL", result.repository_url or result.repository_name or "Not set")
-        print_kv("Branch", result.repository_branch or "main")
+    elif isinstance(repository, GitConfigurationRepositoryStatus):
+        print_kv(
+            "Git Repository URL",
+            repository.repository_url or repository.repository_name or "Not set",
+        )
+        print_kv("Branch", repository.branch_name or "main")
 
 
 def _render_pipeline_status(result: ConfigurationStatusResult) -> None:
     console.print()
     print_section(3, "Configuration Pipeline")
-    print_kv("Pipeline Name", result.pipeline_name, bold_value=True)
+    pipeline = result.pipeline
+    print_kv("Pipeline Name", pipeline.name, bold_value=True)
 
-    pipe_status = result.pipeline_status or "Not Executed"
+    pipe_status = pipeline.status or "Not Executed"
     print_kv("Pipeline Status", format_status(pipe_status))
 
-    if result.pipeline_execution_id:
-        print_kv("Latest Execution ID", result.pipeline_execution_id, style="dim")
+    if pipeline.execution_id:
+        print_kv("Latest Execution ID", pipeline.execution_id, style="dim")
 
-    if result.pipeline_failed_stage:
-        print_kv("Failed Stage", result.pipeline_failed_stage, style="red")
-    if result.pipeline_failed_action:
-        print_kv("Failed Action", result.pipeline_failed_action, style="red")
-    if result.pipeline_error:
+    if pipeline.failed_stage:
+        print_kv("Failed Stage", pipeline.failed_stage, style="red")
+    if pipeline.failed_action:
+        print_kv("Failed Action", pipeline.failed_action, style="red")
+    if pipeline.error:
         error_lines = [
             line.strip()
-            for line in result.pipeline_error.splitlines()
+            for line in pipeline.error.splitlines()
             if line.strip()
         ]
         if len(error_lines) == 1:
@@ -163,22 +189,23 @@ def _render_pipeline_status(result: ConfigurationStatusResult) -> None:
             console.print("[red]Error:[/red]")
             for line in error_lines:
                 console.print(f"  [red]{line}[/red]")
-    if result.pipeline_failed_build_url:
-        print_kv("Build Console", result.pipeline_failed_build_url, style="dim")
+    if pipeline.failed_build_url:
+        print_kv("Build Console", pipeline.failed_build_url, style="dim")
 
 
 def _render_state_metadata(result: ConfigurationStatusResult, *, has_state: bool) -> None:
     console.print()
     print_section(4, "Synchronization History")
+    synchronization = result.synchronization
     if has_state:
-        last_push = format_timestamp(result.uploaded_at) or "Never"
-        last_pull = format_timestamp(result.downloaded_at) or "Never"
+        last_push = format_timestamp(synchronization.uploaded_at) or "Never"
+        last_pull = format_timestamp(synchronization.downloaded_at) or "Never"
         print_kv("Last Push", last_push)
         print_kv("Last Pull", last_pull)
-        if result.recorded_pipeline_execution_id:
+        if synchronization.recorded_pipeline_execution_id:
             print_kv(
                 "Recorded Execution ID",
-                result.recorded_pipeline_execution_id,
+                synchronization.recorded_pipeline_execution_id,
                 style="dim",
             )
     else:
@@ -198,13 +225,13 @@ def render_config_status(result: ConfigurationStatusResult, *, has_state: bool) 
     """Render prepared configuration status without inspecting the workspace."""
     render_workspace_header(
         "LZA Configuration Status",
-        customer_name=result.customer_name,
-        workspace_dir=result.workspace_dir,
-        lza_version=result.lza_version,
-        profile=result.profile,
-        region=result.region,
-        aws_identity=result.aws_identity,
-        aws_error=result.aws_error,
+        customer_name=result.workspace.customer_name,
+        workspace_dir=result.workspace.workspace_dir,
+        lza_version=result.workspace.lza_version,
+        profile=result.workspace.profile,
+        region=result.workspace.region,
+        aws_identity=result.workspace.aws_identity,
+        aws_error=result.workspace.aws_error,
     )
 
     console.print()
@@ -220,11 +247,10 @@ def status_config_command(
 ) -> None:
     """Query workspace configuration metadata and display configuration status."""
     result = get_config_status_workflow(target_dir=target_dir)
-    render_config_status(result, has_state=result.has_state)
+    render_config_status(result, has_state=result.synchronization.has_state)
 
 
 __all__ = [
     "render_config_status",
     "status_config_command",
 ]
-

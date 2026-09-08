@@ -9,7 +9,7 @@ from typing import Any
 
 from lza_workbench.aws.codecommit import (
     ensure_codecommit_repository,
-    inspect_codecommit_config_repository,
+    inspect_codecommit_repository,
 )
 from lza_workbench.aws.context import AwsExecutionContext, resolve_aws_execution_context
 from lza_workbench.aws.s3 import (
@@ -208,18 +208,18 @@ def _build_bootstrap_plan(
         cc_repo_name = config.configuration.repository.repository_name or "lza-config-source"
         cc_branch_name = config.configuration.repository.branch or "main"
         cc_client = aws_ctx.factory.get_client("codecommit")
-        cc_insp = inspect_codecommit_config_repository(
+        cc_insp = inspect_codecommit_repository(
             client=cc_client,
             repository_name=cc_repo_name,
             branch_name=cc_branch_name,
         )
-        cc_repo_exists = cc_insp["exists"]
-        cc_branch_exists = cc_insp["branch_exists"]
+        cc_repo_exists = cc_insp.exists
+        cc_branch_exists = cc_insp.branch_exists
 
-        if not cc_insp["accessible"] and not cc_insp["not_found"]:
+        if not cc_insp.accessible and not cc_insp.not_found:
             raise LzaError(
                 f"Unable to access configured CodeCommit repository '{cc_repo_name}': "
-                f"{cc_insp['error'] or 'unknown error'}"
+                f"{cc_insp.error or 'unknown error'}"
             )
 
         if imported:

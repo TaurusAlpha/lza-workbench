@@ -9,9 +9,15 @@ import pytest
 
 import lza_workbench.workflows.status_root as status_root_mod
 from lza_workbench.aws.cloudformation import CfnStackStatusResult
+from lza_workbench.aws.codecommit import CodeCommitRepositoryStatus
 from lza_workbench.aws.codepipeline import PipelineStateResult
 from lza_workbench.cli.commands.status_root import render_root_status
 from lza_workbench.configuration.git import GitRemoteSyncStatus
+from lza_workbench.configuration.status import (
+    CodeCommitConfigurationRepositoryStatus,
+    CodeConnectionConfigurationRepositoryStatus,
+    S3ConfigurationRepositoryStatus,
+)
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.sync import (
     sync_installer_config,
@@ -140,18 +146,17 @@ def test_get_config_status_workflow(configured_workspace: Path) -> None:
 
         result = get_config_status_workflow(target_dir=configured_workspace)
         assert isinstance(result, ConfigurationStatusResult)
-        assert result.customer_name == "Acme Corp"
-        assert result.config_dir_exists is True
-        assert result.repository_type == "s3"
-        assert result.repository_bucket == "aws-accelerator-config-123456789012-eu-west-1"
-        assert result.s3_bucket_exists is True
-        assert result.s3_bucket_versioning is True
-
-        assert result.s3_bucket_encryption is True
-        assert result.s3_object_exists is True
-        assert result.s3_object_etag == "test-etag-123"
-        assert result.pipeline_state is not None
-        assert result.pipeline_state.status == "Succeeded"
+        assert result.workspace.customer_name == "Acme Corp"
+        assert result.workspace.config_dir_exists is True
+        assert isinstance(result.repository, S3ConfigurationRepositoryStatus)
+        assert result.repository.bucket == "aws-accelerator-config-123456789012-eu-west-1"
+        assert result.repository.bucket_exists is True
+        assert result.repository.bucket_versioning is True
+        assert result.repository.bucket_encryption is True
+        assert result.repository.object_exists is True
+        assert result.repository.object_etag == "test-etag-123"
+        assert result.pipeline.state is not None
+        assert result.pipeline.state.status == "Succeeded"
 
 
 def test_get_config_status_workflow_s3_derived_bucket(tmp_path: Path) -> None:
@@ -188,9 +193,9 @@ def test_get_config_status_workflow_s3_derived_bucket(tmp_path: Path) -> None:
             state=WorkspaceState(),
             workspace_dir=tmp_path,
         )
-        assert result.repository_type == "s3"
-        assert result.repository_bucket == "aws-accelerator-config-123456789012-us-east-1"
-        assert result.s3_bucket_exists is True
+        assert isinstance(result.repository, S3ConfigurationRepositoryStatus)
+        assert result.repository.bucket == "aws-accelerator-config-123456789012-us-east-1"
+        assert result.repository.bucket_exists is True
 
 
 def test_get_config_status_workflow_codecommit(tmp_path: Path) -> None:
@@ -206,18 +211,19 @@ def test_get_config_status_workflow_codecommit(tmp_path: Path) -> None:
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
         patch(
-            "lza_workbench.workflows.status_config.inspect_codecommit_config_repository"
+            "lza_workbench.workflows.status_config.inspect_codecommit_repository"
         ) as mock_cc,
         patch("lza_workbench.workflows.status_config.get_pipeline_state") as mock_pipe,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
-        mock_cc.return_value = {
-            "exists": True,
-            "accessible": True,
-            "branch_exists": True,
-            "error": None,
-        }
+        mock_cc.return_value = CodeCommitRepositoryStatus(
+            repository_name="test-config-repo",
+            branch_name="main",
+            exists=True,
+            accessible=True,
+            branch_exists=True,
+        )
         mock_pipe.return_value = MagicMock(
             pipeline_name="AWSAccelerator-Pipeline", exists=True, status="Succeeded"
         )
@@ -227,10 +233,10 @@ def test_get_config_status_workflow_codecommit(tmp_path: Path) -> None:
             state=WorkspaceState(),
             workspace_dir=tmp_path,
         )
-        assert result.repository_type == "codecommit"
-        assert result.codecommit_exists is True
-        assert result.codecommit_branch_exists is True
-        assert result.codecommit_accessible is True
+        assert isinstance(result.repository, CodeCommitConfigurationRepositoryStatus)
+        assert result.repository.exists is True
+        assert result.repository.branch_exists is True
+        assert result.repository.accessible is True
 
 
 def test_get_config_status_workflow_codeconnection(tmp_path: Path) -> None:
@@ -265,9 +271,9 @@ def test_get_config_status_workflow_codeconnection(tmp_path: Path) -> None:
             state=WorkspaceState(),
             workspace_dir=tmp_path,
         )
-        assert result.repository_type == "codeconnection"
-        assert result.codeconnection_status == "AVAILABLE"
-        assert result.codeconnection_provider == "GitHub"
+        assert isinstance(result.repository, CodeConnectionConfigurationRepositoryStatus)
+        assert result.repository.status == "AVAILABLE"
+        assert result.repository.provider == "GitHub"
 
 
 def test_git_working_tree_and_remote_sync_helpers(tmp_path: Path) -> None:
@@ -835,9 +841,9 @@ def test_get_config_status_prefers_observed_pipeline_state_over_recorded_state(
             state=state,
             workspace_dir=tmp_path,
         )
-        assert result.pipeline_status == "Succeeded"
-        assert result.pipeline_execution_id == "live-exec-789"
-        assert result.recorded_pipeline_execution_id == "exec-456"
+        assert result.pipeline.status == "Succeeded"
+        assert result.pipeline.execution_id == "live-exec-789"
+        assert result.synchronization.recorded_pipeline_execution_id == "exec-456"
         assert not any("SynthesizeStack" in w for w in result.warnings)
         assert any(call_args[0][0] == "codepipeline" for call_args in mock_client.call_args_list)
 
@@ -889,12 +895,12 @@ def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: 
             state=state,
             workspace_dir=tmp_path,
         )
-        assert result.pipeline_status == "Failed"
-        assert result.pipeline_failed_stage == "Build"
-        assert result.pipeline_failed_action == "Synth"
-        assert result.pipeline_error is not None
+        assert result.pipeline.status == "Failed"
+        assert result.pipeline.failed_stage == "Build"
+        assert result.pipeline.failed_action == "Synth"
+        assert result.pipeline.error is not None
         assert "Stack AWSAccelerator-Network-Phase2 failed to deploy: ValidationError" in (
-            result.pipeline_error
+            result.pipeline.error
         )
-        assert "❌" not in result.pipeline_error
-        assert result.pipeline_failed_build_url == "https://console.aws.amazon.com/codebuild/..."
+        assert "❌" not in result.pipeline.error
+        assert result.pipeline.failed_build_url == "https://console.aws.amazon.com/codebuild/..."

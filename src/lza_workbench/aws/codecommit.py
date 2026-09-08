@@ -104,21 +104,8 @@ def ensure_codecommit_repository(
             raise
 
 
-def inspect_codecommit_config_repository(**kwargs: Any) -> dict[str, Any]:
-    """Return generic repository observations in the configuration status shape."""
-    status = inspect_codecommit_repository(**kwargs)
-    return {
-        "exists": status.exists,
-        "accessible": status.accessible,
-        "branch_exists": status.branch_exists,
-        "error": status.error,
-        "not_found": status.not_found,
-    }
-
-
 __all__ = [
     "CodeCommitRepositoryStatus",
     "ensure_codecommit_repository",
-    "inspect_codecommit_config_repository",
     "inspect_codecommit_repository",
 ]

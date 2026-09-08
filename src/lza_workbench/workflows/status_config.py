@@ -2,19 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 from lza_workbench.aws.codebuild import fetch_codebuild_diagnostics
-from lza_workbench.aws.codecommit import inspect_codecommit_config_repository
+from lza_workbench.aws.codecommit import inspect_codecommit_repository
 from lza_workbench.aws.codeconnections import inspect_codeconnection
 from lza_workbench.aws.codepipeline import PipelineStateResult, get_pipeline_state
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.s3 import inspect_s3_bucket, inspect_s3_object_safe
 from lza_workbench.configuration.git import (
-    GitRemoteSyncStatus,
-    GitWorkingTreeStatus,
     get_git_remote_sync_status,
     get_git_working_tree_status,
 )
@@ -23,77 +19,24 @@ from lza_workbench.configuration.repository import (
     CONFIG_S3_OBJECT_KEY,
     resolve_s3_configuration_destination,
 )
-from lza_workbench.configuration.status import compile_configuration_warnings
+from lza_workbench.configuration.status import (
+    CodeCommitConfigurationRepositoryStatus,
+    CodeConnectionConfigurationRepositoryStatus,
+    ConfigurationPipelineStatus,
+    ConfigurationRepositoryStatus,
+    ConfigurationStatusResult,
+    ConfigurationSynchronizationStatus,
+    ConfigurationWorkspaceStatus,
+    GitConfigurationRepositoryStatus,
+    LocalGitStatus,
+    S3ConfigurationRepositoryStatus,
+    compile_configuration_warnings,
+)
 from lza_workbench.pipeline.failures import (
     collect_pipeline_action_failures,
 )
 from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
-
-
-@dataclass(frozen=True)
-class ConfigurationStatusResult:
-    """All data needed to render configuration-source status."""
-
-    workspace_dir: Path
-    customer_name: str
-    lza_version: str
-    profile: str
-    region: str
-    aws_identity: dict[str, str] | None
-    aws_error: str | None
-    config_dir: Path
-    config_dir_exists: bool
-    yaml_files: tuple[str, ...]
-    repository_type: str
-    repository_bucket: str | None
-    repository_object_key: str
-    repository_name: str | None
-    repository_branch: str | None
-    codeconnection_arn: str | None
-    owner: str | None
-    repository_url: str | None
-    initialized_at: datetime | None
-    template_name: str | None
-    template_source: str | None
-    drifted_fields: tuple[str, ...]
-    git_working_tree: GitWorkingTreeStatus | None
-    git_sync_status: GitRemoteSyncStatus | None
-    s3_bucket_exists: bool | None
-    s3_bucket_accessible: bool | None
-    s3_bucket_versioning: bool | None
-    s3_bucket_encryption: bool | None
-    s3_object_exists: bool | None
-    s3_object_etag: str | None
-    s3_object_version_id: str | None
-    s3_object_last_modified: datetime | None
-    s3_object_size: int | None
-    s3_error: str | None
-    codecommit_exists: bool | None
-    codecommit_accessible: bool | None
-    codecommit_branch_exists: bool | None
-    codecommit_error: str | None
-    codeconnection_status: str | None
-    codeconnection_provider: str | None
-    codeconnection_owner_account: str | None
-    codeconnection_error: str | None
-    pipeline_name: str
-    pipeline_arn: str
-    pipeline_status: str | None
-    pipeline_execution_id: str | None
-    pipeline_failed_stage: str | None
-    pipeline_failed_action: str | None
-    pipeline_failed_build_url: str | None
-    pipeline_error: str | None
-    pipeline_state: PipelineStateResult | None
-    recorded_pipeline_execution_id: str | None
-
-    uploaded_at: object | None
-    downloaded_at: object | None
-    artifact_etag: str | None
-    artifact_version_id: str | None
-    has_state: bool
-    warnings: tuple[str, ...]
 
 
 def get_config_status_workflow(
@@ -235,12 +178,13 @@ def get_config_status_workflow(
         if aws_identity:
             try:
                 cc_client = factory.get_client("codecommit")
-                cc_info = inspect_codecommit_config_repository(
+                cc_info = inspect_codecommit_repository(
                     client=cc_client, repository_name=repo_name, branch_name=branch_name
                 )
-                codecommit_exists = cc_info.get("exists")
-                codecommit_accessible = cc_info.get("accessible")
-                codecommit_branch_exists = cc_info.get("branch_exists")
+                codecommit_exists = cc_info.exists
+                codecommit_accessible = cc_info.accessible
+                codecommit_branch_exists = cc_info.branch_exists
+                codecommit_error = cc_info.error
             except Exception as exc:
                 codecommit_error = str(exc)
                 codecommit_accessible = False
@@ -304,27 +248,7 @@ def get_config_status_workflow(
         pipeline_failed_build_url = resolved_state.config_pipeline_failed_build_url
         pipeline_error = resolved_state.config_pipeline_error
 
-    warnings = compile_configuration_warnings(
-        config_dir_exists=config_dir.exists(),
-        drifted_fields=drifted_fields,
-        git_working_tree=git_working_tree,
-        git_sync_status=git_sync_status,
-        repository_type=repo.type,
-        s3_bucket_name=s3_bucket_name,
-        s3_bucket_exists=s3_bucket_exists,
-        s3_bucket_accessible=s3_bucket_accessible,
-        s3_object_exists=s3_object_exists,
-        codecommit_exists=codecommit_exists,
-        codecommit_accessible=codecommit_accessible,
-        codecommit_branch_exists=codecommit_branch_exists,
-        codeconnection_status=codeconnection_status,
-        pipeline_name=config_pipeline_name,
-        pipeline_status=pipeline_status,
-        pipeline_failed_stage=pipeline_failed_stage,
-        pipeline_failed_action=pipeline_failed_action,
-    )
-
-    return ConfigurationStatusResult(
+    workspace = ConfigurationWorkspaceStatus(
         workspace_dir=resolved_workspace_dir,
         customer_name=resolved_config.customer.name,
         lza_version=resolved_config.lza.version,
@@ -335,53 +259,85 @@ def get_config_status_workflow(
         config_dir=config_dir,
         config_dir_exists=config_dir.exists(),
         yaml_files=yaml_files,
-        repository_type=repo.type,
-        repository_bucket=s3_bucket_name if repo.type == "s3" else repo.bucket,
-        repository_object_key=CONFIG_S3_OBJECT_KEY,
-        repository_name=repo.repository_name,
-        repository_branch=repo.branch,
-        codeconnection_arn=repo.codeconnection_arn,
-        owner=repo.owner,
-        repository_url=repo.repository,
         initialized_at=initialized_at,
         template_name=template_name,
         template_source=template_source,
         drifted_fields=drifted_fields,
-        git_working_tree=git_working_tree,
-        git_sync_status=git_sync_status,
-        s3_bucket_exists=s3_bucket_exists,
-        s3_bucket_accessible=s3_bucket_accessible,
-        s3_bucket_versioning=s3_bucket_versioning,
-        s3_bucket_encryption=s3_bucket_encryption,
-        s3_object_exists=s3_object_exists,
-        s3_object_etag=s3_object_etag,
-        s3_object_version_id=s3_object_version_id,
-        s3_object_last_modified=s3_object_last_modified,
-        s3_object_size=s3_object_size,
-        s3_error=s3_error,
-        codecommit_exists=codecommit_exists,
-        codecommit_accessible=codecommit_accessible,
-        codecommit_branch_exists=codecommit_branch_exists,
-        codecommit_error=codecommit_error,
-        codeconnection_status=codeconnection_status,
-        codeconnection_provider=codeconnection_provider,
-        codeconnection_owner_account=codeconnection_owner_account,
-        codeconnection_error=codeconnection_error,
-        pipeline_name=config_pipeline_name,
-        pipeline_arn=config_pipeline_arn,
-        pipeline_status=pipeline_status,
-        pipeline_execution_id=pipeline_execution_id,
-        pipeline_failed_stage=pipeline_failed_stage,
-        pipeline_failed_action=pipeline_failed_action,
-        pipeline_failed_build_url=pipeline_failed_build_url,
-        pipeline_error=pipeline_error,
-        pipeline_state=pipeline_state,
+    )
+    local_git = LocalGitStatus(working_tree=git_working_tree, sync_status=git_sync_status)
+    repository: ConfigurationRepositoryStatus
+    if repo.type == "s3":
+        repository = S3ConfigurationRepositoryStatus(
+            bucket=s3_bucket_name,
+            object_key=CONFIG_S3_OBJECT_KEY,
+            bucket_exists=s3_bucket_exists,
+            bucket_accessible=s3_bucket_accessible,
+            bucket_versioning=s3_bucket_versioning,
+            bucket_encryption=s3_bucket_encryption,
+            object_exists=s3_object_exists,
+            object_etag=s3_object_etag,
+            object_version_id=s3_object_version_id,
+            object_last_modified=s3_object_last_modified,
+            object_size=s3_object_size,
+            error=s3_error,
+        )
+    elif repo.type == "codecommit":
+        repository = CodeCommitConfigurationRepositoryStatus(
+            repository_name=repo.repository_name or "aws-accelerator-config",
+            branch_name=repo.branch or "main",
+            exists=codecommit_exists,
+            accessible=codecommit_accessible,
+            branch_exists=codecommit_branch_exists,
+            error=codecommit_error,
+        )
+    elif repo.type == "codeconnection":
+        repository = CodeConnectionConfigurationRepositoryStatus(
+            connection_arn=repo.codeconnection_arn,
+            owner=repo.owner,
+            repository_name=repo.repository_name,
+            branch_name=repo.branch,
+            status=codeconnection_status,
+            provider=codeconnection_provider,
+            owner_account=codeconnection_owner_account,
+            error=codeconnection_error,
+        )
+    else:
+        repository = GitConfigurationRepositoryStatus(
+            repository_url=repo.repository,
+            repository_name=repo.repository_name,
+            branch_name=repo.branch,
+        )
+    pipeline = ConfigurationPipelineStatus(
+        name=config_pipeline_name,
+        arn=config_pipeline_arn,
+        status=pipeline_status,
+        execution_id=pipeline_execution_id,
+        failed_stage=pipeline_failed_stage,
+        failed_action=pipeline_failed_action,
+        failed_build_url=pipeline_failed_build_url,
+        error=pipeline_error,
+        state=pipeline_state,
+    )
+    synchronization = ConfigurationSynchronizationStatus(
+        has_state=resolved_state is not None,
         recorded_pipeline_execution_id=recorded_pipeline_execution_id,
         uploaded_at=resolved_state.config_uploaded_at if resolved_state else None,
         downloaded_at=resolved_state.config_downloaded_at if resolved_state else None,
         artifact_etag=resolved_state.config_artifact_etag if resolved_state else None,
         artifact_version_id=resolved_state.config_artifact_version_id if resolved_state else None,
-        has_state=resolved_state is not None,
+    )
+    warnings = compile_configuration_warnings(
+        workspace=workspace,
+        local_git=local_git,
+        repository=repository,
+        pipeline=pipeline,
+    )
+    return ConfigurationStatusResult(
+        workspace=workspace,
+        local_git=local_git,
+        repository=repository,
+        pipeline=pipeline,
+        synchronization=synchronization,
         warnings=warnings,
     )
 
