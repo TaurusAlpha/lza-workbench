@@ -228,10 +228,6 @@ Future design decision:
 - [ ] Prepare and synchronize installer source code across Amazon S3, AWS CodeCommit, and the official AWS GitHub repository when the configured LZA version or source settings require it.
 - [ ] Follow the AWS source-location requirements for S3 packaging and synthesized installer parameters: <https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/source-code-location.html>.
 
-### `lza installer status`
-
-Show installer deployment status as an alias for `lza status installer`.
-
 ### `lza uninstall`
 
 Uninstall the LZA solution rather than deleting only the installer stack.
@@ -256,22 +252,14 @@ Implementation notes:
 - AWS retains some data-bearing resources to avoid accidental data loss, so preservation and cleanup choices must be explicit.
 - Reference: <https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/uninstall-the-solution.html>.
 
-### `lza config push`
+### `lza config push` and `lza config upload`
 
 Synchronize the local customer `aws-accelerator-config` to the configured remote configuration source without starting the LZA pipeline.
 
-### `lza config pull`
+### `lza config pull` and `lza config download`
 
 Synchronize the configured remote customer configuration source into the local
 `aws-accelerator-config` directory.
-
-### `lza config download`
-
-Download configuration from the configured remote source as an alias for `lza config pull`.
-
-### `lza config upload`
-
-Upload configuration to the configured remote source as an alias for `lza config push`.
 
 ### `lza config deploy`
 
@@ -293,12 +281,12 @@ Show the read-only overall operational status of the current LZA workspace and d
 
 Provides a consolidated high-level summary of workspace identity, installer CloudFormation stack and CodePipeline status, configuration repository and CodePipeline status, and overall deployment health with graceful offline fallback when AWS access is unavailable. Detailed diagnostics remain in `lza status installer` and `lza status config`.
 
-### `lza status installer`
+### `lza status installer` and `lza installer status`
 
 Show detailed installer stack status, deployed configuration drift, and optional explicit state or
 configuration synchronization.
 
-### `lza status config`
+### `lza status config` and `lza config status`
 
 Show detailed configuration repository status, remote source existence/accessibility, local Git working-tree status and remote revision comparison, configuration pipeline status, and operational metadata.
 
@@ -322,7 +310,8 @@ Future design decision:
 
 The local Web GUI
 
-- [ ] Add detailed read-only installer, configuration, and pipeline views before mutation flows.
+- [x] Add detailed read-only configuration details view (accessible from Configuration card).
+- [ ] Add detailed read-only installer and pipeline views before mutation flows.
 - [ ] Keep multi-user/server operation out of the current scope.
 
 ## Workspace

@@ -7,6 +7,14 @@ from typing import Any
 
 from fastapi import APIRouter
 
+from lza_workbench.workflows.status_config import (
+    CodeCommitConfigurationRepositoryStatus,
+    CodeConnectionConfigurationRepositoryStatus,
+    ConfigurationStatusResult,
+    GitConfigurationRepositoryStatus,
+    S3ConfigurationRepositoryStatus,
+    get_config_status_workflow,
+)
 from lza_workbench.workflows.status_root import (
     PipelineSummary,
     RootStatusResult,
@@ -15,12 +23,16 @@ from lza_workbench.workflows.status_root import (
 
 
 def create_status_router(*, workspace_dir: Path) -> APIRouter:
-    """Create the status route bound to one workspace directory."""
+    """Create status routes bound to one workspace directory."""
     router = APIRouter()
 
     @router.get("/api/status")
     def get_status() -> dict[str, Any]:
         return serialize_root_status(get_root_status_workflow(target_dir=workspace_dir))
+
+    @router.get("/api/status/config")
+    def get_config_status() -> dict[str, Any]:
+        return serialize_configuration_status(get_config_status_workflow(target_dir=workspace_dir))
 
     return router
 
@@ -104,4 +116,182 @@ def _serialize_pipeline(pipeline: PipelineSummary) -> dict[str, Any]:
         "failedAction": pipeline.failed_action,
         "failureSummary": pipeline.failure_summary,
         "isLive": pipeline.is_live,
+    }
+
+
+def serialize_configuration_status(result: ConfigurationStatusResult) -> dict[str, Any]:
+    """Translate configuration status result into browser API contract."""
+    ws = result.workspace
+    lg = result.local_git
+    repo = result.repository
+    pipe = result.pipeline
+    sync_obj = result.synchronization
+    remote_sync = sync_obj.remote_sync
+
+    workspace_data = {
+        "directory": str(ws.workspace_dir),
+        "customerName": ws.customer_name,
+        "lzaVersion": ws.lza_version,
+        "profile": ws.profile,
+        "region": ws.region,
+        "identity": ws.aws_identity,
+        "error": ws.aws_error,
+        "isLive": ws.aws_identity is not None,
+        "configDir": str(ws.config_dir),
+        "configDirExists": ws.config_dir_exists,
+        "yamlFiles": list(ws.yaml_files),
+        "yamlFilesCount": len(ws.yaml_files),
+        "initializedAt": ws.initialized_at.isoformat() if ws.initialized_at else None,
+        "templateName": ws.template_name,
+        "templateSource": ws.template_source,
+        "driftedFields": list(ws.drifted_fields),
+    }
+
+    local_git_data: dict[str, Any] = {
+        "isGit": lg.working_tree is not None,
+        "workingTree": None,
+        "syncStatus": None,
+    }
+    if lg.working_tree:
+        wt = lg.working_tree
+        local_git_data["workingTree"] = {
+            "branch": wt.branch,
+            "commit": wt.commit,
+            "commitSubject": wt.commit_subject,
+            "hasUncommitted": wt.has_uncommitted,
+            "uncommittedCount": wt.uncommitted_count,
+            "remoteUrl": wt.remote_url,
+            "filesCount": wt.files_count,
+        }
+    if lg.sync_status:
+        ss = lg.sync_status
+        local_git_data["syncStatus"] = {
+            "status": ss.status,
+            "ahead": ss.ahead,
+            "behind": ss.behind,
+            "summary": ss.summary,
+        }
+
+    repo_data: dict[str, Any] = {}
+    if isinstance(repo, S3ConfigurationRepositoryStatus):
+        repo_data = {
+            "type": "s3",
+            "bucket": repo.bucket,
+            "objectKey": repo.object_key,
+            "bucketExists": repo.bucket_exists,
+            "bucketAccessible": repo.bucket_accessible,
+            "bucketVersioning": repo.bucket_versioning,
+            "bucketEncryption": repo.bucket_encryption,
+            "objectExists": repo.object_exists,
+            "objectEtag": repo.object_etag,
+            "objectVersionId": repo.object_version_id,
+            "objectLastModified": (
+                repo.object_last_modified.isoformat() if repo.object_last_modified else None
+            ),
+            "objectSize": repo.object_size,
+            "error": repo.error,
+        }
+    elif isinstance(repo, CodeCommitConfigurationRepositoryStatus):
+        repo_data = {
+            "type": "codecommit",
+            "repositoryName": repo.repository_name,
+            "branchName": repo.branch_name,
+            "exists": repo.exists,
+            "accessible": repo.accessible,
+            "branchExists": repo.branch_exists,
+            "error": repo.error,
+        }
+    elif isinstance(repo, CodeConnectionConfigurationRepositoryStatus):
+        repo_data = {
+            "type": "codeconnection",
+            "connectionArn": repo.connection_arn,
+            "owner": repo.owner,
+            "repositoryName": repo.repository_name,
+            "branchName": repo.branch_name,
+            "status": repo.status,
+            "provider": repo.provider,
+            "ownerAccount": repo.owner_account,
+            "error": repo.error,
+        }
+    elif isinstance(repo, GitConfigurationRepositoryStatus):
+        repo_data = {
+            "type": "git",
+            "repositoryUrl": repo.repository_url,
+            "repositoryName": repo.repository_name,
+            "branchName": repo.branch_name,
+        }
+
+    remote_sync_data = (
+        {
+            "status": remote_sync.status,
+            "ahead": remote_sync.ahead,
+            "behind": remote_sync.behind,
+            "summary": remote_sync.summary,
+            "isSynced": remote_sync.is_synced,
+            "details": remote_sync.details,
+        }
+        if remote_sync
+        else None
+    )
+
+    pipe_stages: list[dict[str, Any]] = []
+    if pipe.state and pipe.state.stage_states:
+        for stage in pipe.state.stage_states:
+            actions = [
+                {
+                    "name": a.action_name,
+                    "status": a.status,
+                    "summary": a.summary,
+                    "errorMessage": a.error_message,
+                    "externalExecutionUrl": a.external_execution_url,
+                }
+                for a in stage.actions
+            ]
+            pipe_stages.append({
+                "name": stage.stage_name,
+                "status": stage.status,
+                "actions": actions,
+            })
+
+    pipeline_data = {
+        "name": pipe.name,
+        "arn": pipe.arn,
+        "status": pipe.status,
+        "executionId": pipe.execution_id,
+        "failedStage": pipe.failed_stage,
+        "failedAction": pipe.failed_action,
+        "failedBuildUrl": pipe.failed_build_url,
+        "error": pipe.error,
+        "stages": pipe_stages,
+    }
+
+    synchronization_data = {
+        "hasState": sync_obj.has_state,
+        "recordedPipelineExecutionId": sync_obj.recorded_pipeline_execution_id,
+        "uploadedAt": (
+            sync_obj.uploaded_at.isoformat()
+            if hasattr(sync_obj.uploaded_at, "isoformat")
+            else str(sync_obj.uploaded_at)
+            if sync_obj.uploaded_at
+            else None
+        ),
+        "downloadedAt": (
+            sync_obj.downloaded_at.isoformat()
+            if hasattr(sync_obj.downloaded_at, "isoformat")
+            else str(sync_obj.downloaded_at)
+            if sync_obj.downloaded_at
+            else None
+        ),
+        "artifactEtag": sync_obj.artifact_etag,
+        "artifactVersionId": sync_obj.artifact_version_id,
+    }
+
+    return {
+        "workspace": workspace_data,
+        "localGit": local_git_data,
+        "repository": repo_data,
+        "remoteSync": remote_sync_data,
+        "pipeline": pipeline_data,
+        "synchronization": synchronization_data,
+        "warnings": list(result.warnings),
     }

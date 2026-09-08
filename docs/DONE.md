@@ -6,6 +6,13 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### Configuration Details Web Page (v0.31.0)
+- Built a dedicated read-only Configuration Details page in the Web interface, opened from the Overview Configuration card or direct link/hash navigation (`#/configuration`).
+- Supported unified hash routing (`#/` and `#/overview` for Overview, `#/configuration` for Configuration Details) with back button and browser history support.
+- Added `/api/status/config` endpoint serializing local config state, YAML file discovery, repository/provider inspection (S3, CodeCommit, CodeConnection, Git), Git working tree status, remote sync parity, configuration pipeline diagnostics, and synchronization history.
+- Presented comprehensive diagnostic warnings and recommendations, file tags, pipeline execution stages, and provider-specific metadata.
+- Preserved strict architectural layering with fast AST tests in `test_package.py` and endpoint coverage in `test_status.py`.
+
 ### S3 Configuration Remote Synchronization & Status Workflow (v0.30.8)
 - Added S3 remote sync parity tracking comparing local configuration against canonical remote S3 archives without downloading objects into memory.
 - Tracked transfer state in `.lza/state.json` (`config_artifact_etag`, `config_sync_digest`, `config_artifact_version_id`) across `lza config push` and `lza config pull`.

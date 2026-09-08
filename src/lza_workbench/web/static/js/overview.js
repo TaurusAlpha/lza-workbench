@@ -1,11 +1,11 @@
-function escapeHtml(value) {
+export function escapeHtml(value) {
   if (value === null || value === undefined) return "";
   return String(value).replace(/[&<>"']/g, (character) => {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character];
   });
 }
 
-function getStatusVariant(status) {
+export function getStatusVariant(status) {
   if (!status) return "neutral";
   const norm = String(status).toLowerCase();
 
@@ -64,7 +64,7 @@ function getStatusVariant(status) {
   return "neutral";
 }
 
-function renderBadge(status) {
+export function renderBadge(status) {
   if (status === null || status === undefined || status === "") return "";
   const variant = getStatusVariant(status);
   const text = escapeHtml(status);
@@ -83,7 +83,7 @@ function isInactiveOrEmpty(val) {
   );
 }
 
-function formatFieldValue(fieldValue, options = {}) {
+export function formatFieldValue(fieldValue, options = {}) {
   if (isInactiveOrEmpty(fieldValue)) {
     const raw = fieldValue === null || fieldValue === undefined || fieldValue === "" ? "—" : String(fieldValue);
     const str = raw.trim().toLowerCase();
@@ -115,15 +115,20 @@ function formatFieldValue(fieldValue, options = {}) {
   return `<span>${escaped}</span>`;
 }
 
-function card(title, fields, status) {
+export function card(title, fields, status, options = {}) {
   const rows = fields
     .filter(([, fieldValue]) => fieldValue !== undefined)
-    .map(([label, fieldValue, options = {}]) => {
-      return `<div class="kv-row"><dt class="kv-label">${escapeHtml(label)}</dt><dd class="kv-value">${formatFieldValue(fieldValue, options)}</dd></div>`;
+    .map(([label, fieldValue, fieldOptions = {}]) => {
+      return `<div class="kv-row"><dt class="kv-label">${escapeHtml(label)}</dt><dd class="kv-value">${formatFieldValue(fieldValue, fieldOptions)}</dd></div>`;
     })
     .join("");
   const badge = status ? renderBadge(status) : "";
-  return `<article class="card"><div class="card-header"><h2 class="card-title">${escapeHtml(title)}</h2>${badge}</div><dl class="card-body">${rows}</dl></article>`;
+  const titleHtml = options.href
+    ? `<h2 class="card-title"><a href="${options.href}" class="card-title-link" title="View ${escapeHtml(title)} details">${escapeHtml(title)}</a></h2>`
+    : `<h2 class="card-title">${escapeHtml(title)}</h2>`;
+  const interactiveClass = options.href ? " card-interactive" : "";
+  const dataHref = options.href ? ` data-href="${escapeHtml(options.href)}"` : "";
+  return `<article class="card${interactiveClass}"${dataHref}><div class="card-header">${titleHtml}${badge}</div><dl class="card-body">${rows}</dl></article>`;
 }
 
 function pipelineFields(pipeline) {
@@ -198,9 +203,19 @@ export function renderOverview(container, status) {
       ["Local Git", status.configuration.localGitBranch, { mono: true }],
       ["Uncommitted", uncommittedValue, { statusIndicator: !status.configuration.localGitClean }],
       ["Remote sync", remoteSyncSummary, { truncate: true }],
-    ], configurationSyncStatus(status.configuration)),
+    ], configurationSyncStatus(status.configuration), { href: "#/configuration" }),
     card("Installer pipeline", pipelineFields(status.installerPipeline), status.installerPipeline.status),
     card("Configuration pipeline", pipelineFields(status.configurationPipeline), status.configurationPipeline.status),
   ].join("");
+
+  container.querySelectorAll(".card-interactive").forEach((interactiveCard) => {
+    interactiveCard.addEventListener("click", (event) => {
+      if (event.target.closest("a, button")) return;
+      const href = interactiveCard.dataset.href;
+      if (href) {
+        window.location.hash = href;
+      }
+    });
+  });
 }
 

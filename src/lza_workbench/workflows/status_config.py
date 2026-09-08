@@ -366,6 +366,15 @@ def get_config_status_workflow(
 
 
 __all__ = [
+    "CodeCommitConfigurationRepositoryStatus",
+    "CodeConnectionConfigurationRepositoryStatus",
+    "ConfigurationPipelineStatus",
+    "ConfigurationRepositoryStatus",
     "ConfigurationStatusResult",
+    "ConfigurationSynchronizationStatus",
+    "ConfigurationWorkspaceStatus",
+    "GitConfigurationRepositoryStatus",
+    "LocalGitStatus",
+    "S3ConfigurationRepositoryStatus",
     "get_config_status_workflow",
 ]
