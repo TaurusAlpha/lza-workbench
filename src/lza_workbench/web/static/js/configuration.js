@@ -74,11 +74,6 @@ export function renderConfigurationDetails(container, status) {
   const sync = status.remoteSync;
   const syncHistory = status.synchronization;
 
-  // Filter warnings to configuration-specific ones (excluding pipeline-specific messages)
-  const configWarnings = (status.warnings || []).filter(
-    (w) => !w.toLowerCase().includes("pipeline")
-  );
-
   // 1. Local Configuration Fields
   const localDirStatus = ws.configDirExists ? "Present" : "Missing";
   const originStr = ws.initializedAt
@@ -237,9 +232,31 @@ export function renderConfigurationDetails(container, status) {
     ["Recorded artifact ETag", syncHistory.artifactEtag || "—", { mono: true, truncate: true }],
   ];
 
+  // 6. Configuration Pipeline Fields
+  const pipe = status.pipeline;
+  const pipeFields = [
+    ["Pipeline name", pipe.name, { mono: true, truncate: true }],
+    ["Pipeline ARN", pipe.arn, { mono: true, truncate: true }],
+    ["Status", pipe.status || "Not Executed", { statusIndicator: Boolean(pipe.status) }],
+    ["Latest execution ID", pipe.executionId || "—", { mono: true, truncate: true }],
+  ];
+
+  if (pipe.failedStage) {
+    pipeFields.push(["Failed stage", pipe.failedStage, { mono: true }]);
+  }
+  if (pipe.failedAction) {
+    pipeFields.push(["Failed action", pipe.failedAction, { mono: true }]);
+  }
+  if (pipe.error) {
+    pipeFields.push(["Failure details", pipe.error]);
+  }
+  if (pipe.failedBuildUrl) {
+    pipeFields.push(["Build console", pipe.failedBuildUrl, { mono: true, truncate: true }]);
+  }
+
   container.innerHTML = `
     <div class="config-details-layout">
-      ${renderDiagnostics(configWarnings)}
+      ${renderDiagnostics(status.warnings)}
 
       <div class="details-grid">
         ${card("Local Configuration", localConfigFields, localDirStatus)}
@@ -247,7 +264,18 @@ export function renderConfigurationDetails(container, status) {
         ${card("Git State", gitFields, wt ? (wt.hasUncommitted ? "Dirty" : "Clean") : "Not Git")}
         ${card("Remote Sync State", syncFields, sync ? sync.status : "Unavailable")}
         ${card("Synchronization History", historyFields, syncHistory.hasState ? "Recorded" : "None")}
+        ${card("Configuration Pipeline", pipeFields, pipe.status || "Not Executed", { href: "#/configuration-pipeline" })}
       </div>
     </div>
   `;
+
+  container.querySelectorAll(".card-interactive").forEach((interactiveCard) => {
+    interactiveCard.addEventListener("click", (event) => {
+      if (event.target.closest("a, button")) return;
+      const href = interactiveCard.dataset.href;
+      if (href) {
+        window.location.hash = href;
+      }
+    });
+  });
 }

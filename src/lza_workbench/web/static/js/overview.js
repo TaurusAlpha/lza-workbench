@@ -205,7 +205,7 @@ export function renderOverview(container, status) {
       ["Remote sync", remoteSyncSummary, { truncate: true }],
     ], configurationSyncStatus(status.configuration), { href: "#/configuration" }),
     card("Installer pipeline", pipelineFields(status.installerPipeline), status.installerPipeline.status),
-    card("Configuration pipeline", pipelineFields(status.configurationPipeline), status.configurationPipeline.status),
+    card("Configuration pipeline", pipelineFields(status.configurationPipeline), status.configurationPipeline.status, { href: "#/configuration-pipeline" }),
   ].join("");
 
   container.querySelectorAll(".card-interactive").forEach((interactiveCard) => {

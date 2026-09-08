@@ -1,6 +1,7 @@
 import { getConfigurationStatus, getStatus } from "./api.js";
 import { renderConfigurationDetails } from "./configuration.js";
 import { renderOverview } from "./overview.js";
+import { renderPipelineDetails } from "./pipeline.js";
 
 const viewContent = document.querySelector("#view-content") || document.querySelector("#overview");
 const notice = document.querySelector("#notice");
@@ -19,6 +20,9 @@ function parseRoute() {
   }
   if (clean === "/configuration") {
     return "configuration";
+  }
+  if (clean === "/configuration-pipeline" || clean === "/pipeline/configuration") {
+    return "configuration-pipeline";
   }
   return "overview";
 }
@@ -83,10 +87,42 @@ async function loadConfiguration() {
   }
 }
 
+async function loadPipeline() {
+  viewContent.className = "view-container";
+  viewContent.setAttribute("aria-busy", "true");
+  notice.replaceChildren();
+  refresh.disabled = true;
+  if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench / Configuration Pipeline";
+  if (pageTitle) pageTitle.textContent = "Configuration Pipeline Details";
+  if (breadcrumb) breadcrumb.hidden = false;
+
+  try {
+    const status = await getConfigurationStatus();
+    workspacePath.textContent = status.workspace.directory;
+    workspacePath.title = status.workspace.directory;
+    renderPipelineDetails(viewContent, status);
+    if (!status.workspace.isLive) {
+      notice.textContent = status.workspace.error ?? "AWS is unavailable; showing recorded status.";
+      notice.className = "notice warning";
+    }
+  } catch (error) {
+    workspacePath.textContent = "Pipeline status unavailable";
+    workspacePath.removeAttribute("title");
+    viewContent.replaceChildren();
+    notice.textContent = error.message;
+    notice.className = "notice error";
+  } finally {
+    viewContent.setAttribute("aria-busy", "false");
+    refresh.disabled = false;
+  }
+}
+
 function handleRoute() {
   const route = parseRoute();
   if (route === "configuration") {
     loadConfiguration();
+  } else if (route === "configuration-pipeline") {
+    loadPipeline();
   } else {
     loadOverview();
   }
