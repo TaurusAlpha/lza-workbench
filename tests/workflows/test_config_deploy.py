@@ -129,7 +129,7 @@ def test_deploy_configuration_preserves_push_when_start_fails(configured_workspa
             return_value=aws_context,
         ),
         patch(
-            "lza_workbench.workflows.config_deploy.push_configuration_workflow",
+            "lza_workbench.workflows.config_deploy.apply_config_push",
             return_value=push_result,
         ),
         patch(
@@ -153,7 +153,7 @@ def test_deploy_configuration_does_not_wrap_unexpected_push_errors(
             return_value=MagicMock(),
         ),
         patch(
-            "lza_workbench.workflows.config_deploy.push_configuration_workflow",
+            "lza_workbench.workflows.config_deploy.apply_config_push",
             side_effect=RuntimeError("unexpected push defect"),
         ),
     ):
@@ -173,7 +173,7 @@ def test_deploy_configuration_preserves_execution_when_watch_fails(
             return_value=aws_context,
         ),
         patch(
-            "lza_workbench.workflows.config_deploy.push_configuration_workflow",
+            "lza_workbench.workflows.config_deploy.apply_config_push",
             return_value=push_result,
         ),
         patch(

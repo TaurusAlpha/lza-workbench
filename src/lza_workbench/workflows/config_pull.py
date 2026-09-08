@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -77,13 +76,139 @@ class ConfigPullResult:
     restored_changes: bool = False
 
 
+@dataclass(frozen=True)
+class ConfigPullRequest:
+    """Intent to synchronize remote configuration into a workspace."""
+
+    target_dir: Path | None = None
+    dry_run: bool = False
+    force: bool = False
+    extract: bool = True
+    overwrite_confirmed: bool = False
+
+
+@dataclass(frozen=True)
+class ConfigPullPreparation:
+    """Read-only configuration pull assessment for an interface to present."""
+
+    result: ConfigPullResult
+    confirmation_message: str | None = None
+    confirmation_target: Path | None = None
+    confirmation_error: str | None = None
+
+
+class ConfigPullConfirmationRequired(LzaError):
+    """Raised when a pull needs explicit local-overwrite confirmation."""
+
+    def __init__(self, preparation: ConfigPullPreparation) -> None:
+        self.preparation = preparation
+        super().__init__(
+            preparation.confirmation_error
+            or preparation.confirmation_message
+            or "Confirmation is required."
+        )
+
+
+def prepare_config_pull(request: ConfigPullRequest) -> ConfigPullPreparation:
+    """Assess a pull without modifying the local configuration or workspace state."""
+    result = pull_configuration_workflow(
+        target_dir=request.target_dir,
+        dry_run=True,
+        force=request.force,
+        extract=request.extract,
+    )
+    confirmation_message, confirmation_error = _get_pull_confirmation(
+        target_dir=result.workspace_dir,
+        config_dir=result.config_dir,
+        repository_type=result.repository_type,
+        extract=request.extract,
+        force=request.force,
+    )
+    return ConfigPullPreparation(
+        result=result,
+        confirmation_message=confirmation_message,
+        confirmation_target=result.config_dir if confirmation_message else None,
+        confirmation_error=confirmation_error,
+    )
+
+
+def apply_config_pull(request: ConfigPullRequest) -> ConfigPullResult:
+    """Apply a previously assessed pull after explicit confirmation when needed."""
+    preparation = prepare_config_pull(request)
+    if request.dry_run:
+        return preparation.result
+    if preparation.confirmation_message and not request.overwrite_confirmed:
+        raise ConfigPullConfirmationRequired(preparation)
+    return pull_configuration_workflow(
+        target_dir=request.target_dir,
+        dry_run=request.dry_run,
+        force=request.force,
+        extract=request.extract,
+        overwrite_confirmed=request.overwrite_confirmed,
+    )
+
+
+def _get_pull_confirmation(
+    *,
+    target_dir: Path,
+    config_dir: Path,
+    repository_type: str,
+    extract: bool,
+    force: bool,
+) -> tuple[str | None, str | None]:
+    if force:
+        return None, None
+
+    context = load_workspace_context(
+        target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
+    )
+    if repository_type == "s3":
+        exclude_dirs = set(context.config.configuration.packaging.exclude.directories)
+        exclude_files = set(context.config.configuration.packaging.exclude.files)
+        if (
+            extract
+            and config_dir.is_dir()
+            and any(config_dir.iterdir())
+            and (
+                context.state.config_sync_digest is None
+                or compute_config_directory_digest(config_dir, exclude_dirs, exclude_files)
+                != context.state.config_sync_digest
+            )
+        ):
+            return (
+                f"Local configuration directory '{config_dir}' has uncommitted local changes. "
+                "Overwrite?",
+                "Local configuration directory is not empty and has changes "
+                f"that would be overwritten: {config_dir}. Use --force to overwrite.",
+            )
+        return None, None
+
+    if not is_git_repository(config_dir):
+        if config_dir.exists() and any(config_dir.iterdir()):
+            return (
+                f"Local configuration directory '{config_dir}' is not a Git repository "
+                "and contains files. Initialize Git repository and synchronize remote changes?",
+                f"Local configuration directory '{config_dir}' is not a Git repository "
+                "and contains files. Use --force to initialize and synchronize.",
+            )
+        return None, None
+
+    if has_uncommitted_changes(config_dir):
+        return (
+            "Configuration repository contains uncommitted changes. "
+            "Automatically stash local changes and pull?",
+            "Configuration repository contains uncommitted changes. "
+            "Use --force to automatically stash changes or commit/stash them before pulling.",
+        )
+    return None, None
+
+
 def pull_configuration_workflow(
     *,
     target_dir: Path | None = None,
     dry_run: bool = False,
     force: bool = False,
     extract: bool = True,
-    confirm_callback: Callable[[str], bool] | None = None,
     overwrite_confirmed: bool = False,
 ) -> ConfigPullResult:
     """Synchronize remote configuration to local configuration directory."""
@@ -105,7 +230,6 @@ def pull_configuration_workflow(
             dry_run=dry_run,
             force=force,
             extract=extract,
-            confirm_callback=confirm_callback,
             overwrite_confirmed=overwrite_confirmed,
         )
 
@@ -118,7 +242,6 @@ def pull_configuration_workflow(
             repo_type=repo_type,
             dry_run=dry_run,
             force=force,
-            confirm_callback=confirm_callback,
             overwrite_confirmed=overwrite_confirmed,
         )
 
@@ -134,7 +257,6 @@ def _handle_s3_pull(
     dry_run: bool,
     force: bool,
     extract: bool,
-    confirm_callback: Callable[[str], bool] | None,
     overwrite_confirmed: bool,
 ) -> ConfigPullResult:
     repo_cfg = config.configuration.repository
@@ -178,13 +300,7 @@ def _handle_s3_pull(
             != state.config_sync_digest
         )
     ):
-        msg = (
-            f"Local configuration directory '{config_dir}' has uncommitted local changes. "
-            "Overwrite?"
-        )
-        if confirm_callback and confirm_callback(msg):
-            overwrite_confirmed = True
-        else:
+        if not overwrite_confirmed:
             raise LzaError(
                 "Local configuration directory is not empty and has changes "
                 "that would be overwritten: "
@@ -270,7 +386,6 @@ def _handle_git_pull(
     repo_type: str,
     dry_run: bool,
     force: bool,
-    confirm_callback: Callable[[str], bool] | None,
     overwrite_confirmed: bool,
 ) -> ConfigPullResult:
     repo_cfg = config.configuration.repository
@@ -309,13 +424,7 @@ def _handle_git_pull(
         profile = config.aws.profile if repo_type == "codecommit" else None
         if config_dir.exists() and any(config_dir.iterdir()):
             if not force and not overwrite_confirmed:
-                msg = (
-                    f"Local configuration directory '{config_dir}' is not a Git repository "
-                    "and contains files. Initialize Git repository and synchronize remote changes?"
-                )
-                if confirm_callback and confirm_callback(msg):
-                    overwrite_confirmed = True
-                else:
+                if not overwrite_confirmed:
                     raise LzaError(
                         f"Local configuration directory '{config_dir}' is not a Git repository "
                         "and contains files. Use --force to initialize and synchronize."
@@ -358,20 +467,13 @@ def _handle_git_pull(
 
         if has_uncommitted_changes(config_dir):
             if not force and not overwrite_confirmed:
-                msg = (
-                    "Configuration repository contains uncommitted changes. "
-                    "Automatically stash local changes and pull?"
-                )
-                if confirm_callback and confirm_callback(msg):
-                    stashed = stash_git_changes(config_dir)
-                else:
+                if not overwrite_confirmed:
                     raise LzaError(
                         "Configuration repository contains uncommitted changes. "
                         "Use --force to automatically stash changes or "
                         "commit/stash them before pulling."
                     )
-            else:
-                stashed = stash_git_changes(config_dir)
+            stashed = stash_git_changes(config_dir)
 
         fetch_git_remote(config_dir, remote=remote_name)
         pull_git_branch(config_dir, remote=remote_name, branch=destination.branch)

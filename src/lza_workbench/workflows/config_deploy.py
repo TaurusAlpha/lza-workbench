@@ -9,8 +9,9 @@ from pathlib import Path
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.errors import LzaError
 from lza_workbench.workflows.config_push import (
+    ConfigPushRequest,
     ConfigPushResult,
-    push_configuration_workflow,
+    apply_config_push,
 )
 from lza_workbench.workflows.pipeline_start import (
     PipelineStartResult,
@@ -87,11 +88,13 @@ def deploy_configuration_workflow(
 
     push_res: ConfigPushResult | None = None
     try:
-        push_res = push_configuration_workflow(
-            target_dir=target_dir,
-            dry_run=dry_run,
-            workspace_context=context,
-            aws_context=aws_context,
+        push_res = apply_config_push(
+            ConfigPushRequest(
+                target_dir=target_dir,
+                dry_run=dry_run,
+                workspace_context=context,
+                aws_context=aws_context,
+            )
         )
     except LzaError as exc:
         raise ConfigDeployError(f"Configuration push failed: {exc}") from exc

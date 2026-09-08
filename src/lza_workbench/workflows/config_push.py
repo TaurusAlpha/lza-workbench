@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -72,12 +71,76 @@ class ConfigPushResult:
     files_count: int | None = None
 
 
+@dataclass(frozen=True)
+class ConfigPushRequest:
+    """Intent to synchronize local configuration to its configured destination."""
+
+    target_dir: Path | None = None
+    dry_run: bool = False
+    force: bool = False
+    overwrite_confirmed: bool = False
+    workspace_context: WorkspaceContext | None = None
+    aws_context: AwsExecutionContext | None = None
+
+
+@dataclass(frozen=True)
+class ConfigPushPreparation:
+    """Read-only configuration push assessment for an interface to present."""
+
+    result: ConfigPushResult
+    confirmation_message: str | None = None
+    confirmation_target: str | None = None
+
+
+class ConfigPushConfirmationRequired(LzaError):
+    """Raised when an S3 upload needs explicit overwrite confirmation."""
+
+    def __init__(self, preparation: ConfigPushPreparation) -> None:
+        self.preparation = preparation
+        super().__init__(preparation.confirmation_message or "Confirmation is required.")
+
+
+def prepare_config_push(request: ConfigPushRequest) -> ConfigPushPreparation:
+    """Assess a push without uploading or writing workspace state."""
+    result = push_configuration_workflow(
+        target_dir=request.target_dir,
+        dry_run=True,
+        force=request.force,
+        workspace_context=request.workspace_context,
+        aws_context=request.aws_context,
+    )
+    return ConfigPushPreparation(
+        result=result,
+        confirmation_message=result.safety_warning if not request.force else None,
+        confirmation_target=(f"s3://{result.s3_bucket}/{result.s3_key}")
+        if result.safety_warning
+        else None,
+    )
+
+
+def apply_config_push(request: ConfigPushRequest) -> ConfigPushResult:
+    """Apply a previously assessed push after explicit confirmation when needed."""
+    preparation = prepare_config_push(request)
+    if request.dry_run:
+        return preparation.result
+    if preparation.confirmation_message and not request.overwrite_confirmed:
+        raise ConfigPushConfirmationRequired(preparation)
+    return push_configuration_workflow(
+        target_dir=request.target_dir,
+        dry_run=request.dry_run,
+        force=request.force,
+        overwrite_confirmed=request.overwrite_confirmed,
+        workspace_context=request.workspace_context,
+        aws_context=request.aws_context,
+    )
+
+
 def push_configuration_workflow(
     *,
     target_dir: Path | None = None,
     dry_run: bool = False,
     force: bool = False,
-    confirm_callback: Callable[[str], bool] | None = None,
+    overwrite_confirmed: bool = False,
     workspace_context: WorkspaceContext | None = None,
     aws_context: AwsExecutionContext | None = None,
 ) -> ConfigPushResult:
@@ -106,7 +169,7 @@ def push_configuration_workflow(
             dry_run=dry_run,
             aws_context=aws_context,
             force=force,
-            confirm_callback=confirm_callback,
+            overwrite_confirmed=overwrite_confirmed,
         )
 
     if repo_type in ("codecommit", "codeconnection", "git"):
@@ -131,7 +194,7 @@ def _handle_s3_push(
     dry_run: bool,
     aws_context: AwsExecutionContext | None,
     force: bool,
-    confirm_callback: Callable[[str], bool] | None,
+    overwrite_confirmed: bool,
 ) -> ConfigPushResult:
     repo_cfg = config.configuration.repository
     destination = resolve_s3_configuration_destination(
@@ -146,9 +209,8 @@ def _handle_s3_push(
             "Local configuration may overwrite unknown remote state. "
             "Run `lza config download` first, or use --force to explicitly override this check."
         )
-        if not dry_run and not force:
-            if not confirm_callback or not confirm_callback(f"{safety_warning} Continue?"):
-                raise LzaError(safety_warning)
+        if not dry_run and not force and not overwrite_confirmed:
+            raise LzaError(safety_warning)
 
     zip_path = workspace_dir / CONFIG_ARCHIVE_FILENAME
 

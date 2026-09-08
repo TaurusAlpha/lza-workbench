@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 from lza_workbench.errors import LzaError
-from lza_workbench.workflows.config_push import push_configuration_workflow
+from lza_workbench.workflows.config_push import (
+    ConfigPushRequest,
+    apply_config_push,
+    push_configuration_workflow,
+)
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.state import load_workspace_state
 
@@ -156,30 +160,23 @@ def test_imported_s3_push_without_sync_is_protected(
 
 @pytest.mark.parametrize("override", ["force", "confirm", "decline"])
 def test_imported_s3_push_overrides(configured_workspace, mock_aws_execution_context, override):
-    from unittest.mock import Mock
-
     from lza_workbench.workspace.state import write_workspace_state
 
     state = load_workspace_state(configured_workspace)
     state.imported = True
     write_workspace_state(configured_workspace, state)
-    confirm = Mock(return_value=override == "confirm")
-    kwargs = dict(
+    request = ConfigPushRequest(
         target_dir=configured_workspace,
         aws_context=mock_aws_execution_context,
         force=override == "force",
-        confirm_callback=confirm,
+        overwrite_confirmed=override == "confirm",
     )
     mock_aws_execution_context.factory.get_client.return_value.head_object.return_value = {}
     if override == "decline":
         with pytest.raises(LzaError, match="has not been verified"):
-            push_configuration_workflow(**kwargs)
+            apply_config_push(request)
         mock_aws_execution_context.factory.get_client.assert_not_called()
     else:
-        push_configuration_workflow(**kwargs)
+        apply_config_push(request)
         assert load_workspace_state(configured_workspace).config_sync_digest
         mock_aws_execution_context.factory.get_client.return_value.upload_file.assert_called_once()
-    if override == "force":
-        confirm.assert_not_called()
-    else:
-        confirm.assert_called_once()

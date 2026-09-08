@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import typer
@@ -14,8 +15,10 @@ from lza_workbench.cli.output import (
     print_success,
 )
 from lza_workbench.workflows.config_pull import (
+    ConfigPullRequest,
     ConfigPullResult,
-    pull_configuration_workflow,
+    apply_config_pull,
+    prepare_config_pull,
 )
 
 
@@ -77,14 +80,16 @@ def config_pull_command(
     target_dir: Path | None = None,
 ) -> ConfigPullResult:
     """Synchronize LZA configuration from configured remote repository or S3."""
-    result = pull_configuration_workflow(
+    request = ConfigPullRequest(
         target_dir=target_dir,
         dry_run=dry_run,
         force=force,
         extract=extract,
-        confirm_callback=(lambda msg: typer.confirm(msg, default=False))
-        if interactive
-        else None,
     )
+    preparation = prepare_config_pull(request)
+    if preparation.confirmation_message and interactive and not dry_run:
+        if typer.confirm(preparation.confirmation_message, default=False):
+            request = replace(request, overwrite_confirmed=True)
+    result = apply_config_pull(request)
     render_config_pull_result(result)
     return result

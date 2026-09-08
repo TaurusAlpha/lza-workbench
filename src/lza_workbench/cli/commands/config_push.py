@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import typer
@@ -15,8 +16,10 @@ from lza_workbench.cli.output import (
     print_warning,
 )
 from lza_workbench.workflows.config_push import (
+    ConfigPushRequest,
     ConfigPushResult,
-    push_configuration_workflow,
+    apply_config_push,
+    prepare_config_push,
 )
 
 
@@ -69,13 +72,15 @@ def config_push_command(
     target_dir: Path | None = None,
 ) -> ConfigPushResult:
     """Synchronize LZA configuration to configured repository destination."""
-    result = push_configuration_workflow(
+    request = ConfigPushRequest(
         target_dir=target_dir,
         dry_run=dry_run,
         force=force,
-        confirm_callback=(lambda msg: typer.confirm(msg, default=False))
-        if interactive
-        else None,
     )
+    preparation = prepare_config_push(request)
+    if preparation.confirmation_message and interactive and not dry_run:
+        if typer.confirm(f"{preparation.confirmation_message} Continue?", default=False):
+            request = replace(request, overwrite_confirmed=True)
+    result = apply_config_push(request)
     render_config_push_result(result)
     return result
