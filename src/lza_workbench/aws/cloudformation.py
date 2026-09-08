@@ -10,7 +10,6 @@ from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 
-from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.errors import LzaError
 
 
@@ -53,21 +52,9 @@ def _is_stack_not_found(exc: Exception) -> bool:
     return False
 
 
-def _get_cfn_client(
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
-) -> Any | None:
-    if client is not None:
-        return client
-    if factory is not None:
-        return factory.get_client("cloudformation")
-    return None
-
-
 def inspect_cloudformation_stack(
     *,
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
+    client: Any,
     stack_name: str,
     resolved_parameters: dict[str, str],
 ) -> CfnDeploymentPlanResult:
@@ -81,17 +68,8 @@ def inspect_cloudformation_stack(
             resolved_parameters=resolved_parameters,
         )
 
-    cfn = _get_cfn_client(factory=factory, client=client)
-    if cfn is None:
-        return CfnDeploymentPlanResult(
-            stack_name=clean_stack_name,
-            operation="CREATE",
-            stack_status=None,
-            resolved_parameters=resolved_parameters,
-        )
-
     try:
-        response = cfn.describe_stacks(StackName=clean_stack_name)
+        response = client.describe_stacks(StackName=clean_stack_name)
         stacks = response.get("Stacks", [])
         if not stacks:
             return CfnDeploymentPlanResult(
@@ -149,8 +127,7 @@ def inspect_cloudformation_stack(
 
 def get_cloudformation_stack_status(
     *,
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
+    client: Any,
     stack_name: str,
 ) -> CfnStackStatusResult:
     """Get CloudFormation stack status, parameters, and outputs without mutating AWS."""
@@ -163,17 +140,8 @@ def get_cloudformation_stack_status(
             error="Stack name is empty",
         )
 
-    cfn = _get_cfn_client(factory=factory, client=client)
-    if cfn is None:
-        return CfnStackStatusResult(
-            stack_name=clean_stack_name,
-            exists=False,
-            stack_status="NOT_CHECKED",
-            error="No AWS session available",
-        )
-
     try:
-        response = cfn.describe_stacks(StackName=clean_stack_name)
+        response = client.describe_stacks(StackName=clean_stack_name)
         stacks = response.get("Stacks", [])
         if not stacks:
             return CfnStackStatusResult(
@@ -233,8 +201,7 @@ def get_cloudformation_stack_status(
 
 def get_cloudformation_stack_template(
     *,
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
+    client: Any,
     stack_name: str,
 ) -> str | None:
     """Return a deployed stack template body when it can be read."""
@@ -242,12 +209,8 @@ def get_cloudformation_stack_template(
     if not clean_stack_name:
         return None
 
-    cfn = _get_cfn_client(factory=factory, client=client)
-    if cfn is None:
-        return None
-
     try:
-        template_body = cfn.get_template(
+        template_body = client.get_template(
             StackName=clean_stack_name, TemplateStage="Original"
         ).get("TemplateBody")
         if isinstance(template_body, str):
@@ -261,8 +224,7 @@ def get_cloudformation_stack_template(
 
 def deploy_cloudformation_stack(
     *,
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
+    client: Any,
     stack_name: str,
     template_body: str | None = None,
     template_url: str | None = None,
@@ -277,10 +239,6 @@ def deploy_cloudformation_stack(
     clean_stack_name = (stack_name or "").strip()
     if not clean_stack_name:
         raise LzaError("Stack name must not be empty")
-
-    cfn = _get_cfn_client(factory=factory, client=client)
-    if cfn is None:
-        raise LzaError("AWS CloudFormation client is not available")
 
     if not template_body and not template_url:
         raise LzaError(
@@ -306,10 +264,10 @@ def deploy_cloudformation_stack(
 
     try:
         if operation == "CREATE":
-            response = cfn.create_stack(**kwargs)
+            response = client.create_stack(**kwargs)
             return str(response.get("StackId", clean_stack_name))
         if operation == "UPDATE":
-            response = cfn.update_stack(**kwargs)
+            response = client.update_stack(**kwargs)
             return str(response.get("StackId", clean_stack_name))
         raise LzaError(f"Unsupported deployment operation: {operation}")
     except ClientError as exc:
@@ -317,7 +275,7 @@ def deploy_cloudformation_stack(
         message = error.get("Message", str(exc))
         if operation == "UPDATE" and "no updates are to be performed" in message.lower():
             return str(
-                cfn.describe_stacks(StackName=clean_stack_name)
+                client.describe_stacks(StackName=clean_stack_name)
                 .get("Stacks", [{}])[0]
                 .get("StackId")
             )
@@ -332,8 +290,7 @@ def deploy_cloudformation_stack(
 
 def stream_cloudformation_stack_events(
     *,
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
+    client: Any,
     stack_name: str,
     poll_interval: float = 3.0,
     max_consecutive_errors: int = 5,
@@ -347,15 +304,6 @@ def stream_cloudformation_stack_events(
             exists=False,
             stack_status="NOT_SPECIFIED",
             error="Stack name is empty",
-        )
-
-    cfn = _get_cfn_client(factory=factory, client=client)
-    if cfn is None:
-        return CfnStackStatusResult(
-            stack_name=clean_stack_name,
-            exists=False,
-            stack_status="NOT_CHECKED",
-            error="No AWS session available",
         )
 
     seen_event_ids: set[str] = set()
@@ -376,7 +324,7 @@ def stream_cloudformation_stack_events(
 
     while True:
         try:
-            events_resp = cfn.describe_stack_events(StackName=clean_stack_name)
+            events_resp = client.describe_stack_events(StackName=clean_stack_name)
             events = events_resp.get("StackEvents", [])
             # Sort events chronologically (oldest first)
             events.reverse()
@@ -388,7 +336,7 @@ def stream_cloudformation_stack_events(
                     if on_event:
                         on_event(evt)
 
-            status_res = get_cloudformation_stack_status(client=cfn, stack_name=clean_stack_name)
+            status_res = get_cloudformation_stack_status(client=client, stack_name=clean_stack_name)
             if status_res.error:
                 consecutive_errors += 1
                 last_error = status_res.error
@@ -409,7 +357,7 @@ def stream_cloudformation_stack_events(
             if _is_stack_not_found(exc):
                 # Stack might have finished deleting or does not exist
                 status_res = get_cloudformation_stack_status(
-                    client=cfn, stack_name=clean_stack_name
+                    client=client, stack_name=clean_stack_name
                 )
                 if (
                     not status_res.exists
@@ -438,8 +386,7 @@ def stream_cloudformation_stack_events(
 
 def delete_cloudformation_stack(
     *,
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
+    client: Any,
     stack_name: str,
 ) -> None:
     """Delete a CloudFormation stack and wait for deletion to complete."""
@@ -447,13 +394,9 @@ def delete_cloudformation_stack(
     if not clean_stack_name:
         raise LzaError("Stack name must not be empty")
 
-    cfn = _get_cfn_client(factory=factory, client=client)
-    if cfn is None:
-        raise LzaError("AWS CloudFormation client is not available")
-
     try:
-        waiter = cfn.get_waiter("stack_delete_complete")
-        cfn.delete_stack(StackName=clean_stack_name)
+        waiter = client.get_waiter("stack_delete_complete")
+        client.delete_stack(StackName=clean_stack_name)
         waiter.wait(StackName=clean_stack_name)
     except ClientError as exc:
         if not _is_stack_not_found(exc):

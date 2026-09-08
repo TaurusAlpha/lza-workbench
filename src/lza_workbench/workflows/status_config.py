@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lza_workbench.aws.codebuild import fetch_codebuild_diagnostics
 from lza_workbench.aws.codecommit import inspect_codecommit_repository
 from lza_workbench.aws.codeconnections import inspect_codeconnection
 from lza_workbench.aws.codepipeline import get_pipeline_state
@@ -42,6 +41,7 @@ from lza_workbench.configuration.sync import (
 )
 from lza_workbench.pipeline.failures import (
     collect_pipeline_action_failures,
+    fetch_codebuild_diagnostics,
 )
 from lza_workbench.pipeline.models import PipelineExecutionSnapshot
 from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
@@ -211,9 +211,10 @@ def get_config_status_workflow(
 
     elif repo.type == "codeconnection":
         if repo.codeconnection_arn and aws_identity:
+            conn_client = factory.get_client("codeconnections")
             conn_res = inspect_codeconnection(
+                client=conn_client,
                 connection_arn=repo.codeconnection_arn,
-                factory=factory,
             )
             codeconnection_status = conn_res.status
             codeconnection_provider = conn_res.provider_type
@@ -248,10 +249,13 @@ def get_config_status_workflow(
             pipeline_status = pipeline_state.status
             pipeline_execution_id = pipeline_state.latest_execution_id
             if pipeline_state.status in {"Failed", "Cancelled"}:
+                codebuild_client = factory.get_client("codebuild")
+                logs_client = factory.get_client("logs")
                 failures = collect_pipeline_action_failures(
                     pipeline_state.stages,
                     fetch_diagnostics=lambda build_id: fetch_codebuild_diagnostics(
-                        factory=factory,
+                        codebuild_client=codebuild_client,
+                        logs_client=logs_client,
                         build_id=build_id,
                     ),
                 )

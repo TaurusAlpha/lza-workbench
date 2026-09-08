@@ -10,6 +10,8 @@ from lza_workbench.pipeline.failures import (
     clean_raw_diagnostic_text,
     collect_pipeline_action_failures,
     deduplicate_failure_diagnostics,
+    extract_log_error_diagnostics,
+    fetch_codebuild_diagnostics,
     interpret_failure_diagnostic,
     normalize_root_cause_and_resource,
     select_root_cause,
@@ -187,3 +189,51 @@ def test_root_cause_selection_prefers_actionable_over_wrapper() -> None:
 
     root = select_root_cause([diag_wrapper, diag_cfn])
     assert root == diag_cfn
+
+
+def test_extract_log_error_diagnostics_filters_noise_and_extracts_high_priority() -> None:
+    log_lines = [
+        "[Container] 2026/09/08 10:00:00 Entering phase BUILD",
+        "npm notice Beginning compilation",
+        (
+            "2026-09-08 10:00:05 | error | toolkit | ❌ AWSAccelerator-PrepareStack failed: "
+            "ValidationError: Stack cannot be deleted"
+        ),
+        "Command did not exit successfully",
+        "Phase complete: BUILD State: FAILED",
+    ]
+    extracted = extract_log_error_diagnostics(log_lines)
+    assert len(extracted) == 1
+    assert "ValidationError: Stack cannot be deleted" in extracted[0]
+
+
+def test_fetch_codebuild_diagnostics_uses_resolved_clients() -> None:
+    mock_cb = MagicMock()
+    mock_cb.batch_get_builds.return_value = {
+        "builds": [
+            {
+                "id": "build-123",
+                "logs": {
+                    "groupName": "/aws/codebuild/my-build",
+                    "streamName": "stream-123",
+                },
+            }
+        ]
+    }
+    mock_logs = MagicMock()
+    mock_logs.get_log_events.return_value = {
+        "events": [
+            {
+                "message": "ValidationError: Account not found in organization",
+            }
+        ]
+    }
+
+    diagnostics = fetch_codebuild_diagnostics(
+        codebuild_client=mock_cb,
+        logs_client=mock_logs,
+        build_id="build-123",
+    )
+    assert len(diagnostics) == 1
+    assert "ValidationError: Account not found in organization" in diagnostics[0]
+

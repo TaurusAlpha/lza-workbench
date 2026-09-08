@@ -7,8 +7,6 @@ from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 
-from lza_workbench.aws.client_factory import AwsClientFactory
-
 
 @dataclass(frozen=True)
 class CodeConnectionStatusResult:
@@ -23,29 +21,10 @@ class CodeConnectionStatusResult:
     error: str | None = None
 
 
-
-def _get_connections_client(
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
-) -> Any | None:
-    if client is not None:
-        return client
-    if factory is not None:
-        try:
-            return factory.get_client("codeconnections")
-        except Exception:
-            try:
-                return factory.get_client("codestar-connections")
-            except Exception:
-                return None
-    return None
-
-
 def inspect_codeconnection(
     *,
+    client: Any,
     connection_arn: str,
-    client: Any | None = None,
-    factory: AwsClientFactory | None = None,
 ) -> CodeConnectionStatusResult:
     """Inspect CodeConnection status without modifying AWS resources."""
     clean_arn = (connection_arn or "").strip()
@@ -56,16 +35,8 @@ def inspect_codeconnection(
             error="Connection ARN is empty",
         )
 
-    conn_client = _get_connections_client(factory=factory, client=client)
-    if conn_client is None:
-        return CodeConnectionStatusResult(
-            arn=clean_arn,
-            status="UNCHECKED",
-            error="No AWS session or CodeConnections client available",
-        )
-
     try:
-        response = conn_client.get_connection(ConnectionArn=clean_arn)
+        response = client.get_connection(ConnectionArn=clean_arn)
         conn = response.get("Connection", {})
         return CodeConnectionStatusResult(
             arn=clean_arn,

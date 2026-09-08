@@ -532,20 +532,22 @@ def prepare_workspace_import(request: ImportWorkspaceRequest) -> ImportWorkspace
                             config.installer.source_code.github_secret_name
                             or "accelerator/github-token"
                         )
-                        secret_details = inspect_secret_details(secret_name, client=sm_client)
-                        if not secret_details["exists"]:
+                        secret_details = inspect_secret_details(
+                            client=sm_client, secret_name=secret_name
+                        )
+                        if not secret_details.exists:
                             recommendations.append(
                                 "GitHub installer source detected, but Secrets Manager "
                                 f"secret '{secret_name}' was not found. Create this secret "
                                 "containing a valid GitHub token before deployment."
                             )
-                        elif secret_details["value"]:
+                        elif secret_details.value:
                             gh_res = validate_github_repository_access(
                                 owner=config.installer.source_code.owner or "awslabs",
                                 repository_name=config.installer.source_code.repository_name
                                 or "landing-zone-accelerator-on-aws",
                                 branch=config.installer.source_code.branch,
-                                token=secret_details["value"],
+                                token=secret_details.value,
                             )
                             if not gh_res["accessible"]:
                                 recommendations.append(

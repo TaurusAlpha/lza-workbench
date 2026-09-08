@@ -7,7 +7,6 @@ from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 
-from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.errors import LzaError
 from lza_workbench.pipeline.models import (
     PipelineActionState,
@@ -23,22 +22,9 @@ PipelineStateResult = PipelineExecutionSnapshot
 StageStateResult = PipelineStageState
 
 
-
-def _get_codepipeline_client(
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
-) -> Any | None:
-    if client is not None:
-        return client
-    if factory is not None:
-        return factory.get_client("codepipeline")
-    return None
-
-
 def get_pipeline_state(
     *,
-    client: Any | None = None,
-    factory: AwsClientFactory | None = None,
+    client: Any,
     pipeline_name: str,
 ) -> PipelineStateResult:
     """Get CodePipeline state and stage statuses without mutating AWS."""
@@ -51,17 +37,8 @@ def get_pipeline_state(
             error="Pipeline name is empty",
         )
 
-    codepipeline = _get_codepipeline_client(factory=factory, client=client)
-    if codepipeline is None:
-        return PipelineStateResult(
-            pipeline_name=clean_pipeline_name,
-            exists=False,
-            status="NOT_CHECKED",
-            error="No AWS session available",
-        )
-
     try:
-        response = codepipeline.get_pipeline_state(name=clean_pipeline_name)
+        response = client.get_pipeline_state(name=clean_pipeline_name)
         stage_states_raw = response.get("stageStates", [])
 
         stage_results: list[PipelineStageState] = []
@@ -197,8 +174,7 @@ def get_pipeline_state(
 
 def start_pipeline_execution(
     *,
-    client: Any | None = None,
-    factory: AwsClientFactory | None = None,
+    client: Any,
     pipeline_name: str,
 ) -> str:
     """Trigger a new CodePipeline execution and return the execution ID."""
@@ -206,12 +182,8 @@ def start_pipeline_execution(
     if not clean_pipeline_name:
         raise LzaError("Pipeline name cannot be empty.")
 
-    codepipeline = _get_codepipeline_client(factory=factory, client=client)
-    if codepipeline is None:
-        raise LzaError("No AWS session or CodePipeline client available.")
-
     try:
-        response = codepipeline.start_pipeline_execution(name=clean_pipeline_name)
+        response = client.start_pipeline_execution(name=clean_pipeline_name)
         execution_id = response.get("pipelineExecutionId")
         if not execution_id:
             raise LzaError(f"No pipeline execution ID returned for '{clean_pipeline_name}'.")
@@ -234,8 +206,7 @@ def start_pipeline_execution(
 
 def get_pipeline_execution(
     *,
-    client: Any | None = None,
-    factory: AwsClientFactory | None = None,
+    client: Any,
     pipeline_name: str,
     execution_id: str,
 ) -> PipelineExecutionResult:
@@ -251,18 +222,8 @@ def get_pipeline_execution(
             error="Pipeline name or execution ID is empty",
         )
 
-    codepipeline = _get_codepipeline_client(factory=factory, client=client)
-    if codepipeline is None:
-        return PipelineExecutionResult(
-            pipeline_name=clean_pipeline_name,
-            exists=False,
-            execution_id=clean_execution_id,
-            status="UNKNOWN",
-            error="No AWS session available",
-        )
-
     try:
-        response = codepipeline.get_pipeline_execution(
+        response = client.get_pipeline_execution(
             pipelineName=clean_pipeline_name,
             pipelineExecutionId=clean_execution_id,
         )
@@ -330,8 +291,7 @@ def get_pipeline_execution(
 
 def get_latest_pipeline_execution_id(
     *,
-    client: Any | None = None,
-    factory: AwsClientFactory | None = None,
+    client: Any,
     pipeline_name: str,
 ) -> str | None:
     """Discover the most recent execution ID for a pipeline."""
@@ -339,12 +299,8 @@ def get_latest_pipeline_execution_id(
     if not clean_pipeline_name:
         return None
 
-    codepipeline = _get_codepipeline_client(factory=factory, client=client)
-    if codepipeline is None:
-        return None
-
     try:
-        response = codepipeline.list_pipeline_executions(
+        response = client.list_pipeline_executions(
             pipelineName=clean_pipeline_name,
             maxResults=1,
         )
@@ -355,5 +311,5 @@ def get_latest_pipeline_execution_id(
         pass
 
     # Fallback to get_pipeline_state
-    state = get_pipeline_state(client=client, factory=factory, pipeline_name=clean_pipeline_name)
+    state = get_pipeline_state(client=client, pipeline_name=clean_pipeline_name)
     return state.latest_execution_id

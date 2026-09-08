@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lza_workbench.aws.cloudformation import inspect_cloudformation_stack
-from lza_workbench.aws.codecommit import inspect_codecommit_repository
+from lza_workbench.aws.cloudformation import (
+    CfnDeploymentPlanResult,
+    inspect_cloudformation_stack,
+)
+from lza_workbench.aws.codecommit import (
+    CodeCommitRepositoryStatus,
+    inspect_codecommit_repository,
+)
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.secrets_manager import inspect_secret_exists
 from lza_workbench.errors import LzaError
@@ -82,13 +88,23 @@ def plan_installer_workflow(
     # Step 4: CodeCommit Source Planning
     codecommit_client = factory.get_client("codecommit") if aws_identity else None
     version_ref = resolved_params["RepositoryBranchName"]
-    codecommit_observation = inspect_codecommit_repository(
-        client=codecommit_client,
-        repository_name=(
-            config.installer.source_code.repository_name or "aws-accelerator-codecommit"
-        ),
-        branch_name=(config.installer.source_code.branch or version_ref),
-    )
+    repo_name = config.installer.source_code.repository_name or "aws-accelerator-codecommit"
+    branch_name = config.installer.source_code.branch or version_ref
+    if codecommit_client is not None:
+        codecommit_observation = inspect_codecommit_repository(
+            client=codecommit_client,
+            repository_name=repo_name,
+            branch_name=branch_name,
+        )
+    else:
+        codecommit_observation = CodeCommitRepositoryStatus(
+            repository_name=repo_name,
+            branch_name=branch_name,
+            exists=False,
+            accessible=False,
+            branch_exists=False,
+            error="No AWS client available",
+        )
     codecommit_plan = prepare_codecommit_source_plan(
         repository_type=config.installer.source_code.repository_type,
         repository_name=config.installer.source_code.repository_name,
@@ -115,11 +131,19 @@ def plan_installer_workflow(
     # Step 5: CloudFormation Deployment Planning
     stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
     cfn_client = factory.get_client("cloudformation") if aws_identity else None
-    cfn_plan = inspect_cloudformation_stack(
-        client=cfn_client,
-        stack_name=stack_name,
-        resolved_parameters=resolved_params,
-    )
+    if cfn_client is not None:
+        cfn_plan = inspect_cloudformation_stack(
+            client=cfn_client,
+            stack_name=stack_name,
+            resolved_parameters=resolved_params,
+        )
+    else:
+        cfn_plan = CfnDeploymentPlanResult(
+            stack_name=stack_name,
+            operation="CREATE",
+            stack_status=None,
+            resolved_parameters=resolved_params,
+        )
     cfn_plan = include_template_digest_change(
         cfn_plan,
         template_digest=template_digest,

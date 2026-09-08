@@ -112,7 +112,7 @@ def inspect_installer_source(
             source.repository_type, source.branch, config.lza.version
         )
         observation = inspect_codecommit_repository(
-            factory=factory,
+            client=factory.get_client("codecommit"),
             repository_name=source.repository_name or "aws-accelerator-codecommit",
             branch_name=source.branch or version_ref,
         )
@@ -140,7 +140,8 @@ def inspect_installer_source(
         )
     elif source.repository_type == "github":
         exists, error = inspect_secret_exists(
-            factory=factory, secret_name=source.github_secret_name
+            client=factory.get_client("secretsmanager"),
+            secret_name=source.github_secret_name,
         )
         warning = github_secret_warning(source.github_secret_name, exists, error)
         if warning:

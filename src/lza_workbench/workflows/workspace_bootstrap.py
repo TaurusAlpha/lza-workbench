@@ -385,10 +385,12 @@ def _build_bootstrap_plan(
             "github", None, config.lza.version
         )
         sm_client = aws_ctx.factory.get_client("secretsmanager")
-        secret_details = inspect_secret_details(github_secret_name, client=sm_client)
-        github_secret_exists = secret_details["exists"]
-        github_secret_accessible = secret_details["accessible"]
-        token_val = (github_token or "").strip() or secret_details["value"]
+        secret_details = inspect_secret_details(
+            client=sm_client, secret_name=github_secret_name
+        )
+        github_secret_exists = secret_details.exists
+        github_secret_accessible = secret_details.accessible
+        token_val = (github_token or "").strip() or secret_details.value
 
         if github_secret_exists:
             add_action(
@@ -424,7 +426,7 @@ def _build_bootstrap_plan(
                 add_action(
                     github_secret_name,
                     "INACCESSIBLE",
-                    f"AWS Secrets Manager secret access failed: {secret_details['error']}",
+                    f"AWS Secrets Manager secret access failed: {secret_details.error}",
                     severity="error",
                 )
         elif github_token and github_token.strip():
@@ -695,10 +697,10 @@ def apply_bootstrap_preparation(
         sm_client = aws_context.factory.get_client("secretsmanager")
         if plan.github_planned_operation == "CREATE" and github_token:
             create_or_update_secret(
+                client=sm_client,
                 secret_name=plan.github_secret_name,
                 secret_value=github_token.strip(),
                 description="AWS Accelerator GitHub Token",
-                client=sm_client,
             )
             github_secret_created = True
             actions_taken.append(

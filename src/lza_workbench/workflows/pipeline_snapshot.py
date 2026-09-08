@@ -5,13 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from lza_workbench.aws.codebuild import fetch_codebuild_diagnostics
 from lza_workbench.aws.codepipeline import (
     get_latest_pipeline_execution_id,
     get_pipeline_state,
 )
 from lza_workbench.aws.context import AwsExecutionContext, resolve_aws_execution_context
-from lza_workbench.pipeline.failures import PipelineActionFailure, collect_pipeline_action_failures
+from lza_workbench.pipeline.failures import (
+    PipelineActionFailure,
+    collect_pipeline_action_failures,
+    fetch_codebuild_diagnostics,
+)
 from lza_workbench.pipeline.models import PipelineExecutionSnapshot, PipelineStageState
 from lza_workbench.pipeline.observation import observe_pipeline_execution
 from lza_workbench.pipeline.resolution import resolve_pipeline
@@ -214,10 +217,13 @@ def get_pipeline_diagnostics_workflow(
     if not resolved_aws.is_live:
         return []
 
+    codebuild_client = resolved_aws.factory.get_client("codebuild")
+    logs_client = resolved_aws.factory.get_client("logs")
     return collect_pipeline_action_failures(
         snapshot.stages,
         fetch_diagnostics=lambda build_id: fetch_codebuild_diagnostics(
-            factory=resolved_aws.factory,
+            codebuild_client=codebuild_client,
+            logs_client=logs_client,
             build_id=build_id,
         ),
     )

@@ -7,9 +7,6 @@ from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 
-from lza_workbench.aws.client_factory import AwsClientFactory
-from lza_workbench.errors import LzaError
-
 
 @dataclass(frozen=True)
 class CodeCommitRepositoryStatus:
@@ -26,21 +23,13 @@ class CodeCommitRepositoryStatus:
 
 def inspect_codecommit_repository(
     *,
+    client: Any,
     repository_name: str,
     branch_name: str,
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
 ) -> CodeCommitRepositoryStatus:
     """Inspect a resolved CodeCommit repository and branch without feature policy."""
-    cc_client = (
-        client if client is not None else (factory.get_client("codecommit") if factory else None)
-    )
-    if cc_client is None:
-        return CodeCommitRepositoryStatus(
-            repository_name, branch_name, False, False, False, "No AWS client available"
-        )
     try:
-        cc_client.get_repository(repositoryName=repository_name)
+        client.get_repository(repositoryName=repository_name)
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
         not_found = code in {"RepositoryDoesNotExistException", "404"}
@@ -59,7 +48,7 @@ def inspect_codecommit_repository(
             repository_name, branch_name, False, False, False, str(exc)
         )
     try:
-        cc_client.get_branch(repositoryName=repository_name, branchName=branch_name)
+        client.get_branch(repositoryName=repository_name, branchName=branch_name)
         return CodeCommitRepositoryStatus(repository_name, branch_name, True, True, True)
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
@@ -79,25 +68,19 @@ def inspect_codecommit_repository(
 
 def ensure_codecommit_repository(
     *,
+    client: Any,
     repository_name: str,
     description: str,
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
 ) -> None:
     """Create a resolved CodeCommit repository only when it does not exist."""
-    cc_client = (
-        client if client is not None else (factory.get_client("codecommit") if factory else None)
-    )
-    if cc_client is None:
-        raise LzaError("AWS CodeCommit client is not available")
     try:
-        cc_client.get_repository(repositoryName=repository_name)
+        client.get_repository(repositoryName=repository_name)
     except ClientError as exc:
         if exc.response.get("Error", {}).get("Code", "") in {
             "RepositoryDoesNotExistException",
             "404",
         }:
-            cc_client.create_repository(
+            client.create_repository(
                 repositoryName=repository_name, repositoryDescription=description
             )
         else:

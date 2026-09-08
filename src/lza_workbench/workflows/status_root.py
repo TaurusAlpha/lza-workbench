@@ -8,7 +8,6 @@ from typing import Any
 
 from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.aws.cloudformation import get_cloudformation_stack_status
-from lza_workbench.aws.codebuild import fetch_codebuild_diagnostics
 from lza_workbench.aws.codepipeline import (
     get_pipeline_execution,
     get_pipeline_state,
@@ -29,7 +28,10 @@ from lza_workbench.configuration.sync import (
     evaluate_s3_remote_sync,
 )
 from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
-from lza_workbench.pipeline.failures import collect_pipeline_action_failures
+from lza_workbench.pipeline.failures import (
+    collect_pipeline_action_failures,
+    fetch_codebuild_diagnostics,
+)
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.workspace.context import (
     WorkspaceAssessment,
@@ -164,11 +166,17 @@ def _resolve_pipeline_summary(
         failed_action: str | None = None
         failure_summary: str | None = None
         if status in {"Failed", "Cancelled"}:
+            codebuild_client = factory.get_client("codebuild") if factory else None
+            logs_client = factory.get_client("logs") if factory else None
             failures = collect_pipeline_action_failures(
                 pipe_state.stages,
                 fetch_diagnostics=lambda build_id: (
-                    fetch_codebuild_diagnostics(factory=factory, build_id=build_id)
-                    if factory
+                    fetch_codebuild_diagnostics(
+                        codebuild_client=codebuild_client,
+                        logs_client=logs_client,
+                        build_id=build_id,
+                    )
+                    if codebuild_client
                     else []
                 ),
             )

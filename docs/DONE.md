@@ -6,6 +6,13 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### AWS Adapter Contract Standardization & Typed Observations (v0.38.0)
+- **Resolved Client Standardization**: Standardized all public adapter functions across `aws/cloudformation.py`, `aws/codebuild.py`, `aws/codecommit.py`, `aws/codeconnections.py`, `aws/codepipeline.py`, `aws/secrets_manager.py`, and `aws/ssm.py` on already-resolved boto3 clients (`client: Any`). Removed dual `factory | None` / `client | None` signatures and internal client-resolution shims from adapters.
+- **Typed Observations**: Replaced untyped dictionary returns with immutable typed dataclasses (`SecretObservation` in `aws/secrets_manager.py`, `CodeBuildBuildObservation`, `CodeBuildPhase`, and `CodeBuildPhaseContext` in `aws/codebuild.py`).
+- **Log Diagnostic Relocation**: Moved CodeBuild log cleaning, noise filtering, and diagnostic extraction out of the thin AWS boundary (`aws/codebuild.py`) into `pipeline/failures.py` (`fetch_codebuild_diagnostics`, `extract_log_error_diagnostics`).
+- **Centralized Client Resolution in Workflows**: Updated all workflow callers and patch targets across `workflows/status_*.py`, `workflows/pipeline_*.py`, `workflows/installer_*.py`, `workflows/workspace_*.py`, and `installer/deployment.py` to resolve clients via `factory.get_client(...)`.
+- **Architectural Boundary Enforcement**: Verified zero circular dependencies and strict package layering (`web/cli -> workflows -> features/AWS`) via `tests/test_package.py`.
+
 ### Workspace Setup Area & Capability-Driven Next Steps (v0.37.0)
 - **Unified Workspace Setup UI**: Built dedicated Workspace Setup area (`#/setup`) offering three distinct flows:
   - **Create New Workspace**: Scoped to pure `lza init` capabilities (customer name, directory, AWS profile/region, LZA version); includes pre-creation validation preview (`POST /api/workspace/init/preview`) displaying resolved directories and planned files, followed by explicit creation (`POST /api/workspace/init/apply`).

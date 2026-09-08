@@ -7,13 +7,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from lza_workbench.aws.codebuild import fetch_codebuild_diagnostics
 from lza_workbench.aws.codepipeline import (
     get_latest_pipeline_execution_id,
 )
 from lza_workbench.aws.context import AwsExecutionContext, resolve_aws_execution_context
 from lza_workbench.errors import LzaError
-from lza_workbench.pipeline.failures import PipelineActionFailure, collect_pipeline_action_failures
+from lza_workbench.pipeline.failures import (
+    PipelineActionFailure,
+    collect_pipeline_action_failures,
+    fetch_codebuild_diagnostics,
+)
 from lza_workbench.pipeline.models import PipelineStageState
 from lza_workbench.pipeline.observation import observe_pipeline_execution
 from lza_workbench.pipeline.resolution import resolve_pipeline
@@ -203,11 +206,16 @@ def watch_pipeline_workflow(
                 action.status == "Failed" for stage in stage_summaries for action in stage.actions
             )
             if has_failed_action:
+                codebuild_client = resolved_aws_context.factory.get_client("codebuild")
+                logs_client = resolved_aws_context.factory.get_client("logs")
                 failure_details = collect_pipeline_action_failures(
                     stage_summaries,
-                    fetch_diagnostics=lambda build_id: fetch_codebuild_diagnostics(
-                        factory=resolved_aws_context.factory,
-                        build_id=build_id,
+                    fetch_diagnostics=lambda build_id, cb=codebuild_client, lc=logs_client: (
+                        fetch_codebuild_diagnostics(
+                            codebuild_client=cb,
+                            logs_client=lc,
+                            build_id=build_id,
+                        )
                     ),
                 )
                 failed_actions = failure_details

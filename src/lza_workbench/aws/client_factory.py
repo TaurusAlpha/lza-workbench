@@ -80,6 +80,11 @@ class AwsClientFactory:
 
     def get_client(self, service_name: str) -> Any:
         """Create a service client using the authenticated session."""
+        if service_name == "codeconnections":
+            try:
+                return self.get_session().client("codeconnections")
+            except Exception:
+                return self.get_session().client("codestar-connections")
         return self.get_session().client(service_name)
 
     def validate_identity(self) -> dict[str, str]:

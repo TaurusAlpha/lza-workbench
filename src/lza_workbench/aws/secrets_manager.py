@@ -1,35 +1,32 @@
+"""Thin AWS Secrets Manager service adapter."""
+
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from botocore.exceptions import ClientError
 
-from lza_workbench.aws.client_factory import AwsClientFactory
-from lza_workbench.errors import LzaError
 
+@dataclass(frozen=True)
+class SecretObservation:
+    """Typed observation of an AWS Secrets Manager secret."""
 
-def _get_sm_client(
-    *,
-    factory: AwsClientFactory | None = None,
-    client: Any | None = None,
-) -> Any:
-    """Get Secrets Manager client from factory or provided client."""
-    if client is not None:
-        return client
-    if factory is not None:
-        return factory.get_client("secretsmanager")
-    raise LzaError("Either AwsClientFactory or boto3 client must be provided.")
+    name: str
+    exists: bool
+    accessible: bool = False
+    value: str | None = None
+    error: str | None = None
 
 
 def inspect_secret_exists(
+    *,
+    client: Any,
     secret_name: str,
-    client: Any | None = None,
-    factory: AwsClientFactory | None = None,
 ) -> tuple[bool, str | None]:
     """Return whether a resolved secret exists, without feature interpretation."""
-    sm_client = _get_sm_client(factory=factory, client=client)
     try:
-        sm_client.describe_secret(SecretId=secret_name)
+        client.describe_secret(SecretId=secret_name)
         return True, None
     except ClientError as err:
         code = err.response.get("Error", {}).get("Code")
@@ -41,52 +38,60 @@ def inspect_secret_exists(
 
 
 def inspect_secret_details(
+    *,
+    client: Any,
     secret_name: str,
-    client: Any | None = None,
-    factory: AwsClientFactory | None = None,
-) -> dict[str, Any]:
+) -> SecretObservation:
     """Return existence, accessibility, and string value of a secret."""
-    sm_client = _get_sm_client(factory=factory, client=client)
     try:
-        sm_client.describe_secret(SecretId=secret_name)
+        client.describe_secret(SecretId=secret_name)
     except ClientError as err:
         code = err.response.get("Error", {}).get("Code")
         if code in ("ResourceNotFoundException", "404"):
-            return {"exists": False, "accessible": False, "value": None, "error": None}
-        return {"exists": False, "accessible": False, "value": None, "error": str(err)}
+            return SecretObservation(
+                name=secret_name, exists=False, accessible=False, value=None, error=None
+            )
+        return SecretObservation(
+            name=secret_name, exists=False, accessible=False, value=None, error=str(err)
+        )
     except Exception as exc:
-        return {"exists": False, "accessible": False, "value": None, "error": str(exc)}
+        return SecretObservation(
+            name=secret_name, exists=False, accessible=False, value=None, error=str(exc)
+        )
 
     try:
-        val_resp = sm_client.get_secret_value(SecretId=secret_name)
+        val_resp = client.get_secret_value(SecretId=secret_name)
         secret_string = val_resp.get("SecretString")
-        return {"exists": True, "accessible": True, "value": secret_string, "error": None}
+        return SecretObservation(
+            name=secret_name, exists=True, accessible=True, value=secret_string, error=None
+        )
     except ClientError as err:
-        code = err.response.get("Error", {}).get("Code")
-        return {
-            "exists": True,
-            "accessible": False,
-            "value": None,
-            "error": f"Access denied: {err}",
-        }
+        return SecretObservation(
+            name=secret_name,
+            exists=True,
+            accessible=False,
+            value=None,
+            error=f"Access denied: {err}",
+        )
     except Exception as exc:
-        return {"exists": True, "accessible": False, "value": None, "error": str(exc)}
+        return SecretObservation(
+            name=secret_name, exists=True, accessible=False, value=None, error=str(exc)
+        )
 
 
 def create_or_update_secret(
+    *,
+    client: Any,
     secret_name: str,
     secret_value: str,
     description: str = "",
-    client: Any | None = None,
-    factory: AwsClientFactory | None = None,
 ) -> None:
     """Create or update a secret value in Secrets Manager."""
-    sm_client = _get_sm_client(factory=factory, client=client)
-    exists, _ = inspect_secret_exists(secret_name, client=sm_client)
+    exists, _ = inspect_secret_exists(client=client, secret_name=secret_name)
     if exists:
-        sm_client.put_secret_value(SecretId=secret_name, SecretString=secret_value)
+        client.put_secret_value(SecretId=secret_name, SecretString=secret_value)
     else:
-        sm_client.create_secret(
+        client.create_secret(
             Name=secret_name,
             SecretString=secret_value,
             Description=description or "LZA Workbench Secret",
@@ -94,6 +99,7 @@ def create_or_update_secret(
 
 
 __all__ = [
+    "SecretObservation",
     "create_or_update_secret",
     "inspect_secret_details",
     "inspect_secret_exists",

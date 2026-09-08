@@ -153,7 +153,7 @@ Each item lists: the concrete problem, the target design, why it must land befor
 
 ### Phase 3 — Later / opportunistic, not gating any specific GUI step
 
-**3.1 AWS adapter contract cleanup.**
+**3.1 AWS adapter contract cleanup. - COMPLETE**
 
 - Standardize on typed observation results instead of raw dictionaries where adapters still return `dict[str, Any]` (e.g. some S3 inspection calls).
 - Standardize each adapter function on accepting either a resolved client or a small service object — not both `factory: AwsClientFactory | None` and `client: Any | None` on the same call.
