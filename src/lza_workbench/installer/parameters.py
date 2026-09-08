@@ -6,31 +6,6 @@ from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.installer.versions import version_to_branch
 from lza_workbench.workspace.schema import WorkspaceConfig
 
-KNOWN_INSTALLER_PARAMETER_NAMES = frozenset(
-    {
-        "RepositorySource",
-        "RepositoryOwner",
-        "RepositoryName",
-        "RepositoryBranchName",
-        "RepositoryBucketName",
-        "RepositoryBucketObject",
-        "EnableApprovalStage",
-        "ApprovalStageNotifyEmailList",
-        "ManagementAccountEmail",
-        "LogArchiveAccountEmail",
-        "AuditAccountEmail",
-        "ControlTowerEnabled",
-        "AcceleratorPrefix",
-        "ConfigurationRepositoryLocation",
-        "UseExistingConfigRepo",
-        "ConfigCodeConnectionArn",
-        "ExistingConfigRepositoryOwner",
-        "ExistingConfigRepositoryName",
-        "ExistingConfigRepositoryBranchName",
-        "EnableDiagnosticsPack",
-    }
-)
-
 INSTALLER_PARAMETER_LABELS = {
     "RepositorySource": "Source location",
     "RepositoryOwner": "Repository owner",
@@ -72,19 +47,6 @@ def get_installer_parameter_label(
     return parameter_name
 
 
-def persist_template_defaults(config: WorkspaceConfig, schema: dict[str, dict[str, Any]]) -> bool:
-    """Persist defaults for template parameters not represented in the workspace schema."""
-    changed = False
-    persisted = config.installer.template_parameters
-    for key, definition in schema.items():
-        if key in KNOWN_INSTALLER_PARAMETER_NAMES or key in persisted:
-            continue
-        if "Default" in definition:
-            persisted[key] = str(definition["Default"])
-            changed = True
-    return changed
-
-
 def resolve_installer_source_branch(
     repository_type: str, branch: str | None, lza_version: str | None
 ) -> str:
@@ -99,12 +61,6 @@ def resolve_installer_source_branch(
 def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: str) -> bool:
     """Return whether a template parameter applies to the current configuration."""
     source_type = config.installer.source_code.repository_type
-    config_type = (
-        config.configuration.repository.type
-        or config.installer.options.configuration_repository_location
-        or "s3"
-    )
-    use_existing = config.installer.options.use_existing_config_repo
     approval_enabled = config.installer.options.enable_approval_stage
 
     if parameter_name == "RepositoryOwner":
@@ -119,14 +75,15 @@ def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: s
     if parameter_name == "ApprovalStageNotifyEmailList":
         return bool(approval_enabled)
 
-    if parameter_name == "UseExistingConfigRepo":
-        return config_type != "s3"
-
-    if parameter_name in {"ConfigCodeConnectionArn", "ExistingConfigRepositoryOwner"}:
-        return config_type == "codeconnection" and bool(use_existing)
-
-    if parameter_name in {"ExistingConfigRepositoryName", "ExistingConfigRepositoryBranchName"}:
-        return config_type in {"codecommit", "codeconnection"} and bool(use_existing)
+    if parameter_name in {
+        "ConfigurationRepositoryLocation",
+        "UseExistingConfigRepo",
+        "ConfigCodeConnectionArn",
+        "ExistingConfigRepositoryOwner",
+        "ExistingConfigRepositoryName",
+        "ExistingConfigRepositoryBranchName",
+    }:
+        return False
 
     return True
 
@@ -135,8 +92,6 @@ def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, valu
     """Persist an accepted template parameter in its owning workspace setting."""
     source_code = config.installer.source_code
     options = config.installer.options
-
-    config.installer.template_parameters[parameter_name] = value
 
     if parameter_name == "RepositorySource":
         source_code.repository_type = value  # type: ignore[assignment]
@@ -168,26 +123,20 @@ def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, valu
         config.lza.accelerator_prefix = value
     elif parameter_name == "ConfigurationRepositoryLocation":
         config.configuration.repository.type = value  # type: ignore[assignment]
-        if value == "s3" and config.aws.account_id and config.aws.region:
-            config.configuration.repository.bucket = get_canonical_config_s3_bucket(
-                config.aws.account_id, config.aws.region
-            )
     elif parameter_name == "UseExistingConfigRepo":
-        options.use_existing_config_repo = value == "Yes"
+        return
     elif parameter_name == "ConfigCodeConnectionArn":
-        options.config_code_connection_arn = value or None
         config.configuration.repository.codeconnection_arn = value or None
     elif parameter_name == "ExistingConfigRepositoryOwner":
-        options.existing_config_repository_owner = value or None
         config.configuration.repository.owner = value or None
     elif parameter_name == "ExistingConfigRepositoryName":
-        options.existing_config_repository_name = value or None
         config.configuration.repository.repository_name = value or None
     elif parameter_name == "ExistingConfigRepositoryBranchName":
-        options.existing_config_repository_branch_name = value or None
         config.configuration.repository.branch = value or None
     elif parameter_name == "EnableDiagnosticsPack":
         options.enable_diagnostics_pack = value == "Yes"
+    else:
+        config.installer.extra_parameters[parameter_name] = value
 
 
 def apply_deployed_installer_parameters(
@@ -208,14 +157,14 @@ def apply_deployed_installer_parameters(
     for parameter_name, value in parameters.items():
         apply_installer_parameter(config, parameter_name, value)
 
-    if config.configuration.repository.type == "codecommit":
-        if config.installer.options.use_existing_config_repo:
-            if config.installer.options.existing_config_repository_name:
-                config.configuration.repository.repository_name = (
-                    config.installer.options.existing_config_repository_name
-                )
-        elif not config.installer.options.existing_config_repository_name:
-            config.configuration.repository.repository_name = "aws-accelerator-config"
+    repository = config.configuration.repository
+    if (
+        repository.type == "s3"
+        and not repository.bucket
+        and config.aws.account_id
+        and config.aws.region
+    ):
+        repository.bucket = get_canonical_config_s3_bucket(config.aws.account_id, config.aws.region)
 
 def build_installer_cfn_parameters(
     config: WorkspaceConfig, schema: dict[str, dict[str, Any]] | None = None
@@ -236,8 +185,8 @@ def build_installer_cfn_parameters(
     repo_source = source_code.repository_type
     repo_owner = source_code.owner if repo_source == "github" else ""
 
-    config_location = repo_config.type or options.configuration_repository_location or "s3"
-    use_existing = options.use_existing_config_repo
+    config_location = repo_config.type
+    use_existing = config_location in {"codecommit", "codeconnection"}
 
     if config_location == "s3":
         use_existing = False
@@ -245,31 +194,18 @@ def build_installer_cfn_parameters(
         existing_owner = ""
         existing_name = ""
         existing_branch = ""
-        if config.aws.account_id and config.aws.region and not repo_config.bucket:
-            repo_config.bucket = get_canonical_config_s3_bucket(
-                config.aws.account_id, config.aws.region
-            )
-
     elif config_location == "codeconnection":
         use_existing = True
-        code_conn_arn = options.config_code_connection_arn or source_code.connection_arn or ""
-        existing_owner = options.existing_config_repository_owner or ""
-        existing_name = options.existing_config_repository_name or repo_config.repository_name or ""
-        existing_branch = options.existing_config_repository_branch_name or repo_config.branch or ""
+        code_conn_arn = repo_config.codeconnection_arn or ""
+        existing_owner = repo_config.owner or ""
+        existing_name = repo_config.repository_name or ""
+        existing_branch = repo_config.branch or ""
     elif config_location == "codecommit":
         code_conn_arn = ""
         existing_owner = ""
         if use_existing:
-            existing_name = (
-                options.existing_config_repository_name
-                or repo_config.repository_name
-                or "lza-config-source"
-            )
-            existing_branch = (
-                options.existing_config_repository_branch_name
-                or repo_config.branch
-                or "main"
-            )
+            existing_name = repo_config.repository_name or "lza-config-source"
+            existing_branch = repo_config.branch or "main"
         else:
             existing_name = ""
             existing_branch = ""
@@ -304,13 +240,9 @@ def build_installer_cfn_parameters(
         for key, info in schema.items():
             if key in params:
                 continue
-            if key in config.installer.template_parameters:
-                params[key] = config.installer.template_parameters[key]
+            if key in config.installer.extra_parameters:
+                params[key] = config.installer.extra_parameters[key]
             elif "Default" in info:
                 params[key] = str(info["Default"])
-
-    for key, value in config.installer.template_parameters.items():
-        if key in params:
-            params[key] = value
 
     return params

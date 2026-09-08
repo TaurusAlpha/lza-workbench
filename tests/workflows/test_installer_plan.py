@@ -9,7 +9,11 @@ from botocore.exceptions import ClientError
 
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult
 from lza_workbench.installer.planning import InstallerPlanResult
-from lza_workbench.workflows.installer_init import initialize_installer_workflow
+from lza_workbench.workflows.installer_init import (
+    InstallerSettingsRequest,
+    apply_installer_settings,
+    get_installer_parameters_schema,
+)
 from lza_workbench.workflows.installer_plan import plan_installer_workflow
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.schema import (
@@ -128,10 +132,10 @@ def test_installer_init_persists_new_template_defaults(tmp_path: Path) -> None:
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
-        initialize_installer_workflow(target_dir=ws_dir)
+        apply_installer_settings(InstallerSettingsRequest(target_dir=ws_dir, values={}))
 
     persisted = load_workspace_config(ws_dir)
-    assert persisted.installer.template_parameters == {"NewDefault": "accepted"}
+    assert persisted.installer.extra_parameters == {}
 
 
 def test_installer_init_prompts_for_every_selected_template_parameter(tmp_path: Path) -> None:
@@ -173,14 +177,27 @@ def test_installer_init_prompts_for_every_selected_template_parameter(tmp_path: 
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
-        initialize_installer_workflow(target_dir=ws_dir, prompter=prompter)
+        form = get_installer_parameters_schema(target_dir=ws_dir)
+        apply_installer_settings(
+            InstallerSettingsRequest(
+                target_dir=ws_dir,
+                values={
+                    field.name: (
+                        "mandatory-value"
+                        if field.default is None
+                        else "accepted-optional-value"
+                    )
+                    for field in form.fields
+                },
+            )
+        )
 
-    assert prompts == [
+    assert [(field.label, field.default) for field in form.fields] == [
         ("Required setting", None),
         ("OptionalNewParameter", "template-default"),
     ]
     persisted = load_workspace_config(ws_dir)
-    assert persisted.installer.template_parameters == {
+    assert persisted.installer.extra_parameters == {
         "MandatoryNewParameter": "mandatory-value",
         "OptionalNewParameter": "accepted-optional-value",
     }
@@ -218,9 +235,9 @@ def test_installer_init_resolves_branch_default_after_source_selection(tmp_path:
         prompts.append((label, default))
         return "github" if label.startswith("Source location") else default or ""
 
-    initialize_installer_workflow(target_dir=ws_dir, prompter=prompter)
+    form = get_installer_parameters_schema(target_dir=ws_dir)
 
-    assert prompts == [
+    assert [(field.label, field.default) for field in form.fields] == [
         ("Source location", "codecommit"),
         ("Branch name", "release/v1.16.0"),
     ]
@@ -273,20 +290,25 @@ def test_installer_init_skips_inapplicable_parameters(tmp_path: Path) -> None:
             return "s3"
         return default or ""
 
-    initialize_installer_workflow(
-        target_dir=ws_dir,
-        accelerator_prefix="CustomPrefix",
-        prompter=prompter,
+    form = get_installer_parameters_schema(target_dir=ws_dir)
+    apply_installer_settings(
+        InstallerSettingsRequest(
+            target_dir=ws_dir,
+            values={
+                "RepositorySource": "codecommit",
+                "EnableApprovalStage": "No",
+                "AcceleratorPrefix": "CustomPrefix",
+            },
+        )
     )
 
     # RepositoryOwner skipped because source is codecommit
     # ApprovalStageNotifyEmailList skipped because EnableApprovalStage is No
     # UseExistingConfigRepo, ConfigCodeConnectionArn, ExistingConfigRepositoryName
     # skipped because config is s3
-    assert [p[0] for p in prompts] == [
+    assert [field.label for field in form.fields] == [
         "Source location",
         "Enable approval stage",
-        "Configuration repository location",
     ]
     saved_config = load_workspace_config(ws_dir)
     assert saved_config.lza.accelerator_prefix == "CustomPrefix"
@@ -356,10 +378,9 @@ def test_installer_init_populates_s3_config_bucket(tmp_path: Path) -> None:
     write_workspace_config(ws_dir, config)
     write_workspace_state(ws_dir, WorkspaceState.from_config(config))
 
-    res = initialize_installer_workflow(target_dir=ws_dir)
+    res = apply_installer_settings(InstallerSettingsRequest(target_dir=ws_dir, values={}))
     expected_bucket = "aws-accelerator-config-123456789012-us-east-1"
     assert res.config.configuration.repository.bucket == expected_bucket
 
     saved_config = load_workspace_config(ws_dir)
     assert saved_config.configuration.repository.bucket == expected_bucket
-

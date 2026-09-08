@@ -749,7 +749,7 @@ def test_sync_installer_config_success(tmp_path: Path) -> None:
     assert new_config.installer.source_code.repository_type == "codecommit"
     assert new_config.installer.options.management_account_email == "mgmt@example.com"
     assert new_config.installer.options.enable_approval_stage is True
-    assert new_config.installer.template_parameters["CustomTemplateParameter"] == "deployed-value"
+    assert new_config.installer.extra_parameters["CustomTemplateParameter"] == "deployed-value"
 
     loaded_config = load_workspace_config(tmp_path)
     assert loaded_config.installer.options.management_account_email == "mgmt@example.com"

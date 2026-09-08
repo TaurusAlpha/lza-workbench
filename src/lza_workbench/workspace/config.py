@@ -23,6 +23,7 @@ def load_workspace_config(workspace_dir: Path) -> WorkspaceConfig:
         with path.open("r", encoding="utf-8") as handle:
             data = yaml.load(handle)
         _reject_persisted_aws_secrets(data)
+        _normalize_legacy_installer_settings(data)
         return WorkspaceConfig.model_validate(data)
     except (OSError, YAMLError, ValidationError, TypeError, ValueError) as exc:
         raise LzaError(f"Invalid workspace configuration {path}: {exc}") from exc
@@ -46,6 +47,49 @@ def _reject_persisted_aws_secrets(data: object) -> None:
             "Remove them and configure credentials externally through an AWS profile, "
             "environment, SSO, or an assumed role."
         )
+
+
+def _normalize_legacy_installer_settings(data: object) -> None:
+    """Normalize installer repository mirrors into their canonical workspace owners."""
+    if not isinstance(data, dict):
+        return
+    installer = data.get("installer")
+    configuration = data.get("configuration")
+    if not isinstance(installer, dict) or not isinstance(configuration, dict):
+        return
+    options = installer.get("options")
+    if not isinstance(options, dict):
+        options = {}
+    repository = configuration.get("repository")
+    if not isinstance(repository, dict):
+        repository = {}
+        configuration["repository"] = repository
+
+    legacy_repository_fields = {
+        "configuration_repository_location": "type",
+        "config_code_connection_arn": "codeconnection_arn",
+        "existing_config_repository_owner": "owner",
+        "existing_config_repository_name": "repository_name",
+        "existing_config_repository_branch_name": "branch",
+    }
+    for legacy_name, canonical_name in legacy_repository_fields.items():
+        legacy_value = options.pop(legacy_name, None)
+        if canonical_name not in repository and legacy_value is not None:
+            repository[canonical_name] = legacy_value
+    options.pop("use_existing_config_repo", None)
+    options.pop("accelerator_prefix", None)
+
+    legacy_parameters = installer.pop("template_parameters", None)
+    if not isinstance(legacy_parameters, dict):
+        return
+    from lza_workbench.installer.schema import KNOWN_INSTALLER_PARAMETER_NAMES
+
+    extra_parameters = installer.setdefault("extra_parameters", {})
+    if not isinstance(extra_parameters, dict):
+        return
+    for name, value in legacy_parameters.items():
+        if name not in KNOWN_INSTALLER_PARAMETER_NAMES and name not in extra_parameters:
+            extra_parameters[name] = str(value)
 
 
 def write_workspace_config(workspace_dir: Path, config: WorkspaceConfig) -> None:

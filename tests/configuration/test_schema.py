@@ -54,16 +54,27 @@ def test_forbids_extra_fields_across_submodels() -> None:
     with pytest.raises(ValidationError):
         InstallerOptionsConfig(invalid_param="bad")  # type: ignore[call-arg]
 
+    with pytest.raises(ValidationError, match="cannot override known"):
+        LzaInstaller(extra_parameters={"ManagementAccountEmail": "shadow@example.com"})
 
-def test_installer_options_sync_from_config_repo() -> None:
-    """Verify synchronization between config repository and installer options."""
+
+def test_configuration_repository_is_independent_of_installer_options() -> None:
+    """Configuration repository values are no longer mirrored into installer options."""
     repo = ConfigurationRepositoryConfig(
         type="codecommit",
         repository_name="custom-repo",
         branch="develop",
     )
-    options = InstallerOptionsConfig.sync_from_config_repo(repo)
-    assert options.configuration_repository_location == "codecommit"
-    assert options.use_existing_config_repo is True
-    assert options.existing_config_repository_name == "custom-repo"
-    assert options.existing_config_repository_branch_name == "develop"
+    assert repo.type == "codecommit"
+    assert repo.repository_name == "custom-repo"
+    assert repo.branch == "develop"
+    assert InstallerOptionsConfig().model_dump() == {
+        "enable_approval_stage": False,
+        "approval_stage_notify_email_list": [],
+        "management_account_email": None,
+        "log_archive_account_email": None,
+        "audit_account_email": None,
+        "control_tower_enabled": True,
+        "enable_diagnostics_pack": True,
+        "anonymous_data": False,
+    }

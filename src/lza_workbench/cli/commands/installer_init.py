@@ -14,12 +14,14 @@ from lza_workbench.cli.output import (
     print_notice,
 )
 from lza_workbench.workflows.installer_init import (
-    InstallerInitResult,
-    initialize_installer_workflow,
+    InstallerSettingsRequest,
+    InstallerSettingsResult,
+    apply_installer_settings,
+    get_installer_parameters_schema,
 )
 
 
-def render_installer_init_report(result: InstallerInitResult) -> None:
+def render_installer_init_report(result: InstallerSettingsResult) -> None:
     """Render the local initialization result without inspecting AWS resources."""
     title = f"[bold cyan]LZA Installer Initialization - {result.config.customer.name}[/bold cyan]"
     if result.dry_run:
@@ -30,6 +32,8 @@ def render_installer_init_report(result: InstallerInitResult) -> None:
     print_kv("Resolved Parameters", len(result.resolved_parameters))
     if result.dry_run:
         print_notice("Dry run: installer configuration was not saved.")
+    elif result.no_save:
+        print_notice("Installer configuration was not saved.")
     else:
         print_notice(
             "Installer configuration saved. Run `lza installer plan` to inspect AWS actions."
@@ -47,24 +51,38 @@ def installer_init_command(
     interactive: bool = True,
 ) -> None:
     """Collect and persist installer configuration from the selected template."""
+    values = {
+        name: value.strip()
+        for name, value in {
+            "ManagementAccountEmail": management_account_email,
+            "LogArchiveAccountEmail": log_archive_account_email,
+            "AuditAccountEmail": audit_account_email,
+            "AcceleratorPrefix": accelerator_prefix,
+        }.items()
+        if value and value.strip()
+    }
+    if interactive:
+        while True:
+            form = get_installer_parameters_schema(
+                target_dir=target_dir, values=values, dry_run=dry_run
+            )
+            next_field = next((field for field in form.fields if field.name not in values), None)
+            if next_field is None:
+                break
+            values[next_field.name] = value_or_prompt(
+                label=next_field.label,
+                value=None,
+                default=next_field.default,
+                interactive=True,
+            )
 
-    def prompter(label: str, default: str | None) -> str:
-        return value_or_prompt(
-            label=label,
-            value=None,
-            default=default,
-            interactive=interactive,
+    result = apply_installer_settings(
+        InstallerSettingsRequest(
+            target_dir=target_dir,
+            values=values,
+            dry_run=dry_run,
+            no_save=no_save,
         )
-
-    result = initialize_installer_workflow(
-        target_dir=target_dir,
-        management_account_email=management_account_email,
-        log_archive_account_email=log_archive_account_email,
-        audit_account_email=audit_account_email,
-        accelerator_prefix=accelerator_prefix,
-        prompter=prompter if interactive else None,
-        dry_run=dry_run,
-        no_save=no_save,
     )
     render_installer_init_report(result)
 

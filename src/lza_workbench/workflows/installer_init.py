@@ -1,11 +1,11 @@
-"""Workflow for collecting and persisting installer configuration."""
+"""Interface-neutral installer settings preparation and application workflows."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.errors import LzaError
@@ -15,7 +15,6 @@ from lza_workbench.installer.parameters import (
     build_installer_cfn_parameters,
     get_installer_parameter_label,
     is_installer_parameter_applicable,
-    persist_template_defaults,
 )
 from lza_workbench.installer.templates import (
     inspect_template_parameters,
@@ -29,60 +28,130 @@ from lza_workbench.workspace.state import write_workspace_state
 
 
 @dataclass(frozen=True)
-class InstallerInitResult:
-    """Resolved installer configuration ready for a subsequent plan or deployment."""
+class InstallerFormField:
+    """One applicable CloudFormation parameter for an installer settings form."""
+
+    name: str
+    label: str
+    default: str | None
+    required: bool
+    allowed_values: tuple[str, ...]
+    allowed_pattern: str | None
+    description: str | None
+
+
+@dataclass(frozen=True)
+class InstallerForm:
+    """Template-derived installer settings form with no workspace persistence."""
+
+    workspace_dir: Path
+    template_path: Path
+    fields: tuple[InstallerFormField, ...]
+    resolved_parameters: dict[str, str]
+
+
+@dataclass(frozen=True)
+class InstallerSettingsRequest:
+    """Resolved installer form values submitted by a CLI or future Web interface."""
+
+    values: dict[str, str]
+    target_dir: Path | None = None
+    dry_run: bool = False
+    no_save: bool = False
+
+
+@dataclass(frozen=True)
+class InstallerSettingsResult:
+    """Applied installer settings ready for a subsequent plan or deployment."""
 
     workspace_dir: Path
     config: WorkspaceConfig
     template_path: Path
     resolved_parameters: dict[str, str]
     dry_run: bool
+    no_save: bool
 
 
-def initialize_installer_workflow(
+def _apply_values(config: WorkspaceConfig, values: dict[str, str]) -> None:
+    for parameter_name, value in values.items():
+        apply_installer_parameter(config, parameter_name, value)
+
+
+def _ensure_canonical_s3_bucket(config: WorkspaceConfig, management_account_id: str | None) -> None:
+    repository = config.configuration.repository
+    if repository.type != "s3" or repository.bucket:
+        return
+    account_id = config.aws.account_id or management_account_id
+    if account_id and config.aws.region:
+        repository.bucket = get_canonical_config_s3_bucket(account_id, config.aws.region)
+
+
+def _validate_candidate(config: WorkspaceConfig) -> WorkspaceConfig:
+    """Run schema validation after codec assignments that use mutable models."""
+    return WorkspaceConfig.model_validate(config.model_dump(mode="json"))
+
+
+def get_installer_parameters_schema(
     *,
     target_dir: Path | None = None,
-    management_account_email: str | None = None,
-    log_archive_account_email: str | None = None,
-    audit_account_email: str | None = None,
-    accelerator_prefix: str | None = None,
-    prompter: Callable[[str, str | None], str] | None = None,
+    values: dict[str, str] | None = None,
     dry_run: bool = False,
-    no_save: bool = False,
-) -> InstallerInitResult:
-    """Collect template parameters, validate them, and persist accepted local settings."""
+) -> InstallerForm:
+    """Return applicable, template-derived fields without writing workspace config or state."""
     ctx = load_workspace_context(
         target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
     )
-    workspace_dir, config = ctx.workspace_dir, ctx.config
-    options = config.installer.options
-
-    for provided, attribute in (
-        (management_account_email, "management_account_email"),
-        (log_archive_account_email, "log_archive_account_email"),
-        (audit_account_email, "audit_account_email"),
-    ):
-        if provided and provided.strip():
-            setattr(options, attribute, provided.strip())
-    if accelerator_prefix and accelerator_prefix.strip():
-        config.lza.accelerator_prefix = accelerator_prefix.strip()
-
-    template_path = resolve_installer_template(workspace_dir, config, dry_run=dry_run)
+    candidate = ctx.config.model_copy(deep=True)
+    _apply_values(candidate, values or {})
+    _ensure_canonical_s3_bucket(
+        candidate, ctx.state.management_account_id if ctx.state else None
+    )
+    candidate = _validate_candidate(candidate)
+    template_path = resolve_installer_template(ctx.workspace_dir, candidate, dry_run=dry_run)
     schema = inspect_template_parameters(template_path)
-    persist_template_defaults(config, schema)
-    resolved_parameters = build_installer_cfn_parameters(config, schema=schema)
+    resolved_parameters = build_installer_cfn_parameters(candidate, schema=schema)
+    fields = tuple(
+        InstallerFormField(
+            name=name,
+            label=get_installer_parameter_label(name, definition),
+            default=resolved_parameters.get(name),
+            required="Default" not in definition and not resolved_parameters.get(name),
+            allowed_values=tuple(str(value) for value in definition.get("AllowedValues", [])),
+            allowed_pattern=(
+                str(definition["AllowedPattern"])
+                if definition.get("AllowedPattern") is not None
+                else None
+            ),
+            description=(str(definition["Description"]) if definition.get("Description") else None),
+        )
+        for name, definition in schema.items()
+        if is_installer_parameter_applicable(candidate, name)
+    )
+    return InstallerForm(
+        workspace_dir=ctx.workspace_dir,
+        template_path=template_path,
+        fields=fields,
+        resolved_parameters=resolved_parameters,
+    )
 
-    if prompter:
-        for parameter_name, definition in schema.items():
-            if not is_installer_parameter_applicable(config, parameter_name):
-                continue
-            label = get_installer_parameter_label(parameter_name, definition)
-            current_value = resolved_parameters.get(parameter_name)
-            value = prompter(label, current_value)
-            apply_installer_parameter(config, parameter_name, value)
-            resolved_parameters = build_installer_cfn_parameters(config, schema=schema)
 
-    validation = validate_installer_configuration(config)
+def apply_installer_settings(request: InstallerSettingsRequest) -> InstallerSettingsResult:
+    """Validate and persist already-resolved installer settings without prompting."""
+    ctx = load_workspace_context(
+        request.target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
+    )
+    candidate = ctx.config.model_copy(deep=True)
+    _apply_values(candidate, request.values)
+    _ensure_canonical_s3_bucket(
+        candidate, ctx.state.management_account_id if ctx.state else None
+    )
+    candidate = _validate_candidate(candidate)
+    template_path = resolve_installer_template(
+        ctx.workspace_dir, candidate, dry_run=request.dry_run
+    )
+    schema: dict[str, dict[str, Any]] = inspect_template_parameters(template_path)
+    resolved_parameters = build_installer_cfn_parameters(candidate, schema=schema)
+    validation = validate_installer_configuration(candidate)
     if not validation.is_complete:
         missing = ", ".join(
             f"{field.section}.{field.attribute}" for field in validation.missing_fields
@@ -93,33 +162,30 @@ def initialize_installer_workflow(
         )
     validate_parameters_against_schema(resolved_parameters, schema)
 
-    if config.configuration.repository.type == "s3" and not config.configuration.repository.bucket:
-        account_id = config.aws.account_id or (
-            ctx.state.management_account_id if ctx.state else None
-        )
-        region = config.aws.region
-        if account_id and region:
-            config.configuration.repository.bucket = get_canonical_config_s3_bucket(
-                account_id, region
-            )
-
-    if not no_save and not dry_run:
-        write_workspace_config(workspace_dir, config)
-
-        ctx.state.installer_template_version = config.lza.version
+    if not request.no_save and not request.dry_run:
+        write_workspace_config(ctx.workspace_dir, candidate)
+        ctx.state.installer_template_version = candidate.lza.version
         if template_path.exists():
             ctx.state.installer_downloaded_at = datetime.fromtimestamp(
                 template_path.stat().st_mtime, tz=UTC
             )
-        write_workspace_state(workspace_dir, ctx.state)
+        write_workspace_state(ctx.workspace_dir, ctx.state)
 
-    return InstallerInitResult(
-        workspace_dir=workspace_dir,
-        config=config,
+    return InstallerSettingsResult(
+        workspace_dir=ctx.workspace_dir,
+        config=candidate,
         template_path=template_path,
         resolved_parameters=resolved_parameters,
-        dry_run=dry_run,
+        dry_run=request.dry_run,
+        no_save=request.no_save,
     )
 
 
-__all__ = ["InstallerInitResult", "initialize_installer_workflow"]
+__all__ = [
+    "InstallerForm",
+    "InstallerFormField",
+    "InstallerSettingsRequest",
+    "InstallerSettingsResult",
+    "apply_installer_settings",
+    "get_installer_parameters_schema",
+]

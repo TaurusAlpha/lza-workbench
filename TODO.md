@@ -305,6 +305,9 @@ Implementation checklist:
 Future design decision:
 
 - [ ] Decide whether to add an explicit `--fix` mode. Do not implement mutation as part of the current diagnostic command.
+- [ ] Move legacy installer-settings normalization out of workspace loading: remove
+  `_normalize_legacy_installer_settings()` and have `lza doctor` diagnose legacy fields and,
+  when an explicit fix mode exists, migrate them to the canonical schema.
 
 ## Web Interface
 

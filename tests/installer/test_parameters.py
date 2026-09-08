@@ -38,6 +38,23 @@ def test_build_installer_cfn_parameters_conditional_filtering() -> None:
     assert params["CustomParam"] == "CustomValue"
 
 
+def test_extra_parameters_cannot_shadow_known_cfn_values() -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test", slug="test"),
+        aws=AwsConfig(profile="default", region="us-east-1"),
+    )
+    config.installer.extra_parameters["ManagementAccountEmail"] = "shadow@example.com"
+    config.installer.options.management_account_email = "canonical@example.com"
+
+    params = build_installer_cfn_parameters(
+        config,
+        schema={"ManagementAccountEmail": {}, "CustomParameter": {"Default": "default"}},
+    )
+
+    assert params["ManagementAccountEmail"] == "canonical@example.com"
+    assert params["CustomParameter"] == "default"
+
+
 def test_collecting_repository_branch_persists_the_resolved_default() -> None:
     """Applying empty branch resolves and sets the default version branch."""
     config = WorkspaceConfig(
@@ -88,7 +105,7 @@ def test_is_installer_parameter_applicable_github_and_s3() -> None:
     assert is_installer_parameter_applicable(config, "EnableApprovalStage") is True
     assert is_installer_parameter_applicable(config, "ApprovalStageNotifyEmailList") is False
     assert is_installer_parameter_applicable(config, "ManagementAccountEmail") is True
-    assert is_installer_parameter_applicable(config, "ConfigurationRepositoryLocation") is True
+    assert is_installer_parameter_applicable(config, "ConfigurationRepositoryLocation") is False
     assert is_installer_parameter_applicable(config, "UseExistingConfigRepo") is False
     assert is_installer_parameter_applicable(config, "ConfigCodeConnectionArn") is False
     assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryOwner") is False
@@ -104,14 +121,13 @@ def test_is_installer_parameter_applicable_codecommit_and_codeconnection() -> No
     )
     config.installer.source_code.repository_type = "codecommit"
     config.configuration.repository.type = "codeconnection"
-    config.installer.options.use_existing_config_repo = True
     config.installer.options.enable_approval_stage = True
 
     assert is_installer_parameter_applicable(config, "RepositoryOwner") is False
     assert is_installer_parameter_applicable(config, "RepositoryName") is True
     assert is_installer_parameter_applicable(config, "ApprovalStageNotifyEmailList") is True
-    assert is_installer_parameter_applicable(config, "UseExistingConfigRepo") is True
-    assert is_installer_parameter_applicable(config, "ConfigCodeConnectionArn") is True
-    assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryOwner") is True
-    assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryName") is True
-    assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryBranchName") is True
+    assert is_installer_parameter_applicable(config, "UseExistingConfigRepo") is False
+    assert is_installer_parameter_applicable(config, "ConfigCodeConnectionArn") is False
+    assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryOwner") is False
+    assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryName") is False
+    assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryBranchName") is False

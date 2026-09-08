@@ -101,3 +101,38 @@ def test_workspace_writer_never_serializes_secret_keys(tmp_path: Path) -> None:
     assert "access_key" not in serialized
     assert "secret_access_key" not in serialized
     assert "role_arn" in serialized
+
+
+def test_workspace_loader_normalizes_legacy_installer_parameter_mirrors(tmp_path: Path) -> None:
+    (tmp_path / "lza-workspace.yaml").write_text(
+        """\
+customer:
+  name: Example
+  slug: example
+aws:
+  profile: example-root
+  region: us-east-1
+configuration:
+  repository:
+    type: codecommit
+    repository_name: canonical-repository
+installer:
+  options:
+    configuration_repository_location: s3
+    existing_config_repository_name: legacy-repository
+  template_parameters:
+    ManagementAccountEmail: shadow@example.com
+    CustomTemplateParameter: preserved
+""",
+        encoding="utf-8",
+    )
+
+    config = load_workspace_config(tmp_path)
+
+    assert config.configuration.repository.type == "codecommit"
+    assert config.configuration.repository.repository_name == "canonical-repository"
+    assert config.installer.extra_parameters == {"CustomTemplateParameter": "preserved"}
+    write_workspace_config(tmp_path, config)
+    serialized = (tmp_path / "lza-workspace.yaml").read_text(encoding="utf-8")
+    assert "template_parameters" not in serialized
+    assert "configuration_repository_location" not in serialized
