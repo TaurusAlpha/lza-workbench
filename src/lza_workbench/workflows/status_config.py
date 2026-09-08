@@ -61,6 +61,7 @@ def get_config_status_workflow(
         resolved_workspace_dir = workspace_dir
         resolved_config = config
         resolved_state = state
+        config_dir = resolved_workspace_dir / resolved_config.configuration.local_path
     else:
         ctx = load_workspace_context(
             target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
@@ -68,8 +69,7 @@ def get_config_status_workflow(
         resolved_workspace_dir = ctx.workspace_dir
         resolved_config = ctx.config
         resolved_state = ctx.state
-
-    config_dir = resolved_workspace_dir / resolved_config.configuration.local_path
+        config_dir = ctx.config_dir
     yaml_files = (
         tuple(
             sorted(

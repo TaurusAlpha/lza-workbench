@@ -6,6 +6,12 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### WorkspaceContext Derived Path Properties (v0.38.2)
+- **Derived Path Properties (Phase 3.3)**: Added immutable, read-only path properties (`.config_dir`, `.installer_dir`, `.state_dir`, `.config_file`, `.state_file`) to `WorkspaceContext`.
+- **Workflow Adoption**: Refactored `workflows/config_push.py`, `workflows/config_pull.py`, `workflows/status_root.py`, `workflows/status_config.py`, and `workflows/config_init.py` to use `ctx.config_dir` instead of repeated manual path concatenations.
+- **Architectural Invariant**: Retained `WorkspaceContext` as an immutable context value object without persistence or mutation methods, maintaining strict separation between declarative configuration and operational state.
+- **Verification**: Added unit tests in `tests/workspace/test_readiness.py` and verified static architectural boundaries pass cleanly via `tests/test_package.py`.
+
 ### CLI Command Forwarder Simplification (v0.38.1)
 - **Consolidated Command Synonyms**: Streamlined `cli/main.py` command registration by stacking multiple Typer command decorators (`@status_app.command("installer")` / `@installer_app.command("status")` and `@status_app.command("config")` / `@config_app.command("status")`) onto single command handlers, eliminating redundant forwarding shims.
 - **Workflow Locality Assessment (Phase 3.2)**: Confirmed that retaining workflows in `workflows/` preserves the strict architectural boundaries (`web/cli -> workflows -> features/AWS`) and enforces interface independence without premature churn or violating AST import bounds.

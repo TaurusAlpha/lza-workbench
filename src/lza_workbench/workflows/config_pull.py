@@ -220,8 +220,7 @@ def pull_configuration_workflow(
         target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
     )
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
-
-    config_dir = workspace_dir / config.configuration.local_path
+    config_dir = ctx.config_dir
     repo_cfg = config.configuration.repository
     repo_type = repo_cfg.type
 

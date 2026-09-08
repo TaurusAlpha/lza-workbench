@@ -226,3 +226,14 @@ def test_readiness_uses_shared_installer_validation(tmp_path: Path) -> None:
     assert (
         not evaluate_workspace_assessment(ws_dir, config, WorkspaceState()).installer_configured
     )
+
+
+def test_workspace_context_path_properties(tmp_path: Path) -> None:
+    ws_dir = create_minimal_workspace(tmp_path)
+    ctx = load_workspace_context(ws_dir)
+
+    assert ctx.config_dir == ws_dir / "aws-accelerator-config"
+    assert ctx.installer_dir == ws_dir / "aws-accelerator-installer"
+    assert ctx.state_dir == ws_dir / ".lza"
+    assert ctx.config_file == ws_dir / "lza-workspace.yaml"
+    assert ctx.state_file == ws_dir / ".lza" / "state.json"

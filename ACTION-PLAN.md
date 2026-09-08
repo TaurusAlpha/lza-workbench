@@ -167,7 +167,7 @@ Each item lists: the concrete problem, the target design, why it must land befor
 - Instead: land the Phase-2 refactor inside the existing `workflows/` module first, get it merged with its tests green. Only then, **as a separate, later change**, reconsider whether moving that use case into its owning feature package (e.g. `installer/application/plan.py`) materially improves locality. Perform the move on its own unless relocation is actually necessary to make the refactor itself coherent (rare — most of the items in this plan aren't). If it doesn't clearly pay for itself, it's fine to leave the file where it is.
 - Also fold in here: simplify the CLI's forwarding command functions and any workflow-result aliases kept only for command-name synonyms — but only as those specific commands are touched, not as a standalone cleanup pass.
 
-**3.3 Minor `WorkspaceContext` ergonomics (optional, low-risk, additive).**
+**3.3 Minor `WorkspaceContext` ergonomics (optional, low-risk, additive). - **COMPLETE****
 
 - If genuinely useful, add a small number of **read-only derived path properties** (e.g. `.config_dir`, `.installer_dir`) to the existing immutable `WorkspaceContext`, or a small immutable `WorkspacePaths` value object.
 - Do **not** turn this into a persistence-owning object (Ground Rule 3). State mutation stays in the existing explicit, feature-owned functions (`configuration/state.py`, `installer/state.py`, `pipeline/state.py`) that name exactly which transition occurred — this explicitness is a deliberate strength of the current design, not a gap.

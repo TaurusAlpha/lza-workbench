@@ -79,7 +79,7 @@ def init_config_workflow(
     resolved_template = resolve_template_source(template_to_resolve)
     validate_template(resolved_template.config_dir)
 
-    target_config_dir = workspace_dir / config.configuration.local_path
+    target_config_dir = context.config_dir
 
     # Check if target exists
     if target_config_dir.exists():

@@ -6,10 +6,10 @@ from pathlib import Path
 
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import validate_installer_configuration
-from lza_workbench.workspace.config import load_workspace_config
+from lza_workbench.workspace.config import WORKSPACE_CONFIG_FILE, load_workspace_config
 from lza_workbench.workspace.paths import resolve_workspace_dir
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
-from lza_workbench.workspace.state import load_workspace_state
+from lza_workbench.workspace.state import WORKSPACE_STATE_FILE, load_workspace_state
 
 
 class WorkspaceCapability(StrEnum):
@@ -51,6 +51,31 @@ class WorkspaceContext:
     config: WorkspaceConfig
     state: WorkspaceState
     assessment: WorkspaceAssessment
+
+    @property
+    def config_dir(self) -> Path:
+        """Absolute path to the local LZA customer configuration directory."""
+        return self.workspace_dir / self.config.configuration.local_path
+
+    @property
+    def installer_dir(self) -> Path:
+        """Absolute path to the local LZA installer template directory."""
+        return self.workspace_dir / self.config.installer.local_path
+
+    @property
+    def state_dir(self) -> Path:
+        """Absolute path to the internal .lza runtime state directory."""
+        return self.workspace_dir / ".lza"
+
+    @property
+    def config_file(self) -> Path:
+        """Absolute path to the declarative lza-workspace.yaml file."""
+        return self.workspace_dir / WORKSPACE_CONFIG_FILE
+
+    @property
+    def state_file(self) -> Path:
+        """Absolute path to the operational .lza/state.json file."""
+        return self.workspace_dir / WORKSPACE_STATE_FILE
 
 
 def evaluate_workspace_assessment(

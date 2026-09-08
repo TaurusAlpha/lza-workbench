@@ -149,8 +149,7 @@ def push_configuration_workflow(
         target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
     )
     workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
-
-    config_dir = workspace_dir / config.configuration.local_path
+    config_dir = ctx.config_dir
 
     if not config_dir.exists() or not config_dir.is_dir():
         raise LzaError(f"Configuration directory does not exist: {config_dir}")
