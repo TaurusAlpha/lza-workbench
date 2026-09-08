@@ -79,6 +79,26 @@ class ImportWorkspaceDiscovery:
 
 
 @dataclass(frozen=True)
+class ImportWorkspaceRequest:
+    """Inputs for preparing an existing workspace for import."""
+
+    workspace_dir: Path
+    config_dir: Path | None = None
+    customer_name: str | None = None
+    aws_auth_type: str = "profile"
+    aws_profile: str | None = None
+    aws_region: str = "us-east-1"
+    lza_version: str = "v1.15.5"
+    installer_stack_name: str | None = None
+    dry_run: bool = False
+    force: bool = False
+    repair: bool = False
+    skip_aws_check: bool = False
+    prime_credentials: bool = False
+    discovery: ImportWorkspaceDiscovery | None = None
+
+
+@dataclass(frozen=True)
 class WorkspaceImportResult:
     """Structured result of workspace import workflow."""
 
@@ -96,6 +116,16 @@ class WorkspaceImportResult:
     installer_discovered: bool = False
     discovered_stack_status: str | None = None
     recommendations: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ImportWorkspacePreparation:
+    """Read-only import discovery, desired metadata, and intended file changes."""
+
+    result: WorkspaceImportResult
+    installer_template_path: Path | None = None
+    installer_template_body: str | None = None
+
 
 
 def resolve_import_paths(*, workspace_dir: Path, config_dir: Path | None) -> tuple[Path, Path]:
@@ -320,30 +350,15 @@ def _metadata_paths(
     ]
 
 
-def import_workspace_workflow(
-    *,
-    workspace_dir: Path,
-    config_dir: Path | None = None,
-    customer_name: str | None = None,
-    aws_auth_type: str = "profile",
-    aws_profile: str | None = None,
-    aws_region: str = "us-east-1",
-    lza_version: str = "v1.15.5",
-    installer_stack_name: str | None = None,
-    dry_run: bool = False,
-    force: bool = False,
-    repair: bool = False,
-    skip_aws_check: bool = False,
-    prime_credentials: bool = False,
-    discovery: ImportWorkspaceDiscovery | None = None,
-) -> WorkspaceImportResult:
-    """Execute the pure workspace import workflow and return structured result."""
+def prepare_workspace_import(request: ImportWorkspaceRequest) -> ImportWorkspacePreparation:
+    """Discover an existing workspace and derive import metadata without writing files."""
+    discovery = request.discovery
     if discovery is None:
         discovery = discover_import_workspace(
-            workspace_dir=workspace_dir,
-            config_dir=config_dir,
-            force=force,
-            repair=repair,
+            workspace_dir=request.workspace_dir,
+            config_dir=request.config_dir,
+            force=request.force,
+            repair=request.repair,
         )
     resolved_workspace_dir = discovery.workspace_dir
     resolved_config_dir = discovery.config_dir
@@ -352,8 +367,8 @@ def import_workspace_workflow(
     # Validate template files presence
     validate_template(resolved_config_dir)
 
-    if lza_version is not None:
-        resolved_version = lza_version
+    if request.lza_version is not None:
+        resolved_version = request.lza_version
     elif existing and existing.config:
         resolved_version = existing.config.lza.version
     else:
@@ -372,8 +387,8 @@ def import_workspace_workflow(
     if provenance is None and resolved_config_dir != resolved_workspace_dir:
         provenance = resolve_git_provenance(resolved_workspace_dir)
 
-    if customer_name:
-        resolved_customer_name = customer_name
+    if request.customer_name:
+        resolved_customer_name = request.customer_name
     elif existing and existing.config:
         resolved_customer_name = existing.config.customer.name
     else:
@@ -385,18 +400,18 @@ def import_workspace_workflow(
         else normalize_customer_slug(resolved_customer_name)
     )
 
-    if aws_auth_type != "profile":
-        raise LzaError(f"Invalid AWS auth type: {aws_auth_type}")
+    if request.aws_auth_type != "profile":
+        raise LzaError(f"Invalid AWS auth type: {request.aws_auth_type}")
 
-    if aws_profile:
-        resolved_profile = aws_profile
+    if request.aws_profile:
+        resolved_profile = request.aws_profile
     elif existing and existing.config:
         resolved_profile = existing.config.aws.profile
     else:
         resolved_profile = f"{customer_slug}-root"
 
-    if aws_region is not None:
-        resolved_region = aws_region
+    if request.aws_region is not None:
+        resolved_region = request.aws_region
     elif existing and existing.config:
         resolved_region = existing.config.aws.region
     else:
@@ -412,8 +427,8 @@ def import_workspace_workflow(
         config_dir=resolved_config_dir,
         existing_config=existing.config if existing else None,
         provenance=provenance,
-        installer_stack_name=installer_stack_name,
-        prime_credentials=prime_credentials,
+        installer_stack_name=request.installer_stack_name,
+        prime_credentials=request.prime_credentials,
     )
     if existing and existing.config and config.configuration != existing.config.configuration:
         raise LzaError(
@@ -453,7 +468,7 @@ def import_workspace_workflow(
     installer_template_path: Path | None = None
     installer_template_body: str | None = None
 
-    if not skip_aws_check:
+    if not request.skip_aws_check:
         try:
             aws_ctx = resolve_aws_execution_context(
                 profile=config.aws.profile,
@@ -492,25 +507,24 @@ def import_workspace_workflow(
                         or config.lza.accelerator_prefix
                     ),
                 )
-                if not dry_run:
-                    if deployed_template is not None:
-                        installer_template_path = prepare_installer_template_sync(
-                            workspace_dir=resolved_workspace_dir,
-                            config=config,
-                            state=state,
-                            template_body=deployed_template,
-                        )
-                        installer_template_body = deployed_template
-                    config = apply_installer_config_sync(
+                if deployed_template is not None:
+                    installer_template_path = prepare_installer_template_sync(
+                        workspace_dir=resolved_workspace_dir,
                         config=config,
-                        cfn_status=cfn_status,
-                        deployed_version=deployed_version,
-                    )
-                    state = apply_installer_state_sync(
                         state=state,
-                        cfn_status=cfn_status,
-                        deployed_version=deployed_version,
+                        template_body=deployed_template,
                     )
+                    installer_template_body = deployed_template
+                config = apply_installer_config_sync(
+                    config=config,
+                    cfn_status=cfn_status,
+                    deployed_version=deployed_version,
+                )
+                state = apply_installer_state_sync(
+                    state=state,
+                    cfn_status=cfn_status,
+                    deployed_version=deployed_version,
+                )
                 if config.installer.source_code.repository_type == "github":
                     try:
                         sm_client = aws_ctx.factory.get_client("secretsmanager")
@@ -584,62 +598,15 @@ def import_workspace_workflow(
         paths.append(installer_template_path)
     is_repaired = bool(existing and existing.is_repaired)
 
-    if dry_run:
-        return WorkspaceImportResult(
-            workspace_dir=resolved_workspace_dir,
-            config_dir=resolved_config_dir,
-            config=config,
-            state=state,
-            affected_paths=paths,
-            identity=identity,
-            already_imported=not bool(paths) and not is_repaired,
-            dry_run=True,
-            repaired=is_repaired,
-            provenance=provenance,
-            validation_summary={"files_validated": len(parsed_yaml)},
-            installer_discovered=installer_discovered,
-            discovered_stack_status=discovered_stack_status,
-            recommendations=recommendations,
-        )
-
-    if not paths and not is_repaired:
-        return WorkspaceImportResult(
-            workspace_dir=resolved_workspace_dir,
-            config_dir=resolved_config_dir,
-            config=config,
-            state=state,
-            affected_paths=[],
-            identity=identity,
-            already_imported=True,
-            dry_run=False,
-            repaired=False,
-            provenance=provenance,
-            validation_summary={"files_validated": len(parsed_yaml)},
-            installer_discovered=installer_discovered,
-            discovered_stack_status=discovered_stack_status,
-            recommendations=recommendations,
-        )
-
-    (resolved_workspace_dir / ".lza").mkdir(parents=True, exist_ok=True)
-    if installer_template_path in paths and installer_template_body is not None:
-        write_installer_template(
-            template_path=installer_template_path,
-            template_body=installer_template_body,
-        )
-    if resolved_workspace_dir / "lza-workspace.yaml" in paths:
-        write_workspace_config(resolved_workspace_dir, config)
-    if resolved_workspace_dir / ".lza" / "state.json" in paths:
-        write_workspace_state(resolved_workspace_dir, state)
-
-    return WorkspaceImportResult(
+    result = WorkspaceImportResult(
         workspace_dir=resolved_workspace_dir,
         config_dir=resolved_config_dir,
         config=config,
         state=state,
         affected_paths=paths,
         identity=identity,
-        already_imported=False,
-        dry_run=False,
+        already_imported=not bool(paths) and not is_repaired,
+        dry_run=request.dry_run,
         repaired=is_repaired,
         provenance=provenance,
         validation_summary={"files_validated": len(parsed_yaml)},
@@ -647,3 +614,88 @@ def import_workspace_workflow(
         discovered_stack_status=discovered_stack_status,
         recommendations=recommendations,
     )
+    return ImportWorkspacePreparation(
+        result=result,
+        installer_template_path=installer_template_path,
+        installer_template_body=installer_template_body,
+    )
+
+
+def apply_workspace_import(preparation: ImportWorkspacePreparation) -> WorkspaceImportResult:
+    """Persist a prepared import without repeating discovery or validation."""
+    result = preparation.result
+    if result.dry_run or result.already_imported:
+        return result
+
+    workspace_dir = result.workspace_dir
+    paths = result.affected_paths
+    (workspace_dir / ".lza").mkdir(parents=True, exist_ok=True)
+    if (
+        preparation.installer_template_path in paths
+        and preparation.installer_template_body is not None
+    ):
+        write_installer_template(
+            template_path=preparation.installer_template_path,
+            template_body=preparation.installer_template_body,
+        )
+    if workspace_dir / WORKSPACE_CONFIG_FILE in paths:
+        write_workspace_config(workspace_dir, result.config)
+    if workspace_dir / WORKSPACE_STATE_FILE in paths:
+        write_workspace_state(workspace_dir, result.state)
+    return result
+
+
+def import_workspace_workflow(
+    *,
+    workspace_dir: Path,
+    config_dir: Path | None = None,
+    customer_name: str | None = None,
+    aws_auth_type: str = "profile",
+    aws_profile: str | None = None,
+    aws_region: str = "us-east-1",
+    lza_version: str = "v1.15.5",
+    installer_stack_name: str | None = None,
+    dry_run: bool = False,
+    force: bool = False,
+    repair: bool = False,
+    skip_aws_check: bool = False,
+    prime_credentials: bool = False,
+    discovery: ImportWorkspaceDiscovery | None = None,
+) -> WorkspaceImportResult:
+    """Convenience composition of workspace import preparation and application."""
+    return apply_workspace_import(
+        prepare_workspace_import(
+            ImportWorkspaceRequest(
+                workspace_dir=workspace_dir,
+                config_dir=config_dir,
+                customer_name=customer_name,
+                aws_auth_type=aws_auth_type,
+                aws_profile=aws_profile,
+                aws_region=aws_region,
+                lza_version=lza_version,
+                installer_stack_name=installer_stack_name,
+                dry_run=dry_run,
+                force=force,
+                repair=repair,
+                skip_aws_check=skip_aws_check,
+                prime_credentials=prime_credentials,
+                discovery=discovery,
+            )
+        )
+    )
+
+
+__all__ = [
+    "ExistingMetadata",
+    "ImportWorkspaceDiscovery",
+    "ImportWorkspacePreparation",
+    "ImportWorkspaceRequest",
+    "WorkspaceImportResult",
+    "apply_workspace_import",
+    "build_import_workspace_config",
+    "discover_import_workspace",
+    "import_workspace_workflow",
+    "load_existing_metadata",
+    "prepare_workspace_import",
+    "resolve_import_paths",
+]

@@ -12,8 +12,11 @@ from lza_workbench.configuration.templates import resolve_template_source
 from lza_workbench.errors import LzaError
 from lza_workbench.workflows.installer_plan import plan_installer_workflow
 from lza_workbench.workflows.workspace_import import (
+    ImportWorkspaceRequest,
     WorkspaceImportResult,
+    apply_workspace_import,
     import_workspace_workflow,
+    prepare_workspace_import,
     resolve_import_paths,
 )
 from lza_workbench.workspace.config import write_workspace_config
@@ -87,6 +90,32 @@ def test_import_workspace_workflow_execution(tmp_path: Path) -> None:
     assert (ws_dir / ".lza" / "state.json").is_file()
     assert result.state.config_files_count is not None
     assert result.state.config_files_count > 0
+
+
+def test_prepare_workspace_import_is_read_only_until_applied(tmp_path: Path) -> None:
+    workspace_dir = tmp_path / "prepared-ws"
+    _copy_default_templates(workspace_dir / "aws-accelerator-config")
+
+    preparation = prepare_workspace_import(
+        ImportWorkspaceRequest(
+            workspace_dir=workspace_dir,
+            customer_name="Prepared Customer",
+            aws_profile="prepared-root",
+            aws_region="us-east-1",
+            lza_version="v1.16.0",
+            skip_aws_check=True,
+        )
+    )
+
+    assert preparation.result.affected_paths
+    assert not (workspace_dir / "lza-workspace.yaml").exists()
+    assert not (workspace_dir / ".lza" / "state.json").exists()
+
+    result = apply_workspace_import(preparation)
+
+    assert result.config.customer.name == "Prepared Customer"
+    assert (workspace_dir / "lza-workspace.yaml").is_file()
+    assert (workspace_dir / ".lza" / "state.json").is_file()
 
 
 def test_import_workspace_with_git_provenance(tmp_path: Path) -> None:

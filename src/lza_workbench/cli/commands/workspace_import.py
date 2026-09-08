@@ -13,9 +13,11 @@ from lza_workbench.cli.output import (
     print_success,
 )
 from lza_workbench.workflows.workspace_import import (
+    ImportWorkspaceRequest,
     WorkspaceImportResult,
+    apply_workspace_import,
     discover_import_workspace,
-    import_workspace_workflow,
+    prepare_workspace_import,
 )
 from lza_workbench.workspace.paths import normalize_customer_slug
 from lza_workbench.workspace.schema import LzaConfig
@@ -165,20 +167,23 @@ def workspace_import_command(
         interactive,
     )
 
-    result = import_workspace_workflow(
-        workspace_dir=workspace_dir,
-        config_dir=config_dir,
-        customer_name=resolved_customer_name,
-        aws_auth_type=aws_auth_type,
-        aws_profile=resolved_profile,
-        aws_region=resolved_region,
-        lza_version=resolved_version,
-        installer_stack_name=resolved_stack_name,
-        dry_run=dry_run,
-        force=force,
-        repair=repair,
-        skip_aws_check=skip_aws_check,
-        prime_credentials=prime_credentials,
-        discovery=discovery,
+    preparation = prepare_workspace_import(
+        ImportWorkspaceRequest(
+            workspace_dir=workspace_dir,
+            config_dir=config_dir,
+            customer_name=resolved_customer_name,
+            aws_auth_type=aws_auth_type,
+            aws_profile=resolved_profile,
+            aws_region=resolved_region,
+            lza_version=resolved_version,
+            installer_stack_name=resolved_stack_name,
+            dry_run=dry_run,
+            force=force,
+            repair=repair,
+            skip_aws_check=skip_aws_check,
+            prime_credentials=prime_credentials,
+            discovery=discovery,
+        )
     )
+    result = apply_workspace_import(preparation)
     render_workspace_import_result(result)
