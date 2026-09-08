@@ -1,4 +1,10 @@
-import { getConfigurationStatus, getInstallerStatus, getStatus } from "./api.js";
+import {
+  getConfigurationStatus,
+  getInstallerStatus,
+  getPipelineDiagnostics,
+  getPipelineSnapshot,
+  getStatus,
+} from "./api.js";
 import { renderConfigurationDetails } from "./configuration.js";
 import { renderInstallerDetails } from "./installer.js";
 import { renderOverview } from "./overview.js";
@@ -12,23 +18,38 @@ const pageEyebrow = document.querySelector("#page-eyebrow");
 const pageTitle = document.querySelector("#page-title");
 const breadcrumb = document.querySelector("#breadcrumb");
 
+let pipelinePollTimer = null;
+
+function stopPipelinePolling() {
+  if (pipelinePollTimer) {
+    clearInterval(pipelinePollTimer);
+    pipelinePollTimer = null;
+  }
+}
+
 function parseRoute() {
   const hash = (window.location.hash || "").replace(/^#/, "").trim();
-  // Normalize: "", "/", "/overview" all resolve to "overview"
-  const clean = hash.replace(/^\/?/, "/");
+  const [pathPart, queryPart] = hash.split("?");
+  const clean = (pathPart || "").replace(/^\/?/, "/");
+  const params = new URLSearchParams(queryPart || "");
+  const executionId = params.get("executionId") || params.get("execution_id");
+
   if (clean === "/" || clean === "/overview") {
-    return "overview";
+    return { name: "overview" };
   }
   if (clean === "/installer") {
-    return "installer";
+    return { name: "installer" };
   }
   if (clean === "/configuration") {
-    return "configuration";
+    return { name: "configuration" };
   }
-  if (clean === "/configuration-pipeline" || clean === "/pipeline/configuration") {
-    return "configuration-pipeline";
+  if (clean === "/pipeline/installer") {
+    return { name: "pipeline", pipelineType: "installer", executionId };
   }
-  return "overview";
+  if (clean === "/pipeline/configuration" || clean === "/configuration-pipeline") {
+    return { name: "pipeline", pipelineType: "configuration", executionId };
+  }
+  return { name: "overview" };
 }
 
 function clearNotice() {
@@ -109,24 +130,108 @@ async function loadConfiguration() {
   }
 }
 
-async function loadPipeline() {
+async function loadPipeline(pipelineType = "configuration", executionId = null) {
+  stopPipelinePolling();
   viewContent.className = "view-container";
   viewContent.setAttribute("aria-busy", "true");
   clearNotice();
   refresh.disabled = true;
-  if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench / Configuration Pipeline";
-  if (pageTitle) pageTitle.textContent = "Configuration Pipeline Details";
+
+  const isInstaller = pipelineType === "installer";
+  if (pageEyebrow) {
+    pageEyebrow.textContent = isInstaller
+      ? "LZA Workbench / Installer Pipeline"
+      : "LZA Workbench / Configuration Pipeline";
+  }
+  if (pageTitle) {
+    pageTitle.textContent = isInstaller
+      ? "Installer Pipeline Details"
+      : "Configuration Pipeline Details";
+  }
   if (breadcrumb) breadcrumb.hidden = false;
 
+  let currentDiagnostics = null;
+
+  async function fetchAndRenderDiagnostics(snap) {
+    try {
+      currentDiagnostics = await getPipelineDiagnostics({
+        type: pipelineType,
+        executionId: snap.executionId || executionId,
+      });
+      renderPipelineDetails(
+        viewContent,
+        snap,
+        () => loadPipeline(pipelineType, executionId),
+        currentDiagnostics,
+        () => fetchAndRenderDiagnostics(snap)
+      );
+    } catch (e) {
+      console.warn("Diagnostics fetch failed:", e);
+    }
+  }
+
   try {
-    const status = await getConfigurationStatus();
-    workspacePath.textContent = status.workspace.directory;
-    workspacePath.title = status.workspace.directory;
-    renderPipelineDetails(viewContent, status);
-    if (!status.workspace.isLive) {
-      showNotice(getOfflineWarning(status.workspace.error), "warning");
+    const snapshot = await getPipelineSnapshot({
+      type: pipelineType,
+      executionId,
+    });
+
+    workspacePath.textContent = snapshot.pipelineName;
+    workspacePath.title = snapshot.pipelineArn;
+
+    if (snapshot.status === "Failed") {
+      try {
+        currentDiagnostics = await getPipelineDiagnostics({
+          type: pipelineType,
+          executionId: snapshot.executionId || executionId,
+        });
+      } catch {
+        currentDiagnostics = null;
+      }
+    }
+
+    renderPipelineDetails(
+      viewContent,
+      snapshot,
+      () => loadPipeline(pipelineType, executionId),
+      currentDiagnostics,
+      () => fetchAndRenderDiagnostics(snapshot)
+    );
+
+    if (!snapshot.isLive) {
+      showNotice(getOfflineWarning(snapshot.error), "warning");
     } else {
       clearNotice();
+    }
+
+    // Single-pass periodic polling while active (not terminal)
+    if (!snapshot.isTerminal && snapshot.isLive) {
+      pipelinePollTimer = setInterval(async () => {
+        try {
+          const snap = await getPipelineSnapshot({
+            type: pipelineType,
+            executionId: snapshot.executionId || executionId,
+          });
+          if (snap.status === "Failed" && !currentDiagnostics) {
+            currentDiagnostics = await getPipelineDiagnostics({
+              type: pipelineType,
+              executionId: snap.executionId || executionId,
+            }).catch(() => null);
+          }
+          renderPipelineDetails(
+            viewContent,
+            snap,
+            () => loadPipeline(pipelineType, executionId),
+            currentDiagnostics,
+            () => fetchAndRenderDiagnostics(snap)
+          );
+          if (snap.isTerminal) {
+            stopPipelinePolling();
+          }
+        } catch (err) {
+          console.warn("Pipeline poll iteration failed:", err);
+        }
+      }, 3000);
     }
   } catch (error) {
     workspacePath.textContent = "Pipeline status unavailable";
@@ -140,6 +245,7 @@ async function loadPipeline() {
 }
 
 async function loadInstaller() {
+  stopPipelinePolling();
   viewContent.className = "view-container";
   viewContent.setAttribute("aria-busy", "true");
   clearNotice();
@@ -170,13 +276,14 @@ async function loadInstaller() {
 }
 
 function handleRoute() {
+  stopPipelinePolling();
   const route = parseRoute();
-  if (route === "installer") {
+  if (route.name === "installer") {
     loadInstaller();
-  } else if (route === "configuration") {
+  } else if (route.name === "configuration") {
     loadConfiguration();
-  } else if (route === "configuration-pipeline") {
-    loadPipeline();
+  } else if (route.name === "pipeline") {
+    loadPipeline(route.pipelineType, route.executionId);
   } else {
     loadOverview();
   }

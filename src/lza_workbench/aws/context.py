@@ -17,6 +17,11 @@ class AwsExecutionContext:
     identity: dict[str, str] | None
     error: str | None
 
+    @property
+    def is_live(self) -> bool:
+        """Return True if AWS identity was successfully validated."""
+        return self.identity is not None
+
 
 def resolve_aws_execution_context(
     *,

@@ -6,6 +6,14 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### Pipeline Details & Config Deploy Web Flow (v0.35.0)
+- **Pipeline Details Page**: Built a dedicated, comprehensive Pipeline Details view for both Installer and Configuration pipelines (`#/pipeline/installer`, `#/pipeline/configuration`).
+- **Single-Pass Observation & Client Polling**: Implemented `GET /api/pipeline/snapshot` wrapping a non-blocking observation workflow; frontend periodically polls every 3s while execution is active (`!isTerminal`) without server-side blocking loops.
+- **Stage/Action Progression**: Renders ordered pipeline stages with status indicators, actions, timing, summaries, and direct links to AWS CodeBuild/CloudFormation console logs.
+- **On-Demand Failure Diagnostics**: Excluded heavy diagnostic scans from fast snapshot observations; added `GET /api/pipeline/diagnostics` to fetch and display CodeBuild/CloudFormation root-cause explanations only when execution fails or details are requested.
+- **Overview Navigation**: Connected both the Installer pipeline card and Configuration pipeline card on the Overview dashboard to their respective pipeline monitoring pages.
+- **Config Deploy Workflow**: Added "Deploy Configuration" to Configuration Details; pushes local configuration and triggers pipeline execution only when `pipelines.configuration.execute` is true; automatically presents option to monitor the running pipeline.
+
 ### Configuration Pull & Push Web Actions (v0.34.0)
 - **Configuration Details Actions**: Added "Pull Configuration" and "Push Configuration" actions to the Configuration Details page (`#/configuration`).
 - **Two-phase Prepare/Apply Pattern**: Non-mutating preparation step (`POST /api/config/pull/prepare`, `POST /api/config/push/prepare`) assesses remote target (S3 bucket or Git remote), tracked files count, branch, and detects overwrite/conflict risks before mutating anything.

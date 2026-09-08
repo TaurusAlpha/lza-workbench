@@ -1,4 +1,10 @@
-import { applyConfigPull, applyConfigPush, prepareConfigPull, prepareConfigPush } from "./api.js";
+import {
+  applyConfigDeploy,
+  applyConfigPull,
+  applyConfigPush,
+  prepareConfigPull,
+  prepareConfigPush,
+} from "./api.js";
 import { card, escapeHtml, formatFieldValue, renderBadge } from "./overview.js";
 
 function formatTimestamp(isoStr) {
@@ -266,8 +272,11 @@ export function renderConfigurationDetails(container, status, onRefresh) {
           <button type="button" id="btn-config-pull" class="btn">
             <span>Pull Configuration</span>
           </button>
-          <button type="button" id="btn-config-push" class="btn btn-primary">
+          <button type="button" id="btn-config-push" class="btn">
             <span>Push Configuration</span>
+          </button>
+          <button type="button" id="btn-config-deploy" class="btn btn-primary">
+            <span>Deploy Configuration</span>
           </button>
         </div>
       </div>
@@ -280,7 +289,7 @@ export function renderConfigurationDetails(container, status, onRefresh) {
         ${card("Git State", gitFields, wt ? (wt.hasUncommitted ? "Dirty" : "Clean") : "Not Git")}
         ${card("Remote Sync State", syncFields, sync ? sync.status : "Unavailable")}
         ${card("Synchronization History", historyFields, syncHistory.hasState ? "Recorded" : "None")}
-        ${card("Configuration Pipeline", pipeFields, pipe.status || "Not Executed", { href: "#/configuration-pipeline" })}
+        ${card("Configuration Pipeline", pipeFields, pipe.status || "Not Executed", { href: "#/pipeline/configuration" })}
       </div>
 
       <div id="config-action-modal-container" hidden></div>
@@ -298,12 +307,15 @@ export function renderConfigurationDetails(container, status, onRefresh) {
     });
   });
 
-  // Attach Pull and Push action handlers
+  // Attach Pull, Push, and Deploy action handlers
   container.querySelector("#btn-config-pull")?.addEventListener("click", () => {
     openConfigActionModal(container, "pull", onRefresh);
   });
   container.querySelector("#btn-config-push")?.addEventListener("click", () => {
     openConfigActionModal(container, "push", onRefresh);
+  });
+  container.querySelector("#btn-config-deploy")?.addEventListener("click", () => {
+    openConfigActionModal(container, "deploy", onRefresh);
   });
 }
 
@@ -311,9 +323,17 @@ async function openConfigActionModal(container, actionType, onRefresh) {
   const modalContainer = container.querySelector("#config-action-modal-container");
   if (!modalContainer) return;
 
-  const actionTitle = actionType === "pull" ? "Pull Configuration" : "Push Configuration";
+  const actionTitle = actionType === "pull"
+    ? "Pull Configuration"
+    : actionType === "deploy"
+    ? "Deploy Configuration"
+    : "Push Configuration";
   const prepFn = actionType === "pull" ? prepareConfigPull : prepareConfigPush;
-  const applyFn = actionType === "pull" ? applyConfigPull : applyConfigPush;
+  const applyFn = actionType === "pull"
+    ? applyConfigPull
+    : actionType === "deploy"
+    ? applyConfigDeploy
+    : applyConfigPush;
 
   modalContainer.hidden = false;
   modalContainer.innerHTML = `
@@ -476,6 +496,18 @@ async function openConfigActionModal(container, actionType, onRefresh) {
         `;
       }
 
+      let footerButtons = `
+        <button type="button" class="btn btn-primary btn-done">Done</button>
+      `;
+      if (applyResult.action === "deploy" && applyResult.pipelineStarted && applyResult.executionId) {
+        footerButtons = `
+          <button type="button" class="btn btn-done">Close</button>
+          <button type="button" id="btn-goto-monitor" class="btn btn-primary">
+            <span>Monitor Pipeline &rarr;</span>
+          </button>
+        `;
+      }
+
       modalContainer.innerHTML = `
         <div class="plan-modal-overlay">
           <div class="plan-modal-card" style="max-width: 36rem;">
@@ -489,12 +521,17 @@ async function openConfigActionModal(container, actionType, onRefresh) {
               </div>
               ${diffSummaryHtml}
             </div>
-            <div class="plan-modal-footer">
-              <button type="button" class="btn btn-primary btn-done">Done</button>
+            <div class="plan-modal-footer" style="gap: 0.75rem;">
+              ${footerButtons}
             </div>
           </div>
         </div>
       `;
+
+      modalContainer.querySelector("#btn-goto-monitor")?.addEventListener("click", () => {
+        closeModal();
+        window.location.hash = `#/pipeline/configuration?executionId=${encodeURIComponent(applyResult.executionId)}`;
+      });
 
       modalContainer.querySelectorAll(".btn-done").forEach((b) => {
         b.addEventListener("click", () => {
@@ -506,7 +543,7 @@ async function openConfigActionModal(container, actionType, onRefresh) {
       });
     } catch (err) {
       btnExecute.disabled = false;
-      btnExecute.innerHTML = `<span>Retry ${escapeHtml(actionType === "pull" ? "Pull" : "Push")}</span>`;
+      btnExecute.innerHTML = `<span>Retry ${escapeHtml(actionTitle)}</span>`;
       modalAlert.innerHTML = `
         <div class="notice error">
           ${escapeHtml(err.message)}

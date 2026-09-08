@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from lza_workbench.workflows.config_deploy import deploy_configuration_workflow
 from lza_workbench.workflows.config_pull import (
     ConfigPullPreparation,
     ConfigPullRequest,
@@ -31,6 +32,12 @@ from lza_workbench.workflows.installer_init import (
 from lza_workbench.workflows.installer_plan import (
     InstallerPlanResult,
     plan_installer_workflow,
+)
+from lza_workbench.workflows.pipeline_snapshot import (
+    PipelineActionFailure,
+    PipelineSnapshotResult,
+    get_pipeline_diagnostics_workflow,
+    get_pipeline_snapshot_workflow,
 )
 from lza_workbench.workflows.status_config import (
     CodeCommitConfigurationRepositoryStatus,
@@ -124,6 +131,66 @@ def create_status_router(*, workspace_dir: Path) -> APIRouter:
         )
         res = apply_config_push(req)
         return serialize_config_push_result(res)
+
+    @router.get("/api/pipeline/snapshot")
+    def pipeline_snapshot(
+        type: str = "configuration",
+        execution_id: str | None = None,
+    ) -> dict[str, Any]:
+        snapshot = get_pipeline_snapshot_workflow(
+            target_dir=workspace_dir,
+            pipeline_type=type,
+            execution_id=execution_id,
+        )
+        return serialize_pipeline_snapshot(snapshot)
+
+    @router.get("/api/pipeline/diagnostics")
+    def pipeline_diagnostics(
+        type: str = "configuration",
+        execution_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        failures = get_pipeline_diagnostics_workflow(
+            target_dir=workspace_dir,
+            pipeline_type=type,
+            execution_id=execution_id,
+        )
+        return serialize_pipeline_diagnostics(failures)
+
+    @router.post("/api/config/deploy")
+    def apply_deploy(payload: ConfigActionApplyPayload | None = None) -> dict[str, Any]:
+        deploy_res = deploy_configuration_workflow(
+            target_dir=workspace_dir,
+            dry_run=False,
+            force=payload.force if payload else False,
+            overwrite_confirmed=payload.overwrite_confirmed if payload else False,
+            watch=False,
+        )
+        push_data = (
+            serialize_config_push_result(deploy_res.push_result)
+            if deploy_res.push_result
+            else None
+        )
+        pipeline_started = deploy_res.start_result is not None
+        execution_id = (
+            deploy_res.start_result.execution_id if deploy_res.start_result else None
+        )
+        pipeline_name = (
+            deploy_res.start_result.pipeline_name if deploy_res.start_result else None
+        )
+        message = (
+            f"Configuration pushed and pipeline execution started ({execution_id})."
+            if pipeline_started
+            else "Configuration pushed successfully."
+        )
+        return {
+            "success": True,
+            "action": "deploy",
+            "pushResult": push_data,
+            "pipelineStarted": pipeline_started,
+            "pipelineName": pipeline_name,
+            "executionId": execution_id,
+            "message": message,
+        }
 
     return router
 
@@ -661,3 +728,81 @@ def serialize_config_push_result(result: ConfigPushResult) -> dict[str, Any]:
         "versionId": result.version_id,
         "filesCount": result.files_count,
     }
+
+
+def serialize_pipeline_snapshot(snapshot: PipelineSnapshotResult) -> dict[str, Any]:
+    """Translate pipeline snapshot result into browser API contract."""
+    stages_data: list[dict[str, Any]] = []
+    for stage in snapshot.stages:
+        actions_data: list[dict[str, Any]] = []
+        for action in stage.actions:
+            actions_data.append(
+                {
+                    "name": action.action_name,
+                    "status": action.status,
+                    "summary": action.summary,
+                    "lastStatusChange": action.last_status_change,
+                    "errorMessage": action.error_message,
+                    "externalExecutionId": action.external_execution_id,
+                    "externalExecutionUrl": action.external_execution_url,
+                }
+            )
+        stages_data.append(
+            {
+                "name": stage.stage_name,
+                "status": stage.status,
+                "executionId": stage.execution_id,
+                "actions": actions_data,
+            }
+        )
+
+    return {
+        "pipelineName": snapshot.pipeline_name,
+        "pipelineType": snapshot.pipeline_type,
+        "pipelineArn": snapshot.pipeline_arn,
+        "executionId": snapshot.execution_id,
+        "status": snapshot.status,
+        "statusSummary": snapshot.status_summary,
+        "isTerminal": snapshot.is_terminal,
+        "isLive": snapshot.is_live,
+        "startTime": snapshot.start_time,
+        "lastUpdateTime": snapshot.last_update_time,
+        "durationSeconds": snapshot.duration_seconds,
+        "currentStage": snapshot.current_stage,
+        "currentAction": snapshot.current_action,
+        "failedStage": snapshot.failed_stage,
+        "failedAction": snapshot.failed_action,
+        "stages": stages_data,
+        "error": snapshot.error,
+    }
+
+
+def serialize_pipeline_diagnostics(
+    failures: list[PipelineActionFailure],
+) -> list[dict[str, Any]]:
+    """Translate pipeline action failures into structured root cause diagnostic objects."""
+    results: list[dict[str, Any]] = []
+    for failure in failures:
+        root_cause_data = None
+        if failure.root_cause:
+            root_cause_data = {
+                "category": failure.root_cause.category.value,
+                "message": failure.root_cause.message,
+                "resource": failure.root_cause.resource,
+            }
+
+        results.append(
+            {
+                "stageName": failure.stage_name,
+                "actionName": failure.action_name,
+                "failedResource": failure.failed_resource,
+                "summary": failure.summary,
+                "errorMessage": failure.error_message,
+                "externalExecutionId": failure.external_execution_id,
+                "externalExecutionUrl": failure.external_execution_url,
+                "diagnosticDetails": failure.diagnostic_details,
+                "rootCause": root_cause_data,
+            }
+        )
+    return results
+

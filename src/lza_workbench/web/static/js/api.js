@@ -132,3 +132,51 @@ export async function applyConfigPush({ overwriteConfirmed = false, force = fals
   }
   return body;
 }
+
+export async function getPipelineSnapshot({ type = "configuration", executionId = null } = {}) {
+  const params = new URLSearchParams();
+  if (type) params.set("type", type);
+  if (executionId) params.set("execution_id", executionId);
+
+  const response = await fetch(`/api/pipeline/snapshot?${params.toString()}`);
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to load pipeline snapshot.");
+  }
+  return body;
+}
+
+export async function getPipelineDiagnostics({ type = "configuration", executionId = null } = {}) {
+  const params = new URLSearchParams();
+  if (type) params.set("type", type);
+  if (executionId) params.set("execution_id", executionId);
+
+  const response = await fetch(`/api/pipeline/diagnostics?${params.toString()}`);
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to load pipeline diagnostics.");
+  }
+  return body;
+}
+
+export async function applyConfigDeploy({ overwriteConfirmed = false, force = false } = {}) {
+  const response = await fetch("/api/config/deploy", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      overwrite_confirmed: overwriteConfirmed,
+      force,
+    }),
+  });
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to deploy configuration.");
+  }
+  return body;
+}
+

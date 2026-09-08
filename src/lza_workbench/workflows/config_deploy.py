@@ -61,6 +61,8 @@ def deploy_configuration_workflow(
     *,
     target_dir: Path | None = None,
     dry_run: bool = False,
+    force: bool = False,
+    overwrite_confirmed: bool = False,
     watch: bool = True,
     poll_interval_seconds: int | None = None,
     initial_delay_seconds: float = 3.0,
@@ -92,6 +94,8 @@ def deploy_configuration_workflow(
             ConfigPushRequest(
                 target_dir=target_dir,
                 dry_run=dry_run,
+                force=force,
+                overwrite_confirmed=overwrite_confirmed,
                 workspace_context=context,
                 aws_context=aws_context,
             )
@@ -100,22 +104,24 @@ def deploy_configuration_workflow(
         raise ConfigDeployError(f"Configuration push failed: {exc}") from exc
 
     start_res: PipelineStartResult | None = None
-    try:
-        start_res = start_pipeline_workflow(
-            target_dir=target_dir,
-            pipeline_type="configuration",
-            dry_run=dry_run,
-            workspace_context=context,
-            aws_context=aws_context,
-        )
-    except LzaError as exc:
-        raise ConfigDeployError(
-            f"Configuration push succeeded, but pipeline start failed: {exc}",
-            push_result=push_res,
-        ) from exc
+    should_execute = context.config.pipelines.configuration.execute
+    if should_execute:
+        try:
+            start_res = start_pipeline_workflow(
+                target_dir=target_dir,
+                pipeline_type="configuration",
+                dry_run=dry_run,
+                workspace_context=context,
+                aws_context=aws_context,
+            )
+        except LzaError as exc:
+            raise ConfigDeployError(
+                f"Configuration push succeeded, but pipeline start failed: {exc}",
+                push_result=push_res,
+            ) from exc
 
     watch_res: PipelineWatchResult | None = None
-    if not dry_run and watch:
+    if not dry_run and watch and start_res and start_res.execution_id:
         try:
             watch_res = watch_pipeline_workflow(
                 target_dir=target_dir,

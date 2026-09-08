@@ -223,8 +223,8 @@ export function renderOverview(container, status) {
       ["Uncommitted", uncommittedValue, { statusIndicator: !status.configuration.localGitClean }],
       ["Remote sync", remoteSyncSummary, { truncate: true }],
     ], configurationSyncStatus(status.configuration, status.aws.isLive), { href: "#/configuration" }),
-    card("Installer pipeline", pipelineFields(status.installerPipeline), pipelineBadge(status.installerPipeline)),
-    card("Configuration pipeline", pipelineFields(status.configurationPipeline), pipelineBadge(status.configurationPipeline), { href: "#/configuration-pipeline" }),
+    card("Installer pipeline", pipelineFields(status.installerPipeline), pipelineBadge(status.installerPipeline), { href: "#/pipeline/installer" }),
+    card("Configuration pipeline", pipelineFields(status.configurationPipeline), pipelineBadge(status.configurationPipeline), { href: "#/pipeline/configuration" }),
   ].join("");
 
   container.querySelectorAll(".card-interactive").forEach((interactiveCard) => {
