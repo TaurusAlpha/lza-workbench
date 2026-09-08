@@ -11,17 +11,17 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from lza_workbench.errors import LzaError
-from lza_workbench.web.status import create_status_router
+from lza_workbench.web.status import ActiveWorkspaceContext, create_status_router
 
 STATIC_DIR = Path(__file__).parent / "static"
 
 
 def create_app(
     *,
-    workspace_dir: Path,
+    workspace_dir: Path | ActiveWorkspaceContext | None = None,
     open_browser_url: str | None = None,
 ) -> FastAPI:
-    """Create the local Web interface for one selected workspace."""
+    """Create the local Web interface for workspaces."""
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -38,6 +38,12 @@ def create_app(
             content={"error": {"code": "workspace_unavailable", "message": str(exc)}},
         )
 
-    app.include_router(create_status_router(workspace_dir=workspace_dir))
+    context = (
+        workspace_dir
+        if isinstance(workspace_dir, ActiveWorkspaceContext)
+        else ActiveWorkspaceContext(workspace_dir)
+    )
+
+    app.include_router(create_status_router(workspace_dir=context))
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app

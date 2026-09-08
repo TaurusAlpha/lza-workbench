@@ -873,5 +873,235 @@ def test_bootstrap_apply_api_error() -> None:
     assert "Missing imported CodeCommit repository" in data["error"]["message"]
 
 
+def test_workspace_active_api() -> None:
+    from lza_workbench.web.status import ActiveWorkspaceContext
+    from lza_workbench.workspace.context import WorkspaceAssessment
+
+    context = ActiveWorkspaceContext(Path("/workspaces/acme"))
+    app = create_app(workspace_dir=context)
+
+    dummy_root = RootStatusResult(
+        workspace_dir=Path("/workspaces/acme"),
+        customer_name="Acme",
+        lza_version="v1.15.5",
+        profile="acme-root",
+        region="us-east-1",
+        aws_identity=None,
+        aws_error=None,
+        installer=InstallerStackSummary(name="AWSAccelerator-InstallerStack", exists=False),
+        installer_pipeline=PipelineSummary(name="AWSAccelerator-Pipeline", exists=False),
+        configuration_repo=ConfigurationRepoSummary(repository_type="S3"),
+        configuration_pipeline=PipelineSummary(name="AWSAccelerator-ConfigPipeline", exists=False),
+        health=OverallHealthSummary(
+            installer="Not Deployed", configuration="Clean", workspace="Clean"
+        ),
+        assessment=WorkspaceAssessment(
+            metadata_valid=True,
+            configuration_present=True,
+            installer_configured=False,
+            installer_recorded_deployed=False,
+            imported=False,
+        ),
+    )
+
+    with patch("lza_workbench.web.status.get_root_status_workflow", return_value=dummy_root):
+        response = TestClient(app).get("/api/workspace/active")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["hasWorkspace"] is True
+    assert data["workspaceDir"] == "/workspaces/acme"
+    assert data["customerName"] == "Acme"
+    assert data["assessment"]["installerConfigured"] is False
+    assert data["assessment"]["configurationPresent"] is True
+
+
+def test_workspace_open_api(tmp_path: Path) -> None:
+    from lza_workbench.web.status import ActiveWorkspaceContext
+
+    context = ActiveWorkspaceContext(None)
+    app = create_app(workspace_dir=context)
+
+    target_ws = tmp_path / "customer-a"
+    target_ws.mkdir()
+
+    dummy_root = RootStatusResult(
+        workspace_dir=target_ws,
+        customer_name="Customer A",
+        lza_version="v1.15.5",
+        profile="cust-a-root",
+        region="us-east-1",
+        aws_identity=None,
+        aws_error=None,
+        installer=InstallerStackSummary(name="AWSAccelerator-InstallerStack", exists=False),
+        installer_pipeline=PipelineSummary(name="AWSAccelerator-Pipeline", exists=False),
+        configuration_repo=ConfigurationRepoSummary(repository_type="S3"),
+        configuration_pipeline=PipelineSummary(name="AWSAccelerator-ConfigPipeline", exists=False),
+        health=OverallHealthSummary(
+            installer="Not Deployed", configuration="Clean", workspace="Clean"
+        ),
+    )
+
+    with patch("lza_workbench.web.status.get_root_status_workflow", return_value=dummy_root):
+        response = TestClient(app).post("/api/workspace/open", json={"directory": str(target_ws)})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["workspaceDir"] == str(target_ws.resolve())
+    assert context.workspace_dir == target_ws.resolve()
+
+
+def test_workspace_init_preview_and_apply(tmp_path: Path) -> None:
+    from lza_workbench.web.status import ActiveWorkspaceContext
+    from lza_workbench.workflows.workspace_init import WorkspaceInitResult
+    from lza_workbench.workspace.schema import (
+        AwsConfig,
+        CustomerConfig,
+        LzaConfig,
+        WorkspaceConfig,
+        WorkspaceState,
+    )
+
+    context = ActiveWorkspaceContext(None)
+    app = create_app(workspace_dir=context)
+
+    ws_dir = tmp_path / "new-customer"
+    cfg = WorkspaceConfig(
+        customer=CustomerConfig(name="New Customer", slug="new-customer"),
+        aws=AwsConfig(profile="new-customer-root", region="us-east-1"),
+        lza=LzaConfig(version="v1.15.5"),
+    )
+    state = WorkspaceState.from_config(cfg)
+
+    preview_res = WorkspaceInitResult(
+        workspace_dir=ws_dir,
+        config=cfg,
+        state=state,
+        planned_paths=[ws_dir / "lza-workspace.yaml", ws_dir / ".lza" / "state.json"],
+        existing_directory=False,
+        identity=None,
+        dry_run=True,
+    )
+    apply_res = WorkspaceInitResult(
+        workspace_dir=ws_dir,
+        config=cfg,
+        state=state,
+        planned_paths=[ws_dir / "lza-workspace.yaml", ws_dir / ".lza" / "state.json"],
+        existing_directory=False,
+        identity=None,
+        dry_run=False,
+    )
+
+    with patch("lza_workbench.web.status.init_workspace_workflow", return_value=preview_res):
+        resp_preview = TestClient(app).post(
+            "/api/workspace/init/preview",
+            json={"customer_name": "New Customer"},
+        )
+    assert resp_preview.status_code == 200
+    preview_data = resp_preview.json()
+    assert preview_data["customerSlug"] == "new-customer"
+    assert preview_data["dryRun"] is True
+
+    with patch("lza_workbench.web.status.init_workspace_workflow", return_value=apply_res):
+        resp_apply = TestClient(app).post(
+            "/api/workspace/init/apply",
+            json={"customer_name": "New Customer"},
+        )
+    assert resp_apply.status_code == 200
+    apply_data = resp_apply.json()
+    assert apply_data["customerSlug"] == "new-customer"
+    assert apply_data["dryRun"] is False
+    assert context.workspace_dir == ws_dir.resolve()
+
+
+def test_workspace_import_discover_prepare_apply(tmp_path: Path) -> None:
+    from lza_workbench.web.status import ActiveWorkspaceContext
+    from lza_workbench.workflows.workspace_import import (
+        ImportWorkspaceDiscovery,
+        ImportWorkspacePreparation,
+        WorkspaceImportResult,
+    )
+    from lza_workbench.workspace.schema import (
+        AwsConfig,
+        CustomerConfig,
+        LzaConfig,
+        WorkspaceConfig,
+        WorkspaceState,
+    )
+
+    context = ActiveWorkspaceContext(None)
+    app = create_app(workspace_dir=context)
+
+    ws_dir = tmp_path / "imported-ws"
+    cfg_dir = ws_dir / "config"
+    cfg = WorkspaceConfig(
+        customer=CustomerConfig(name="Imported Customer", slug="imported-customer"),
+        aws=AwsConfig(profile="imported-root", region="us-east-1"),
+        lza=LzaConfig(version="v1.15.5"),
+    )
+    state = WorkspaceState.from_config(cfg)
+    state.imported = True
+
+    discovery = ImportWorkspaceDiscovery(
+        workspace_dir=ws_dir,
+        config_dir=cfg_dir,
+        existing=None,
+    )
+
+    from lza_workbench.configuration.git import GitProvenance
+
+    prov = GitProvenance(
+        remote_url="https://github.com/acme/lza-config.git",
+        branch="main",
+        commit="1234567890abcdef",
+        files_count=12,
+        repo_type="github",
+        repo_name="acme/lza-config",
+    )
+
+    import_res = WorkspaceImportResult(
+        workspace_dir=ws_dir,
+        config_dir=cfg_dir,
+        config=cfg,
+        state=state,
+        affected_paths=[ws_dir / "lza-workspace.yaml", ws_dir / ".lza" / "state.json"],
+        identity=None,
+        already_imported=False,
+        dry_run=False,
+        provenance=prov,
+        recommendations=["Run bootstrap next"],
+    )
+    prep = ImportWorkspacePreparation(result=import_res)
+
+    with patch("lza_workbench.web.status.discover_import_workspace", return_value=discovery):
+        resp_disc = TestClient(app).post(
+            "/api/workspace/import/discover",
+            json={"workspace_dir": str(ws_dir)},
+        )
+    assert resp_disc.status_code == 200
+    assert resp_disc.json()["hasExistingMetadata"] is False
+
+    with patch("lza_workbench.web.status.prepare_workspace_import", return_value=prep):
+        resp_prep = TestClient(app).post(
+            "/api/workspace/import/prepare",
+            json={"workspace_dir": str(ws_dir)},
+        )
+    assert resp_prep.status_code == 200
+    prep_data = resp_prep.json()
+    assert prep_data["customerSlug"] == "imported-customer"
+    assert prep_data["provenance"]["repoName"] == "acme/lza-config"
+    assert prep_data["provenance"]["filesCount"] == 12
+    assert prep_data["recommendations"] == ["Run bootstrap next"]
+    assert context.prepared_import is not None
+
+    with patch("lza_workbench.web.status.apply_workspace_import", return_value=import_res):
+        resp_apply = TestClient(app).post("/api/workspace/import/apply")
+    assert resp_apply.status_code == 200
+    assert resp_apply.json()["customerSlug"] == "imported-customer"
+    assert context.workspace_dir == ws_dir.resolve()
+
+
+
 
 

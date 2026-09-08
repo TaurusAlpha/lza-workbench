@@ -209,3 +209,102 @@ export async function applyBootstrap({ githubToken = null, allowMissingGithubSec
   return body;
 }
 
+export async function getActiveWorkspace() {
+  const response = await fetch("/api/workspace/active");
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? "Failed to check active workspace.");
+  }
+  return body;
+}
+
+export async function openWorkspace(directory) {
+  const response = await fetch("/api/workspace/open", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ directory }),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to open workspace.");
+  }
+  return body;
+}
+
+export async function previewWorkspaceInit(payload) {
+  const response = await fetch("/api/workspace/init/preview", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to validate workspace initialization.");
+  }
+  return body;
+}
+
+export async function applyWorkspaceInit(payload) {
+  const response = await fetch("/api/workspace/init/apply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to create workspace.");
+  }
+  return body;
+}
+
+export async function discoverWorkspaceImport(payload) {
+  const response = await fetch("/api/workspace/import/discover", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to discover workspace import.");
+  }
+  return body;
+}
+
+export async function prepareWorkspaceImport(payload) {
+  const response = await fetch("/api/workspace/import/prepare", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to prepare workspace import.");
+  }
+  return body;
+}
+
+export async function applyWorkspaceImport() {
+  const response = await fetch("/api/workspace/import/apply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to apply workspace import.");
+  }
+  return body;
+}
+
+

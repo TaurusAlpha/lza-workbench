@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from lza_workbench.errors import LzaError
 from lza_workbench.workflows.config_deploy import deploy_configuration_workflow
 from lza_workbench.workflows.config_pull import (
     ConfigPullPreparation,
@@ -62,6 +63,68 @@ from lza_workbench.workflows.workspace_bootstrap import (
     bootstrap_workspace_workflow,
     plan_bootstrap_workflow,
 )
+from lza_workbench.workflows.workspace_import import (
+    ImportWorkspaceDiscovery,
+    ImportWorkspacePreparation,
+    ImportWorkspaceRequest,
+    WorkspaceImportResult,
+    apply_workspace_import,
+    discover_import_workspace,
+    prepare_workspace_import,
+)
+from lza_workbench.workflows.workspace_init import (
+    WorkspaceInitResult,
+    init_workspace_workflow,
+)
+
+
+class ActiveWorkspaceContext:
+    """Manages active workspace directory and in-flight operations for the web server."""
+
+    def __init__(self, workspace_dir: Path | None = None) -> None:
+        self.workspace_dir: Path | None = workspace_dir.resolve() if workspace_dir else None
+        self.prepared_import: ImportWorkspacePreparation | None = None
+
+    def set_workspace_dir(self, workspace_dir: Path) -> None:
+        self.workspace_dir = workspace_dir.resolve()
+        self.prepared_import = None
+
+
+class WorkspaceOpenPayload(BaseModel):
+    directory: str
+
+
+class WorkspaceInitPayload(BaseModel):
+    customer_name: str
+    workspace_dir: str | None = None
+    aws_auth_type: str = "profile"
+    aws_profile: str | None = None
+    aws_region: str = "us-east-1"
+    lza_version: str = "v1.15.5"
+    force: bool = False
+    skip_aws_check: bool = True
+
+
+class WorkspaceImportDiscoverPayload(BaseModel):
+    workspace_dir: str
+    config_dir: str | None = None
+    force: bool = False
+    repair: bool = False
+
+
+class WorkspaceImportPreparePayload(BaseModel):
+    workspace_dir: str
+    config_dir: str | None = None
+    customer_name: str | None = None
+    aws_auth_type: str = "profile"
+    aws_profile: str | None = None
+    aws_region: str = "us-east-1"
+    lza_version: str = "v1.15.5"
+    installer_stack_name: str | None = None
+    force: bool = False
+    repair: bool = False
+    skip_aws_check: bool = False
+    prime_credentials: bool = False
 
 
 class InstallerSettingsPayload(BaseModel):
@@ -78,28 +141,167 @@ class BootstrapApplyPayload(BaseModel):
     allow_missing_github_secret: bool = False
 
 
-def create_status_router(*, workspace_dir: Path) -> APIRouter:
-    """Create status routes bound to one workspace directory."""
+def create_status_router(
+    *, workspace_dir: Path | ActiveWorkspaceContext | None = None
+) -> APIRouter:
+    """Create status and workspace routes bound to an active workspace context."""
+    if isinstance(workspace_dir, ActiveWorkspaceContext):
+        context = workspace_dir
+    elif workspace_dir is not None:
+        context = ActiveWorkspaceContext(workspace_dir)
+    else:
+        context = ActiveWorkspaceContext(None)
+
     router = APIRouter()
+
+    def get_target_dir() -> Path:
+        if context.workspace_dir is None:
+            raise LzaError("No active workspace is open. Please open or create a workspace.")
+        return context.workspace_dir
+
+    @router.get("/api/workspace/active")
+    def get_active_workspace() -> dict[str, Any]:
+        if context.workspace_dir is None:
+            return {"hasWorkspace": False, "workspaceDir": None}
+        try:
+            status_res = get_root_status_workflow(target_dir=context.workspace_dir)
+            return {
+                "hasWorkspace": True,
+                "workspaceDir": str(status_res.workspace_dir),
+                "customerName": status_res.customer_name,
+                "lzaVersion": status_res.lza_version,
+                "assessment": (
+                    {
+                        "metadataValid": status_res.assessment.metadata_valid,
+                        "configurationPresent": status_res.assessment.configuration_present,
+                        "installerConfigured": status_res.assessment.installer_configured,
+                        "installerRecordedDeployed": (
+                            status_res.assessment.installer_recorded_deployed
+                        ),
+                        "imported": status_res.assessment.imported,
+                    }
+                    if status_res.assessment
+                    else None
+                ),
+            }
+        except Exception:
+            return {
+                "hasWorkspace": False,
+                "workspaceDir": str(context.workspace_dir),
+            }
+
+    @router.post("/api/workspace/open")
+    def open_workspace(payload: WorkspaceOpenPayload) -> dict[str, Any]:
+        target = Path(payload.directory).expanduser().resolve()
+        if not target.is_dir():
+            raise LzaError(f"Directory does not exist: {target}")
+        status_res = get_root_status_workflow(target_dir=target)
+        context.set_workspace_dir(target)
+        return {
+            "success": True,
+            "workspaceDir": str(status_res.workspace_dir),
+            "customerName": status_res.customer_name,
+            "lzaVersion": status_res.lza_version,
+        }
+
+    @router.post("/api/workspace/init/preview")
+    def preview_workspace_init(payload: WorkspaceInitPayload) -> dict[str, Any]:
+        target_dir = Path(payload.workspace_dir).expanduser() if payload.workspace_dir else None
+        result = init_workspace_workflow(
+            customer_name=payload.customer_name,
+            workspace_dir=target_dir,
+            aws_auth_type=payload.aws_auth_type,
+            aws_profile=payload.aws_profile,
+            aws_region=payload.aws_region,
+            lza_version=payload.lza_version,
+            dry_run=True,
+            force=payload.force,
+            skip_aws_check=payload.skip_aws_check,
+        )
+        return serialize_workspace_init_result(result)
+
+    @router.post("/api/workspace/init/apply")
+    def apply_workspace_init_endpoint(payload: WorkspaceInitPayload) -> dict[str, Any]:
+        target_dir = Path(payload.workspace_dir).expanduser() if payload.workspace_dir else None
+        result = init_workspace_workflow(
+            customer_name=payload.customer_name,
+            workspace_dir=target_dir,
+            aws_auth_type=payload.aws_auth_type,
+            aws_profile=payload.aws_profile,
+            aws_region=payload.aws_region,
+            lza_version=payload.lza_version,
+            dry_run=False,
+            force=payload.force,
+            skip_aws_check=payload.skip_aws_check,
+        )
+        context.set_workspace_dir(result.workspace_dir)
+        return serialize_workspace_init_result(result)
+
+    @router.post("/api/workspace/import/discover")
+    def discover_workspace_import_endpoint(
+        payload: WorkspaceImportDiscoverPayload,
+    ) -> dict[str, Any]:
+        ws_dir = Path(payload.workspace_dir).expanduser()
+        cfg_dir = Path(payload.config_dir).expanduser() if payload.config_dir else None
+        discovery = discover_import_workspace(
+            workspace_dir=ws_dir,
+            config_dir=cfg_dir,
+            force=payload.force,
+            repair=payload.repair,
+        )
+        return serialize_import_discovery(discovery)
+
+    @router.post("/api/workspace/import/prepare")
+    def prepare_workspace_import_endpoint(payload: WorkspaceImportPreparePayload) -> dict[str, Any]:
+        ws_dir = Path(payload.workspace_dir).expanduser()
+        cfg_dir = Path(payload.config_dir).expanduser() if payload.config_dir else None
+        request = ImportWorkspaceRequest(
+            workspace_dir=ws_dir,
+            config_dir=cfg_dir,
+            customer_name=payload.customer_name,
+            aws_auth_type=payload.aws_auth_type,
+            aws_profile=payload.aws_profile,
+            aws_region=payload.aws_region,
+            lza_version=payload.lza_version,
+            installer_stack_name=payload.installer_stack_name,
+            dry_run=False,
+            force=payload.force,
+            repair=payload.repair,
+            skip_aws_check=payload.skip_aws_check,
+            prime_credentials=payload.prime_credentials,
+        )
+        prep = prepare_workspace_import(request)
+        context.prepared_import = prep
+        return serialize_workspace_import_result(prep.result)
+
+    @router.post("/api/workspace/import/apply")
+    def apply_workspace_import_endpoint() -> dict[str, Any]:
+        if context.prepared_import is None:
+            raise LzaError("No prepared import found. Run prepare first before applying.")
+        result = apply_workspace_import(context.prepared_import)
+        context.set_workspace_dir(result.workspace_dir)
+        return serialize_workspace_import_result(result)
 
     @router.get("/api/status")
     def get_status() -> dict[str, Any]:
-        return serialize_root_status(get_root_status_workflow(target_dir=workspace_dir))
+        return serialize_root_status(get_root_status_workflow(target_dir=get_target_dir()))
 
     @router.get("/api/status/config")
     def get_config_status() -> dict[str, Any]:
-        return serialize_configuration_status(get_config_status_workflow(target_dir=workspace_dir))
+        status_res = get_config_status_workflow(target_dir=get_target_dir())
+        return serialize_configuration_status(status_res)
 
     @router.get("/api/status/installer")
     def get_installer_status() -> dict[str, Any]:
-        status_res = get_installer_status_workflow(target_dir=workspace_dir)
-        form_res = get_installer_parameters_schema(target_dir=workspace_dir, all_fields=True)
+        target = get_target_dir()
+        status_res = get_installer_status_workflow(target_dir=target)
+        form_res = get_installer_parameters_schema(target_dir=target, all_fields=True)
         return serialize_installer_status(status_res, form_res)
 
     @router.post("/api/installer/settings")
     def save_installer_settings(payload: InstallerSettingsPayload) -> dict[str, Any]:
         result = apply_installer_settings(
-            InstallerSettingsRequest(target_dir=workspace_dir, values=payload.values)
+            InstallerSettingsRequest(target_dir=get_target_dir(), values=payload.values)
         )
         return {
             "success": True,
@@ -110,18 +312,18 @@ def create_status_router(*, workspace_dir: Path) -> APIRouter:
     @router.post("/api/installer/plan")
     def get_installer_plan() -> dict[str, Any]:
         return serialize_installer_plan(
-            plan_installer_workflow(target_dir=workspace_dir, dry_run=True)
+            plan_installer_workflow(target_dir=get_target_dir(), dry_run=True)
         )
 
     @router.post("/api/config/pull/prepare")
     def prepare_pull() -> dict[str, Any]:
-        prep = prepare_config_pull(ConfigPullRequest(target_dir=workspace_dir))
+        prep = prepare_config_pull(ConfigPullRequest(target_dir=get_target_dir()))
         return serialize_config_pull_preparation(prep)
 
     @router.post("/api/config/pull/apply")
     def apply_pull(payload: ConfigActionApplyPayload | None = None) -> dict[str, Any]:
         req = ConfigPullRequest(
-            target_dir=workspace_dir,
+            target_dir=get_target_dir(),
             overwrite_confirmed=payload.overwrite_confirmed if payload else False,
             force=payload.force if payload else False,
         )
@@ -130,13 +332,13 @@ def create_status_router(*, workspace_dir: Path) -> APIRouter:
 
     @router.post("/api/config/push/prepare")
     def prepare_push() -> dict[str, Any]:
-        prep = prepare_config_push(ConfigPushRequest(target_dir=workspace_dir))
+        prep = prepare_config_push(ConfigPushRequest(target_dir=get_target_dir()))
         return serialize_config_push_preparation(prep)
 
     @router.post("/api/config/push/apply")
     def apply_push(payload: ConfigActionApplyPayload | None = None) -> dict[str, Any]:
         req = ConfigPushRequest(
-            target_dir=workspace_dir,
+            target_dir=get_target_dir(),
             overwrite_confirmed=payload.overwrite_confirmed if payload else False,
             force=payload.force if payload else False,
         )
@@ -149,7 +351,7 @@ def create_status_router(*, workspace_dir: Path) -> APIRouter:
         execution_id: str | None = None,
     ) -> dict[str, Any]:
         snapshot = get_pipeline_snapshot_workflow(
-            target_dir=workspace_dir,
+            target_dir=get_target_dir(),
             pipeline_type=type,
             execution_id=execution_id,
         )
@@ -161,7 +363,7 @@ def create_status_router(*, workspace_dir: Path) -> APIRouter:
         execution_id: str | None = None,
     ) -> list[dict[str, Any]]:
         failures = get_pipeline_diagnostics_workflow(
-            target_dir=workspace_dir,
+            target_dir=get_target_dir(),
             pipeline_type=type,
             execution_id=execution_id,
         )
@@ -170,7 +372,7 @@ def create_status_router(*, workspace_dir: Path) -> APIRouter:
     @router.post("/api/config/deploy")
     def apply_deploy(payload: ConfigActionApplyPayload | None = None) -> dict[str, Any]:
         deploy_res = deploy_configuration_workflow(
-            target_dir=workspace_dir,
+            target_dir=get_target_dir(),
             dry_run=False,
             force=payload.force if payload else False,
             overwrite_confirmed=payload.overwrite_confirmed if payload else False,
@@ -206,13 +408,13 @@ def create_status_router(*, workspace_dir: Path) -> APIRouter:
     @router.get("/api/bootstrap/plan")
     def get_bootstrap_plan() -> dict[str, Any]:
         return serialize_bootstrap_plan(
-            plan_bootstrap_workflow(target_dir=workspace_dir, dry_run=True)
+            plan_bootstrap_workflow(target_dir=get_target_dir(), dry_run=True)
         )
 
     @router.post("/api/bootstrap/apply")
     def apply_bootstrap(payload: BootstrapApplyPayload | None = None) -> dict[str, Any]:
         result = bootstrap_workspace_workflow(
-            target_dir=workspace_dir,
+            target_dir=get_target_dir(),
             dry_run=False,
             github_token=payload.github_token if payload else None,
             allow_missing_github_secret=payload.allow_missing_github_secret if payload else False,
@@ -283,6 +485,32 @@ def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
             "workspace": result.health.workspace,
             "isLive": result.health.is_live,
         },
+        "assessment": (
+            {
+                "metadataValid": result.assessment.metadata_valid,
+                "configurationPresent": result.assessment.configuration_present,
+                "installerConfigured": result.assessment.installer_configured,
+                "installerRecordedDeployed": result.assessment.installer_recorded_deployed,
+                "imported": result.assessment.imported,
+            }
+            if result.assessment
+            else None
+        ),
+        "capabilities": (
+            [
+                cap
+                for cap, is_supported in [
+                    ("metadata_valid", result.assessment.metadata_valid),
+                    ("configuration_present", result.assessment.configuration_present),
+                    ("installer_configured", result.assessment.installer_configured),
+                    ("installer_recorded_deployed", result.assessment.installer_recorded_deployed),
+                    ("imported", result.assessment.imported),
+                ]
+                if is_supported
+            ]
+            if result.assessment
+            else []
+        ),
     }
 
 
@@ -911,4 +1139,76 @@ def serialize_bootstrap_result(result: WorkspaceBootstrapResult) -> dict[str, An
         "githubSecretName": result.github_secret_name,
         "githubSecretCreated": result.github_secret_created,
     }
+
+
+def serialize_workspace_init_result(result: WorkspaceInitResult) -> dict[str, Any]:
+    """Translate workspace init workflow result into the browser API contract."""
+    return {
+        "workspaceDir": str(result.workspace_dir),
+        "customerSlug": result.config.customer.slug,
+        "customerName": result.config.customer.name,
+        "aws": {
+            "profile": result.config.aws.profile,
+            "region": result.config.aws.region,
+        },
+        "lzaVersion": result.config.lza.version,
+        "plannedPaths": [str(p) for p in result.planned_paths],
+        "existingDirectory": result.existing_directory,
+        "identity": result.identity,
+        "dryRun": result.dry_run,
+    }
+
+
+def serialize_workspace_import_result(result: WorkspaceImportResult) -> dict[str, Any]:
+    """Translate workspace import workflow result into the browser API contract."""
+    return {
+        "workspaceDir": str(result.workspace_dir),
+        "configDir": str(result.config_dir),
+        "customerName": result.config.customer.name,
+        "customerSlug": result.config.customer.slug,
+        "aws": {
+            "profile": result.config.aws.profile,
+            "region": result.config.aws.region,
+        },
+        "lzaVersion": result.config.lza.version,
+        "affectedPaths": [str(p) for p in result.affected_paths],
+        "identity": result.identity,
+        "alreadyImported": result.already_imported,
+        "dryRun": result.dry_run,
+        "repaired": result.repaired,
+        "provenance": (
+            {
+                "repoType": result.provenance.repo_type,
+                "repoName": result.provenance.repo_name,
+                "remoteUrl": result.provenance.remote_url,
+                "branch": result.provenance.branch,
+                "commit": result.provenance.commit,
+                "filesCount": result.provenance.files_count,
+            }
+            if result.provenance
+            else None
+        ),
+        "validationSummary": result.validation_summary,
+        "installerDiscovered": result.installer_discovered,
+        "discoveredStackStatus": result.discovered_stack_status,
+        "recommendations": result.recommendations,
+    }
+
+
+def serialize_import_discovery(discovery: ImportWorkspaceDiscovery) -> dict[str, Any]:
+    """Translate import discovery into the browser API contract."""
+    existing = discovery.existing
+    existing_config = existing.config if existing else None
+    return {
+        "workspaceDir": str(discovery.workspace_dir),
+        "configDir": str(discovery.config_dir),
+        "hasExistingMetadata": existing is not None
+        and (existing.config is not None or existing.state is not None),
+        "existingCustomerName": existing_config.customer.name if existing_config else None,
+        "existingAwsProfile": existing_config.aws.profile if existing_config else None,
+        "existingAwsRegion": existing_config.aws.region if existing_config else None,
+        "existingLzaVersion": existing_config.lza.version if existing_config else None,
+        "isRepaired": existing.is_repaired if existing else False,
+    }
+
 

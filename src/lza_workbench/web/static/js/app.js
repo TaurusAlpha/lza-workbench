@@ -1,5 +1,6 @@
 import {
   applyConfigDeploy,
+  getActiveWorkspace,
   getBootstrapPlan,
   getConfigurationStatus,
   getInstallerStatus,
@@ -12,6 +13,7 @@ import { renderConfigurationDetails } from "./configuration.js";
 import { renderInstallerDetails } from "./installer.js";
 import { renderOverview } from "./overview.js";
 import { renderPipelineDetails } from "./pipeline.js";
+import { renderSetup } from "./setup.js";
 
 const viewContent = document.querySelector("#view-content") || document.querySelector("#overview");
 const notice = document.querySelector("#notice");
@@ -39,6 +41,9 @@ function parseRoute() {
 
   if (clean === "/" || clean === "/overview") {
     return { name: "overview" };
+  }
+  if (clean === "/setup") {
+    return { name: "setup" };
   }
   if (clean === "/installer") {
     return { name: "installer" };
@@ -99,6 +104,14 @@ async function loadOverview() {
       clearNotice();
     }
   } catch (error) {
+    if (
+      error.message?.includes("No active workspace") ||
+      error.message?.includes("No workspace") ||
+      error.message?.includes("workspace_unavailable")
+    ) {
+      window.location.hash = "#/setup";
+      return;
+    }
     workspacePath.textContent = "Workspace status unavailable";
     workspacePath.removeAttribute("title");
     viewContent.replaceChildren();
@@ -311,10 +324,51 @@ async function loadBootstrap() {
   }
 }
 
+async function loadSetup() {
+  stopPipelinePolling();
+  viewContent.className = "view-container";
+  viewContent.setAttribute("aria-busy", "true");
+  clearNotice();
+  refresh.disabled = true;
+
+  if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench / Setup";
+  if (pageTitle) pageTitle.textContent = "Workspace Setup";
+
+  let activeWs = null;
+  try {
+    activeWs = await getActiveWorkspace();
+  } catch {
+    activeWs = null;
+  }
+
+  const hasActive = activeWs && activeWs.hasWorkspace;
+  if (breadcrumb) {
+    breadcrumb.hidden = !hasActive;
+  }
+
+  if (hasActive) {
+    workspacePath.textContent = activeWs.workspaceDir;
+    workspacePath.title = activeWs.workspaceDir;
+  } else {
+    workspacePath.textContent = "No active workspace";
+    workspacePath.removeAttribute("title");
+  }
+
+  renderSetup(viewContent, activeWs, () => {
+    window.location.hash = "#/overview";
+    handleRoute();
+  });
+
+  viewContent.setAttribute("aria-busy", "false");
+  refresh.disabled = false;
+}
+
 function handleRoute() {
   stopPipelinePolling();
   const route = parseRoute();
-  if (route.name === "installer") {
+  if (route.name === "setup") {
+    loadSetup();
+  } else if (route.name === "installer") {
     loadInstaller();
   } else if (route.name === "configuration") {
     loadConfiguration();

@@ -31,7 +31,11 @@ from lza_workbench.configuration.sync import (
 from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.pipeline.failures import collect_pipeline_action_failures
 from lza_workbench.pipeline.resolution import resolve_pipeline
-from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
+from lza_workbench.workspace.context import (
+    WorkspaceAssessment,
+    WorkspaceCapability,
+    load_workspace_context,
+)
 from lza_workbench.workspace.schema import WorkspaceState
 
 
@@ -105,6 +109,7 @@ class RootStatusResult:
     configuration_repo: ConfigurationRepoSummary
     configuration_pipeline: PipelineSummary
     health: OverallHealthSummary
+    assessment: WorkspaceAssessment | None = None
 
 
 def _resolve_pipeline_summary(
@@ -521,6 +526,7 @@ def get_root_status_workflow(
         configuration_repo=config_repo_summary,
         configuration_pipeline=config_pipe_summary,
         health=health,
+        assessment=ctx.assessment,
     )
 
 

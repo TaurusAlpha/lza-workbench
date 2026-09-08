@@ -6,6 +6,19 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### Workspace Setup Area & Capability-Driven Next Steps (v0.37.0)
+- **Unified Workspace Setup UI**: Built dedicated Workspace Setup area (`#/setup`) offering three distinct flows:
+  - **Create New Workspace**: Scoped to pure `lza init` capabilities (customer name, directory, AWS profile/region, LZA version); includes pre-creation validation preview (`POST /api/workspace/init/preview`) displaying resolved directories and planned files, followed by explicit creation (`POST /api/workspace/init/apply`).
+  - **Import Existing Workspace**: Adheres to Phase 2.6 read-only discovery boundary; allows inspecting existing directories (`POST /api/workspace/import/discover`) to auto-fill metadata, preparing read-only import discoveries and warnings (`POST /api/workspace/import/prepare`), and reviewing Git provenance and affected paths before explicitly applying (`POST /api/workspace/import/apply`).
+  - **Open Existing Workspace**: Quickly open and validate existing workspaces (`POST /api/workspace/open`) and switch runtime context.
+- **Dynamic Active Workspace Context**: Added `ActiveWorkspaceContext` to the web server to manage active workspace state and support live switching without restarting the server.
+- **Capability-Driven Overview Next Actions**: Overview dashboard automatically checks workspace capabilities and presents a "Pending Workspace Actions" card guiding users to next steps:
+  - Configure Installer (`#/installer`) when installer configuration is incomplete.
+  - Initialize Configuration (`#/configuration`) when configuration directory is missing.
+  - Review Bootstrap (`#/bootstrap`) when prerequisite AWS resources need provisioning.
+- **Workspace Navigation & Fallback**: Header and Workspace card provide quick "Switch workspace" navigation; accessing Overview without an active workspace automatically redirects to `#/setup`.
+- **Architectural Boundary Enforcement**: Preserved strict layering (`web` -> `workflows` only) with zero direct imports from feature or AWS packages; validated via `tests/test_package.py` and `tests/web/test_status.py`.
+
 ### Workspace Bootstrap Offline Graceful Handling & Overview Indicator Fix (v0.36.1)
 - **Offline Bootstrap Page Support**: Made `plan_bootstrap_workflow` return an offline `BootstrapPlanResult` (`is_live=False`, `error=...`) instead of raising `LzaError` when AWS authentication/SSO has expired; allows `GET /api/bootstrap/plan` to return HTTP 200 and renders the Bootstrap page gracefully with configured resources, offline badges, and standard offline banner without a blank screen or 422 error.
 - **Dynamic Overview Workspace Indicator**: Replaced static grey "Bootstrap" card badge with dynamic plan status (`In sync` in green when no changes are needed, `Bootstrap required` / `Action required` in amber when actions are planned, `Missing resources` when blocked, and `Offline` when unauthenticated).

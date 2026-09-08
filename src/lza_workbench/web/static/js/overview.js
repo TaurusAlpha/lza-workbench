@@ -91,6 +91,10 @@ function isInactiveOrEmpty(val) {
 }
 
 export function formatFieldValue(fieldValue, options = {}) {
+  if (options.raw) {
+    return String(fieldValue);
+  }
+
   if (isInactiveOrEmpty(fieldValue)) {
     const raw = fieldValue === null || fieldValue === undefined || fieldValue === "" ? "—" : String(fieldValue);
     const str = raw.trim().toLowerCase();
@@ -224,12 +228,73 @@ export function renderOverview(container, status, bootstrapPlan = null) {
     prerequisitesDisplay = "In sync";
   }
 
+  function renderNextStepsCard() {
+    const steps = [];
+    if (status.assessment && !status.assessment.installerConfigured) {
+      steps.push({
+        title: "Configure Installer",
+        description: "Installer settings (AWS accounts, regions, repository) are incomplete.",
+        action: "#/installer",
+        actionText: "Configure Installer",
+      });
+    }
+    if (status.assessment && !status.assessment.configurationPresent) {
+      steps.push({
+        title: "Initialize Configuration",
+        description: "Local LZA configuration files are missing or not initialized.",
+        action: "#/configuration",
+        actionText: "Go to Configuration",
+      });
+    }
+    if (bootstrapPlan && bootstrapPlan.isMutationRequired) {
+      steps.push({
+        title: "Bootstrap AWS Prerequisites",
+        description: "Prerequisite S3 buckets, encryption keys, or secrets require creation or update.",
+        action: "#/bootstrap",
+        actionText: "Review Bootstrap",
+      });
+    }
+
+    if (steps.length === 0) return "";
+
+    const stepItems = steps
+      .map(
+        (s) => `
+      <li class="next-step-item">
+        <div class="next-step-info">
+          <strong class="next-step-title">${escapeHtml(s.title)}</strong>
+          <span class="next-step-desc">${escapeHtml(s.description)}</span>
+        </div>
+        <a href="${escapeHtml(s.action)}" class="btn btn-sm btn-primary">${escapeHtml(s.actionText)}</a>
+      </li>`
+      )
+      .join("");
+
+    return `
+      <article class="card card-full card-next-steps">
+        <div class="card-header">
+          <h2 class="card-title">Pending Workspace Actions</h2>
+          <span class="badge badge-warning">${steps.length} pending</span>
+        </div>
+        <div class="card-body">
+          <ul class="next-steps-list">
+            ${stepItems}
+          </ul>
+        </div>
+      </article>
+    `;
+  }
+
+  const nextStepsHtml = renderNextStepsCard();
+
   container.innerHTML = [
+    nextStepsHtml,
     card("Workspace", [
       ["Customer", status.workspace.customerName],
       ["LZA version", status.workspace.lzaVersion, { mono: true }],
       ["Directory", status.workspace.directory, { mono: true, truncate: true }],
       ["Prerequisites", prerequisitesDisplay, { statusIndicator: hasPrerequisitesIndicator }],
+      ["Switch", '<a href="#/setup" class="card-link-inline">Switch workspace &rarr;</a>', { raw: true }],
     ], workspaceBadge, { href: "#/bootstrap" }),
     card("AWS context", [
       ["Profile", status.aws.profile, { mono: true }],
@@ -250,7 +315,7 @@ export function renderOverview(container, status, bootstrapPlan = null) {
     ], configurationSyncStatus(status.configuration, status.aws.isLive), { href: "#/configuration" }),
     card("Installer pipeline", pipelineFields(status.installerPipeline), pipelineBadge(status.installerPipeline), { href: "#/pipeline/installer" }),
     card("Configuration pipeline", pipelineFields(status.configurationPipeline), pipelineBadge(status.configurationPipeline), { href: "#/pipeline/configuration" }),
-  ].join("");
+  ].filter(Boolean).join("");
 
   container.querySelectorAll(".card-interactive").forEach((interactiveCard) => {
     interactiveCard.addEventListener("click", (event) => {

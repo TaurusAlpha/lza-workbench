@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lza-workbench"
-version = "0.36.1"
+version = "0.37.0"
 
 description = "Toolkit for initializing and managing AWS Landing Zone Accelerator workspaces"
 readme = "README.md"
@@ -26,7 +26,6 @@ lza-workbench = "lza_workbench.cli:main"
 [dependency-groups]
 dev = ["httpx2>=0.1.0", "pytest>=8.4.0", "ruff>=0.12.0"]
 # dev = ["httpx2>=0.1.0", "pytest>=8.4.0", "ruff>=0.12.0", "complexipy>=8.0.1"]
-# dev = ["httpx2>=0.1.0", "pytest>=8.4.0", "ruff>=0.12.0", "complexipy>=8.0.1", "wily>=1.25"]
 
 [tool.ruff]
 line-length = 100
@@ -40,6 +39,11 @@ select = ["E", "F", "I", "B", "UP"]
 # # Standard thresholds: 10 (strict), 15 (moderate)
 # max-complexity = 15
 
+# [tool.complexipy]
+# paths = ["src"]
+# max-complexity-allowed = 15
+# exclude = ["tests/*"]
+
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
@@ -50,29 +54,6 @@ markers = [
   "git: tests that execute local Git commands against temporary repositories",
   "arch: static architectural and dependency-boundary invariants",
 ]
-
-# [tool.complexipy]
-# # Max cognitive complexity before raising an error (default is usually 15)
-# max_complexity = 15
-
-# # Target paths and files to ignore
-# paths = ["src"]
-# exclude = ["tests/*", "*_test.py"]
-
-# # Output details in the terminal summary
-# details = "low"
-
-# [tool.wily]
-# # Specify target source directory
-# path = "src"
-
-# # Operators to track over git revisions
-# # Cyclomatic complexity, raw metrics, and maintainability index
-# operators = ["cyclomatic", "raw", "maintainability"]
-
-# # Metric to use for git pre-commit checks or CI builds
-# default_metric = "cyclomatic.complexity"
-# max_revisions = 50
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lza_workbench"]
