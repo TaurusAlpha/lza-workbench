@@ -64,3 +64,71 @@ export async function getInstallerPlan() {
   }
   return body;
 }
+
+export async function prepareConfigPull() {
+  const response = await fetch("/api/config/pull/prepare", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Unable to prepare configuration pull.");
+  }
+  return body;
+}
+
+export async function applyConfigPull({ overwriteConfirmed = false, force = false } = {}) {
+  const response = await fetch("/api/config/pull/apply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      overwrite_confirmed: overwriteConfirmed,
+      force,
+    }),
+  });
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to pull configuration.");
+  }
+  return body;
+}
+
+export async function prepareConfigPush() {
+  const response = await fetch("/api/config/push/prepare", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Unable to prepare configuration push.");
+  }
+  return body;
+}
+
+export async function applyConfigPush({ overwriteConfirmed = false, force = false } = {}) {
+  const response = await fetch("/api/config/push/apply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      overwrite_confirmed: overwriteConfirmed,
+      force,
+    }),
+  });
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to push configuration.");
+  }
+  return body;
+}

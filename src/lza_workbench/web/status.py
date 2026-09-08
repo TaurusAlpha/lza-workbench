@@ -8,6 +8,20 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from lza_workbench.workflows.config_pull import (
+    ConfigPullPreparation,
+    ConfigPullRequest,
+    ConfigPullResult,
+    apply_config_pull,
+    prepare_config_pull,
+)
+from lza_workbench.workflows.config_push import (
+    ConfigPushPreparation,
+    ConfigPushRequest,
+    ConfigPushResult,
+    apply_config_push,
+    prepare_config_push,
+)
 from lza_workbench.workflows.installer_init import (
     InstallerForm,
     InstallerSettingsRequest,
@@ -39,6 +53,11 @@ from lza_workbench.workflows.status_root import (
 
 class InstallerSettingsPayload(BaseModel):
     values: dict[str, str]
+
+
+class ConfigActionApplyPayload(BaseModel):
+    overwrite_confirmed: bool = False
+    force: bool = False
 
 
 def create_status_router(*, workspace_dir: Path) -> APIRouter:
@@ -75,6 +94,36 @@ def create_status_router(*, workspace_dir: Path) -> APIRouter:
         return serialize_installer_plan(
             plan_installer_workflow(target_dir=workspace_dir, dry_run=True)
         )
+
+    @router.post("/api/config/pull/prepare")
+    def prepare_pull() -> dict[str, Any]:
+        prep = prepare_config_pull(ConfigPullRequest(target_dir=workspace_dir))
+        return serialize_config_pull_preparation(prep)
+
+    @router.post("/api/config/pull/apply")
+    def apply_pull(payload: ConfigActionApplyPayload | None = None) -> dict[str, Any]:
+        req = ConfigPullRequest(
+            target_dir=workspace_dir,
+            overwrite_confirmed=payload.overwrite_confirmed if payload else False,
+            force=payload.force if payload else False,
+        )
+        res = apply_config_pull(req)
+        return serialize_config_pull_result(res)
+
+    @router.post("/api/config/push/prepare")
+    def prepare_push() -> dict[str, Any]:
+        prep = prepare_config_push(ConfigPushRequest(target_dir=workspace_dir))
+        return serialize_config_push_preparation(prep)
+
+    @router.post("/api/config/push/apply")
+    def apply_push(payload: ConfigActionApplyPayload | None = None) -> dict[str, Any]:
+        req = ConfigPushRequest(
+            target_dir=workspace_dir,
+            overwrite_confirmed=payload.overwrite_confirmed if payload else False,
+            force=payload.force if payload else False,
+        )
+        res = apply_config_push(req)
+        return serialize_config_push_result(res)
 
     return router
 
@@ -478,4 +527,137 @@ def serialize_installer_plan(plan: InstallerPlanResult) -> dict[str, Any]:
             "error": plan.aws_error,
             "isLive": plan.aws_identity is not None,
         },
+    }
+
+
+def serialize_config_pull_preparation(prep: ConfigPullPreparation) -> dict[str, Any]:
+    """Translate configuration pull preparation assessment into browser API contract."""
+    res = prep.result
+    target = (
+        f"s3://{res.s3_bucket}/{res.s3_key}"
+        if res.repository_type == "s3"
+        else (res.git_remote_url or res.git_remote or "Remote Git")
+    )
+    if res.repository_type == "s3":
+        operation = (
+            f"Download and extract configuration archive from {target} "
+            "into local configuration directory."
+        )
+    else:
+        branch_desc = res.git_branch or "configured branch"
+        operation = f"Pull remote changes from '{branch_desc}' into local repository."
+    return {
+        "action": "pull",
+        "repositoryType": res.repository_type,
+        "target": target,
+        "branch": res.git_branch,
+        "operation": operation,
+        "requiresConfirmation": prep.confirmation_message is not None,
+        "confirmationReason": prep.confirmation_message,
+        "confirmationError": prep.confirmation_error,
+        "trackedFiles": res.files_count,
+    }
+
+
+def serialize_config_pull_result(result: ConfigPullResult) -> dict[str, Any]:
+    """Translate configuration pull execution result into browser API contract."""
+    target = (
+        f"s3://{result.s3_bucket}/{result.s3_key}"
+        if result.repository_type == "s3"
+        else (result.git_remote_url or "Remote Git")
+    )
+    message = (
+        f"Successfully downloaded and extracted configuration from {target}."
+        if result.repository_type == "s3" and result.extracted
+        else f"Successfully pulled configuration from {target}."
+    )
+    diff = None
+    if result.diff_result:
+        diff = {
+            "added": result.diff_result.added,
+            "modified": result.diff_result.modified,
+            "removed": result.diff_result.removed,
+            "total": (
+                len(result.diff_result.added)
+                + len(result.diff_result.modified)
+                + len(result.diff_result.removed)
+            ),
+        }
+    return {
+        "success": True,
+        "action": "pull",
+        "message": message,
+        "repositoryType": result.repository_type,
+        "target": target,
+        "branch": result.git_branch,
+        "commit": result.git_commit,
+        "diff": diff,
+        "stashedChanges": result.stashed_changes,
+        "restoredChanges": result.restored_changes,
+        "filesCount": result.files_count,
+    }
+
+
+def serialize_config_push_preparation(prep: ConfigPushPreparation) -> dict[str, Any]:
+    """Translate configuration push preparation assessment into browser API contract."""
+    res = prep.result
+    target = (
+        f"s3://{res.s3_bucket}/{res.s3_key}"
+        if res.repository_type == "s3"
+        else (res.git_remote_url or res.git_remote or "Remote Git")
+    )
+    operation = (
+        f"Archive local configuration and upload to {target}."
+        if res.repository_type == "s3"
+        else f"Push local commits to branch '{res.git_branch or 'main'}' on remote repository."
+    )
+    return {
+        "action": "push",
+        "repositoryType": res.repository_type,
+        "target": target,
+        "branch": res.git_branch,
+        "commit": res.git_commit,
+        "operation": operation,
+        "requiresConfirmation": prep.confirmation_message is not None,
+        "confirmationReason": prep.confirmation_message,
+        "trackedFiles": res.files_count,
+    }
+
+
+def serialize_config_push_result(result: ConfigPushResult) -> dict[str, Any]:
+    """Translate configuration push execution result into browser API contract."""
+    target = (
+        f"s3://{result.s3_bucket}/{result.s3_key}"
+        if result.repository_type == "s3"
+        else (result.git_remote_url or "Remote Git")
+    )
+    message = (
+        f"Successfully uploaded configuration archive to {target}."
+        if result.repository_type == "s3"
+        else f"Successfully pushed configuration to {target}."
+    )
+    diff = None
+    if result.diff_result:
+        diff = {
+            "added": result.diff_result.added,
+            "modified": result.diff_result.modified,
+            "removed": result.diff_result.removed,
+            "total": (
+                len(result.diff_result.added)
+                + len(result.diff_result.modified)
+                + len(result.diff_result.removed)
+            ),
+        }
+    return {
+        "success": True,
+        "action": "push",
+        "message": message,
+        "repositoryType": result.repository_type,
+        "target": target,
+        "branch": result.git_branch,
+        "commit": result.git_commit,
+        "diff": diff,
+        "etag": result.etag,
+        "versionId": result.version_id,
+        "filesCount": result.files_count,
     }

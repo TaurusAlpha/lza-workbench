@@ -92,7 +92,7 @@ async function loadConfiguration() {
     const status = await getConfigurationStatus();
     workspacePath.textContent = status.workspace.directory;
     workspacePath.title = status.workspace.directory;
-    renderConfigurationDetails(viewContent, status);
+    renderConfigurationDetails(viewContent, status, loadConfiguration);
     if (!status.workspace.isLive) {
       showNotice(getOfflineWarning(status.workspace.error), "warning");
     } else {

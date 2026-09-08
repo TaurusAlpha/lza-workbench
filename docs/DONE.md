@@ -6,6 +6,13 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### Configuration Pull & Push Web Actions (v0.34.0)
+- **Configuration Details Actions**: Added "Pull Configuration" and "Push Configuration" actions to the Configuration Details page (`#/configuration`).
+- **Two-phase Prepare/Apply Pattern**: Non-mutating preparation step (`POST /api/config/pull/prepare`, `POST /api/config/push/prepare`) assesses remote target (S3 bucket or Git remote), tracked files count, branch, and detects overwrite/conflict risks before mutating anything.
+- **Workflow-driven Confirmation UI**: Risky operations (e.g. uncommitted local changes, S3 overwrite) display structured warning reasons returned directly by backend workflows with an explicit confirmation checkbox; safe operations allow immediate execution.
+- **Structured Apply & Refresh**: Applying operations (`POST /api/config/pull/apply`, `POST /api/config/push/apply`) passes explicit user intent, displays success message with file diff metrics, and automatically refreshes configuration status.
+- **Layering & Testing**: Maintained strict architectural import boundaries (`web` -> `workflows` only) verified via `tests/test_package.py` and unit test coverage in `tests/web/test_status.py`.
+
 ### Web UI & Installer Settings Bugfixes (v0.33.1)
 - **Bug 1 & 2 (Offline mode notices & recorded badge color)**: Fixed empty yellow notice box persisting after login/refresh/back when offline; displayed clear warning that statuses are not live but last recorded states; ensured recorded offline states are styled amber (warning) rather than misleading green (success).
 - **Bug 3 (Card naming)**: Renamed "Canonical Settings" card on the Installer page to "Current Settings" for concise readability.

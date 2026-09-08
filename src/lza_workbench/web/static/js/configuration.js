@@ -1,3 +1,4 @@
+import { applyConfigPull, applyConfigPush, prepareConfigPull, prepareConfigPush } from "./api.js";
 import { card, escapeHtml, formatFieldValue, renderBadge } from "./overview.js";
 
 function formatTimestamp(isoStr) {
@@ -67,7 +68,7 @@ function renderDiagnostics(warnings) {
 }
 
 
-export function renderConfigurationDetails(container, status) {
+export function renderConfigurationDetails(container, status, onRefresh) {
   const ws = status.workspace;
   const git = status.localGit;
   const repo = status.repository;
@@ -153,48 +154,52 @@ export function renderConfigurationDetails(container, status) {
     if (repo.error) {
       repoFields.push(["Provider error", repo.error]);
     }
+    repoFields.push(
+      ["Repository name", repo.codeCommitRepositoryName || "—", { mono: true }],
+      ["Branch", repo.codeCommitBranch || "—", { mono: true }],
+      ["Region", repo.codeCommitRegion || "—", { mono: true }],
+      ["Clone URL (HTTP)", repo.codeCommitCloneUrlHttp || "—", { mono: true, truncate: true }]
+    );
   } else if (repo.type === "codeconnection") {
     repoFields.push(
-      ["Connection ARN", repo.connectionArn, { mono: true, truncate: true }],
-      ["Connection status", repo.status, { statusIndicator: Boolean(repo.status) }],
-      ["Provider type", repo.provider || "—"],
-      ["Repository owner", repo.ownerAccount || repo.owner || "—", { mono: true }],
-      ["Repository name", repo.repositoryName, { mono: true }],
-      ["Branch", repo.branchName, { mono: true }],
+      ["Repository name", repo.codeConnectionRepositoryName || "—", { mono: true }],
+      ["Branch", repo.codeConnectionBranch || "—", { mono: true }],
+      ["Owner", repo.codeConnectionOwner || "—", { mono: true }],
+      ["Connection ARN", repo.codeConnectionArn || "—", { mono: true, truncate: true }]
     );
-    if (repo.error) {
-      repoFields.push(["Provider error", repo.error]);
-    }
   } else if (repo.type === "git") {
     repoFields.push(
-      ["Repository URL", repo.repositoryUrl || repo.repositoryName, { mono: true, truncate: true }],
-      ["Branch", repo.branchName, { mono: true }],
+      ["Repository URL", repo.gitRepositoryUrl || "—", { mono: true, truncate: true }],
+      ["Branch", repo.gitBranch || "—", { mono: true }]
     );
   }
 
-  // 3. Git Working Tree Fields
+  // 3. Git Working Tree State Fields
   const wt = git.workingTree;
   let gitFields = [];
-  if (!git.isGit || !wt) {
+  if (!git.isGitRepo) {
     gitFields = [
-      ["Git state", "Not a Git repository or uninitialized", { statusIndicator: true }],
+      ["Repository", "Not a Git repository", { statusIndicator: true }],
+      ["Directory", ws.configDir, { mono: true, truncate: true }],
     ];
   } else {
-    const workingTreeStatus = wt.hasUncommitted
-      ? `Dirty (${wt.uncommittedCount} uncommitted change${wt.uncommittedCount === 1 ? "" : "s"})`
-      : "Clean";
-
     gitFields = [
-      ["Branch", wt.branch, { mono: true }],
-      ["HEAD Commit", wt.commit, { mono: true }],
-      ["Commit subject", wt.commitSubject || "—"],
-      ["Working tree", workingTreeStatus, { statusIndicator: true }],
-      ["Tracked files", wt.filesCount !== null && wt.filesCount !== undefined ? `${wt.filesCount} files` : "—"],
-      ["Remote URL", wt.remoteUrl || "—", { mono: true, truncate: true }],
+      ["Branch", git.branch || "—", { mono: true }],
+      ["Head commit", git.headCommit || "—", { mono: true }],
+      ["Remote URL", git.remoteUrl || "—", { mono: true, truncate: true }],
+      ["Status", wt ? (wt.hasUncommitted ? "Uncommitted changes" : "Clean") : "Unknown", { statusIndicator: true }],
+      ["Tracked files", git.filesCount !== null ? String(git.filesCount) : "—"],
     ];
+    if (wt && wt.hasUncommitted) {
+      const parts = [];
+      if (wt.untrackedFiles && wt.untrackedFiles.length) parts.push(`${wt.untrackedFiles.length} untracked`);
+      if (wt.modifiedFiles && wt.modifiedFiles.length) parts.push(`${wt.modifiedFiles.length} modified`);
+      if (wt.stagedFiles && wt.stagedFiles.length) parts.push(`${wt.stagedFiles.length} staged`);
+      gitFields.push(["Uncommitted detail", parts.join(", ") || "Modified"]);
+    }
   }
 
-  // 4. Remote Sync Fields
+  // 4. Remote Synchronization State Fields
   let syncFields = [];
   if (!sync) {
     syncFields = [
@@ -256,6 +261,17 @@ export function renderConfigurationDetails(container, status) {
 
   container.innerHTML = `
     <div class="config-details-layout">
+      <div class="config-actions-bar">
+        <div class="config-actions-group">
+          <button type="button" id="btn-config-pull" class="btn">
+            <span>Pull Configuration</span>
+          </button>
+          <button type="button" id="btn-config-push" class="btn btn-primary">
+            <span>Push Configuration</span>
+          </button>
+        </div>
+      </div>
+
       ${renderDiagnostics(status.warnings)}
 
       <div class="details-grid">
@@ -266,9 +282,12 @@ export function renderConfigurationDetails(container, status) {
         ${card("Synchronization History", historyFields, syncHistory.hasState ? "Recorded" : "None")}
         ${card("Configuration Pipeline", pipeFields, pipe.status || "Not Executed", { href: "#/configuration-pipeline" })}
       </div>
+
+      <div id="config-action-modal-container" hidden></div>
     </div>
   `;
 
+  // Attach interactive card clicks
   container.querySelectorAll(".card-interactive").forEach((interactiveCard) => {
     interactiveCard.addEventListener("click", (event) => {
       if (event.target.closest("a, button")) return;
@@ -277,5 +296,222 @@ export function renderConfigurationDetails(container, status) {
         window.location.hash = href;
       }
     });
+  });
+
+  // Attach Pull and Push action handlers
+  container.querySelector("#btn-config-pull")?.addEventListener("click", () => {
+    openConfigActionModal(container, "pull", onRefresh);
+  });
+  container.querySelector("#btn-config-push")?.addEventListener("click", () => {
+    openConfigActionModal(container, "push", onRefresh);
+  });
+}
+
+async function openConfigActionModal(container, actionType, onRefresh) {
+  const modalContainer = container.querySelector("#config-action-modal-container");
+  if (!modalContainer) return;
+
+  const actionTitle = actionType === "pull" ? "Pull Configuration" : "Push Configuration";
+  const prepFn = actionType === "pull" ? prepareConfigPull : prepareConfigPush;
+  const applyFn = actionType === "pull" ? applyConfigPull : applyConfigPush;
+
+  modalContainer.hidden = false;
+  modalContainer.innerHTML = `
+    <div class="plan-modal-overlay">
+      <div class="plan-modal-card" style="max-width: 36rem;">
+        <div class="plan-modal-header">
+          <h3 class="plan-modal-title">Preparing ${escapeHtml(actionTitle)}&hellip;</h3>
+          <button type="button" class="btn btn-sm btn-close-modal" title="Cancel">✕</button>
+        </div>
+        <div class="plan-modal-body">
+          <p class="plan-loading-text">Inspecting repository and assessing configuration changes&hellip;</p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  function closeModal() {
+    modalContainer.hidden = true;
+    modalContainer.innerHTML = "";
+  }
+
+  modalContainer.querySelector(".btn-close-modal").addEventListener("click", closeModal);
+
+  let prep;
+  try {
+    prep = await prepFn();
+  } catch (err) {
+    modalContainer.innerHTML = `
+      <div class="plan-modal-overlay">
+        <div class="plan-modal-card" style="max-width: 36rem;">
+          <div class="plan-modal-header">
+            <h3 class="plan-modal-title">${escapeHtml(actionTitle)} Assessment Failed</h3>
+            <button type="button" class="btn btn-sm btn-close-modal" title="Close">✕</button>
+          </div>
+          <div class="plan-modal-body">
+            <div class="notice error">${escapeHtml(err.message)}</div>
+          </div>
+          <div class="plan-modal-footer">
+            <button type="button" class="btn btn-close-modal">Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+    modalContainer.querySelectorAll(".btn-close-modal").forEach((b) => b.addEventListener("click", closeModal));
+    return;
+  }
+
+  // Render preparation assessment
+  const requiresConfirm = Boolean(prep.requiresConfirmation);
+  const targetLabel = prep.repositoryType === "s3" ? "S3 Destination" : "Git Remote";
+  const branchRow = prep.branch
+    ? `<div class="plan-summary-item"><span class="plan-summary-label">Branch</span><span class="mono-val">${escapeHtml(prep.branch)}</span></div>`
+    : "";
+  const trackedFilesRow = prep.trackedFiles !== undefined && prep.trackedFiles !== null
+    ? `<div class="plan-summary-item"><span class="plan-summary-label">Tracked Files</span><span>${escapeHtml(prep.trackedFiles)}</span></div>`
+    : "";
+
+  let riskNoticeHtml = "";
+  let confirmCheckboxHtml = "";
+  let executeBtnHtml = "";
+
+  if (requiresConfirm) {
+    riskNoticeHtml = `
+      <div class="notice warning" style="margin-top: 1rem;">
+        <strong>Warning:</strong> ${escapeHtml(prep.confirmationReason || "Operation requires confirmation.")}
+      </div>
+    `;
+    confirmCheckboxHtml = `
+      <div class="confirmation-checkbox-container">
+        <input type="checkbox" id="chk-confirm-action" />
+        <label for="chk-confirm-action">I understand the potential overwrite or conflict risks and want to proceed.</label>
+      </div>
+    `;
+    executeBtnHtml = `
+      <button type="button" id="btn-execute-action" class="btn btn-danger" disabled>
+        <span>Confirm &amp; ${escapeHtml(actionType === "pull" ? "Pull" : "Push")}</span>
+      </button>
+    `;
+  } else {
+    riskNoticeHtml = `
+      <div class="notice info" style="margin-top: 1rem;">
+        No overwrite or conflict risks detected. This operation is ready to proceed.
+      </div>
+    `;
+    executeBtnHtml = `
+      <button type="button" id="btn-execute-action" class="btn btn-primary">
+        <span>Execute ${escapeHtml(actionType === "pull" ? "Pull" : "Push")}</span>
+      </button>
+    `;
+  }
+
+  modalContainer.innerHTML = `
+    <div class="plan-modal-overlay">
+      <div class="plan-modal-card" style="max-width: 36rem;">
+        <div class="plan-modal-header">
+          <div>
+            <h3 class="plan-modal-title">${escapeHtml(actionTitle)}</h3>
+            <p class="section-subtitle">${escapeHtml(prep.operation)}</p>
+          </div>
+          <button type="button" class="btn btn-sm btn-close-modal" title="Cancel">✕</button>
+        </div>
+        <div class="plan-modal-body">
+          <div class="plan-summary-grid">
+            <div class="plan-summary-item">
+              <span class="plan-summary-label">${escapeHtml(targetLabel)}</span>
+              <span class="mono-val" style="word-break: break-all;">${escapeHtml(prep.target)}</span>
+            </div>
+            <div class="plan-summary-item">
+              <span class="plan-summary-label">Repository Type</span>
+              <span class="mono-val">${escapeHtml(prep.repositoryType.toUpperCase())}</span>
+            </div>
+            ${branchRow}
+            ${trackedFilesRow}
+          </div>
+
+          ${riskNoticeHtml}
+          ${confirmCheckboxHtml}
+
+          <div id="action-modal-alert" aria-live="polite"></div>
+        </div>
+        <div class="plan-modal-footer" style="gap: 0.75rem;">
+          <button type="button" class="btn btn-close-modal">Cancel</button>
+          ${executeBtnHtml}
+        </div>
+      </div>
+    </div>
+  `;
+
+  modalContainer.querySelectorAll(".btn-close-modal").forEach((b) => b.addEventListener("click", closeModal));
+
+  const btnExecute = modalContainer.querySelector("#btn-execute-action");
+  const chkConfirm = modalContainer.querySelector("#chk-confirm-action");
+  const modalAlert = modalContainer.querySelector("#action-modal-alert");
+
+  if (chkConfirm) {
+    chkConfirm.addEventListener("change", () => {
+      btnExecute.disabled = !chkConfirm.checked;
+    });
+  }
+
+  btnExecute.addEventListener("click", async () => {
+    btnExecute.disabled = true;
+    btnExecute.innerHTML = `<span>Applying ${escapeHtml(actionType === "pull" ? "Pull" : "Push")}&hellip;</span>`;
+    modalAlert.innerHTML = `
+      <div class="notice info">
+        Synchronizing configuration&hellip;
+      </div>
+    `;
+
+    try {
+      const applyResult = await applyFn({ overwriteConfirmed: true });
+      let diffSummaryHtml = "";
+      if (applyResult.diff && applyResult.diff.total > 0) {
+        diffSummaryHtml = `
+          <div style="margin-top: 0.75rem; font-size: 0.8125rem;">
+            Changes: <strong>${applyResult.diff.added.length} added</strong>,
+            <strong>${applyResult.diff.modified.length} modified</strong>,
+            <strong>${applyResult.diff.removed.length} removed</strong>.
+          </div>
+        `;
+      }
+
+      modalContainer.innerHTML = `
+        <div class="plan-modal-overlay">
+          <div class="plan-modal-card" style="max-width: 36rem;">
+            <div class="plan-modal-header">
+              <h3 class="plan-modal-title">${escapeHtml(actionTitle)} Complete</h3>
+              <button type="button" class="btn btn-sm btn-done" title="Close">✕</button>
+            </div>
+            <div class="plan-modal-body">
+              <div class="notice success">
+                ${escapeHtml(applyResult.message)}
+              </div>
+              ${diffSummaryHtml}
+            </div>
+            <div class="plan-modal-footer">
+              <button type="button" class="btn btn-primary btn-done">Done</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      modalContainer.querySelectorAll(".btn-done").forEach((b) => {
+        b.addEventListener("click", () => {
+          closeModal();
+          if (typeof onRefresh === "function") {
+            onRefresh();
+          }
+        });
+      });
+    } catch (err) {
+      btnExecute.disabled = false;
+      btnExecute.innerHTML = `<span>Retry ${escapeHtml(actionType === "pull" ? "Pull" : "Push")}</span>`;
+      modalAlert.innerHTML = `
+        <div class="notice error">
+          ${escapeHtml(err.message)}
+        </div>
+      `;
+    }
   });
 }

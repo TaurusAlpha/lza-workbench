@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackStatusResult
 from lza_workbench.aws.codepipeline import PipelineStateResult
+from lza_workbench.configuration.archive import ConfigDiffResult
 from lza_workbench.configuration.git import GitRemoteSyncStatus, GitWorkingTreeStatus
 from lza_workbench.configuration.status import (
     ConfigurationPipelineStatus,
@@ -25,6 +26,8 @@ from lza_workbench.installer.planning import InstallerPlanResult
 from lza_workbench.installer.source import CodeCommitPlanResult
 from lza_workbench.installer.status import StateAlignment
 from lza_workbench.web.app import create_app
+from lza_workbench.workflows.config_pull import ConfigPullPreparation, ConfigPullResult
+from lza_workbench.workflows.config_push import ConfigPushPreparation, ConfigPushResult
 from lza_workbench.workflows.installer_init import (
     InstallerForm,
     InstallerFormField,
@@ -454,5 +457,125 @@ def test_installer_plan_api_serializes_plan() -> None:
     }
     assert data["codecommit"]["repositoryName"] == "aws-accelerator-codecommit"
     assert data["codecommit"]["status"] == "EXISTS"
+
+
+def test_config_pull_prepare_api_requires_confirmation() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    prep = ConfigPullPreparation(
+        result=ConfigPullResult(
+            workspace_dir=Path("/workspaces/acme"),
+            config_dir=Path("/workspaces/acme/aws-accelerator-config"),
+            repository_type="s3",
+            dry_run=True,
+            s3_bucket="acme-bucket",
+            s3_key="archive.zip",
+        ),
+        confirmation_message=(
+            "Local configuration has uncommitted changes that will be overwritten."
+        ),
+    )
+    with patch(
+        "lza_workbench.web.status.prepare_config_pull",
+        return_value=prep,
+    ):
+        response = TestClient(app).post("/api/config/pull/prepare")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["action"] == "pull"
+    assert data["repositoryType"] == "s3"
+    assert data["target"] == "s3://acme-bucket/archive.zip"
+    assert data["requiresConfirmation"] is True
+    assert "uncommitted changes" in data["confirmationReason"]
+
+
+def test_config_pull_apply_api_success() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    pull_res = ConfigPullResult(
+        workspace_dir=Path("/workspaces/acme"),
+        config_dir=Path("/workspaces/acme/aws-accelerator-config"),
+        repository_type="s3",
+        dry_run=False,
+        s3_bucket="acme-bucket",
+        s3_key="archive.zip",
+        extracted=True,
+        diff_result=ConfigDiffResult(added=["new-file.yaml"], modified=[], removed=[]),
+    )
+    with patch(
+        "lza_workbench.web.status.apply_config_pull",
+        return_value=pull_res,
+    ):
+        response = TestClient(app).post(
+            "/api/config/pull/apply",
+            json={"overwrite_confirmed": True, "force": False},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["action"] == "pull"
+    assert data["target"] == "s3://acme-bucket/archive.zip"
+    assert data["diff"]["added"] == ["new-file.yaml"]
+    assert data["diff"]["total"] == 1
+
+
+def test_config_push_prepare_api() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    prep = ConfigPushPreparation(
+        result=ConfigPushResult(
+            workspace_dir=Path("/workspaces/acme"),
+            config_dir=Path("/workspaces/acme/aws-accelerator-config"),
+            repository_type="git",
+            dry_run=True,
+            git_remote="origin",
+            git_remote_url="https://github.com/org/repo.git",
+            git_branch="main",
+            files_count=12,
+        ),
+        confirmation_message=None,
+    )
+    with patch(
+        "lza_workbench.web.status.prepare_config_push",
+        return_value=prep,
+    ):
+        response = TestClient(app).post("/api/config/push/prepare")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["action"] == "push"
+    assert data["repositoryType"] == "git"
+    assert data["branch"] == "main"
+    assert data["requiresConfirmation"] is False
+    assert data["trackedFiles"] == 12
+
+
+def test_config_push_apply_api_success() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    push_res = ConfigPushResult(
+        workspace_dir=Path("/workspaces/acme"),
+        config_dir=Path("/workspaces/acme/aws-accelerator-config"),
+        repository_type="s3",
+        dry_run=False,
+        s3_bucket="acme-bucket",
+        s3_key="archive.zip",
+        etag="etag-456",
+        version_id="ver-789",
+    )
+    with patch(
+        "lza_workbench.web.status.apply_config_push",
+        return_value=push_res,
+    ):
+        response = TestClient(app).post(
+            "/api/config/push/apply",
+            json={"overwrite_confirmed": True, "force": False},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["action"] == "push"
+    assert data["etag"] == "etag-456"
+    assert data["versionId"] == "ver-789"
+
 
 
