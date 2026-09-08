@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.aws.s3 import download_s3_file, inspect_s3_object_safe
+from lza_workbench.aws.s3 import (
+    S3ObjectObservation,
+    download_s3_file,
+    inspect_s3_object_safe,
+)
 from lza_workbench.configuration.archive import (
     ConfigDiffResult,
     compute_config_directory_digest,
@@ -321,13 +325,13 @@ def _handle_s3_pull(
         repo_cfg.bucket = destination.bucket
         write_workspace_config(workspace_dir, config)
 
-    s3_info = inspect_s3_object_safe(
+    s3_info: S3ObjectObservation = inspect_s3_object_safe(
         client=s3_client,
         bucket_name=destination.bucket,
         object_key=destination.object_key,
     )
-    etag = s3_info.get("etag")
-    version_id = s3_info.get("version_id")
+    etag = s3_info.etag
+    version_id = s3_info.version_id
 
     download_s3_file(
         client=s3_client,

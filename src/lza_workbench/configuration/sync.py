@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from lza_workbench.aws.s3 import S3ObjectObservation
 from lza_workbench.configuration.archive import compute_config_directory_digest
 from lza_workbench.configuration.git import GitRemoteSyncStatus
 from lza_workbench.workspace.schema import WorkspaceState
@@ -43,7 +44,7 @@ def evaluate_s3_remote_sync(
     config_dir: Path,
     exclude_dirs: set[str],
     exclude_files: set[str],
-    s3_object_info: dict[str, Any] | None,
+    s3_object_info: S3ObjectObservation | None,
     state: WorkspaceState | None = None,
     is_live: bool = True,
 ) -> RemoteSyncStatus:
@@ -88,8 +89,8 @@ def evaluate_s3_remote_sync(
         )
 
     # Live S3 inspection evaluation
-    if not s3_object_info.get("exists"):
-        err = s3_object_info.get("error")
+    if not s3_object_info.exists:
+        err = s3_object_info.error
         if err:
             return RemoteSyncStatus(
                 status="Unknown",
@@ -104,9 +105,9 @@ def evaluate_s3_remote_sync(
             details={"exists": False},
         )
 
-    raw_etag = s3_object_info.get("etag")
+    raw_etag = s3_object_info.etag
     remote_etag = raw_etag if isinstance(raw_etag, str) else None
-    metadata = s3_object_info.get("metadata")
+    metadata = s3_object_info.metadata
     raw_digest = metadata.get("lza-content-digest") if isinstance(metadata, dict) else None
     remote_digest = raw_digest if isinstance(raw_digest, str) else None
 
@@ -203,4 +204,3 @@ __all__ = [
     "RemoteSyncStatus",
     "evaluate_s3_remote_sync",
 ]
-

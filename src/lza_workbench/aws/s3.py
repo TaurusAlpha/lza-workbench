@@ -2,12 +2,34 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.errors import LzaError
+
+
+@dataclass(frozen=True)
+class S3BucketObservation:
+    exists: bool
+    accessible: bool
+    versioning_enabled: bool = False
+    encryption_enabled: bool = False
+    kms_encrypted: bool = False
+
+
+@dataclass(frozen=True)
+class S3ObjectObservation:
+    exists: bool
+    etag: str | None = None
+    version_id: str | None = None
+    content_length: int | None = None
+    last_modified: datetime | None = None
+    metadata: dict[str, str] = field(default_factory=dict)
+    error: str | None = None
 
 
 def get_s3_https_url(bucket_name: str, object_key: str, region: str = "us-east-1") -> str:
@@ -31,7 +53,7 @@ def inspect_s3_bucket(
     *,
     client: Any,
     bucket_name: str,
-) -> dict[str, Any]:
+) -> S3BucketObservation:
     """Inspect S3 bucket existence, accessibility, versioning, and server-side encryption."""
     clean_bucket = bucket_name.strip()
     try:
@@ -40,13 +62,7 @@ def inspect_s3_bucket(
         error = exc.response.get("Error", {})
         code = error.get("Code", "Unknown")
         if code in {"404", "NoSuchBucket", "NotFound"}:
-            return {
-                "exists": False,
-                "accessible": False,
-                "versioning_enabled": False,
-                "encryption_enabled": False,
-                "kms_encrypted": False,
-            }
+            return S3BucketObservation(exists=False, accessible=False)
         if code in {"403", "AccessDenied"}:
             raise LzaError(
                 f"Access denied to S3 bucket '{clean_bucket}'. Check your AWS permissions."
@@ -86,13 +102,13 @@ def inspect_s3_bucket(
                 f"Failed to check encryption on S3 bucket '{clean_bucket}': {exc}"
             ) from exc
 
-    return {
-        "exists": True,
-        "accessible": True,
-        "versioning_enabled": versioning_enabled,
-        "encryption_enabled": encryption_enabled,
-        "kms_encrypted": kms_encrypted,
-    }
+    return S3BucketObservation(
+        exists=True,
+        accessible=True,
+        versioning_enabled=versioning_enabled,
+        encryption_enabled=encryption_enabled,
+        kms_encrypted=kms_encrypted,
+    )
 
 
 def create_s3_bucket(
@@ -185,12 +201,20 @@ def inspect_s3_object(
     client: Any,
     bucket_name: str,
     object_key: str,
-) -> dict[str, Any]:
+) -> S3ObjectObservation:
     """Inspect S3 object existence and metadata."""
     clean_bucket = bucket_name.strip()
     clean_key = object_key.strip().lstrip("/")
     try:
-        return client.head_object(Bucket=clean_bucket, Key=clean_key)
+        head = client.head_object(Bucket=clean_bucket, Key=clean_key)
+        return S3ObjectObservation(
+            exists=True,
+            etag=head.get("ETag", "").strip('"') or None,
+            version_id=head.get("VersionId"),
+            content_length=head.get("ContentLength"),
+            last_modified=head.get("LastModified"),
+            metadata=head.get("Metadata") or {},
+        )
     except ClientError as exc:
         error = exc.response.get("Error", {})
         code = error.get("Code", "Unknown")
@@ -287,55 +311,29 @@ def inspect_s3_object_safe(
     client: Any,
     bucket_name: str,
     object_key: str,
-) -> dict[str, Any]:
-    """Inspect S3 object existence and metadata returning structured dict without raising on 404."""
+) -> S3ObjectObservation:
+    """Inspect S3 object existence and metadata without raising on a missing object."""
     clean_bucket = bucket_name.strip()
     clean_key = object_key.strip().lstrip("/")
     try:
         head = client.head_object(Bucket=clean_bucket, Key=clean_key)
-        return {
-            "exists": True,
-            "etag": head.get("ETag", "").strip('"') or None,
-            "version_id": head.get("VersionId"),
-            "content_length": head.get("ContentLength"),
-            "last_modified": head.get("LastModified"),
-            "metadata": head.get("Metadata") or {},
-            "error": None,
-        }
+        return S3ObjectObservation(
+            exists=True, etag=head.get("ETag", "").strip('"') or None,
+            version_id=head.get("VersionId"), content_length=head.get("ContentLength"),
+            last_modified=head.get("LastModified"), metadata=head.get("Metadata") or {},
+        )
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "Unknown")
         if code in {"404", "NoSuchKey", "NoSuchBucket", "NotFound"}:
-            return {
-                "exists": False,
-                "etag": None,
-                "version_id": None,
-                "content_length": None,
-                "last_modified": None,
-                "metadata": {},
-                "error": None,
-            }
-        return {
-            "exists": False,
-            "etag": None,
-            "version_id": None,
-            "content_length": None,
-            "last_modified": None,
-            "metadata": {},
-            "error": f"[{code}] {exc}",
-        }
+            return S3ObjectObservation(exists=False)
+        return S3ObjectObservation(exists=False, error=f"[{code}] {exc}")
     except BotoCoreError as exc:
-        return {
-            "exists": False,
-            "etag": None,
-            "version_id": None,
-            "content_length": None,
-            "last_modified": None,
-            "metadata": {},
-            "error": f"Connection failure: {exc}",
-        }
+        return S3ObjectObservation(exists=False, error=f"Connection failure: {exc}")
 
 
 __all__ = [
+    "S3BucketObservation",
+    "S3ObjectObservation",
     "create_s3_bucket",
     "download_s3_file",
     "get_s3_https_url",
@@ -347,5 +345,3 @@ __all__ = [
     "put_s3_bucket_versioning",
     "upload_s3_file",
 ]
-
-

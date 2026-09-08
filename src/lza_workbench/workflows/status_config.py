@@ -9,7 +9,11 @@ from lza_workbench.aws.codecommit import inspect_codecommit_repository
 from lza_workbench.aws.codeconnections import inspect_codeconnection
 from lza_workbench.aws.codepipeline import get_pipeline_state
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.aws.s3 import inspect_s3_bucket, inspect_s3_object_safe
+from lza_workbench.aws.s3 import (
+    S3ObjectObservation,
+    inspect_s3_bucket,
+    inspect_s3_object_safe,
+)
 from lza_workbench.configuration.git import (
     get_git_remote_sync_status,
     get_git_working_tree_status,
@@ -154,15 +158,15 @@ def get_config_status_workflow(
         except Exception as exc:
             s3_error = str(exc)
 
-        obj_info = None
+        obj_info: S3ObjectObservation | None = None
         if s3_bucket_name and aws_identity:
             try:
                 s3_client = factory.get_client("s3")
                 b_info = inspect_s3_bucket(client=s3_client, bucket_name=s3_bucket_name)
-                s3_bucket_exists = b_info.get("exists")
-                s3_bucket_accessible = b_info.get("accessible")
-                s3_bucket_versioning = b_info.get("versioning_enabled")
-                s3_bucket_encryption = b_info.get("encryption_enabled")
+                s3_bucket_exists = b_info.exists
+                s3_bucket_accessible = b_info.accessible
+                s3_bucket_versioning = b_info.versioning_enabled
+                s3_bucket_encryption = b_info.encryption_enabled
 
                 if s3_bucket_exists:
                     obj_info = inspect_s3_object_safe(
@@ -170,11 +174,11 @@ def get_config_status_workflow(
                         bucket_name=s3_bucket_name,
                         object_key=CONFIG_S3_OBJECT_KEY,
                     )
-                    s3_object_exists = obj_info.get("exists")
-                    s3_object_etag = obj_info.get("etag")
-                    s3_object_version_id = obj_info.get("version_id")
-                    s3_object_last_modified = obj_info.get("last_modified")
-                    s3_object_size = obj_info.get("content_length")
+                    s3_object_exists = obj_info.exists
+                    s3_object_etag = obj_info.etag
+                    s3_object_version_id = obj_info.version_id
+                    s3_object_last_modified = obj_info.last_modified
+                    s3_object_size = obj_info.content_length
             except Exception as exc:
                 s3_error = str(exc)
                 s3_bucket_accessible = False

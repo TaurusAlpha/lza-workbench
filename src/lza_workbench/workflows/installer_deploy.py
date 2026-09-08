@@ -219,7 +219,7 @@ def apply_installer_deployment(
     s3_client = aws_context.factory.get_client("s3")
     bucket_name = (config.assets_bucket or "").strip()
     insp = inspect_s3_bucket(client=s3_client, bucket_name=bucket_name)
-    if not insp["exists"]:
+    if not insp.exists:
         raise LzaError(
             f"Configured assets bucket '{bucket_name}' does not exist in AWS. "
             "Run 'lza bootstrap' to create and configure the required AWS resources."

@@ -14,7 +14,7 @@ from lza_workbench.aws.codepipeline import (
     get_pipeline_state,
 )
 from lza_workbench.aws.context import resolve_aws_execution_context
-from lza_workbench.aws.s3 import inspect_s3_object_safe
+from lza_workbench.aws.s3 import S3ObjectObservation, inspect_s3_object_safe
 from lza_workbench.configuration.git import (
     GitRemoteSyncStatus,
     get_git_remote_sync_status,
@@ -465,7 +465,7 @@ def get_root_status_workflow(
 
     remote_sync: RemoteSyncStatus | None = None
     if repo.type == "s3":
-        s3_info = None
+        s3_info: S3ObjectObservation | None = None
         if is_live and target and target != "Not configured":
             try:
                 s3_client = factory.get_client("s3")

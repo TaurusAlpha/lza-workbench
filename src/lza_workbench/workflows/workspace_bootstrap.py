@@ -52,15 +52,15 @@ def ensure_s3_workbench_assets_bucket(
     actions_taken: list[str] = []
     insp = inspect_s3_bucket(client=client, bucket_name=bucket_name)
 
-    if not insp["exists"]:
+    if not insp.exists:
         create_s3_bucket(client=client, bucket_name=bucket_name, region=region)
         actions_taken.append(f"Created S3 bucket '{bucket_name}' in region '{region}'")
 
-    if not insp["versioning_enabled"]:
+    if not insp.versioning_enabled:
         put_s3_bucket_versioning(client=client, bucket_name=bucket_name, enabled=True)
         actions_taken.append(f"Enabled versioning on S3 bucket '{bucket_name}'")
 
-    if not insp["kms_encrypted"]:
+    if not insp.kms_encrypted:
         put_s3_bucket_encryption(client=client, bucket_name=bucket_name)
         actions_taken.append(f"Enabled AWS-managed KMS encryption on S3 bucket '{bucket_name}'")
 
@@ -293,13 +293,13 @@ def _build_bootstrap_plan(
             )
         )
 
-    if not insp["exists"]:
+    if not insp.exists:
         bucket_planned_operation = "CREATE"
         add_action(bucket_name, "CREATE", f"Create S3 bucket in region '{region}'")
     else:
-        if not insp["versioning_enabled"]:
+        if not insp.versioning_enabled:
             add_action(bucket_name, "UPDATE", "Enable versioning on S3 bucket")
-        if not insp["kms_encrypted"]:
+        if not insp.kms_encrypted:
             add_action(bucket_name, "UPDATE", "Enable AWS-managed KMS encryption on S3 bucket")
 
         if actions:
@@ -506,9 +506,9 @@ def _build_bootstrap_plan(
         aws_region=region,
         account_id=account_id,
         bucket_name=bucket_name,
-        bucket_exists=insp["exists"],
-        versioning_enabled=insp["versioning_enabled"],
-        encryption_enabled=insp["kms_encrypted"],
+        bucket_exists=insp.exists,
+        versioning_enabled=insp.versioning_enabled,
+        encryption_enabled=insp.kms_encrypted,
         bucket_planned_operation=bucket_planned_operation,
         codecommit_repo_name=cc_repo_name,
         codecommit_branch_name=cc_branch_name,

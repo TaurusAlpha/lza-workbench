@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from lza_workbench.aws.s3 import S3ObjectObservation
 from lza_workbench.configuration.archive import (
     compute_config_directory_digest,
 )
@@ -92,7 +93,7 @@ def test_evaluate_s3_remote_sync_not_uploaded(tmp_path: Path) -> None:
         config_dir=config_dir,
         exclude_dirs=set(),
         exclude_files=set(),
-        s3_object_info={"exists": False, "error": None},
+        s3_object_info=S3ObjectObservation(exists=False),
         state=None,
         is_live=True,
     )
@@ -106,12 +107,11 @@ def test_evaluate_s3_remote_sync_metadata_match(tmp_path: Path) -> None:
     (config_dir / "global-config.yaml").write_text("test: 1\n", encoding="utf-8")
 
     digest = compute_config_directory_digest(config_dir, set(), set())
-    s3_info = {
-        "exists": True,
-        "etag": "s3-etag-999",
-        "metadata": {"lza-content-digest": digest},
-        "error": None,
-    }
+    s3_info = S3ObjectObservation(
+        exists=True,
+        etag="s3-etag-999",
+        metadata={"lza-content-digest": digest},
+    )
 
     res = evaluate_s3_remote_sync(
         config_dir=config_dir,
@@ -136,12 +136,11 @@ def test_evaluate_s3_remote_sync_metadata_diverged_and_ahead(tmp_path: Path) -> 
     state.config_artifact_etag = "etag-1"
 
     # Local changed, remote matches state etag
-    s3_info = {
-        "exists": True,
-        "etag": "etag-1",
-        "metadata": {"lza-content-digest": "digest-v1"},
-        "error": None,
-    }
+    s3_info = S3ObjectObservation(
+        exists=True,
+        etag="etag-1",
+        metadata={"lza-content-digest": "digest-v1"},
+    )
     res = evaluate_s3_remote_sync(
         config_dir=config_dir,
         exclude_dirs=set(),
@@ -165,12 +164,7 @@ def test_evaluate_s3_remote_sync_state_etag_fallback(tmp_path: Path) -> None:
     state.config_artifact_etag = "etag-abc"
 
     # S3 has no user metadata
-    s3_info = {
-        "exists": True,
-        "etag": "etag-abc",
-        "metadata": {},
-        "error": None,
-    }
+    s3_info = S3ObjectObservation(exists=True, etag="etag-abc")
     res = evaluate_s3_remote_sync(
         config_dir=config_dir,
         exclude_dirs=set(),
@@ -189,12 +183,7 @@ def test_evaluate_s3_remote_sync_never_synced(tmp_path: Path) -> None:
     config_dir.mkdir()
     (config_dir / "global-config.yaml").write_text("test", encoding="utf-8")
 
-    s3_info = {
-        "exists": True,
-        "etag": "etag-unknown-remote",
-        "metadata": {},
-        "error": None,
-    }
+    s3_info = S3ObjectObservation(exists=True, etag="etag-unknown-remote")
     state = _make_test_workspace_state()
     # No state.config_artifact_etag recorded
     res = evaluate_s3_remote_sync(

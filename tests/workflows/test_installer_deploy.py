@@ -128,7 +128,9 @@ def test_apply_installer_deployment_records_terminal_failure(
         profile="test",
         account_id="123456789012",
     )
-    mock_inspect_bucket.return_value = {"exists": True}
+    from lza_workbench.aws.s3 import S3BucketObservation
+
+    mock_inspect_bucket.return_value = S3BucketObservation(exists=True, accessible=True)
     mock_deploy.return_value = "stack-id"
     mock_stream.return_value = CfnStackStatusResult(
         stack_name="AWSAccelerator-InstallerStack",
