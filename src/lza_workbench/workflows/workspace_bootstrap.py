@@ -71,6 +71,16 @@ def ensure_s3_workbench_assets_bucket(
 
 
 @dataclass(frozen=True)
+class BootstrapAction:
+    """One plain-language bootstrap action for CLI or Web presentation."""
+
+    subject: str
+    operation: str
+    message: str
+    severity: str | None = None
+
+
+@dataclass(frozen=True)
 class BootstrapPlanResult:
     """Structured plan for bootstrapping AWS resources for a workspace."""
 
@@ -98,7 +108,7 @@ class BootstrapPlanResult:
     github_repo_accessible: bool
     github_planned_operation: str
     planned_operation: str
-    actions: list[str]
+    actions: list[BootstrapAction]
     warnings: list[str]
     dry_run: bool
 
@@ -179,22 +189,43 @@ def _build_bootstrap_plan(
 
     insp = inspect_s3_bucket(client=s3_client, bucket_name=bucket_name)
 
-    actions: list[str] = []
+    actions: list[BootstrapAction] = []
     warnings: list[str] = []
+
+    def add_action(
+        subject: str,
+        operation: str,
+        message: str,
+        *,
+        severity: str | None = None,
+    ) -> None:
+        actions.append(
+            BootstrapAction(
+                subject=subject,
+                operation=operation,
+                message=message,
+                severity=severity,
+            )
+        )
+
     if not insp["exists"]:
         bucket_planned_operation = "CREATE"
-        actions.append(f"Create S3 bucket '{bucket_name}' in region '{region}'")
+        add_action(bucket_name, "CREATE", f"Create S3 bucket in region '{region}'")
     else:
         if not insp["versioning_enabled"]:
-            actions.append(f"Enable versioning on S3 bucket '{bucket_name}'")
+            add_action(bucket_name, "UPDATE", "Enable versioning on S3 bucket")
         if not insp["kms_encrypted"]:
-            actions.append(f"Enable AWS-managed KMS encryption on S3 bucket '{bucket_name}'")
+            add_action(bucket_name, "UPDATE", "Enable AWS-managed KMS encryption on S3 bucket")
 
         if actions:
             bucket_planned_operation = "UPDATE"
         else:
             bucket_planned_operation = "NO_CHANGE"
-            actions.append(f"Reuse existing S3 assets bucket '{bucket_name}' (already configured)")
+            add_action(
+                bucket_name,
+                "NO_CHANGE",
+                "Reuse existing S3 assets bucket (already configured)",
+            )
 
     is_codecommit_config = config.configuration.repository.type == "codecommit"
 
@@ -225,22 +256,26 @@ def _build_bootstrap_plan(
         if imported:
             if cc_repo_exists:
                 cc_planned_op = "NO_CHANGE"
-                actions.append(
-                    f"Validate existing CodeCommit repository '{cc_repo_name}' "
-                    f"branch '{cc_branch_name}' (imported)"
+                add_action(
+                    cc_repo_name,
+                    "NO_CHANGE",
+                    f"Validate existing CodeCommit repository branch '{cc_branch_name}' (imported)",
                 )
             else:
                 cc_planned_op = "MISSING"
-                actions.append(
-                    f"[bold red]MISSING[/bold red] CodeCommit repository '{cc_repo_name}' "
-                    "not found (imported resources must not be recreated automatically)"
+                add_action(
+                    cc_repo_name,
+                    "MISSING",
+                    "CodeCommit repository not found "
+                    "(imported resources must not be recreated automatically)",
+                    severity="error",
                 )
         elif cc_repo_exists:
             cc_planned_op = "NO_CHANGE"
-            actions.append(f"Reuse existing CodeCommit repository '{cc_repo_name}'")
+            add_action(cc_repo_name, "NO_CHANGE", "Reuse existing CodeCommit repository")
         else:
             cc_planned_op = "CREATE"
-            actions.append(f"Create CodeCommit repository '{cc_repo_name}' in region '{region}'")
+            add_action(cc_repo_name, "CREATE", f"Create CodeCommit repository in region '{region}'")
 
     # Inspect GitHub installer source if configured
     is_github_source = config.installer.source_code.repository_type == "github"
@@ -271,7 +306,11 @@ def _build_bootstrap_plan(
         token_val = (github_token or "").strip() or secret_details["value"]
 
         if github_secret_exists:
-            actions.append(f"Validate AWS Secrets Manager secret '{github_secret_name}' (exists)")
+            add_action(
+                github_secret_name,
+                "NO_CHANGE",
+                "Validate AWS Secrets Manager secret (exists)",
+            )
             if github_secret_accessible or token_val:
                 gh_res = validate_github_repository_access(
                     owner=github_repo_owner,
@@ -282,26 +321,33 @@ def _build_bootstrap_plan(
                 if gh_res["accessible"]:
                     github_repo_accessible = True
                     github_planned_op = "NO_CHANGE"
-                    actions.append(
-                        f"Validate GitHub repository '{github_repo_owner}/{github_repo_name}' "
-                        f"branch '{github_repo_branch}' (accessible)"
+                    add_action(
+                        f"{github_repo_owner}/{github_repo_name}",
+                        "NO_CHANGE",
+                        f"Validate GitHub repository branch '{github_repo_branch}' (accessible)",
                     )
                 else:
                     github_planned_op = "INACCESSIBLE"
-                    actions.append(
-                        f"[bold red]INACCESSIBLE[/bold red] GitHub repository "
-                        f"'{github_repo_owner}/{github_repo_name}': {gh_res['error']}"
+                    add_action(
+                        f"{github_repo_owner}/{github_repo_name}",
+                        "INACCESSIBLE",
+                        f"GitHub repository access failed: {gh_res['error']}",
+                        severity="error",
                     )
             else:
                 github_planned_op = "INACCESSIBLE"
-                actions.append(
-                    f"[bold red]INACCESSIBLE[/bold red] AWS Secrets Manager secret "
-                    f"'{github_secret_name}': {secret_details['error']}"
+                add_action(
+                    github_secret_name,
+                    "INACCESSIBLE",
+                    f"AWS Secrets Manager secret access failed: {secret_details['error']}",
+                    severity="error",
                 )
         elif github_token and github_token.strip():
             github_planned_op = "CREATE"
-            actions.append(
-                f"Create AWS Secrets Manager secret '{github_secret_name}' with provided token"
+            add_action(
+                github_secret_name,
+                "CREATE",
+                "Create AWS Secrets Manager secret with provided token",
             )
             gh_res = validate_github_repository_access(
                 owner=github_repo_owner,
@@ -311,9 +357,10 @@ def _build_bootstrap_plan(
             )
             if gh_res["accessible"]:
                 github_repo_accessible = True
-                actions.append(
-                    f"Validate GitHub repository '{github_repo_owner}/{github_repo_name}' "
-                    f"branch '{github_repo_branch}' (accessible)"
+                add_action(
+                    f"{github_repo_owner}/{github_repo_name}",
+                    "NO_CHANGE",
+                    f"Validate GitHub repository branch '{github_repo_branch}' (accessible)",
                 )
             else:
                 warning_msg = (
@@ -321,7 +368,7 @@ def _build_bootstrap_plan(
                     f"check returned: {gh_res['error']}"
                 )
                 warnings.append(warning_msg)
-                actions.append(f"[yellow]WARNING[/yellow] {warning_msg}")
+                add_action(github_secret_name, "WARNING", warning_msg, severity="warning")
         elif allow_missing_github_secret:
             github_planned_op = "WARNING"
             warning_msg = (
@@ -330,19 +377,26 @@ def _build_bootstrap_plan(
                 "deploying the installer."
             )
             warnings.append(warning_msg)
-            actions.append(
-                f"[yellow]WARNING[/yellow] AWS Secrets Manager secret '{github_secret_name}' "
-                "not found (proceeding as requested; manual secret creation required)"
+            add_action(
+                github_secret_name,
+                "WARNING",
+                "AWS Secrets Manager secret not found "
+                "(proceeding as requested; manual secret creation required)",
+                severity="warning",
             )
         else:
             github_planned_op = "MISSING"
-            actions.append(
-                f"[bold red]MISSING[/bold red] AWS Secrets Manager secret "
-                f"'{github_secret_name}' not found"
+            add_action(
+                github_secret_name,
+                "MISSING",
+                "AWS Secrets Manager secret not found",
+                severity="error",
             )
-            actions.append(
-                "  --> AWS LZA requires a GitHub token stored in Secrets Manager "
-                f"secret '{github_secret_name}'"
+            add_action(
+                github_secret_name,
+                "MISSING",
+                "AWS LZA requires a GitHub token stored in this Secrets Manager secret",
+                severity="error",
             )
 
     if cc_planned_op == "MISSING" or (
@@ -605,6 +659,7 @@ def apply_bootstrap_preparation(
 
 
 __all__ = [
+    "BootstrapAction",
     "BootstrapPlanResult",
     "BootstrapPreparation",
     "WorkspaceBootstrapResult",

@@ -175,7 +175,10 @@ def test_plan_bootstrap_workflow_with_codecommit_create(initialized_workspace: P
         assert plan.codecommit_repo_name == "lza-config-source"
         assert plan.codecommit_repo_planned_operation == "CREATE"
         assert plan.planned_operation == "CREATE"
-        assert any("Create CodeCommit repository 'lza-config-source'" in a for a in plan.actions)
+        assert any(
+            action.subject == "lza-config-source" and action.operation == "CREATE"
+            for action in plan.actions
+        )
 
 
 def test_plan_bootstrap_workflow_with_codecommit_imported_missing(
@@ -207,7 +210,7 @@ def test_plan_bootstrap_workflow_with_codecommit_imported_missing(
         plan = plan_bootstrap_workflow(target_dir=imported_workspace, dry_run=True)
         assert plan.codecommit_repo_planned_operation == "MISSING"
         assert plan.planned_operation == "MISSING"
-        assert any("MISSING" in a for a in plan.actions)
+        assert any(action.operation == "MISSING" for action in plan.actions)
 
 
 def test_plan_bootstrap_uses_configuration_repository_provider(

@@ -17,11 +17,27 @@ from lza_workbench.cli.output import (
     print_section,
 )
 from lza_workbench.workflows.workspace_bootstrap import (
+    BootstrapAction,
     BootstrapPlanResult,
     WorkspaceBootstrapResult,
     apply_bootstrap_preparation,
     prepare_bootstrap_workflow,
 )
+
+
+def _render_bootstrap_action(action: BootstrapAction) -> None:
+    """Render a typed bootstrap action using CLI-specific Rich styling."""
+    color = {
+        "error": "bold red",
+        "warning": "yellow",
+        "CREATE": "green",
+        "UPDATE": "yellow",
+        "NO_CHANGE": "dim",
+    }.get(action.severity or action.operation, "blue")
+    console.print(
+        f"  • [{color}]{action.operation}[/{color}] "
+        f"[bold]{action.subject}[/bold]: {action.message}"
+    )
 
 
 def _render_bootstrap_plan(plan: BootstrapPlanResult) -> None:
@@ -90,7 +106,7 @@ def _render_bootstrap_plan(plan: BootstrapPlanResult) -> None:
     console.print()
     print_section(2, "Planned AWS Actions")
     for action in plan.actions:
-        console.print(f"  • {action}")
+        _render_bootstrap_action(action)
 
 
 def _confirm_bootstrap(
@@ -232,6 +248,7 @@ def workspace_bootstrap_command(
 __all__ = [
     "BootstrapPlanResult",
     "WorkspaceBootstrapResult",
+    "_render_bootstrap_action",
     "_confirm_bootstrap",
     "_render_bootstrap_plan",
     "workspace_bootstrap_command",
