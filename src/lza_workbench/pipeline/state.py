@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
 
+from lza_workbench.pipeline.failures import PipelineActionFailure
+from lza_workbench.pipeline.models import PipelineStageState
 from lza_workbench.workspace.schema import WorkspaceState
 
 
@@ -43,8 +44,8 @@ def record_pipeline_watch_result(
     execution_id: str,
     pipeline_name: str,
     status: str,
-    stages: list[Any] | None = None,
-    failed_actions: list[Any] | None = None,
+    stages: list[PipelineStageState] | None = None,
+    failed_actions: list[PipelineActionFailure] | None = None,
     error_message: str | None = None,
     pipeline_type: str = "configuration",
 ) -> None:
@@ -60,17 +61,16 @@ def record_pipeline_watch_result(
     if status in {"Failed", "Cancelled", "TimedOut"}:
         if failed_actions:
             first_fa = failed_actions[0]
-            failed_action = getattr(first_fa, "action_name", str(first_fa))
-            failed_build_url = getattr(first_fa, "external_execution_url", None)
+            failed_action = first_fa.action_name
+            failed_build_url = first_fa.external_execution_url
 
             # Prioritize extracted actual error diagnostics from CloudWatch/CodeBuild
-            diags = getattr(first_fa, "diagnostic_details", [])
+            diags = first_fa.diagnostic_details
             if diags:
                 resolved_error = "\n".join(diags)
             else:
                 resolved_error = (
-                    getattr(first_fa, "error_message", None)
-                    or getattr(first_fa, "summary", None)
+                    first_fa.error_message or first_fa.summary
                 )
 
             if stages:
@@ -84,20 +84,13 @@ def record_pipeline_watch_result(
                         break
         elif stages:
             for st in stages:
-                if getattr(st, "status", "") == "Failed":
-                    failed_stage = getattr(st, "stage_name", None)
-                    for act in getattr(st, "actions", []):
-                        if getattr(act, "status", "") == "Failed":
-                            failed_action = getattr(act, "action_name", None)
-                            failed_build_url = getattr(act, "external_execution_url", None)
-                            diags = getattr(act, "diagnostic_details", [])
-                            if diags:
-                                resolved_error = "\n".join(diags)
-                            else:
-                                resolved_error = (
-                                    getattr(act, "error_message", None)
-                                    or getattr(act, "summary", None)
-                                )
+                if st.status == "Failed":
+                    failed_stage = st.stage_name
+                    for act in st.actions:
+                        if act.status == "Failed":
+                            failed_action = act.action_name
+                            failed_build_url = act.external_execution_url
+                            resolved_error = act.error_message or act.summary
                             break
                     break
 
@@ -126,4 +119,3 @@ __all__ = [
     "record_pipeline_execution",
     "record_pipeline_watch_result",
 ]
-

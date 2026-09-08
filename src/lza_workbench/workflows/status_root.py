@@ -144,14 +144,14 @@ def _resolve_pipeline_summary(
         current_stage: str | None = None
         current_action: str | None = None
         if status == "InProgress":
-            for stage in pipe_state.stage_states:
-                if getattr(stage, "status", None) == "InProgress":
-                    current_stage = getattr(stage, "stage_name", None)
-                    for act in getattr(stage, "actions", []):
-                        if getattr(act, "status", None) == "InProgress":
-                            current_action = getattr(act, "action_name", None)
+            for stage in pipe_state.stages:
+                if stage.status == "InProgress":
+                    current_stage = stage.stage_name
+                    for act in stage.actions:
+                        if act.status == "InProgress":
+                            current_action = act.action_name
                             break
-                    if not current_action and getattr(stage, "actions", None):
+                    if not current_action and stage.actions:
                         current_action = stage.actions[0].action_name
                     break
 
@@ -160,7 +160,7 @@ def _resolve_pipeline_summary(
         failure_summary: str | None = None
         if status in {"Failed", "Cancelled"}:
             failures = collect_pipeline_action_failures(
-                pipe_state.stage_states,
+                pipe_state.stages,
                 fetch_diagnostics=lambda build_id: (
                     fetch_codebuild_diagnostics(factory=factory, build_id=build_id)
                     if factory

@@ -4,22 +4,18 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.aws.codebuild import fetch_codebuild_diagnostics
 from lza_workbench.aws.codepipeline import (
     get_latest_pipeline_execution_id,
-    get_pipeline_execution,
-    get_pipeline_state,
 )
 from lza_workbench.aws.context import AwsExecutionContext, resolve_aws_execution_context
 from lza_workbench.errors import LzaError
-from lza_workbench.pipeline.failures import (
-    FailureDiagnostic,
-    PipelineActionFailure,
-    collect_pipeline_action_failures,
-)
+from lza_workbench.pipeline.failures import PipelineActionFailure, collect_pipeline_action_failures
+from lza_workbench.pipeline.models import PipelineStageState
+from lza_workbench.pipeline.observation import observe_pipeline_execution
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.pipeline.state import record_pipeline_watch_result
 from lza_workbench.workspace.context import (
@@ -31,40 +27,13 @@ from lza_workbench.workspace.state import write_workspace_state
 
 
 @dataclass(frozen=True)
-class PipelineActionSummary:
-    """Status and error details of an individual action inside a pipeline stage."""
-
-    action_name: str
-    stage_name: str | None = None
-    status: str | None = None
-    summary: str | None = None
-    error_message: str | None = None
-    external_execution_id: str | None = None
-    external_execution_url: str | None = None
-    diagnostic_details: list[str] = field(default_factory=list)
-    raw_diagnostic_details: list[str] = field(default_factory=list)
-    failed_resource: str | None = None
-    diagnostics: list[FailureDiagnostic] = field(default_factory=list)
-    root_cause: FailureDiagnostic | None = None
-
-
-@dataclass(frozen=True)
-class PipelineStageSummary:
-    """Status and nested actions of a pipeline stage."""
-
-    stage_name: str
-    status: str | None = None
-    actions: list[PipelineActionSummary] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
 class PipelineWatchUpdate:
     """Progress update emitted during pipeline polling."""
 
     pipeline_name: str
     execution_id: str
     status: str
-    stages: list[PipelineStageSummary]
+    stages: list[PipelineStageState]
     elapsed_seconds: float
 
 
@@ -78,7 +47,7 @@ class PipelineWatchResult:
     pipeline_arn: str
     execution_id: str
     status: str
-    stages: list[PipelineStageSummary]
+    stages: list[PipelineStageState]
     failed_actions: list[PipelineActionFailure]
     elapsed_seconds: float | None = None
     error_message: str | None = None
@@ -182,11 +151,10 @@ def watch_pipeline_workflow(
 
     start_time = time.time()
     last_status = "InProgress"
-    stage_summaries: list[PipelineStageSummary] = []
-    failed_action_summaries: list[PipelineActionSummary] = []
+    stage_summaries: list[PipelineStageState] = []
     failed_actions: list[PipelineActionFailure] = []
     error_message: str | None = None
-    last_exec_res = None
+    last_snapshot = None
     not_found_attempts = 0
     max_not_found_attempts = 3
 
@@ -197,14 +165,14 @@ def watch_pipeline_workflow(
             error_message = f"Watch timed out after {int(elapsed)} seconds."
             break
 
-        exec_res = get_pipeline_execution(
+        snapshot = observe_pipeline_execution(
             client=client,
             pipeline_name=resolved_pipeline_name,
             execution_id=resolved_execution_id,
         )
-        last_exec_res = exec_res
+        last_snapshot = snapshot
 
-        if exec_res.status == "NOT_FOUND":
+        if snapshot.status == "NOT_FOUND":
             not_found_attempts += 1
             if not_found_attempts < max_not_found_attempts:
                 time.sleep(interval)
@@ -214,43 +182,10 @@ def watch_pipeline_workflow(
                 f"pipeline '{resolved_pipeline_name}'."
             )
 
-        state_res = get_pipeline_state(
-            client=client,
-            pipeline_name=resolved_pipeline_name,
-        )
+        stage_summaries = snapshot.stages
 
-        stage_summaries = []
-        failed_action_summaries = []
-        for s in state_res.stage_states:
-            if s.execution_id and s.execution_id != resolved_execution_id:
-                continue
-            actions: list[PipelineActionSummary] = []
-            for a in s.actions:
-                if a.execution_id and a.execution_id != resolved_execution_id:
-                    continue
-                action_sum = PipelineActionSummary(
-                    action_name=a.action_name,
-                    stage_name=s.stage_name,
-                    status=a.status,
-                    summary=a.summary,
-                    error_message=a.error_message,
-                    external_execution_id=a.external_execution_id,
-                    external_execution_url=a.external_execution_url,
-                )
-                actions.append(action_sum)
-                if a.status == "Failed":
-                    failed_action_summaries.append(action_sum)
-
-            stage_summaries.append(
-                PipelineStageSummary(
-                    stage_name=s.stage_name,
-                    status=s.status,
-                    actions=actions,
-                )
-            )
-
-        if exec_res.status and exec_res.status not in {"UNKNOWN", "NOT_FOUND"}:
-            last_status = exec_res.status
+        if snapshot.status and snapshot.status not in {"UNKNOWN", "NOT_FOUND"}:
+            last_status = snapshot.status
 
         if on_update is not None:
             on_update(
@@ -264,7 +199,10 @@ def watch_pipeline_workflow(
             )
 
         if last_status in TERMINAL_STATUSES:
-            if failed_action_summaries:
+            has_failed_action = any(
+                action.status == "Failed" for stage in stage_summaries for action in stage.actions
+            )
+            if has_failed_action:
                 failure_details = collect_pipeline_action_failures(
                     stage_summaries,
                     fetch_diagnostics=lambda build_id: fetch_codebuild_diagnostics(
@@ -293,11 +231,11 @@ def watch_pipeline_workflow(
 
     total_elapsed: float | None = None
     if (
-        last_exec_res
-        and last_exec_res.duration_seconds is not None
-        and last_exec_res.duration_seconds > 0
+        last_snapshot
+        and last_snapshot.duration_seconds is not None
+        and last_snapshot.duration_seconds > 0
     ):
-        total_elapsed = last_exec_res.duration_seconds
+        total_elapsed = last_snapshot.duration_seconds
     else:
         live_dur = time.time() - start_time
         if live_dur >= 1.0:
@@ -333,9 +271,7 @@ def watch_pipeline_workflow(
 
 
 __all__ = [
-    "PipelineActionSummary",
     "PipelineWatchError",
-    "PipelineStageSummary",
     "PipelineWatchResult",
     "PipelineWatchUpdate",
     "require_successful_pipeline_watch",

@@ -22,8 +22,8 @@ from lza_workbench.cli.output import (
 from lza_workbench.cli.output import (
     format_duration as _format_duration,
 )
+from lza_workbench.pipeline.models import PipelineActionState
 from lza_workbench.workflows.pipeline_watch import (
-    PipelineActionSummary,
     PipelineWatchResult,
     PipelineWatchUpdate,
     require_successful_pipeline_watch,
@@ -31,7 +31,7 @@ from lza_workbench.workflows.pipeline_watch import (
 )
 
 
-def _format_action_table_detail(action: PipelineActionSummary) -> str:
+def _format_action_table_detail(action: PipelineActionState) -> str:
     """Format concise action status detail for breakdown table without buildspec dumps."""
     if action.status != "Failed":
         return ""

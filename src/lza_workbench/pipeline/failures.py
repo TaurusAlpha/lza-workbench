@@ -6,7 +6,8 @@ import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+
+from lza_workbench.pipeline.models import PipelineStageState
 
 
 class FailureCategory(StrEnum):
@@ -472,19 +473,18 @@ def select_root_cause(diagnostics: list[FailureDiagnostic]) -> FailureDiagnostic
 
 
 def collect_pipeline_action_failures(
-    stages: Iterable[Any],
+    stages: Iterable[PipelineStageState],
     *,
     fetch_diagnostics: Callable[[str], list[str]],
 ) -> list[PipelineActionFailure]:
     """Collect failed actions and derive concise, normalized root-cause diagnostics."""
     failures: list[PipelineActionFailure] = []
     for stage in stages:
-        stage_name = getattr(stage, "stage_name", None)
-        for action in getattr(stage, "actions", []):
-            if getattr(action, "status", None) != "Failed":
+        for action in stage.actions:
+            if action.status != "Failed":
                 continue
 
-            external_execution_id = getattr(action, "external_execution_id", None)
+            external_execution_id = action.external_execution_id
             diagnostics = fetch_diagnostics(external_execution_id) if external_execution_id else []
             raw_diagnostics = list(diagnostics)
             diagnostic_models: list[FailureDiagnostic] = []
@@ -495,9 +495,7 @@ def collect_pipeline_action_failures(
                     if diag.message:
                         diagnostic_models.append(diag)
             else:
-                raw_error = getattr(action, "error_message", None) or getattr(
-                    action, "summary", None
-                )
+                raw_error = action.error_message or action.summary
                 if raw_error:
                     raw_text = str(raw_error)
                     raw_diagnostics = [raw_text]
@@ -534,12 +532,12 @@ def collect_pipeline_action_failures(
 
             failures.append(
                 PipelineActionFailure(
-                    stage_name=stage_name,
-                    action_name=getattr(action, "action_name", ""),
-                    summary=getattr(action, "summary", None),
-                    error_message=getattr(action, "error_message", None),
+                    stage_name=stage.stage_name,
+                    action_name=action.action_name,
+                    summary=action.summary,
+                    error_message=action.error_message,
                     external_execution_id=external_execution_id,
-                    external_execution_url=getattr(action, "external_execution_url", None),
+                    external_execution_url=action.external_execution_url,
                     diagnostic_details=diagnostic_details,
                     raw_diagnostic_details=raw_diagnostics,
                     failed_resource=failed_resource,

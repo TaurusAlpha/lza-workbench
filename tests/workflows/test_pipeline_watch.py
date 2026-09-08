@@ -266,6 +266,7 @@ def test_watch_pipeline_stops_when_execution_is_not_found(configured_workspace: 
     mock_client = MagicMock()
     missing_execution = PipelineExecutionResult(
         pipeline_name="AWSAccelerator-Pipeline",
+        exists=False,
         execution_id="missing-execution",
         status="NOT_FOUND",
         error="Execution does not exist",
@@ -277,10 +278,9 @@ def test_watch_pipeline_stops_when_execution_is_not_found(configured_workspace: 
             "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
         ),
         patch(
-            "lza_workbench.workflows.pipeline_watch.get_pipeline_execution",
+            "lza_workbench.workflows.pipeline_watch.observe_pipeline_execution",
             return_value=missing_execution,
         ),
-        patch("lza_workbench.workflows.pipeline_watch.get_pipeline_state") as mock_get_state,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         with pytest.raises(LzaError, match="was not found"):
@@ -288,8 +288,6 @@ def test_watch_pipeline_stops_when_execution_is_not_found(configured_workspace: 
                 target_dir=configured_workspace,
                 execution_id="missing-execution",
             )
-
-    mock_get_state.assert_not_called()
 
 
 def test_watch_pipeline_rejects_non_positive_poll_interval(configured_workspace: Path) -> None:

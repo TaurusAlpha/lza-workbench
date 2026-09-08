@@ -325,8 +325,8 @@ def serialize_configuration_status(result: ConfigurationStatusResult) -> dict[st
     )
 
     pipe_stages: list[dict[str, Any]] = []
-    if pipe.state and pipe.state.stage_states:
-        for stage in pipe.state.stage_states:
+    if pipe.state and pipe.state.stages:
+        for stage in pipe.state.stages:
             actions = [
                 {
                     "name": a.action_name,
@@ -429,8 +429,8 @@ def serialize_installer_status(
     failed_action = None
     failure_summary = None
 
-    if pipe and pipe.stage_states:
-        for stage in pipe.stage_states:
+    if pipe and pipe.stages:
+        for stage in pipe.stages:
             for action in stage.actions:
                 if action.status == "InProgress":
                     current_stage = stage.stage_name

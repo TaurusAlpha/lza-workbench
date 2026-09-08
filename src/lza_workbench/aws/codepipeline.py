@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -10,58 +9,18 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.aws.client_factory import AwsClientFactory
 from lza_workbench.errors import LzaError
+from lza_workbench.pipeline.models import (
+    PipelineActionState,
+    PipelineExecutionSnapshot,
+    PipelineStageState,
+)
 
-
-@dataclass
-class ActionStateResult:
-    """State of an individual action inside a pipeline stage."""
-
-    action_name: str
-    status: str | None = None
-    summary: str | None = None
-    last_status_change: str | None = None
-    error_message: str | None = None
-    external_execution_id: str | None = None
-    external_execution_url: str | None = None
-    execution_id: str | None = None
-
-
-@dataclass
-class StageStateResult:
-    """State of a pipeline stage."""
-
-    stage_name: str
-    status: str | None = None
-    actions: list[ActionStateResult] = field(default_factory=list)
-    execution_id: str | None = None
-
-
-@dataclass
-class PipelineStateResult:
-    """Detailed status and stage execution state of an AWS CodePipeline."""
-
-    pipeline_name: str
-    exists: bool
-    status: str | None = None
-    stage_states: list[StageStateResult] = field(default_factory=list)
-    latest_execution_id: str | None = None
-    created: str | None = None
-    updated: str | None = None
-    error: str | None = None
-
-
-@dataclass
-class PipelineExecutionResult:
-    """Status and metadata of an AWS CodePipeline execution."""
-
-    pipeline_name: str
-    execution_id: str
-    status: str
-    status_summary: str | None = None
-    start_time: str | None = None
-    last_update_time: str | None = None
-    duration_seconds: float | None = None
-    error: str | None = None
+# Compatibility aliases for callers outside the pipeline feature. New code should use the
+# canonical pipeline models directly.
+ActionStateResult = PipelineActionState
+PipelineExecutionResult = PipelineExecutionSnapshot
+PipelineStateResult = PipelineExecutionSnapshot
+StageStateResult = PipelineStageState
 
 
 
@@ -105,7 +64,7 @@ def get_pipeline_state(
         response = codepipeline.get_pipeline_state(name=clean_pipeline_name)
         stage_states_raw = response.get("stageStates", [])
 
-        stage_results: list[StageStateResult] = []
+        stage_results: list[PipelineStageState] = []
         latest_execution_id: str | None = None
 
         has_in_progress = False
@@ -124,7 +83,7 @@ def get_pipeline_state(
             if s_exec_id and not latest_execution_id:
                 latest_execution_id = s_exec_id
 
-            actions: list[ActionStateResult] = []
+            actions: list[PipelineActionState] = []
             for action in stage.get("actionStates", []):
                 a_name = action.get("actionName", "")
                 a_exec = action.get("latestExecution") or {}
@@ -141,8 +100,9 @@ def get_pipeline_state(
                 a_ext_url = a_exec.get("externalExecutionUrl")
                 a_exec_id = a_exec.get("pipelineExecutionId")
                 actions.append(
-                    ActionStateResult(
+                    PipelineActionState(
                         action_name=a_name,
+                        stage_name=s_name,
                         status=a_status,
                         summary=a_summary,
                         last_status_change=a_time,
@@ -173,7 +133,7 @@ def get_pipeline_state(
                 all_succeeded = False
 
             stage_results.append(
-                StageStateResult(
+                PipelineStageState(
                     stage_name=s_name,
                     status=s_status,
                     actions=actions,
@@ -203,7 +163,7 @@ def get_pipeline_state(
             pipeline_name=clean_pipeline_name,
             exists=True,
             status=derived_status,
-            stage_states=stage_results,
+            stages=stage_results,
             latest_execution_id=latest_execution_id,
             created=created,
             updated=updated,
@@ -285,6 +245,7 @@ def get_pipeline_execution(
     if not clean_pipeline_name or not clean_execution_id:
         return PipelineExecutionResult(
             pipeline_name=clean_pipeline_name,
+            exists=False,
             execution_id=clean_execution_id,
             status="UNKNOWN",
             error="Pipeline name or execution ID is empty",
@@ -294,6 +255,7 @@ def get_pipeline_execution(
     if codepipeline is None:
         return PipelineExecutionResult(
             pipeline_name=clean_pipeline_name,
+            exists=False,
             execution_id=clean_execution_id,
             status="UNKNOWN",
             error="No AWS session available",
@@ -325,6 +287,7 @@ def get_pipeline_execution(
 
         return PipelineExecutionResult(
             pipeline_name=clean_pipeline_name,
+            exists=True,
             execution_id=clean_execution_id,
             status=status,
             status_summary=status_summary,
@@ -343,12 +306,14 @@ def get_pipeline_execution(
         }:
             return PipelineExecutionResult(
                 pipeline_name=clean_pipeline_name,
+                exists=False,
                 execution_id=clean_execution_id,
                 status="NOT_FOUND",
                 error=message,
             )
         return PipelineExecutionResult(
             pipeline_name=clean_pipeline_name,
+            exists=False,
             execution_id=clean_execution_id,
             status="UNKNOWN",
             error=message,
@@ -356,6 +321,7 @@ def get_pipeline_execution(
     except BotoCoreError as exc:
         return PipelineExecutionResult(
             pipeline_name=clean_pipeline_name,
+            exists=False,
             execution_id=clean_execution_id,
             status="UNKNOWN",
             error=f"Connection failure: {exc}",

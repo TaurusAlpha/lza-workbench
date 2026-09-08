@@ -43,9 +43,9 @@ def _render_resources(result: InstallerStatusResult) -> None:
                 result.pipeline_state.latest_execution_id,
                 style="dim",
             )
-        if result.pipeline_state.stage_states:
+        if result.pipeline_state.stages:
             stage_parts = []
-            for s in result.pipeline_state.stage_states:
+            for s in result.pipeline_state.stages:
                 s_status = s.status or "Unknown"
                 stage_parts.append(f"{s.stage_name} ({format_status(s_status)})")
             print_kv("Pipeline Stages", " -> ".join(stage_parts))

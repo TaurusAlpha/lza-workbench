@@ -210,9 +210,7 @@ def test_get_config_status_workflow_codecommit(tmp_path: Path) -> None:
     with (
         patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
-        patch(
-            "lza_workbench.workflows.status_config.inspect_codecommit_repository"
-        ) as mock_cc,
+        patch("lza_workbench.workflows.status_config.inspect_codecommit_repository") as mock_cc,
         patch("lza_workbench.workflows.status_config.get_pipeline_state") as mock_pipe,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
@@ -553,9 +551,8 @@ def test_get_root_status_evaluates_git_sync_when_aws_unavailable(
 
     result = get_root_status_workflow(target_dir=tmp_path)
 
-    mock_get_sync.assert_called_once_with(
-        config_dir, branch=config.configuration.repository.branch
-    )
+    mock_get_sync.assert_called_once_with(config_dir, branch=config.configuration.repository.branch)
+    assert result.configuration_repo.git_sync_status is not None
     assert result.configuration_repo.git_sync_status == sync_status
     assert result.configuration_repo.git_sync_status.status == "Synchronized"
     assert result.configuration_repo.git_sync_status.summary == "In Sync"
@@ -861,7 +858,7 @@ def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: 
         exists=True,
         status="Failed",
         latest_execution_id="exec-789",
-        stage_states=[
+        stages=[
             StageStateResult(
                 stage_name="Build",
                 status="Failed",
