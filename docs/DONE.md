@@ -6,6 +6,11 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### CLI Command Forwarder Simplification (v0.38.1)
+- **Consolidated Command Synonyms**: Streamlined `cli/main.py` command registration by stacking multiple Typer command decorators (`@status_app.command("installer")` / `@installer_app.command("status")` and `@status_app.command("config")` / `@config_app.command("status")`) onto single command handlers, eliminating redundant forwarding shims.
+- **Workflow Locality Assessment (Phase 3.2)**: Confirmed that retaining workflows in `workflows/` preserves the strict architectural boundaries (`web/cli -> workflows -> features/AWS`) and enforces interface independence without premature churn or violating AST import bounds.
+- **Architectural Boundary Enforcement**: Verified all package tests in `tests/test_package.py` and code formatting rules pass cleanly.
+
 ### AWS Adapter Contract Standardization & Typed Observations (v0.38.0)
 - **Resolved Client Standardization**: Standardized all public adapter functions across `aws/cloudformation.py`, `aws/codebuild.py`, `aws/codecommit.py`, `aws/codeconnections.py`, `aws/codepipeline.py`, `aws/secrets_manager.py`, and `aws/ssm.py` on already-resolved boto3 clients (`client: Any`). Removed dual `factory | None` / `client | None` signatures and internal client-resolution shims from adapters.
 - **Typed Observations**: Replaced untyped dictionary returns with immutable typed dataclasses (`SecretObservation` in `aws/secrets_manager.py`, `CodeBuildBuildObservation`, `CodeBuildPhase`, and `CodeBuildPhaseContext` in `aws/codebuild.py`).

@@ -143,12 +143,6 @@ def installer_import_command(
     )
 
 
-@installer_app.command("status")
-def installer_status_command() -> None:
-    """Show the current installer deployment state (alias for `lza status installer`)."""
-    run_cli_status_installer()
-
-
 @status_app.callback(invoke_without_command=True)
 def status_root_callback(
     ctx: typer.Context,
@@ -159,18 +153,14 @@ def status_root_callback(
 
 
 @status_app.command("installer")
+@installer_app.command("status")
 def status_installer_command() -> None:
-    """Show the current installer stack status details."""
+    """Show the current installer deployment state."""
     run_cli_status_installer()
 
 
-@config_app.command("status")
-def config_status_command() -> None:
-    """Show configuration repository status details."""
-    run_cli_status_config()
-
-
 @status_app.command("config")
+@config_app.command("status")
 def status_config_command() -> None:
     """Show configuration repository status details."""
     run_cli_status_config()

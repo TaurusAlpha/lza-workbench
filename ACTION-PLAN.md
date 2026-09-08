@@ -68,7 +68,7 @@ Each item lists: the concrete problem, the target design, why it must land befor
 
 ### Phase 1 — Before / alongside the first read-only GUI overview - **COMPLETE**
 
-**1.1 Replace ordinal `WorkspaceReadinessLevel` with a multi-dimensional `WorkspaceAssessment`.**
+**1.1 Replace ordinal `WorkspaceReadinessLevel` with a multi-dimensional `WorkspaceAssessment`. - COMPLETE**
 
 - Problem: `evaluate_workspace_readiness()` assigns a single ordinal enum (`UNINITIALIZED → CORE_CONFIGURED → IMPORTED → CONFIGURED → DEPLOYED`) by checking things in a fixed sequence. Concretely: an imported workspace with incomplete installer settings is ranked *below* `CONFIGURED`; "imported" is inferred from config-directory presence rather than from `state.imported`; "deployed" is inferred from a cached installer stack ID rather than live AWS state. Commands then gate on `readiness >= X`, an ordinal comparison over what are actually independent facts.
 - Target design: A `WorkspaceAssessment` value object exposing explicit boolean/structured capabilities, e.g. `metadata_valid`, `configuration_present`, `installer_configured`, `installer_recorded_deployed`, `imported` (read from `state.imported`, not inferred). Commands declare which capabilities they require instead of comparing an ordinal minimum. Keep this as one structured object — do not degrade into a scatter of ad hoc booleans checked independently across the codebase.
@@ -82,9 +82,9 @@ Each item lists: the concrete problem, the target design, why it must land befor
 
 ---
 
-### Phase 2 — Before each specific GUI feature, in this order
+### Phase 2 — Before each specific GUI feature, in this order  - **COMPLETE**
 
-**2.1 Before "Configuration Status & Details" — replace the flat `ConfigurationStatusResult`.**
+**2.1 Before "Configuration Status & Details" — replace the flat `ConfigurationStatusResult`. - COMPLETE**
 
 - Problem: `ConfigurationStatusResult` is a ~57-field flat model mixing workspace identity, local filesystem/Git state, S3 details, CodeCommit details, CodeConnections details, pipeline status, persisted runtime metadata, and warnings — most fields are `None`/invalid for any given repository type. `compile_configuration_warnings` takes 17 keyword-only arguments.
 - Target design: Keep one `ConfigurationStatusResult`, but compose it from focused sections:
@@ -98,7 +98,7 @@ Each item lists: the concrete problem, the target design, why it must land befor
 - Preserve: all currently user-visible fields, and the existing fallback-to-recorded-state behavior when live AWS data is unavailable.
 - Migrate together: the status CLI renderer and its targeted tests.
 
-**2.2 Before "Installer Settings & Deployment" — canonical installer configuration, parameter codec, and callback removal (one combined refactor).**
+**2.2 Before "Installer Settings & Deployment" — canonical installer configuration, parameter codec, and callback removal (one combined refactor). - COMPLETE**
 
 *This item absorbs the installer half of what an earlier draft listed as a separate "2.3" callback-removal task. `initialize_installer_workflow` derives and writes parameter defaults directly inside its `prompter` loop, so the codec and the callback removal are the same piece of logic viewed from two angles — splitting them into separate changes means deriving parameter values once inline in the old prompt path and again in the new codec, then reconciling the two. Land them together.*
 
@@ -113,7 +113,7 @@ Each item lists: the concrete problem, the target design, why it must land befor
 - Preserve: exact deployed-stack import behavior and template-default resolution; add regression coverage before changing the shadowing behavior, since this is the most safety-relevant item in the plan (a wrong parameter value ships to a real CloudFormation deploy).
 - This was independently identified as the single most important issue missed by the first review pass — treat it as high priority, and treat it as one atomic change, not two.
 
-**2.3 Before "Configuration Sync & Deployment Actions" — remove interactive callbacks from config push/pull.**
+**2.3 Before "Configuration Sync & Deployment Actions" — remove interactive callbacks from config push/pull. - COMPLETE**
 
 - Problem: `push_configuration_workflow` and `pull_configuration_workflow` accept a synchronous `confirm_callback: Callable[[str], bool] | None` used for destructive-overwrite safety checks (e.g. confirming before overwriting imported S3 content or changed local configuration). Same interface-neutrality problem as 2.2's installer prompter, but this is separate application logic (config sync, not installer settings) and does not share derivation code with the codec — it should stay its own item.
 - Target design: replace `confirm_callback` with a prepare/plan step that returns a typed result describing overwrite risk and the affected target (a structured "confirmation required" outcome, not a boolean callback), and an apply step that only proceeds given explicit confirmation or `--force`/confirmed intent. Keep existing `--force` semantics and existing safety messages exactly as they are today.
@@ -121,7 +121,7 @@ Each item lists: the concrete problem, the target design, why it must land befor
 - Preserve: dry-run purity, imported-workspace S3 overwrite protection, current CLI exit behavior on declined confirmation.
 - Note: the pipeline watch progress-notification callback is handled separately under 2.4, as part of decoupling the polling loop from single-pass observation — it is not part of this item.
 
-**2.4 Before "Pipeline Monitoring & Logs" — canonical pipeline models + decouple the watch loop from observation.**
+**2.4 Before "Pipeline Monitoring & Logs" — canonical pipeline models + decouple the watch loop from observation. - COMPLETE**
 
 - Problem: The same operational concept (a pipeline execution's stage/action state) has multiple overlapping representations: the AWS adapter's `ActionStateResult`/`StageStateResult`, a near-duplicate `PipelineActionSummary`/`PipelineStageSummary` defined again inside the watch workflow, and callers elsewhere (`failures.py`, `pipeline/state.py`, root status) that fall back to `Iterable[Any]` and `getattr()` because both shapes circulate. Separately, `watch_pipeline_workflow` is a blocking `while True: time.sleep(interval)` loop that also owns retry tolerance, timeout handling, diagnostic enrichment, callbacks, and state persistence all in one place — untenable for a Web server thread over a 15–30 minute pipeline run.
 - Target design:
@@ -132,7 +132,7 @@ Each item lists: the concrete problem, the target design, why it must land befor
   5. Update `collect_pipeline_action_failures`, root status, watch, and state persistence to consume the canonical typed models instead of `Any`/`getattr`.
 - Preserve: execution-identity filtering, `NOT_FOUND` propagation tolerance, timeout semantics, terminal diagnostic enrichment, and exactly what gets persisted to runtime state. This is a medium-risk refactor — treat retry/timeout/diagnostic behavior as must-preserve, not incidental.
 
-**2.5 Before "Bootstrap Resources" — structured bootstrap actions instead of terminal-styled strings.**
+**2.5 Before "Bootstrap Resources" — structured bootstrap actions instead of terminal-styled strings. - COMPLETE**
 
 - Problem: `BootstrapPlanResult` exposes `actions: list[str]` and `warnings: list[str]`, and the workflow embeds Rich terminal markup directly in those strings (e.g. `"[bold red]MISSING[/bold red]"`). A browser would have to parse or strip terminal markup, and the actual action severity/resource identity is trapped inside prose.
 - Target design: A small typed `BootstrapAction` record containing at least: subject/resource, operation or status (`CREATE`, `UPDATE`, `NO_CHANGE`, `MISSING`, `WARNING`), a plain message, and optional severity. Keep `warnings` as plain domain messages. The CLI renderer becomes solely responsible for turning status/severity into Rich styling; the Web layer maps the same status/severity to its own styling.
