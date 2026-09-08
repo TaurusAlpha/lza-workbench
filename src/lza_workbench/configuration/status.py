@@ -125,6 +125,7 @@ class ConfigurationSynchronizationStatus:
     downloaded_at: object | None
     artifact_etag: str | None
     artifact_version_id: str | None
+    remote_sync: RemoteSyncStatus | None
 
 
 @dataclass(frozen=True)
@@ -137,7 +138,6 @@ class ConfigurationStatusResult:
     pipeline: ConfigurationPipelineStatus
     synchronization: ConfigurationSynchronizationStatus
     warnings: tuple[str, ...]
-    remote_sync: RemoteSyncStatus | None = None
 
 
 

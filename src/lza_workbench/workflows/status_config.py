@@ -343,6 +343,7 @@ def get_config_status_workflow(
         downloaded_at=resolved_state.config_downloaded_at if resolved_state else None,
         artifact_etag=resolved_state.config_artifact_etag if resolved_state else None,
         artifact_version_id=resolved_state.config_artifact_version_id if resolved_state else None,
+        remote_sync=remote_sync,
     )
 
 
@@ -360,7 +361,6 @@ def get_config_status_workflow(
         pipeline=pipeline,
         synchronization=synchronization,
         warnings=warnings,
-        remote_sync=remote_sync,
     )
 
 

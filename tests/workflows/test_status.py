@@ -948,8 +948,7 @@ def test_get_config_status_workflow_s3_remote_sync(tmp_path: Path) -> None:
             state=state,
             workspace_dir=tmp_path,
         )
-        assert result.remote_sync is not None
-        assert result.remote_sync.status == "Synchronized"
-        assert result.remote_sync.is_synced is True
-        assert "s3-etag-123" in result.remote_sync.summary
-
+        assert result.synchronization.remote_sync is not None
+        assert result.synchronization.remote_sync.status == "Synchronized"
+        assert result.synchronization.remote_sync.is_synced is True
+        assert "s3-etag-123" in result.synchronization.remote_sync.summary

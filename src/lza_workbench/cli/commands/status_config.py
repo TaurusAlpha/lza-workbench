@@ -74,8 +74,11 @@ def _render_local_config(result: ConfigurationStatusResult) -> None:
             print_kv("Working Tree", "Clean", style="green")
 
         if not isinstance(result.repository, S3ConfigurationRepositoryStatus):
-            if result.remote_sync:
-                print_kv("Remote Sync", format_status(result.remote_sync.summary))
+            if result.synchronization.remote_sync:
+                print_kv(
+                    "Remote Sync",
+                    format_status(result.synchronization.remote_sync.summary),
+                )
             elif local_git.sync_status:
                 print_kv("Remote Sync", format_status(local_git.sync_status.summary))
 
@@ -125,8 +128,11 @@ def _render_repository_settings(result: ConfigurationStatusResult) -> None:
         elif repository.object_exists is False:
             print_kv("Remote Archive Status", "Not uploaded yet", style="yellow")
 
-        if result.remote_sync:
-            print_kv("Remote Sync", format_status(result.remote_sync.summary))
+        if result.synchronization.remote_sync:
+            print_kv(
+                "Remote Sync",
+                format_status(result.synchronization.remote_sync.summary),
+            )
 
     elif isinstance(repository, CodeCommitConfigurationRepositoryStatus):
 
