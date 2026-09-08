@@ -23,13 +23,33 @@ function pipelineFields(pipeline) {
   ];
 }
 
+function configurationSyncStatus(configuration) {
+  if (!configuration.localGitClean) {
+    return "Local changes";
+  }
+
+  switch (configuration.gitSync?.status) {
+    case "Synchronized":
+      return "In sync";
+    case "Ahead":
+    case "Behind":
+    case "Diverged":
+      return "Drift detected";
+    case undefined:
+      return "Sync unavailable";
+    default:
+      return configuration.gitSync.status;
+  }
+}
+
 export function renderOverview(container, status) {
   container.innerHTML = [
     card("Workspace", [
       ["Customer", status.workspace.customerName],
       ["LZA version", status.workspace.lzaVersion],
       ["Directory", status.workspace.directory],
-    ], status.health.workspace),
+      ["Validation", "Not implemented yet"],
+    ], "Validation pending"),
     card("AWS context", [
       ["Profile", status.aws.profile],
       ["Region", status.aws.region],
@@ -46,7 +66,7 @@ export function renderOverview(container, status) {
       ["Local Git", status.configuration.localGitBranch],
       ["Uncommitted changes", status.configuration.localGitUncommitted],
       ["Remote sync", status.configuration.gitSync?.summary],
-    ], status.health.configuration),
+    ], configurationSyncStatus(status.configuration)),
     card("Installer pipeline", pipelineFields(status.installerPipeline), status.installerPipeline.status),
     card("Configuration pipeline", pipelineFields(status.configurationPipeline), status.configurationPipeline.status),
   ].join("");

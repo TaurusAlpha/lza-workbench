@@ -137,6 +137,8 @@ Implementation checklist:
 - [ ] Detect inconsistent settings between workspace, installer, and configuration metadata.
 - [ ] Detect common LZA configuration mistakes.
 - [ ] Produce concise pass, warning, and failure results.
+- [ ] Return a typed validation summary for the Web Overview workspace card; do not use deployment
+  health as a substitute for workspace/configuration validation.
 - [ ] Return a non-zero exit code when validation fails.
 - [ ] Keep validation read-only.
 - [ ] Reuse validation logic from other workflows rather than duplicating checks.
