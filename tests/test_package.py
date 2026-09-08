@@ -146,6 +146,30 @@ def test_cli_commands_do_not_import_aws_or_installer_internals() -> None:
     ), f"CLI command handlers import directly from AWS or installer internals: {violations}"
 
 
+def test_web_interface_does_not_import_feature_or_aws_packages() -> None:
+    """Keep Web routes as adapters over workflows rather than feature-policy owners."""
+    forbidden = {
+        "lza_workbench.aws",
+        "lza_workbench.configuration",
+        "lza_workbench.installer",
+        "lza_workbench.pipeline",
+        "lza_workbench.workspace",
+    }
+    violations: list[tuple[str, int, str]] = []
+
+    for path in (SOURCE_ROOT / "web").glob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                for module in forbidden:
+                    if node.module == module or node.module.startswith(f"{module}."):
+                        violations.append(
+                            (str(path.relative_to(PROJECT_ROOT)), node.lineno, node.module)
+                        )
+
+    assert not violations, f"Web interface imports feature/AWS packages: {violations}"
+
+
 def test_no_direct_boto3_session_or_client_outside_factory() -> None:
     """Verify no file in src/lza_workbench/aws/ except client_factory calls boto3.Session/client."""
     aws_dir = SOURCE_ROOT / "aws"

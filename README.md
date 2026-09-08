@@ -75,6 +75,26 @@ lza installer plan
 Use `--dry-run` with either command to avoid local writes. `lza installer plan` never modifies AWS
 resources.
 
+## Local Web Interface
+
+Start the read-only local workspace overview from inside a workspace:
+
+```bash
+lza ui
+```
+
+The server listens on `http://127.0.0.1:8000` and opens the Overview page in a browser. Use an
+explicit workspace path when launching elsewhere, or disable automatic browser opening for an SSH
+or headless session:
+
+```bash
+lza ui --workspace-dir /path/to/customer-workspace
+lza ui --no-browser --port 8080
+```
+
+The initial Web interface shows workspace and deployment status only. It does not edit local
+configuration or perform AWS mutations.
+
 ## Import an Existing Workspace
 
 Adopt an existing customer-owned LZA configuration by directory:

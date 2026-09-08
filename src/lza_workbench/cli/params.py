@@ -97,6 +97,29 @@ WorkspaceDir = Annotated[
     ),
 ]
 
+UiWorkspaceDir = Annotated[
+    Path | None,
+    typer.Option(
+        "--workspace-dir",
+        help="Workspace directory to display (defaults to the current directory).",
+    ),
+]
+
+UiHost = Annotated[
+    str,
+    typer.Option("--host", help="Local server host."),
+]
+
+UiPort = Annotated[
+    int,
+    typer.Option("--port", min=1, max=65535, help="Local server port."),
+]
+
+NoBrowser = Annotated[
+    bool,
+    typer.Option("--no-browser", help="Do not open the Overview page."),
+]
+
 Force = Annotated[
     bool,
     typer.Option("--force", help="Reinitialize generated files in an existing workspace."),

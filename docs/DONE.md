@@ -6,6 +6,11 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### Local Web Overview Skeleton
+- Added `lza ui`, an on-demand loopback FastAPI/Uvicorn server for one launch-selected workspace.
+- Added a framework-free static Overview page backed by `GET /api/status`, reusing the root-status workflow and presenting workspace, AWS, installer, configuration, pipeline, and health summaries.
+- Preserved read-only behavior and translated expected workspace failures into browser-safe API responses; AWS-offline responses continue to show recorded status where available.
+
 ### Root Status Workflow Coherence & Git Health Independence
 - Unified `get_root_status_workflow` into a single coherent observation pass, loading one `WorkspaceContext` and resolving one `AwsExecutionContext` without nesting `get_config_status_workflow`.
 - Removed redundant compatibility fields and `config_status` from `RootStatusResult`, preserving structured summaries (`installer`, `installer_pipeline`, `configuration_repo`, `configuration_pipeline`, `health`).
@@ -91,5 +96,4 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 - **Normalized Command Renderers**: Standardized section titles, numbering, labels, and formatting across `status`, `status installer` (`installer status`), `status config` (`config status`), `status pipeline`, `pipeline watch`, and `config deploy`.
 - **Cleaned Storage Leaks & Unnecessary IDs**: Suppressed internal `.lza/state.json` file paths in section headings in favor of domain terms (`Synchronization History`, `Execution History`), and omitted full caller/stack ARNs from default views while retaining vital account/region/profile context.
 - **Multi-line Diagnostic Extraction & Custom Resource Error Resolution (`aws/codebuild.py`)**: Enhanced CloudWatch / CodeBuild diagnostic parsing with multi-line error block aggregation and lookahead. Accurately extracts root cause messages from CDK `DeploymentError: Resource updates failed:`, Custom Resource failures (`Received response status [FAILED] from custom resource. Message returned: ...`), and CloudFormation resource creation errors across multiple lines.
-
 

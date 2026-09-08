@@ -301,6 +301,24 @@ def bootstrap_command(
     )
 
 
+@app.command("ui")
+def ui_command(
+    workspace_dir: params.UiWorkspaceDir = None,
+    host: params.UiHost = "127.0.0.1",
+    port: params.UiPort = 8000,
+    no_browser: params.NoBrowser = False,
+) -> None:
+    """Start the local read-only LZA Workbench Web interface."""
+    from lza_workbench.web.main import run_web_server
+
+    run_web_server(
+        workspace_dir=workspace_dir or Path.cwd(),
+        host=host,
+        port=port,
+        open_browser=not no_browser,
+    )
+
+
 @config_app.command("init")
 def config_init_command(
     template: params.ConfigTemplate = None,

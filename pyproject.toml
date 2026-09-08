@@ -10,10 +10,12 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
   "boto3>=1.40.0",
+  "fastapi>=0.115.0",
   "pydantic>=2.11.0",
   "rich>=14.0.0",
   "ruamel.yaml>=0.18.0",
   "typer>=0.16.0",
+  "uvicorn>=0.30.0",
 ]
 
 [project.scripts]
@@ -21,7 +23,7 @@ lza = "lza_workbench.cli:main"
 lza-workbench = "lza_workbench.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8.4.0", "ruff>=0.12.0"]
+dev = ["httpx2>=0.1.0", "pytest>=8.4.0", "ruff>=0.12.0"]
 
 [tool.ruff]
 line-length = 100

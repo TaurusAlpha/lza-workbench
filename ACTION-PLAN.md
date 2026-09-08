@@ -66,7 +66,7 @@ Each item lists: the concrete problem, the target design, why it must land befor
 
 ---
 
-### Phase 1 — Before / alongside the first read-only GUI overview
+### Phase 1 — Before / alongside the first read-only GUI overview - **COMPLETE**
 
 **1.1 Replace ordinal `WorkspaceReadinessLevel` with a multi-dimensional `WorkspaceAssessment`.**
 

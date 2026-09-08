@@ -323,8 +323,8 @@ automation, debugging, SSH, and advanced use. Implementation follows
 [`docs/CODEX-GUI-IMPLEMENTATION.md`](docs/CODEX-GUI-IMPLEMENTATION.md).
 
 - [x] Complete the approved root-status workflow readiness refactors before adding Web dependencies.
-- [ ] Choose the minimal local Web stack after the reusable workflow boundary is ready.
-- [ ] Deliver the first read-only vertical slice for workspace selection and overview status.
+- [x] Choose FastAPI/Uvicorn with static HTML, CSS, and native ES modules for the minimal local Web stack.
+- [x] Deliver the first read-only vertical slice for one launch-selected workspace and overview status.
 - [ ] Add detailed read-only installer, configuration, and pipeline views before mutation flows.
 - [ ] Keep multi-user/server operation out of the current scope.
 
