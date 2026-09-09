@@ -15,7 +15,7 @@ from lza_workbench.pipeline.failures import (
     collect_pipeline_action_failures,
     fetch_codebuild_diagnostics,
 )
-from lza_workbench.pipeline.models import PipelineExecutionSnapshot, PipelineStageState
+from lza_workbench.pipeline.models import PipelineStageState
 from lza_workbench.pipeline.observation import (
     observe_pipeline_execution,
     pipeline_state_to_snapshot,
