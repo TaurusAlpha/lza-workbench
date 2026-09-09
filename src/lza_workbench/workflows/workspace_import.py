@@ -350,6 +350,306 @@ def _metadata_paths(
     ]
 
 
+def _resolve_lza_version(
+    request: ImportWorkspaceRequest, existing: ExistingMetadata | None
+) -> str:
+    if request.lza_version is not None:
+        return request.lza_version
+    if existing and existing.config:
+        return existing.config.lza.version
+    return "v1.15.5"
+
+
+def _resolve_import_parameters(
+    request: ImportWorkspaceRequest,
+    existing: ExistingMetadata | None,
+    resolved_workspace_dir: Path,
+) -> tuple[str, str, str | None, str]:
+    if request.customer_name:
+        customer_name = request.customer_name
+    elif existing and existing.config:
+        customer_name = existing.config.customer.name
+    else:
+        customer_name = resolved_workspace_dir.name
+
+    customer_slug = (
+        existing.config.customer.slug
+        if existing and existing.config and existing.config.customer.name == customer_name
+        else normalize_customer_slug(customer_name)
+    )
+
+    if request.aws_auth_type != "profile":
+        raise LzaError(f"Invalid AWS auth type: {request.aws_auth_type}")
+
+    if request.aws_profile:
+        aws_profile = request.aws_profile
+    elif existing and existing.config:
+        aws_profile = existing.config.aws.profile
+    else:
+        aws_profile = f"{customer_slug}-root"
+
+    if request.aws_region is not None:
+        aws_region = request.aws_region
+    elif existing and existing.config:
+        aws_region = existing.config.aws.region
+    else:
+        aws_region = "us-east-1"
+
+    return customer_name, customer_slug, aws_profile, aws_region
+
+
+def _initialize_import_state(
+    config: WorkspaceConfig,
+    existing: ExistingMetadata | None,
+    provenance: GitProvenance | None,
+    resolved_config_dir: Path,
+) -> WorkspaceState:
+    if existing and existing.state:
+        state = existing.state.model_copy(deep=True)
+    else:
+        state = WorkspaceState.from_config(config)
+
+    state.imported = True
+    if state.imported_at is None:
+        state.imported_at = datetime.now(UTC)
+
+    if provenance:
+        state.config_files_count = provenance.files_count
+        if provenance.commit:
+            state.config_artifact_sha256 = provenance.commit
+        state.config_template_source = provenance.repo_type
+    else:
+        exclude = PackagingExcludeConfig()
+        state.config_files_count = count_config_files(
+            resolved_config_dir,
+            set(exclude.directories),
+            set(exclude.files),
+        )
+        state.config_template_source = "local"
+
+    return state
+
+
+def _check_github_installer_secret(
+    aws_ctx: Any,
+    config: WorkspaceConfig,
+    recommendations: list[str],
+) -> None:
+    try:
+        sm_client = aws_ctx.factory.get_client("secretsmanager")
+        secret_name = (
+            config.installer.source_code.github_secret_name
+            or "accelerator/github-token"
+        )
+        secret_details = inspect_secret_details(
+            client=sm_client, secret_name=secret_name
+        )
+        if not secret_details.exists:
+            recommendations.append(
+                "GitHub installer source detected, but Secrets Manager "
+                f"secret '{secret_name}' was not found. Create this secret "
+                "containing a valid GitHub token before deployment."
+            )
+        elif secret_details.value:
+            gh_res = validate_github_repository_access(
+                owner=config.installer.source_code.owner or "awslabs",
+                repository_name=config.installer.source_code.repository_name
+                or "landing-zone-accelerator-on-aws",
+                branch=config.installer.source_code.branch,
+                token=secret_details.value,
+            )
+            if not gh_res["accessible"]:
+                recommendations.append(
+                    f"GitHub repository check returned: {gh_res['error']}"
+                )
+    except Exception as gh_exc:
+        recommendations.append(f"GitHub token validation check skipped: {gh_exc}")
+
+
+def _inspect_live_installer(
+    aws_ctx: Any,
+    workspace_dir: Path,
+    config: WorkspaceConfig,
+    state: WorkspaceState,
+    recommendations: list[str],
+) -> tuple[WorkspaceConfig, WorkspaceState, bool, str | None, Path | None, str | None]:
+    stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
+    cfn_client = aws_ctx.factory.get_client("cloudformation")
+    cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=stack_name)
+
+    if not cfn_status.exists:
+        return config, state, False, None, None, None
+
+    installer_discovered = True
+    discovered_stack_status = f"{cfn_status.stack_name} ({cfn_status.stack_status})"
+    ssm_client = aws_ctx.factory.get_client("ssm")
+    deployed_template = get_cloudformation_stack_template(
+        client=cfn_client, stack_name=stack_name
+    )
+    if deployed_template is None:
+        recommendations.append(
+            "Live installer template could not be retrieved. Ensure the AWS identity "
+            "has cloudformation:GetTemplate, then run 'lza installer import'."
+        )
+    deployed_version = resolve_deployed_installer_version(
+        cfn_client=cfn_client,
+        ssm_client=ssm_client,
+        stack_name=stack_name,
+        accelerator_prefix=(
+            cfn_status.deployed_parameters.get("AcceleratorPrefix")
+            or config.lza.accelerator_prefix
+        ),
+    )
+    installer_template_path: Path | None = None
+    installer_template_body: str | None = None
+    if deployed_template is not None:
+        installer_template_path = prepare_installer_template_sync(
+            workspace_dir=workspace_dir,
+            config=config,
+            state=state,
+            template_body=deployed_template,
+        )
+        installer_template_body = deployed_template
+    config = apply_installer_config_sync(
+        config=config,
+        cfn_status=cfn_status,
+        deployed_version=deployed_version,
+    )
+    state = apply_installer_state_sync(
+        state=state,
+        cfn_status=cfn_status,
+        deployed_version=deployed_version,
+    )
+    if config.installer.source_code.repository_type == "github":
+        _check_github_installer_secret(aws_ctx, config, recommendations)
+
+    return (
+        config,
+        state,
+        installer_discovered,
+        discovered_stack_status,
+        installer_template_path,
+        installer_template_body,
+    )
+
+
+def _discover_live_aws(
+    request: ImportWorkspaceRequest,
+    workspace_dir: Path,
+    config: WorkspaceConfig,
+    state: WorkspaceState,
+) -> tuple[
+    WorkspaceConfig,
+    WorkspaceState,
+    dict[str, str] | None,
+    bool,
+    str | None,
+    list[str],
+    Path | None,
+    str | None,
+]:
+    recommendations: list[str] = []
+    if request.skip_aws_check:
+        recommendations.append(
+            "Live AWS discovery was skipped (--skip-aws-check). "
+            "Run 'lza installer import' to synchronize deployed settings."
+        )
+        return config, state, None, False, None, recommendations, None, None
+
+    identity: dict[str, str] | None = None
+    installer_discovered = False
+    discovered_stack_status: str | None = None
+    installer_template_path: Path | None = None
+    installer_template_body: str | None = None
+
+    try:
+        aws_ctx = resolve_aws_execution_context(
+            profile=config.aws.profile,
+            region=config.aws.region,
+            role_arn=config.aws.role_arn,
+            expected_account_id=config.aws.account_id,
+            prime_credentials=config.aws.prime_credentials,
+        )
+        identity = aws_ctx.identity
+        if identity:
+            state.management_account_id = identity.get("account")
+            state.caller_arn = identity.get("arn")
+            (
+                config,
+                state,
+                installer_discovered,
+                discovered_stack_status,
+                installer_template_path,
+                installer_template_body,
+            ) = _inspect_live_installer(
+                aws_ctx, workspace_dir, config, state, recommendations
+            )
+        elif aws_ctx.error:
+            recommendations.append(
+                f"AWS connection check failed ({aws_ctx.error}). "
+                "Verify credentials and run 'lza installer import'."
+            )
+    except Exception as exc:
+        recommendations.append(
+            f"Live AWS discovery skipped due to error: {exc}. "
+            "Run 'lza installer import' to sync deployed installer parameters."
+        )
+
+    return (
+        config,
+        state,
+        identity,
+        installer_discovered,
+        discovered_stack_status,
+        recommendations,
+        installer_template_path,
+        installer_template_body,
+    )
+
+
+def _build_import_recommendations(
+    installer_discovered: bool,
+    config: WorkspaceConfig,
+    state: WorkspaceState,
+    recommendations: list[str],
+) -> None:
+    if installer_discovered:
+        if config.configuration.repository.type == "s3" and state.config_downloaded_at is None:
+            recommendations.append(
+                "Run 'lza config download' to pull the latest remote S3 configuration archive."
+            )
+        recommendations.append("Run 'lza status' to inspect overall workspace readiness.")
+        recommendations.append(
+            "Run 'lza config push' to synchronize configuration to the remote destination."
+        )
+    elif not recommendations:
+        recommendations.append(
+            "Installer stack was not found in AWS; run 'lza installer plan' "
+            "or 'lza installer init' to configure installer deployment."
+        )
+
+
+def _collect_import_paths(
+    workspace_dir: Path,
+    existing: ExistingMetadata | None,
+    config: WorkspaceConfig,
+    state: WorkspaceState,
+    installer_template_path: Path | None,
+    installer_template_body: str | None,
+) -> list[Path]:
+    paths = _metadata_paths(workspace_dir, existing, config, state)
+    if (
+        installer_template_path is not None
+        and installer_template_body is not None
+        and (
+            not installer_template_path.is_file()
+            or installer_template_path.read_text(encoding="utf-8") != installer_template_body
+        )
+    ):
+        paths.append(installer_template_path)
+    return paths
+
+
 def prepare_workspace_import(request: ImportWorkspaceRequest) -> ImportWorkspacePreparation:
     """Discover an existing workspace and derive import metadata without writing files."""
     discovery = request.discovery
@@ -367,12 +667,7 @@ def prepare_workspace_import(request: ImportWorkspaceRequest) -> ImportWorkspace
     # Validate template files presence
     validate_template(resolved_config_dir)
 
-    if request.lza_version is not None:
-        resolved_version = request.lza_version
-    elif existing and existing.config:
-        resolved_version = existing.config.lza.version
-    else:
-        resolved_version = "v1.15.5"
+    resolved_version = _resolve_lza_version(request, existing)
 
     # Parse YAML syntax and validate LZA configuration schema
     parsed_yaml = validate_yaml_syntax(resolved_config_dir)
@@ -387,41 +682,15 @@ def prepare_workspace_import(request: ImportWorkspaceRequest) -> ImportWorkspace
     if provenance is None and resolved_config_dir != resolved_workspace_dir:
         provenance = resolve_git_provenance(resolved_workspace_dir)
 
-    if request.customer_name:
-        resolved_customer_name = request.customer_name
-    elif existing and existing.config:
-        resolved_customer_name = existing.config.customer.name
-    else:
-        resolved_customer_name = resolved_workspace_dir.name
-
-    customer_slug = (
-        existing.config.customer.slug
-        if existing and existing.config and existing.config.customer.name == resolved_customer_name
-        else normalize_customer_slug(resolved_customer_name)
+    customer_name, customer_slug, aws_profile, aws_region = _resolve_import_parameters(
+        request, existing, resolved_workspace_dir
     )
 
-    if request.aws_auth_type != "profile":
-        raise LzaError(f"Invalid AWS auth type: {request.aws_auth_type}")
-
-    if request.aws_profile:
-        resolved_profile = request.aws_profile
-    elif existing and existing.config:
-        resolved_profile = existing.config.aws.profile
-    else:
-        resolved_profile = f"{customer_slug}-root"
-
-    if request.aws_region is not None:
-        resolved_region = request.aws_region
-    elif existing and existing.config:
-        resolved_region = existing.config.aws.region
-    else:
-        resolved_region = "us-east-1"
-
     config = build_import_workspace_config(
-        customer_name=resolved_customer_name,
+        customer_name=customer_name,
         customer_slug=customer_slug,
-        aws_profile=resolved_profile,
-        aws_region=resolved_region,
+        aws_profile=aws_profile,
+        aws_region=aws_region,
         lza_version=resolved_version,
         workspace_dir=resolved_workspace_dir,
         config_dir=resolved_config_dir,
@@ -436,168 +705,29 @@ def prepare_workspace_import(request: ImportWorkspaceRequest) -> ImportWorkspace
             "Re-run with --force to intentionally replace workspace metadata."
         )
 
-    if existing and existing.state:
-        state = existing.state.model_copy(deep=True)
-    else:
-        state = WorkspaceState.from_config(config)
+    state = _initialize_import_state(config, existing, provenance, resolved_config_dir)
 
-    # Track imported state
-    state.imported = True
-    if state.imported_at is None:
-        state.imported_at = datetime.now(UTC)
+    (
+        config,
+        state,
+        identity,
+        installer_discovered,
+        discovered_stack_status,
+        recommendations,
+        installer_template_path,
+        installer_template_body,
+    ) = _discover_live_aws(request, resolved_workspace_dir, config, state)
 
-    # Update operational state with discovered configuration metrics
-    if provenance:
-        state.config_files_count = provenance.files_count
-        if provenance.commit:
-            state.config_artifact_sha256 = provenance.commit
-        state.config_template_source = provenance.repo_type
-    else:
-        exclude = PackagingExcludeConfig()
-        state.config_files_count = count_config_files(
-            resolved_config_dir,
-            set(exclude.directories),
-            set(exclude.files),
-        )
-        state.config_template_source = "local"
+    _build_import_recommendations(installer_discovered, config, state, recommendations)
 
-    identity: dict[str, str] | None = None
-    installer_discovered = False
-    discovered_stack_status: str | None = None
-    recommendations: list[str] = []
-    installer_template_path: Path | None = None
-    installer_template_body: str | None = None
-
-    if not request.skip_aws_check:
-        try:
-            aws_ctx = resolve_aws_execution_context(
-                profile=config.aws.profile,
-                region=config.aws.region,
-                role_arn=config.aws.role_arn,
-                expected_account_id=config.aws.account_id,
-                prime_credentials=config.aws.prime_credentials,
-            )
-            identity = aws_ctx.identity
-            if identity:
-                state.management_account_id = identity.get("account")
-                state.caller_arn = identity.get("arn")
-
-                stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
-                cfn_client = aws_ctx.factory.get_client("cloudformation")
-                cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=stack_name)
-
-                if cfn_status.exists:
-                    installer_discovered = True
-                    discovered_stack_status = f"{cfn_status.stack_name} ({cfn_status.stack_status})"
-                    ssm_client = aws_ctx.factory.get_client("ssm")
-                    deployed_template = get_cloudformation_stack_template(
-                        client=cfn_client, stack_name=stack_name
-                    )
-                    if deployed_template is None:
-                        recommendations.append(
-                            "Live installer template could not be retrieved. Ensure the AWS identity "
-                            "has cloudformation:GetTemplate, then run 'lza installer import'."
-                        )
-                    deployed_version = resolve_deployed_installer_version(
-                        cfn_client=cfn_client,
-                        ssm_client=ssm_client,
-                        stack_name=stack_name,
-                        accelerator_prefix=(
-                            cfn_status.deployed_parameters.get("AcceleratorPrefix")
-                            or config.lza.accelerator_prefix
-                        ),
-                    )
-                    if deployed_template is not None:
-                        installer_template_path = prepare_installer_template_sync(
-                            workspace_dir=resolved_workspace_dir,
-                            config=config,
-                            state=state,
-                            template_body=deployed_template,
-                        )
-                        installer_template_body = deployed_template
-                    config = apply_installer_config_sync(
-                        config=config,
-                        cfn_status=cfn_status,
-                        deployed_version=deployed_version,
-                    )
-                    state = apply_installer_state_sync(
-                        state=state,
-                        cfn_status=cfn_status,
-                        deployed_version=deployed_version,
-                    )
-                    if config.installer.source_code.repository_type == "github":
-                        try:
-                            sm_client = aws_ctx.factory.get_client("secretsmanager")
-                            secret_name = (
-                                config.installer.source_code.github_secret_name
-                                or "accelerator/github-token"
-                            )
-                            secret_details = inspect_secret_details(
-                                client=sm_client, secret_name=secret_name
-                            )
-                            if not secret_details.exists:
-                                recommendations.append(
-                                    "GitHub installer source detected, but Secrets Manager "
-                                    f"secret '{secret_name}' was not found. Create this secret "
-                                    "containing a valid GitHub token before deployment."
-                                )
-                            elif secret_details.value:
-                                gh_res = validate_github_repository_access(
-                                    owner=config.installer.source_code.owner or "awslabs",
-                                    repository_name=config.installer.source_code.repository_name
-                                    or "landing-zone-accelerator-on-aws",
-                                    branch=config.installer.source_code.branch,
-                                    token=secret_details.value,
-                                )
-                                if not gh_res["accessible"]:
-                                    recommendations.append(
-                                        f"GitHub repository check returned: {gh_res['error']}"
-                                    )
-                        except Exception as gh_exc:
-                            recommendations.append(f"GitHub token validation check skipped: {gh_exc}")
-            elif aws_ctx.error:
-                recommendations.append(
-                    f"AWS connection check failed ({aws_ctx.error}). "
-                    "Verify credentials and run 'lza installer import'."
-                )
-        except Exception as exc:
-            recommendations.append(
-                f"Live AWS discovery skipped due to error: {exc}. "
-                "Run 'lza installer import' to sync deployed installer parameters."
-            )
-    else:
-        recommendations.append(
-            "Live AWS discovery was skipped (--skip-aws-check). "
-            "Run 'lza installer import' to synchronize deployed settings."
-        )
-
-    # Next-step recommendations
-    if installer_discovered:
-        if config.configuration.repository.type == "s3" and state.config_downloaded_at is None:
-            recommendations.append(
-                "Run 'lza config download' to pull the latest remote S3 configuration archive."
-            )
-        recommendations.append("Run 'lza status' to inspect overall workspace readiness.")
-        recommendations.append(
-            "Run 'lza config push' to synchronize configuration to the remote destination."
-        )
-    else:
-        if not recommendations:
-            recommendations.append(
-                "Installer stack was not found in AWS; run 'lza installer plan' "
-                "or 'lza installer init' to configure installer deployment."
-            )
-
-    paths = _metadata_paths(resolved_workspace_dir, existing, config, state)
-    if (
-        installer_template_path is not None
-        and installer_template_body is not None
-        and (
-            not installer_template_path.is_file()
-            or installer_template_path.read_text(encoding="utf-8") != installer_template_body
-        )
-    ):
-        paths.append(installer_template_path)
+    paths = _collect_import_paths(
+        resolved_workspace_dir,
+        existing,
+        config,
+        state,
+        installer_template_path,
+        installer_template_body,
+    )
     is_repaired = bool(existing and existing.is_repaired)
 
     result = WorkspaceImportResult(
