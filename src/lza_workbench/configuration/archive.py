@@ -66,6 +66,71 @@ def create_zip_archive(
     )
 
 
+def _clear_directory_contents(
+    directory: Path,
+    exclude_dirs: set[str],
+    exclude_files: set[str],
+) -> None:
+    if not directory.is_dir():
+        return
+    for item in list(directory.iterdir()):
+        if item.name in exclude_dirs or (item.is_file() and item.name in exclude_files):
+            continue
+        if item.is_dir():
+            shutil.rmtree(item)
+        else:
+            item.unlink()
+
+
+def _backup_directory_contents(
+    source_dir: Path,
+    backup_dir: Path,
+    exclude_dirs: set[str],
+    exclude_files: set[str],
+) -> None:
+    if not source_dir.is_dir():
+        return
+    for item in source_dir.iterdir():
+        if item.name in exclude_dirs or (item.is_file() and item.name in exclude_files):
+            continue
+        dest = backup_dir / item.name
+        if item.is_dir():
+            shutil.copytree(item, dest)
+        else:
+            shutil.copy2(item, dest)
+
+
+def _restore_directory_contents(
+    backup_dir: Path,
+    target_dir: Path,
+) -> None:
+    if not backup_dir.is_dir():
+        return
+    for item in backup_dir.iterdir():
+        dest = target_dir / item.name
+        if item.is_dir():
+            shutil.copytree(item, dest)
+        else:
+            shutil.copy2(item, dest)
+
+
+def _copy_staged_files(
+    source_dir: Path,
+    target_dir: Path,
+    exclude_dirs: set[str],
+    exclude_files: set[str],
+) -> None:
+    for item in source_dir.rglob("*"):
+        if not item.is_file():
+            continue
+        rel_path = item.relative_to(source_dir)
+        if is_path_excluded(rel_path, exclude_dirs, exclude_files):
+            continue
+        dest = target_dir / rel_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(item, dest)
+
+
 def extract_zip_to_workspace(
     *,
     zip_path: Path,
@@ -107,52 +172,16 @@ def extract_zip_to_workspace(
             removed=sorted(before_keys - incoming_keys),
         )
 
-        if config_dir.is_dir():
-            for item in config_dir.iterdir():
-                if item.name in exclude_dirs or (item.is_file() and item.name in exclude_files):
-                    continue
-                if item.is_dir():
-                    shutil.copytree(item, backup_dir / item.name)
-                else:
-                    shutil.copy2(item, backup_dir / item.name)
-
+        _backup_directory_contents(config_dir, backup_dir, exclude_dirs, exclude_files)
         config_dir.mkdir(parents=True, exist_ok=True)
 
         try:
-            for item in list(config_dir.iterdir()):
-                if item.name in exclude_dirs or (item.is_file() and item.name in exclude_files):
-                    continue
-                if item.is_dir():
-                    shutil.rmtree(item)
-                else:
-                    item.unlink()
-
-            for item in source_content_dir.rglob("*"):
-                if not item.is_file():
-                    continue
-                rel_path = item.relative_to(source_content_dir)
-                if is_path_excluded(rel_path, exclude_dirs, exclude_files):
-                    continue
-                dest = config_dir / rel_path
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(item, dest)
-
+            _clear_directory_contents(config_dir, exclude_dirs, exclude_files)
+            _copy_staged_files(source_content_dir, config_dir, exclude_dirs, exclude_files)
             return diff_result
-
         except Exception:
-            for item in list(config_dir.iterdir()):
-                if item.name in exclude_dirs or (item.is_file() and item.name in exclude_files):
-                    continue
-                if item.is_dir():
-                    shutil.rmtree(item)
-                else:
-                    item.unlink()
-
-            for item in backup_dir.iterdir():
-                if item.is_dir():
-                    shutil.copytree(item, config_dir / item.name)
-                else:
-                    shutil.copy2(item, config_dir / item.name)
+            _clear_directory_contents(config_dir, exclude_dirs, exclude_files)
+            _restore_directory_contents(backup_dir, config_dir)
             raise
 
 
