@@ -24,8 +24,13 @@ lza = "lza_workbench.cli:main"
 lza-workbench = "lza_workbench.cli:main"
 
 [dependency-groups]
-dev = ["httpx2>=0.1.0", "pytest>=8.4.0", "ruff>=0.12.0"]
-# dev = ["httpx2>=0.1.0", "pytest>=8.4.0", "ruff>=0.12.0", "complexipy>=8.0.1"]
+dev = [
+  "httpx2>=0.1.0",
+  "pytest>=8.4.0",
+  "ruff>=0.12.0",
+  "complexipy>=8.0.1",
+  "import-linter>=2.15.0",
+]
 
 [tool.ruff]
 line-length = 100
@@ -33,16 +38,32 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
-# extend-select = ["C901"]
+extend-select = ["C901"]
 
-# [tool.ruff.lint.mccabe]
-# # Standard thresholds: 10 (strict), 15 (moderate)
-# max-complexity = 15
+[tool.ruff.lint.mccabe]
+# Standard thresholds: 10 (strict), 15 (moderate)
+max-complexity = 15
 
-# [tool.complexipy]
-# paths = ["src"]
-# max-complexity-allowed = 15
-# exclude = ["tests/*"]
+[tool.complexipy]
+paths = ["src"]
+max-complexity-allowed = 15
+exclude = ["tests/*"]
+
+[tool.importlinter]
+root_packages = ["lza_workbench"]
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture"
+type = "layers"
+layers = [
+  "lza_workbench.cli | lza_workbench.web",
+  "lza_workbench.workflows",
+  "lza_workbench.configuration : lza_workbench.installer : lza_workbench.pipeline : lza_workbench.workspace",
+  "lza_workbench.aws",
+]
+ignore_imports = [
+  "lza_workbench.cli.main -> lza_workbench.web.main",
+]
 
 [tool.pytest.ini_options]
 addopts = "-q"
