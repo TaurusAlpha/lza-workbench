@@ -23,31 +23,64 @@ from lza_workbench.workspace.paths import normalize_customer_slug
 from lza_workbench.workspace.schema import LzaConfig
 
 
+def _render_import_provenance(result: WorkspaceImportResult) -> None:
+    provenance = result.provenance
+    if not provenance or not provenance.remote_url:
+        return
+    print_kv("Git remote", provenance.remote_url)
+    print_kv("Git branch", provenance.branch)
+    if provenance.commit:
+        print_kv("Git commit", provenance.commit)
+
+
+def _render_affected_paths(result: WorkspaceImportResult) -> None:
+    console.print("Affected paths:")
+    for path in result.affected_paths:
+        console.print(f"  - {path}")
+
+
+def _render_import_identity(result: WorkspaceImportResult) -> None:
+    if result.identity:
+        print_kv("AWS account", result.identity["account"])
+        print_kv("Caller ARN", result.identity["arn"])
+
+
+def _render_recommendations(result: WorkspaceImportResult) -> None:
+    if not result.recommendations:
+        return
+    console.print("\nNext steps:")
+    for recommendation in result.recommendations:
+        console.print(f"  - {recommendation}")
+
+
+def _render_import_location(result: WorkspaceImportResult) -> None:
+    print_kv("Workspace", result.workspace_dir)
+    print_kv("Configuration", result.config_dir)
+    _render_import_provenance(result)
+
+
+def _render_import_details(
+    result: WorkspaceImportResult,
+    *,
+    include_discovered_stack: bool,
+) -> None:
+    _render_import_location(result)
+    if include_discovered_stack and result.discovered_stack_status:
+        print_kv("Discovered installer stack", result.discovered_stack_status)
+    _render_affected_paths(result)
+    _render_import_identity(result)
+    console.print("Customer configuration files were preserved.")
+
+
 def render_workspace_import_result(result: WorkspaceImportResult) -> None:
     """Render the results of workspace import."""
-    workspace_dir = result.workspace_dir
-    config_dir = result.config_dir
-    paths = result.affected_paths
-    identity = result.identity
-    provenance = result.provenance
-
     if result.dry_run:
         print_dry_run_header("lza import")
-        print_kv("Workspace", workspace_dir)
-        print_kv("Configuration", config_dir)
-        if provenance and provenance.remote_url:
-            print_kv("Git remote", provenance.remote_url)
-            print_kv("Git branch", provenance.branch)
-            if provenance.commit:
-                print_kv("Git commit", provenance.commit)
+        _render_import_location(result)
         if result.repaired:
             console.print("[yellow]Mode:[/] Repair metadata")
-        console.print("Affected paths:")
-        for path in paths:
-            console.print(f"  - {path}")
-        if identity:
-            print_kv("AWS account", identity["account"])
-            print_kv("Caller ARN", identity["arn"])
+        _render_affected_paths(result)
+        _render_import_identity(result)
         console.print("Customer configuration files were preserved.")
         return
 
@@ -55,39 +88,14 @@ def render_workspace_import_result(result: WorkspaceImportResult) -> None:
         print_success("Workspace already imported; no metadata changes")
         if result.discovered_stack_status:
             print_kv("Discovered installer stack", result.discovered_stack_status)
-        if result.recommendations:
-            console.print("\nNext steps:")
-            for rec in result.recommendations:
-                console.print(f"  - {rec}")
+        _render_recommendations(result)
         return
 
-    if result.repaired:
-        print_success("Repaired and adopted LZA workspace")
-    else:
-        print_success("Imported LZA workspace")
-
-    print_kv("Workspace", workspace_dir)
-    print_kv("Configuration", config_dir)
-    if provenance and provenance.remote_url:
-        print_kv("Git remote", provenance.remote_url)
-        print_kv("Git branch", provenance.branch)
-        if provenance.commit:
-            print_kv("Git commit", provenance.commit)
-    if result.discovered_stack_status:
-        print_kv("Discovered installer stack", result.discovered_stack_status)
-
-    console.print("Affected paths:")
-    for path in paths:
-        console.print(f"  - {path}")
-    if identity:
-        print_kv("AWS account", identity["account"])
-        print_kv("Caller ARN", identity["arn"])
-    console.print("Customer configuration files were preserved.")
-
-    if result.recommendations:
-        console.print("\nNext steps:")
-        for rec in result.recommendations:
-            console.print(f"  - {rec}")
+    print_success(
+        "Repaired and adopted LZA workspace" if result.repaired else "Imported LZA workspace"
+    )
+    _render_import_details(result, include_discovered_stack=True)
+    _render_recommendations(result)
 
 
 def workspace_import_command(
