@@ -6,7 +6,7 @@ from pathlib import Path
 
 from lza_workbench.aws.codecommit import inspect_codecommit_repository
 from lza_workbench.aws.codeconnections import inspect_codeconnection
-from lza_workbench.aws.codepipeline import get_pipeline_state
+from lza_workbench.aws.codepipeline import PipelineStateResult, get_pipeline_state
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.aws.s3 import (
     S3ObjectObservation,
@@ -43,7 +43,6 @@ from lza_workbench.pipeline.failures import (
     collect_pipeline_action_failures,
     fetch_codebuild_diagnostics,
 )
-from lza_workbench.pipeline.models import PipelineExecutionSnapshot
 from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
@@ -235,7 +234,7 @@ def get_config_status_workflow(
     pipeline_failed_action: str | None = None
     pipeline_failed_build_url: str | None = None
     pipeline_error: str | None = None
-    pipeline_state: PipelineExecutionSnapshot | None = None
+    pipeline_state: PipelineStateResult | None = None
 
     recorded_pipeline_execution_id = (
         resolved_state.config_pipeline_execution_id if resolved_state else None

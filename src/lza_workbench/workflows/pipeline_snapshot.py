@@ -16,7 +16,10 @@ from lza_workbench.pipeline.failures import (
     fetch_codebuild_diagnostics,
 )
 from lza_workbench.pipeline.models import PipelineExecutionSnapshot, PipelineStageState
-from lza_workbench.pipeline.observation import observe_pipeline_execution
+from lza_workbench.pipeline.observation import (
+    observe_pipeline_execution,
+    pipeline_state_to_snapshot,
+)
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.workspace.context import (
     WorkspaceCapability,
@@ -130,14 +133,7 @@ def get_pipeline_snapshot_workflow(
         state_result = get_pipeline_state(
             client=codepipeline_client, pipeline_name=resolved_pipeline_name
         )
-        snapshot = PipelineExecutionSnapshot(
-            pipeline_name=resolved_pipeline_name,
-            exists=state_result.exists,
-            status=state_result.status,
-            execution_id=state_result.latest_execution_id,
-            stages=state_result.stages,
-            error=state_result.error,
-        )
+        snapshot = pipeline_state_to_snapshot(state_result)
 
     status = snapshot.status or "Unknown"
     is_terminal = status in TERMINAL_STATUSES

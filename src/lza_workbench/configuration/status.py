@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from lza_workbench.aws.codepipeline import PipelineStateResult
 from lza_workbench.configuration.git import GitRemoteSyncStatus, GitWorkingTreeStatus
 from lza_workbench.configuration.sync import RemoteSyncStatus
-from lza_workbench.pipeline.models import PipelineExecutionSnapshot
 
 
 @dataclass(frozen=True)
@@ -112,7 +112,7 @@ class ConfigurationPipelineStatus:
     failed_action: str | None
     failed_build_url: str | None
     error: str | None
-    state: PipelineExecutionSnapshot | None
+    state: PipelineStateResult | None
 
 
 @dataclass(frozen=True)

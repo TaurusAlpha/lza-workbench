@@ -2,24 +2,72 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.errors import LzaError
-from lza_workbench.pipeline.models import (
-    PipelineActionState,
-    PipelineExecutionSnapshot,
-    PipelineStageState,
-)
 
-# Compatibility aliases for callers outside the pipeline feature. New code should use the
-# canonical pipeline models directly.
-ActionStateResult = PipelineActionState
-PipelineExecutionResult = PipelineExecutionSnapshot
-PipelineStateResult = PipelineExecutionSnapshot
-StageStateResult = PipelineStageState
+
+@dataclass(frozen=True)
+class ActionStateResult:
+    """Observed state of an action within a CodePipeline stage."""
+
+    action_name: str
+    stage_name: str | None = None
+    status: str | None = None
+    summary: str | None = None
+    last_status_change: str | None = None
+    error_message: str | None = None
+    external_execution_id: str | None = None
+    external_execution_url: str | None = None
+    execution_id: str | None = None
+
+
+@dataclass(frozen=True)
+class StageStateResult:
+    """Observed state of a CodePipeline stage and its actions."""
+
+    stage_name: str
+    status: str | None = None
+    actions: list[ActionStateResult] = field(default_factory=list)
+    execution_id: str | None = None
+
+
+@dataclass(frozen=True)
+class PipelineStateResult:
+    """Detailed status and stage execution state of an AWS CodePipeline."""
+
+    pipeline_name: str
+    exists: bool
+    status: str | None = None
+    stages: list[StageStateResult] = field(default_factory=list)
+    latest_execution_id: str | None = None
+    created: str | None = None
+    updated: str | None = None
+    error: str | None = None
+
+    @property
+    def stage_states(self) -> list[StageStateResult]:
+        """Backward-compatibility alias for stages."""
+        return self.stages
+
+
+@dataclass(frozen=True)
+class PipelineExecutionResult:
+    """Status and metadata of an AWS CodePipeline execution."""
+
+    pipeline_name: str
+    exists: bool = False
+    execution_id: str = ""
+    status: str = "UNKNOWN"
+    status_summary: str | None = None
+    start_time: str | None = None
+    last_update_time: str | None = None
+    duration_seconds: float | None = None
+    error: str | None = None
 
 
 def get_pipeline_state(
@@ -37,11 +85,18 @@ def get_pipeline_state(
             error="Pipeline name is empty",
         )
 
+    if not client:
+        return PipelineStateResult(
+            pipeline_name=clean_pipeline_name,
+            exists=False,
+            status="UNKNOWN",
+            error="Connection failure: client is not initialized",
+        )
     try:
         response = client.get_pipeline_state(name=clean_pipeline_name)
         stage_states_raw = response.get("stageStates", [])
 
-        stage_results: list[PipelineStageState] = []
+        stage_results: list[StageStateResult] = []
         latest_execution_id: str | None = None
 
         has_in_progress = False
@@ -60,16 +115,14 @@ def get_pipeline_state(
             if s_exec_id and not latest_execution_id:
                 latest_execution_id = s_exec_id
 
-            actions: list[PipelineActionState] = []
+            actions: list[ActionStateResult] = []
             for action in stage.get("actionStates", []):
                 a_name = action.get("actionName", "")
                 a_exec = action.get("latestExecution") or {}
                 a_status = a_exec.get("status")
                 a_summary = a_exec.get("summary")
                 a_time = (
-                    str(a_exec.get("lastStatusChange"))
-                    if a_exec.get("lastStatusChange")
-                    else None
+                    str(a_exec.get("lastStatusChange")) if a_exec.get("lastStatusChange") else None
                 )
                 err_details = a_exec.get("errorDetails") or {}
                 a_err = err_details.get("message")
@@ -77,7 +130,7 @@ def get_pipeline_state(
                 a_ext_url = a_exec.get("externalExecutionUrl")
                 a_exec_id = a_exec.get("pipelineExecutionId")
                 actions.append(
-                    PipelineActionState(
+                    ActionStateResult(
                         action_name=a_name,
                         stage_name=s_name,
                         status=a_status,
@@ -110,7 +163,7 @@ def get_pipeline_state(
                 all_succeeded = False
 
             stage_results.append(
-                PipelineStageState(
+                StageStateResult(
                     stage_name=s_name,
                     status=s_status,
                     actions=actions,
@@ -148,10 +201,10 @@ def get_pipeline_state(
 
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "")
-        if (
-            code in {"PipelineNotFoundException", "ResourceNotFoundException"}
-            or "does not exist" in str(exc)
-        ):
+        if code in {
+            "PipelineNotFoundException",
+            "ResourceNotFoundException",
+        } or "does not exist" in str(exc):
             return PipelineStateResult(
                 pipeline_name=clean_pipeline_name,
                 exists=False,
@@ -197,9 +250,7 @@ def start_pipeline_execution(
             raise LzaError(
                 f"Cannot start execution for pipeline '{clean_pipeline_name}': {message}"
             ) from exc
-        raise LzaError(
-            f"Failed to start CodePipeline '{clean_pipeline_name}': {message}"
-        ) from exc
+        raise LzaError(f"Failed to start CodePipeline '{clean_pipeline_name}': {message}") from exc
     except BotoCoreError as exc:
         raise LzaError(f"AWS connection failure when starting pipeline: {exc}") from exc
 
@@ -313,3 +364,15 @@ def get_latest_pipeline_execution_id(
     # Fallback to get_pipeline_state
     state = get_pipeline_state(client=client, pipeline_name=clean_pipeline_name)
     return state.latest_execution_id
+
+
+__all__ = [
+    "ActionStateResult",
+    "PipelineExecutionResult",
+    "PipelineStateResult",
+    "StageStateResult",
+    "get_latest_pipeline_execution_id",
+    "get_pipeline_execution",
+    "get_pipeline_state",
+    "start_pipeline_execution",
+]

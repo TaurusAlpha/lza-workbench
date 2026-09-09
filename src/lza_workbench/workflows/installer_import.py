@@ -10,7 +10,7 @@ from lza_workbench.aws.cloudformation import (
     get_cloudformation_stack_status,
     get_cloudformation_stack_template,
 )
-from lza_workbench.aws.codepipeline import get_pipeline_state
+from lza_workbench.aws.codepipeline import PipelineStateResult, get_pipeline_state
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
@@ -19,7 +19,6 @@ from lza_workbench.installer.sync import (
     sync_installer_state,
     sync_installer_template,
 )
-from lza_workbench.pipeline.models import PipelineExecutionSnapshot
 from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
@@ -37,7 +36,7 @@ class InstallerImportResult:
     aws_identity: dict[str, str] | None
     aws_error: str | None
     dry_run: bool
-    pipeline_state: PipelineExecutionSnapshot | None = None
+    pipeline_state: PipelineStateResult | None = None
     applied_parameters: dict[str, str] = field(default_factory=dict)
 
 

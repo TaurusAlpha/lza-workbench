@@ -9,7 +9,7 @@ from lza_workbench.aws.cloudformation import (
     CfnStackStatusResult,
     get_cloudformation_stack_status,
 )
-from lza_workbench.aws.codepipeline import get_pipeline_state
+from lza_workbench.aws.codepipeline import PipelineStateResult, get_pipeline_state
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.installer.status import (
@@ -18,7 +18,6 @@ from lza_workbench.installer.status import (
     calculate_state_alignment,
 )
 from lza_workbench.installer.versions import normalize_lza_version
-from lza_workbench.pipeline.models import PipelineExecutionSnapshot
 from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
@@ -39,7 +38,7 @@ class InstallerStatusResult:
     configuration_drift: dict[str, tuple[str, str]]
     state_alignment: StateAlignment | None
     installer_pipeline_name: str
-    pipeline_state: PipelineExecutionSnapshot | None = None
+    pipeline_state: PipelineStateResult | None = None
 
 
 def prepare_installer_status(
@@ -53,7 +52,7 @@ def prepare_installer_status(
     aws_error: str | None,
     cfn_status: CfnStackStatusResult,
     deployed_version: str,
-    pipeline_state: PipelineExecutionSnapshot | None = None,
+    pipeline_state: PipelineStateResult | None = None,
 ) -> InstallerStatusResult:
     """Prepare report data without calling AWS, writing files, or rendering output."""
     drift = (
@@ -73,7 +72,7 @@ def prepare_installer_status(
     )
     prefix = config.lza.accelerator_prefix or "AWSAccelerator"
     installer_pipeline_name = config.pipelines.installer.name or f"{prefix}-Installer"
-    resolved_pipeline_state = pipeline_state or PipelineExecutionSnapshot(
+    resolved_pipeline_state = pipeline_state or PipelineStateResult(
         pipeline_name=installer_pipeline_name,
         exists=False,
         status="NOT_CHECKED",

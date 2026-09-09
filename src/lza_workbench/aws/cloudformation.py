@@ -140,6 +140,14 @@ def get_cloudformation_stack_status(
             error="Stack name is empty",
         )
 
+    if not client:
+        return CfnStackStatusResult(
+            stack_name=clean_stack_name,
+            exists=False,
+            stack_status="UNKNOWN",
+            error="Connection failure: client is not initialized",
+        )
+
     try:
         response = client.describe_stacks(StackName=clean_stack_name)
         stacks = response.get("Stacks", [])

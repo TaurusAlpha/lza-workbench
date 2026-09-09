@@ -12,6 +12,7 @@ from lza_workbench.aws.codebuild import (
     get_cloudwatch_log_events,
     get_codebuild_build_info,
 )
+from lza_workbench.aws.codepipeline import StageStateResult
 from lza_workbench.pipeline.models import PipelineStageState
 
 
@@ -478,7 +479,7 @@ def select_root_cause(diagnostics: list[FailureDiagnostic]) -> FailureDiagnostic
 
 
 def collect_pipeline_action_failures(
-    stages: Iterable[PipelineStageState],
+    stages: Iterable[PipelineStageState | StageStateResult],
     *,
     fetch_diagnostics: Callable[[str], list[str]],
 ) -> list[PipelineActionFailure]:

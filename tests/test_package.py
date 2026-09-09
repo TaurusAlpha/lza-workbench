@@ -100,8 +100,6 @@ def test_aws_adapters_do_not_import_workspace_or_features() -> None:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module:
-                if node.module == "lza_workbench.pipeline.models":
-                    continue
                 for f in forbidden:
                     if node.module == f or node.module.startswith(f"{f}."):
                         violations.append(
