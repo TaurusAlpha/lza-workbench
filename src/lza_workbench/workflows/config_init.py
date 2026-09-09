@@ -29,7 +29,7 @@ from lza_workbench.configuration.templates import (
 from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import write_workspace_config
 from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
-from lza_workbench.workspace.schema import WorkspaceConfig
+from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.state import write_workspace_state
 
 
@@ -52,6 +52,137 @@ class ConfigInitResult:
     git_committed: bool = False
     git_skipped: bool = False
     git_skip_reason: str | None = None
+
+
+def _check_existing_config(
+    *,
+    workspace_dir: Path,
+    target_config_dir: Path,
+    resolved_template: ResolvedTemplateSource,
+    config: WorkspaceConfig,
+    state: WorkspaceState | None,
+    force: bool,
+    dry_run: bool,
+) -> ConfigInitResult | None:
+    if not target_config_dir.exists():
+        return None
+
+    if not target_config_dir.is_dir():
+        raise LzaError(
+            f"Target configuration path exists and is not a directory: {target_config_dir}"
+        )
+
+    has_contents = any(target_config_dir.iterdir())
+    if not has_contents or force:
+        return None
+
+    if state and state.config_initialized_at:
+        current_snapshot = capture_init_values_snapshot(config)
+        saved_snapshot = state.config_init_values or {}
+        drifted = tuple(
+            sorted(k for k, v in current_snapshot.items() if saved_snapshot.get(k) != v)
+        )
+        return ConfigInitResult(
+            workspace_dir=workspace_dir,
+            config_dir=target_config_dir,
+            template_source=resolved_template,
+            written_paths=[],
+            unresolved_placeholders=[],
+            dry_run=dry_run,
+            config=config,
+            skipped=True,
+            is_managed=True,
+            initialized_at=state.config_initialized_at,
+            drifted_fields=drifted,
+            git_skipped=True,
+            git_skip_reason="Configuration directory already exists",
+        )
+
+    return ConfigInitResult(
+        workspace_dir=workspace_dir,
+        config_dir=target_config_dir,
+        template_source=resolved_template,
+        written_paths=[],
+        unresolved_placeholders=[],
+        dry_run=dry_run,
+        config=config,
+        skipped=True,
+        is_managed=False,
+        git_skipped=True,
+        git_skip_reason="Configuration directory already exists",
+    )
+
+
+def _clean_target_config_dir(target_config_dir: Path) -> None:
+    for child in target_config_dir.iterdir():
+        if child.name == ".git":
+            continue
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
+
+def _setup_config_git(
+    target_config_dir: Path,
+    repo_type: str,
+    dry_run: bool,
+) -> tuple[bool, bool, bool, str | None]:
+    if repo_type == "s3":
+        if is_git_root(target_config_dir):
+            return False, False, True, "Directory already has a Git repository"
+        if is_inside_parent_git_repo(target_config_dir):
+            return False, False, True, "Directory is inside an existing parent Git repository"
+        if not dry_run:
+            init_git_repository(target_config_dir)
+            create_initial_commit(target_config_dir, "Initial LZA configuration")
+            return True, True, False, None
+        return False, False, False, None
+
+    return False, False, True, f"Remote configuration repository is '{repo_type}'"
+
+
+def _persist_config_init_provenance(
+    *,
+    workspace_dir: Path,
+    target_config_dir: Path,
+    resolved_template: ResolvedTemplateSource,
+    config: WorkspaceConfig,
+    state: WorkspaceState | None,
+    written_paths: list[Path],
+    repo_type: str,
+) -> None:
+    validate_template(target_config_dir)
+
+    template_source_type = (
+        "packaged"
+        if resolved_template.source_type == "bundled"
+        else resolved_template.source_type
+    )
+    current_template = config.configuration.template
+    if (
+        current_template.name != resolved_template.source
+        or current_template.source != template_source_type
+    ):
+        current_template.name = resolved_template.source
+        current_template.source = template_source_type  # type: ignore[assignment]
+        write_workspace_config(workspace_dir, config)
+
+    if (
+        repo_type == "codecommit"
+        and config.aws.profile
+        and (is_git_repository(target_config_dir) or (target_config_dir / ".git").exists())
+    ):
+        configure_codecommit_credential_helper(target_config_dir, config.aws.profile)
+
+    if state:
+        state.config_initialized_at = datetime.now(UTC)
+        state.config_template_name = resolved_template.source
+        state.config_template_source = template_source_type
+        state.config_init_values = capture_init_values_snapshot(config)
+        state.config_init_digest = compute_config_directory_digest(target_config_dir)
+        state.config_files_count = len(written_paths)
+        write_workspace_state(workspace_dir, state)
 
 
 def init_config_workflow(
@@ -81,59 +212,20 @@ def init_config_workflow(
 
     target_config_dir = context.config_dir
 
-    # Check if target exists
-    if target_config_dir.exists():
-        if not target_config_dir.is_dir():
-            raise LzaError(
-                f"Target configuration path exists and is not a directory: {target_config_dir}"
-            )
-        # Check if directory has existing contents
-        has_contents = any(target_config_dir.iterdir())
-        if has_contents and not force:
-            if state and state.config_initialized_at:
-                current_snapshot = capture_init_values_snapshot(config)
-                saved_snapshot = state.config_init_values or {}
-                drifted = tuple(
-                    sorted(k for k, v in current_snapshot.items() if saved_snapshot.get(k) != v)
-                )
-                return ConfigInitResult(
-                    workspace_dir=workspace_dir,
-                    config_dir=target_config_dir,
-                    template_source=resolved_template,
-                    written_paths=[],
-                    unresolved_placeholders=[],
-                    dry_run=dry_run,
-                    config=config,
-                    skipped=True,
-                    is_managed=True,
-                    initialized_at=state.config_initialized_at,
-                    drifted_fields=drifted,
-                    git_skipped=True,
-                    git_skip_reason="Configuration directory already exists",
-                )
-            return ConfigInitResult(
-                workspace_dir=workspace_dir,
-                config_dir=target_config_dir,
-                template_source=resolved_template,
-                written_paths=[],
-                unresolved_placeholders=[],
-                dry_run=dry_run,
-                config=config,
-                skipped=True,
-                is_managed=False,
-                git_skipped=True,
-                git_skip_reason="Configuration directory already exists",
-            )
+    existing_result = _check_existing_config(
+        workspace_dir=workspace_dir,
+        target_config_dir=target_config_dir,
+        resolved_template=resolved_template,
+        config=config,
+        state=state,
+        force=force,
+        dry_run=dry_run,
+    )
+    if existing_result is not None:
+        return existing_result
 
     if not dry_run and force and target_config_dir.exists():
-        # Scoped cleanup of target directory to prevent orphaned files, preserving .git
-        for child in target_config_dir.iterdir():
-            if child.name == ".git":
-                continue
-            if child.is_dir():
-                shutil.rmtree(child)
-            else:
-                child.unlink()
+        _clean_target_config_dir(target_config_dir)
 
     written_paths, unresolved = render_and_copy_template(
         template_config_dir=resolved_template.config_dir,
@@ -142,61 +234,21 @@ def init_config_workflow(
         dry_run=dry_run,
     )
 
-    git_initialized = False
-    git_committed = False
-    git_skipped = False
-    git_skip_reason: str | None = None
-
     repo_type = config.configuration.repository.type
-    if repo_type == "s3":
-        if is_git_root(target_config_dir):
-            git_skipped = True
-            git_skip_reason = "Directory already has a Git repository"
-        elif is_inside_parent_git_repo(target_config_dir):
-            git_skipped = True
-            git_skip_reason = "Directory is inside an existing parent Git repository"
-        elif not dry_run:
-            init_git_repository(target_config_dir)
-            create_initial_commit(target_config_dir, "Initial LZA configuration")
-            git_initialized = True
-            git_committed = True
-    else:
-        git_skipped = True
-        git_skip_reason = f"Remote configuration repository is '{repo_type}'"
+    git_initialized, git_committed, git_skipped, git_skip_reason = _setup_config_git(
+        target_config_dir, repo_type, dry_run
+    )
 
     if not dry_run:
-        validate_template(target_config_dir)
-
-        # Update provenance in lza-workspace.yaml if template changed
-        template_source_type = (
-            "packaged"
-            if resolved_template.source_type == "bundled"
-            else resolved_template.source_type
+        _persist_config_init_provenance(
+            workspace_dir=workspace_dir,
+            target_config_dir=target_config_dir,
+            resolved_template=resolved_template,
+            config=config,
+            state=state,
+            written_paths=written_paths,
+            repo_type=repo_type,
         )
-        current_template = config.configuration.template
-        if (
-            current_template.name != resolved_template.source
-            or current_template.source != template_source_type
-        ):
-            current_template.name = resolved_template.source
-            current_template.source = template_source_type  # type: ignore[assignment]
-            write_workspace_config(workspace_dir, config)
-
-        if (
-            repo_type == "codecommit"
-            and config.aws.profile
-            and (is_git_repository(target_config_dir) or (target_config_dir / ".git").exists())
-        ):
-            configure_codecommit_credential_helper(target_config_dir, config.aws.profile)
-
-        if state:
-            state.config_initialized_at = datetime.now(UTC)
-            state.config_template_name = resolved_template.source
-            state.config_template_source = template_source_type
-            state.config_init_values = capture_init_values_snapshot(config)
-            state.config_init_digest = compute_config_directory_digest(target_config_dir)
-            state.config_files_count = len(written_paths)
-            write_workspace_state(workspace_dir, state)
 
     return ConfigInitResult(
         workspace_dir=workspace_dir,
