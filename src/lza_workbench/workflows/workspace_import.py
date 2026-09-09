@@ -150,56 +150,49 @@ def resolve_import_paths(*, workspace_dir: Path, config_dir: Path | None) -> tup
     return resolved_workspace_dir, resolved_config_dir
 
 
-def load_existing_metadata(
+def _load_existing_config(
     workspace_dir: Path,
     *,
-    force: bool = False,
-    repair: bool = False,
-) -> ExistingMetadata | None:
-    """Load a complete existing metadata pair, or repair partial/corrupted metadata if requested."""
-    config_path = workspace_dir / WORKSPACE_CONFIG_FILE
-    state_path = workspace_dir / WORKSPACE_STATE_FILE
+    config_path: Path,
+) -> tuple[WorkspaceConfig | None, Exception | None]:
+    if not config_path.exists():
+        return None, None
+    try:
+        return load_workspace_config(workspace_dir), None
+    except Exception as exc:
+        return None, exc
 
-    if not config_path.exists() and not state_path.exists():
-        return None
 
-    if force:
-        return None
+def _load_existing_state(
+    workspace_dir: Path,
+    *,
+    state_path: Path,
+) -> tuple[WorkspaceState | None, Exception | None]:
+    if not state_path.exists():
+        return None, None
+    try:
+        return load_workspace_state(workspace_dir), None
+    except Exception as exc:
+        return None, exc
 
-    config: WorkspaceConfig | None = None
-    state: WorkspaceState | None = None
-    config_err: Exception | None = None
-    state_err: Exception | None = None
 
-    if config_path.exists():
-        try:
-            config = load_workspace_config(workspace_dir)
-        except Exception as exc:
-            config_err = exc
+def _repair_existing_metadata(
+    config: WorkspaceConfig | None,
+    state: WorkspaceState | None,
+) -> ExistingMetadata:
+    if state is None and config is not None:
+        state = WorkspaceState.from_config(config)
+    return ExistingMetadata(config=config, state=state, is_repaired=True)
 
-    if state_path.exists():
-        try:
-            state = load_workspace_state(workspace_dir)
-        except Exception as exc:
-            state_err = exc
 
-    # Both exist and valid
-    if config is not None and state is not None:
-        return ExistingMetadata(config=config, state=state, is_repaired=False)
-
-    # If repair flag is enabled, reconstruct missing or broken metadata
-    if repair:
-        repaired_config = config
-        repaired_state = state
-        if repaired_state is None and repaired_config is not None:
-            repaired_state = WorkspaceState.from_config(repaired_config)
-        return ExistingMetadata(
-            config=repaired_config,
-            state=repaired_state,
-            is_repaired=True,
-        )
-
-    # Neither force nor repair - raise descriptive errors
+def _raise_invalid_metadata_error(
+    *,
+    workspace_dir: Path,
+    config_path: Path,
+    state_path: Path,
+    config_error: Exception | None,
+    state_error: Exception | None,
+) -> None:
     if config_path.exists() and not state_path.exists():
         raise LzaError(
             f"Workspace at '{workspace_dir}' has partial metadata; "
@@ -215,10 +208,37 @@ def load_existing_metadata(
             "or `--force` to recreate metadata."
         )
 
-    err = config_err or state_err
+    err = config_error or state_error
     raise LzaError(
         f"Invalid workspace metadata in {workspace_dir}: {err}. "
         f"Run `lza import {workspace_dir} --repair` to repair it or `--force` to replace it."
+    )
+
+
+def load_existing_metadata(
+    workspace_dir: Path,
+    *,
+    force: bool = False,
+    repair: bool = False,
+) -> ExistingMetadata | None:
+    """Load a complete existing metadata pair, or repair partial/corrupted metadata if requested."""
+    config_path = workspace_dir / WORKSPACE_CONFIG_FILE
+    state_path = workspace_dir / WORKSPACE_STATE_FILE
+    if force or (not config_path.exists() and not state_path.exists()):
+        return None
+
+    config, config_error = _load_existing_config(workspace_dir, config_path=config_path)
+    state, state_error = _load_existing_state(workspace_dir, state_path=state_path)
+    if config is not None and state is not None:
+        return ExistingMetadata(config=config, state=state)
+    if repair:
+        return _repair_existing_metadata(config, state)
+    _raise_invalid_metadata_error(
+        workspace_dir=workspace_dir,
+        config_path=config_path,
+        state_path=state_path,
+        config_error=config_error,
+        state_error=state_error,
     )
 
 
@@ -241,29 +261,17 @@ def discover_import_workspace(
     )
 
 
-def build_import_workspace_config(
+def _build_import_configuration_source(
     *,
-    customer_name: str,
-    customer_slug: str,
-    aws_profile: str | None = None,
-    aws_region: str,
-    lza_version: str,
-    workspace_dir: Path,
-    config_dir: Path,
-    existing_config: WorkspaceConfig | None,
-    provenance: GitProvenance | None = None,
-    installer_stack_name: str | None = None,
-    prime_credentials: bool = False,
-) -> WorkspaceConfig:
-    """Build import metadata, incorporating Git provenance when available."""
-    rel_config_path = str(config_dir.relative_to(workspace_dir))
-
+    provenance: GitProvenance | None,
+    relative_config_path: str,
+) -> tuple[ConfigurationTemplateConfig, ConfigurationRepositoryConfig]:
     if provenance and provenance.remote_url:
         template = ConfigurationTemplateConfig(
             source="git",
             repository=provenance.remote_url,
             ref=provenance.branch,
-            path=rel_config_path,
+            path=relative_config_path,
         )
         if provenance.repo_type == "codecommit":
             repository = ConfigurationRepositoryConfig(
@@ -280,33 +288,78 @@ def build_import_workspace_config(
     else:
         template = ConfigurationTemplateConfig(
             source="local",
-            path=rel_config_path,
+            path=relative_config_path,
         )
         repository = ConfigurationRepositoryConfig()
+    return template, repository
+
+
+def _resolve_import_configuration(
+    *,
+    existing_config: WorkspaceConfig | None,
+    relative_config_path: str,
+    template: ConfigurationTemplateConfig,
+    repository: ConfigurationRepositoryConfig,
+) -> ConfigurationConfig:
+    if existing_config is not None:
+        return existing_config.configuration.model_copy(update={"local_path": relative_config_path})
+    return ConfigurationConfig(
+        local_path=relative_config_path,
+        template=template,
+        repository=repository,
+    )
+
+
+def _resolve_import_installer(
+    *,
+    existing_config: WorkspaceConfig | None,
+    installer_stack_name: str | None,
+) -> LzaInstaller:
+    resolved_stack_name = (
+        installer_stack_name
+        or (existing_config.installer.stack_name if existing_config else None)
+        or "AWSAccelerator-InstallerStack"
+    )
+    if existing_config:
+        return existing_config.installer.model_copy(update={"stack_name": resolved_stack_name})
+    return LzaInstaller(stack_name=resolved_stack_name)
+
+
+def build_import_workspace_config(
+    *,
+    customer_name: str,
+    customer_slug: str,
+    aws_profile: str | None = None,
+    aws_region: str,
+    lza_version: str,
+    workspace_dir: Path,
+    config_dir: Path,
+    existing_config: WorkspaceConfig | None,
+    provenance: GitProvenance | None = None,
+    installer_stack_name: str | None = None,
+    prime_credentials: bool = False,
+) -> WorkspaceConfig:
+    """Build import metadata, incorporating Git provenance when available."""
+    relative_config_path = str(config_dir.relative_to(workspace_dir))
+    template, repository = _build_import_configuration_source(
+        provenance=provenance,
+        relative_config_path=relative_config_path,
+    )
 
     if repository.type == "s3" and not repository.bucket and aws_region:
         account_id = existing_config.aws.account_id if existing_config else None
         if account_id:
             repository.bucket = get_canonical_config_s3_bucket(account_id, aws_region)
 
-    configuration = (
-        existing_config.configuration.model_copy(update={"local_path": rel_config_path})
-        if existing_config is not None
-        else ConfigurationConfig(
-            local_path=rel_config_path,
-            template=template,
-            repository=repository,
-        )
+    configuration = _resolve_import_configuration(
+        existing_config=existing_config,
+        relative_config_path=relative_config_path,
+        template=template,
+        repository=repository,
     )
-    resolved_stack_name = (
-        installer_stack_name
-        or (existing_config.installer.stack_name if existing_config else None)
-        or "AWSAccelerator-InstallerStack"
-    )
-    installer = (
-        existing_config.installer.model_copy(update={"stack_name": resolved_stack_name})
-        if existing_config
-        else LzaInstaller(stack_name=resolved_stack_name)
+    installer = _resolve_import_installer(
+        existing_config=existing_config,
+        installer_stack_name=installer_stack_name,
     )
     fields: dict[str, Any] = {
         "customer": CustomerConfig(name=customer_name, slug=customer_slug),
