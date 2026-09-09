@@ -478,6 +478,93 @@ def select_root_cause(diagnostics: list[FailureDiagnostic]) -> FailureDiagnostic
     )
 
 
+def _resolve_action_diagnostics(
+    action: Any,
+    fetch_diagnostics: Callable[[str], list[str]],
+) -> tuple[list[FailureDiagnostic], list[str]]:
+    external_execution_id = action.external_execution_id
+    diagnostics = fetch_diagnostics(external_execution_id) if external_execution_id else []
+    raw_diagnostics = list(diagnostics)
+    diagnostic_models: list[FailureDiagnostic] = []
+
+    if diagnostics:
+        for diagnostic in diagnostics:
+            diag = interpret_failure_diagnostic(diagnostic)
+            if diag.message:
+                diagnostic_models.append(diag)
+    else:
+        raw_error = action.error_message or action.summary
+        if raw_error:
+            raw_text = str(raw_error)
+            raw_diagnostics = [raw_text]
+            diag = interpret_failure_diagnostic(raw_text)
+            if diag.message:
+                diagnostic_models.append(diag)
+    return diagnostic_models, raw_diagnostics
+
+
+def _resolve_failed_resource(
+    root_cause: FailureDiagnostic | None,
+    deduped: list[FailureDiagnostic],
+) -> str | None:
+    if root_cause and root_cause.resource:
+        return root_cause.resource
+    for d in deduped:
+        if d.resource:
+            return d.resource
+    return None
+
+
+def _build_diagnostic_details(
+    root_cause: FailureDiagnostic | None,
+    deduped: list[FailureDiagnostic],
+    raw_diagnostics: list[str],
+) -> list[str]:
+    diagnostic_details: list[str] = []
+    if root_cause:
+        diagnostic_details.append(root_cause.message)
+        for d in deduped:
+            if d != root_cause and d.message not in diagnostic_details:
+                # Do not include shallow wrappers when a deep root cause is available
+                if root_cause.specificity >= 30 and d.category in {
+                    FailureCategory.CODEBUILD,
+                    FailureCategory.DEPLOYMENT,
+                }:
+                    continue
+                diagnostic_details.append(d.message)
+    elif deduped:
+        diagnostic_details = [d.message for d in deduped]
+    elif raw_diagnostics:
+        diagnostic_details = [clean_raw_diagnostic_text(r) or r for r in raw_diagnostics]
+    return diagnostic_details
+
+
+def _analyze_action_failure(
+    stage_name: str,
+    action: Any,
+    fetch_diagnostics: Callable[[str], list[str]],
+) -> PipelineActionFailure:
+    diagnostic_models, raw_diagnostics = _resolve_action_diagnostics(action, fetch_diagnostics)
+    deduped = deduplicate_failure_diagnostics(diagnostic_models)
+    root_cause = select_root_cause(deduped)
+    failed_resource = _resolve_failed_resource(root_cause, deduped)
+    diagnostic_details = _build_diagnostic_details(root_cause, deduped, raw_diagnostics)
+
+    return PipelineActionFailure(
+        stage_name=stage_name,
+        action_name=action.action_name,
+        summary=action.summary,
+        error_message=action.error_message,
+        external_execution_id=action.external_execution_id,
+        external_execution_url=action.external_execution_url,
+        diagnostic_details=diagnostic_details,
+        raw_diagnostic_details=raw_diagnostics,
+        failed_resource=failed_resource,
+        diagnostics=deduped,
+        root_cause=root_cause,
+    )
+
+
 def collect_pipeline_action_failures(
     stages: Iterable[PipelineStageState | StageStateResult],
     *,
@@ -487,70 +574,14 @@ def collect_pipeline_action_failures(
     failures: list[PipelineActionFailure] = []
     for stage in stages:
         for action in stage.actions:
-            if action.status != "Failed":
-                continue
-
-            external_execution_id = action.external_execution_id
-            diagnostics = fetch_diagnostics(external_execution_id) if external_execution_id else []
-            raw_diagnostics = list(diagnostics)
-            diagnostic_models: list[FailureDiagnostic] = []
-
-            if diagnostics:
-                for diagnostic in diagnostics:
-                    diag = interpret_failure_diagnostic(diagnostic)
-                    if diag.message:
-                        diagnostic_models.append(diag)
-            else:
-                raw_error = action.error_message or action.summary
-                if raw_error:
-                    raw_text = str(raw_error)
-                    raw_diagnostics = [raw_text]
-                    diag = interpret_failure_diagnostic(raw_text)
-                    if diag.message:
-                        diagnostic_models.append(diag)
-
-            deduped = deduplicate_failure_diagnostics(diagnostic_models)
-            root_cause = select_root_cause(deduped)
-
-            failed_resource = root_cause.resource if root_cause and root_cause.resource else None
-            if not failed_resource:
-                for d in deduped:
-                    if d.resource:
-                        failed_resource = d.resource
-                        break
-
-            diagnostic_details: list[str] = []
-            if root_cause:
-                diagnostic_details.append(root_cause.message)
-                for d in deduped:
-                    if d != root_cause and d.message not in diagnostic_details:
-                        # Do not include shallow wrappers when a deep root cause is available
-                        if root_cause.specificity >= 30 and d.category in {
-                            FailureCategory.CODEBUILD,
-                            FailureCategory.DEPLOYMENT,
-                        }:
-                            continue
-                        diagnostic_details.append(d.message)
-            elif deduped:
-                diagnostic_details = [d.message for d in deduped]
-            elif raw_diagnostics:
-                diagnostic_details = [clean_raw_diagnostic_text(r) or r for r in raw_diagnostics]
-
-            failures.append(
-                PipelineActionFailure(
-                    stage_name=stage.stage_name,
-                    action_name=action.action_name,
-                    summary=action.summary,
-                    error_message=action.error_message,
-                    external_execution_id=external_execution_id,
-                    external_execution_url=action.external_execution_url,
-                    diagnostic_details=diagnostic_details,
-                    raw_diagnostic_details=raw_diagnostics,
-                    failed_resource=failed_resource,
-                    diagnostics=deduped,
-                    root_cause=root_cause,
+            if action.status == "Failed":
+                failures.append(
+                    _analyze_action_failure(
+                        stage_name=stage.stage_name,
+                        action=action,
+                        fetch_diagnostics=fetch_diagnostics,
+                    )
                 )
-            )
     return failures
 
 
