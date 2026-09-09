@@ -140,14 +140,8 @@ class ConfigurationStatusResult:
     warnings: tuple[str, ...]
 
 
-def compile_configuration_warnings(
-    *,
-    workspace: ConfigurationWorkspaceStatus,
-    local_git: LocalGitStatus,
-    repository: ConfigurationRepositoryStatus,
-    pipeline: ConfigurationPipelineStatus,
-) -> tuple[str, ...]:
-    """Interpret configuration observations into actionable warnings."""
+def _compile_workspace_warnings(workspace: ConfigurationWorkspaceStatus) -> list[str]:
+    """Compile warnings from local workspace observations."""
     warnings: list[str] = []
     if not workspace.config_dir_exists:
         warnings.append(
@@ -160,6 +154,12 @@ def compile_configuration_warnings(
             f"({', '.join(workspace.drifted_fields)}). "
             "Run 'lza config init --force' to re-apply the template."
         )
+    return warnings
+
+
+def _compile_local_git_warnings(local_git: LocalGitStatus) -> list[str]:
+    """Compile warnings from local Git observations."""
+    warnings: list[str] = []
     if local_git.working_tree and local_git.working_tree.has_uncommitted:
         warnings.append(
             f"Local configuration contains {local_git.working_tree.uncommitted_count} uncommitted "
@@ -175,34 +175,64 @@ def compile_configuration_warnings(
             f"Local configuration has diverged from remote ({local_git.sync_status.ahead} ahead, "
             f"{local_git.sync_status.behind} behind). Reconcile Git history before pushing."
         )
+    return warnings
+
+
+def _compile_s3_repository_warnings(repository: S3ConfigurationRepositoryStatus) -> list[str]:
+    """Compile warnings from an S3 configuration repository."""
+    label = f" '{repository.bucket}'" if repository.bucket else ""
+    if repository.bucket_exists is False:
+        return [f"Configured S3 bucket{label} does not exist."]
+    if repository.bucket_accessible is False:
+        return [f"Access denied or connection failure to configured S3 bucket{label}."]
+    if repository.bucket_exists is True and repository.object_exists is False:
+        return [
+            f"Configuration archive is not present in S3 bucket{label}. "
+            "Run 'lza config push' to upload local configuration."
+        ]
+    return []
+
+
+def _compile_codecommit_repository_warnings(
+    repository: CodeCommitConfigurationRepositoryStatus,
+) -> list[str]:
+    """Compile warnings from a CodeCommit configuration repository."""
+    if repository.exists is False:
+        return ["Configured CodeCommit repository does not exist."]
+    if repository.accessible is False:
+        return ["Access denied or connection failure to CodeCommit repository."]
+    if repository.exists is True and repository.branch_exists is False:
+        return [
+            "Configured branch does not exist in CodeCommit repository. "
+            "Run 'lza config push' to push branch."
+        ]
+    return []
+
+
+def _compile_codeconnection_repository_warnings(
+    repository: CodeConnectionConfigurationRepositoryStatus,
+) -> list[str]:
+    """Compile warnings from a CodeConnection configuration repository."""
+    if repository.status == "PENDING":
+        return ["CodeConnection is in PENDING status. Complete the handshake in the AWS Console."]
+    if repository.status in {"ERROR", "NOT_FOUND", "INACCESSIBLE"}:
+        return [f"CodeConnection issue detected (Status: {repository.status})."]
+    return []
+
+
+def _compile_repository_warnings(repository: ConfigurationRepositoryStatus) -> list[str]:
+    """Compile warnings from the configured remote repository."""
     if isinstance(repository, S3ConfigurationRepositoryStatus):
-        label = f" '{repository.bucket}'" if repository.bucket else ""
-        if repository.bucket_exists is False:
-            warnings.append(f"Configured S3 bucket{label} does not exist.")
-        elif repository.bucket_accessible is False:
-            warnings.append(f"Access denied or connection failure to configured S3 bucket{label}.")
-        elif repository.bucket_exists is True and repository.object_exists is False:
-            warnings.append(
-                f"Configuration archive is not present in S3 bucket{label}. "
-                "Run 'lza config push' to upload local configuration."
-            )
-    elif isinstance(repository, CodeCommitConfigurationRepositoryStatus):
-        if repository.exists is False:
-            warnings.append("Configured CodeCommit repository does not exist.")
-        elif repository.accessible is False:
-            warnings.append("Access denied or connection failure to CodeCommit repository.")
-        elif repository.exists is True and repository.branch_exists is False:
-            warnings.append(
-                "Configured branch does not exist in CodeCommit repository. "
-                "Run 'lza config push' to push branch."
-            )
-    elif isinstance(repository, CodeConnectionConfigurationRepositoryStatus):
-        if repository.status == "PENDING":
-            warnings.append(
-                "CodeConnection is in PENDING status. Complete the handshake in the AWS Console."
-            )
-        elif repository.status in {"ERROR", "NOT_FOUND", "INACCESSIBLE"}:
-            warnings.append(f"CodeConnection issue detected (Status: {repository.status}).")
+        return _compile_s3_repository_warnings(repository)
+    if isinstance(repository, CodeCommitConfigurationRepositoryStatus):
+        return _compile_codecommit_repository_warnings(repository)
+    if isinstance(repository, CodeConnectionConfigurationRepositoryStatus):
+        return _compile_codeconnection_repository_warnings(repository)
+    return []
+
+
+def _compile_pipeline_warnings(pipeline: ConfigurationPipelineStatus) -> list[str]:
+    """Compile warnings from the latest configuration pipeline execution."""
     if pipeline.status == "Failed":
         detail = (
             f" (Stage: '{pipeline.failed_stage}', Action: '{pipeline.failed_action}')"
@@ -211,13 +241,24 @@ def compile_configuration_warnings(
             if pipeline.failed_stage
             else ""
         )
-        warnings.append(
-            f"Latest execution of configuration pipeline '{pipeline.name}' failed{detail}."
-        )
-    elif pipeline.status == "Cancelled":
-        warnings.append(
-            f"Latest execution of configuration pipeline '{pipeline.name}' was cancelled."
-        )
+        return [f"Latest execution of configuration pipeline '{pipeline.name}' failed{detail}."]
+    if pipeline.status == "Cancelled":
+        return [f"Latest execution of configuration pipeline '{pipeline.name}' was cancelled."]
+    return []
+
+
+def compile_configuration_warnings(
+    *,
+    workspace: ConfigurationWorkspaceStatus,
+    local_git: LocalGitStatus,
+    repository: ConfigurationRepositoryStatus,
+    pipeline: ConfigurationPipelineStatus,
+) -> tuple[str, ...]:
+    """Interpret configuration observations into actionable warnings."""
+    warnings = _compile_workspace_warnings(workspace)
+    warnings.extend(_compile_local_git_warnings(local_git))
+    warnings.extend(_compile_repository_warnings(repository))
+    warnings.extend(_compile_pipeline_warnings(pipeline))
     return tuple(warnings)
 
 
