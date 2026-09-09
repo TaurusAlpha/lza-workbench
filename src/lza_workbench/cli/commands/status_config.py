@@ -84,6 +84,85 @@ def _render_local_config(result: ConfigurationStatusResult) -> None:
 
 
 
+def _render_s3_repository_settings(
+    repository: S3ConfigurationRepositoryStatus,
+    *,
+    result: ConfigurationStatusResult,
+) -> None:
+    s3_bucket = repository.bucket or "Not configured"
+    if repository.bucket_exists is True:
+        versioning = "Versioning: Enabled" if repository.bucket_versioning else "Versioning: Disabled"
+        encryption = "Encrypted" if repository.bucket_encryption else "Unencrypted"
+        bucket_status = f"[green]Available[/green] ({versioning}, {encryption})"
+    elif repository.bucket_exists is False:
+        bucket_status = "[red]Bucket Not Found / Missing[/red]"
+    elif repository.bucket_accessible is False:
+        bucket_status = f"[red]Inaccessible[/red] ({repository.error or 'Access Denied'})"
+    else:
+        bucket_status = "[dim]Not Checked[/dim]"
+
+    print_kv("S3 Bucket", f"{s3_bucket} ({bucket_status})")
+    print_kv("S3 Object Key", repository.object_key)
+    if repository.object_exists is True:
+        size_kb = (repository.object_size or 0) / 1024
+        modified = format_timestamp(repository.object_last_modified) or "Unknown"
+        etag = f"ETag: {repository.object_etag}" if repository.object_etag else ""
+        print_kv(
+            "Remote Archive Status",
+            f"[green]Present[/green] ({size_kb:.1f} KB, {etag}, Last Modified: {modified})",
+        )
+    elif repository.object_exists is False:
+        print_kv("Remote Archive Status", "Not uploaded yet", style="yellow")
+
+    if result.synchronization.remote_sync:
+        print_kv("Remote Sync", format_status(result.synchronization.remote_sync.summary))
+
+
+def _render_codecommit_repository_settings(
+    repository: CodeCommitConfigurationRepositoryStatus,
+) -> None:
+    repo_name = repository.repository_name or "Not set"
+    if repository.exists is True:
+        repo_status = "[green]Available[/green]"
+    elif repository.exists is False:
+        repo_status = "[red]Repository Not Found[/red]"
+    elif repository.accessible is False:
+        repo_status = f"[red]Inaccessible[/red] ({repository.error or 'Access Denied'})"
+    else:
+        repo_status = "[dim]Not Checked[/dim]"
+
+    print_kv("CodeCommit Repository", f"{repo_name} ({repo_status})")
+    branch = repository.branch_name or "main"
+    if repository.branch_exists is True:
+        branch_status = "[green]Exists[/green]"
+    elif repository.branch_exists is False:
+        branch_status = "[yellow]Branch Not Found[/yellow]"
+    else:
+        branch_status = "[dim]Not Checked[/dim]"
+    print_kv("Branch", f"{branch} ({branch_status})")
+
+
+def _render_codeconnection_repository_settings(
+    repository: CodeConnectionConfigurationRepositoryStatus,
+) -> None:
+    connection_arn = repository.connection_arn or "Not set"
+    connection_status = format_status(repository.status or "Configured")
+    print_kv("CodeConnection ARN", f"{connection_arn} ({connection_status})")
+    if repository.provider:
+        print_kv("Provider Type", repository.provider)
+    print_kv("Repository Owner", repository.owner or "Not set")
+    print_kv("Repository Name", repository.repository_name or "Not set")
+    print_kv("Branch", repository.branch_name or "main")
+
+
+def _render_git_repository_settings(repository: GitConfigurationRepositoryStatus) -> None:
+    print_kv(
+        "Git Repository URL",
+        repository.repository_url or repository.repository_name or "Not set",
+    )
+    print_kv("Branch", repository.branch_name or "main")
+
+
 def _render_repository_settings(result: ConfigurationStatusResult) -> None:
     console.print()
     print_section(2, "Repository Settings")
@@ -97,81 +176,13 @@ def _render_repository_settings(result: ConfigurationStatusResult) -> None:
     print_kv("Repository Type", repository_type, bold_value=True)
 
     if isinstance(repository, S3ConfigurationRepositoryStatus):
-        s3_bucket = repository.bucket or "Not configured"
-
-        if repository.bucket_exists is True:
-            ver_str = (
-                "Versioning: Enabled"
-                if repository.bucket_versioning
-                else "Versioning: Disabled"
-            )
-            enc_str = "Encrypted" if repository.bucket_encryption else "Unencrypted"
-            bucket_status = f"[green]Available[/green] ({ver_str}, {enc_str})"
-        elif repository.bucket_exists is False:
-            bucket_status = "[red]Bucket Not Found / Missing[/red]"
-        elif repository.bucket_accessible is False:
-            bucket_status = f"[red]Inaccessible[/red] ({repository.error or 'Access Denied'})"
-        else:
-            bucket_status = "[dim]Not Checked[/dim]"
-
-        print_kv("S3 Bucket", f"{s3_bucket} ({bucket_status})")
-        print_kv("S3 Object Key", repository.object_key)
-
-        if repository.object_exists is True:
-            size_kb = (repository.object_size or 0) / 1024
-            mod_str = format_timestamp(repository.object_last_modified) or "Unknown"
-            etag_str = f"ETag: {repository.object_etag}" if repository.object_etag else ""
-            print_kv(
-                "Remote Archive Status",
-                f"[green]Present[/green] ({size_kb:.1f} KB, {etag_str}, Last Modified: {mod_str})",
-            )
-        elif repository.object_exists is False:
-            print_kv("Remote Archive Status", "Not uploaded yet", style="yellow")
-
-        if result.synchronization.remote_sync:
-            print_kv(
-                "Remote Sync",
-                format_status(result.synchronization.remote_sync.summary),
-            )
-
+        _render_s3_repository_settings(repository, result=result)
     elif isinstance(repository, CodeCommitConfigurationRepositoryStatus):
-
-        repo_name = repository.repository_name or "Not set"
-        if repository.exists is True:
-            repo_status = "[green]Available[/green]"
-        elif repository.exists is False:
-            repo_status = "[red]Repository Not Found[/red]"
-        elif repository.accessible is False:
-            repo_status = f"[red]Inaccessible[/red] ({repository.error or 'Access Denied'})"
-        else:
-            repo_status = "[dim]Not Checked[/dim]"
-
-        print_kv("CodeCommit Repository", f"{repo_name} ({repo_status})")
-        branch_str = repository.branch_name or "main"
-        if repository.branch_exists is True:
-            branch_status = "[green]Exists[/green]"
-        elif repository.branch_exists is False:
-            branch_status = "[yellow]Branch Not Found[/yellow]"
-        else:
-            branch_status = "[dim]Not Checked[/dim]"
-        print_kv("Branch", f"{branch_str} ({branch_status})")
-
+        _render_codecommit_repository_settings(repository)
     elif isinstance(repository, CodeConnectionConfigurationRepositoryStatus):
-        conn_arn = repository.connection_arn or "Not set"
-        conn_status = format_status(repository.status or "Configured")
-        print_kv("CodeConnection ARN", f"{conn_arn} ({conn_status})")
-        if repository.provider:
-            print_kv("Provider Type", repository.provider)
-        print_kv("Repository Owner", repository.owner or "Not set")
-        print_kv("Repository Name", repository.repository_name or "Not set")
-        print_kv("Branch", repository.branch_name or "main")
-
+        _render_codeconnection_repository_settings(repository)
     elif isinstance(repository, GitConfigurationRepositoryStatus):
-        print_kv(
-            "Git Repository URL",
-            repository.repository_url or repository.repository_name or "Not set",
-        )
-        print_kv("Branch", repository.branch_name or "main")
+        _render_git_repository_settings(repository)
 
 
 def _render_pipeline_status(result: ConfigurationStatusResult) -> None:
