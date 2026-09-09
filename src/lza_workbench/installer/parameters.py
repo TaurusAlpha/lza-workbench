@@ -200,6 +200,47 @@ def apply_deployed_installer_parameters(
     ):
         repository.bucket = get_canonical_config_s3_bucket(config.aws.account_id, config.aws.region)
 
+def _resolve_existing_config_repo_params(
+    repo_config: Any,
+) -> tuple[str, bool, str, str, str, str]:
+    config_location = repo_config.type
+    if config_location == "codeconnection":
+        return (
+            config_location,
+            True,
+            repo_config.codeconnection_arn or "",
+            repo_config.owner or "",
+            repo_config.repository_name or "",
+            repo_config.branch or "",
+        )
+    if config_location == "codecommit":
+        return (
+            config_location,
+            True,
+            "",
+            "",
+            repo_config.repository_name or "lza-config-source",
+            repo_config.branch or "main",
+        )
+    return config_location, False, "", "", "", ""
+
+
+def _apply_schema_defaults(
+    params: dict[str, str],
+    schema: dict[str, dict[str, Any]] | None,
+    extra_parameters: dict[str, str],
+) -> None:
+    if not schema:
+        return
+    for key, info in schema.items():
+        if key in params:
+            continue
+        if key in extra_parameters:
+            params[key] = extra_parameters[key]
+        elif "Default" in info:
+            params[key] = str(info["Default"])
+
+
 def build_installer_cfn_parameters(
     config: WorkspaceConfig, schema: dict[str, dict[str, Any]] | None = None
 ) -> dict[str, str]:
@@ -219,35 +260,14 @@ def build_installer_cfn_parameters(
     repo_source = source_code.repository_type
     repo_owner = source_code.owner if repo_source == "github" else ""
 
-    config_location = repo_config.type
-    use_existing = config_location in {"codecommit", "codeconnection"}
-
-    if config_location == "s3":
-        use_existing = False
-        code_conn_arn = ""
-        existing_owner = ""
-        existing_name = ""
-        existing_branch = ""
-    elif config_location == "codeconnection":
-        use_existing = True
-        code_conn_arn = repo_config.codeconnection_arn or ""
-        existing_owner = repo_config.owner or ""
-        existing_name = repo_config.repository_name or ""
-        existing_branch = repo_config.branch or ""
-    elif config_location == "codecommit":
-        code_conn_arn = ""
-        existing_owner = ""
-        if use_existing:
-            existing_name = repo_config.repository_name or "lza-config-source"
-            existing_branch = repo_config.branch or "main"
-        else:
-            existing_name = ""
-            existing_branch = ""
-    else:
-        code_conn_arn = ""
-        existing_owner = ""
-        existing_name = ""
-        existing_branch = ""
+    (
+        config_location,
+        use_existing,
+        code_conn_arn,
+        existing_owner,
+        existing_name,
+        existing_branch,
+    ) = _resolve_existing_config_repo_params(repo_config)
 
     params: dict[str, str] = {
         "RepositorySource": repo_source,
@@ -270,13 +290,5 @@ def build_installer_cfn_parameters(
         "EnableDiagnosticsPack": "Yes" if options.enable_diagnostics_pack else "No",
     }
 
-    if schema:
-        for key, info in schema.items():
-            if key in params:
-                continue
-            if key in config.installer.extra_parameters:
-                params[key] = config.installer.extra_parameters[key]
-            elif "Default" in info:
-                params[key] = str(info["Default"])
-
+    _apply_schema_defaults(params, schema, config.installer.extra_parameters)
     return params

@@ -271,6 +271,34 @@ def deploy_cloudformation_stack(
         ) from exc
 
 
+def _dispatch_new_stack_events(
+    events: list[dict[str, Any]],
+    seen_event_ids: set[str],
+    on_event: Callable[[dict[str, Any]], None] | None,
+) -> None:
+    for evt in reversed(events):
+        evt_id = evt.get("EventId")
+        if evt_id and evt_id not in seen_event_ids:
+            seen_event_ids.add(evt_id)
+            if on_event:
+                on_event(evt)
+
+
+def _handle_monitoring_error(
+    error: Exception | str,
+    consecutive_errors: int,
+    max_consecutive_errors: int,
+    clean_stack_name: str,
+) -> int:
+    consecutive_errors += 1
+    if consecutive_errors >= max_consecutive_errors:
+        raise LzaError(
+            f"CloudFormation event monitoring failed for stack '{clean_stack_name}' "
+            f"after {consecutive_errors} consecutive AWS errors: {error}"
+        ) from (error if isinstance(error, Exception) else None)
+    return consecutive_errors
+
+
 def stream_cloudformation_stack_events(
     *,
     client: Any,
@@ -290,9 +318,9 @@ def stream_cloudformation_stack_events(
         )
 
     seen_event_ids: set[str] = set()
-
-    terminal_success = {"CREATE_COMPLETE", "UPDATE_COMPLETE"}
-    terminal_failure = {
+    terminal_statuses = {
+        "CREATE_COMPLETE",
+        "UPDATE_COMPLETE",
         "CREATE_FAILED",
         "ROLLBACK_COMPLETE",
         "UPDATE_ROLLBACK_COMPLETE",
@@ -303,66 +331,36 @@ def stream_cloudformation_stack_events(
     }
 
     consecutive_errors = 0
-    last_error: Exception | str | None = None
 
     while True:
         try:
             events_resp = client.describe_stack_events(StackName=clean_stack_name)
-            events = events_resp.get("StackEvents", [])
-            # Sort events chronologically (oldest first)
-            events.reverse()
-
-            for evt in events:
-                evt_id = evt.get("EventId")
-                if evt_id and evt_id not in seen_event_ids:
-                    seen_event_ids.add(evt_id)
-                    if on_event:
-                        on_event(evt)
+            _dispatch_new_stack_events(
+                events_resp.get("StackEvents", []), seen_event_ids, on_event
+            )
 
             status_res = get_cloudformation_stack_status(client=client, stack_name=clean_stack_name)
             if status_res.error:
-                consecutive_errors += 1
-                last_error = status_res.error
-                if consecutive_errors >= max_consecutive_errors:
-                    raise LzaError(
-                        f"CloudFormation event monitoring failed for stack '{clean_stack_name}' "
-                        f"after {consecutive_errors} consecutive AWS errors: {last_error}"
-                    )
+                consecutive_errors = _handle_monitoring_error(
+                    status_res.error, consecutive_errors, max_consecutive_errors, clean_stack_name
+                )
             else:
                 consecutive_errors = 0
-                last_error = None
-
-                curr_status = status_res.stack_status or ""
-                if curr_status in terminal_success or curr_status in terminal_failure:
+                if (status_res.stack_status or "") in terminal_statuses:
                     return status_res
 
         except ClientError as exc:
             if _is_stack_not_found(exc):
-                # Stack might have finished deleting or does not exist
-                status_res = get_cloudformation_stack_status(
-                    client=client, stack_name=clean_stack_name
-                )
-                if (
-                    not status_res.exists
-                    or status_res.stack_status in terminal_failure
-                    or status_res.stack_status in terminal_success
-                ):
+                status_res = get_cloudformation_stack_status(client=client, stack_name=clean_stack_name)
+                if not status_res.exists or status_res.stack_status in terminal_statuses:
                     return status_res
-            consecutive_errors += 1
-            last_error = exc
-            if consecutive_errors >= max_consecutive_errors:
-                raise LzaError(
-                    f"CloudFormation event monitoring failed for stack '{clean_stack_name}' "
-                    f"after {consecutive_errors} consecutive AWS errors: {last_error}"
-                ) from exc
+            consecutive_errors = _handle_monitoring_error(
+                exc, consecutive_errors, max_consecutive_errors, clean_stack_name
+            )
         except BotoCoreError as exc:
-            consecutive_errors += 1
-            last_error = exc
-            if consecutive_errors >= max_consecutive_errors:
-                raise LzaError(
-                    f"CloudFormation event monitoring failed for stack '{clean_stack_name}' "
-                    f"after {consecutive_errors} consecutive AWS errors: {last_error}"
-                ) from exc
+            consecutive_errors = _handle_monitoring_error(
+                exc, consecutive_errors, max_consecutive_errors, clean_stack_name
+            )
 
         time.sleep(poll_interval)
 

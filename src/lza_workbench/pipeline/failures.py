@@ -786,6 +786,48 @@ def _deduplicate_messages(messages: list[str], max_messages: int = 5) -> list[st
     return unique[:max_messages]
 
 
+def _collect_error_block(
+    flat_lines: list[str],
+    start_idx: int,
+    initial_cleaned: str,
+) -> tuple[str, int]:
+    block_lines = [initial_cleaned]
+    j = start_idx + 1
+    n = len(flat_lines)
+    while j < n and len(block_lines) < 8:
+        next_raw = flat_lines[j]
+        next_cleaned = _clean_log_line(next_raw)
+        if not next_cleaned:
+            j += 1
+            continue
+        if _is_wrapper_or_noise(next_cleaned):
+            break
+        if _is_continuation_line(next_raw, block_lines[-1]) or (
+            len(block_lines) == 1
+            and (
+                block_lines[0].endswith(":")
+                or "Resource updates failed" in block_lines[0]
+                or "failed to create" in block_lines[0]
+            )
+        ):
+            block_lines.append(next_cleaned)
+            j += 1
+        else:
+            break
+
+    return _combine_error_block(block_lines), j
+
+
+def _is_standard_error_line(raw_line: str, cleaned: str) -> bool:
+    if _is_wrapper_or_noise(cleaned):
+        return False
+    return (
+        "| error |" in raw_line
+        or "error" in cleaned.lower()
+        or "failed" in cleaned.lower()
+    )
+
+
 def extract_log_error_diagnostics(
     log_lines: list[str],
     *,
@@ -815,43 +857,13 @@ def extract_log_error_diagnostics(
         if _is_high_priority_error(cleaned) or (
             "| error |" in raw_line and not _is_wrapper_or_noise(cleaned)
         ):
-            block_lines = [cleaned]
-            j = i + 1
-            while j < n and len(block_lines) < 8:
-                next_raw = flat_lines[j]
-                next_cleaned = _clean_log_line(next_raw)
-                if not next_cleaned:
-                    j += 1
-                    continue
-                if _is_wrapper_or_noise(next_cleaned):
-                    break
-                if _is_continuation_line(next_raw, block_lines[-1]) or (
-                    len(block_lines) == 1
-                    and (
-                        block_lines[0].endswith(":")
-                        or "Resource updates failed" in block_lines[0]
-                        or "failed to create" in block_lines[0]
-                    )
-                ):
-                    block_lines.append(next_cleaned)
-                    j += 1
-                else:
-                    break
-
-            combined_msg = _combine_error_block(block_lines)
+            combined_msg, i = _collect_error_block(flat_lines, i, cleaned)
             if _is_high_priority_error(combined_msg):
                 high_priority_matches.append(combined_msg)
             else:
                 standard_matches.append(combined_msg)
-
-            i = j
-        elif not _is_wrapper_or_noise(cleaned):
-            if (
-                "| error |" in raw_line
-                or "error" in cleaned.lower()
-                or "failed" in cleaned.lower()
-            ):
-                standard_matches.append(cleaned)
+        elif _is_standard_error_line(raw_line, cleaned):
+            standard_matches.append(cleaned)
             i += 1
         else:
             i += 1

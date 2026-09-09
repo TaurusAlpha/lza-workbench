@@ -173,6 +173,30 @@ def _resolve_bootstrap_aws_context(
         raise LzaError(f"AWS identity resolution failed: {exc}") from exc
 
 
+def _resolve_offline_codecommit_params(
+    config: WorkspaceConfig,
+) -> tuple[str | None, str | None]:
+    if config.configuration.repository.type != "codecommit":
+        return None, None
+    repo_name = config.configuration.repository.repository_name or "lza-config-source"
+    branch_name = config.configuration.repository.branch or "main"
+    return repo_name, branch_name
+
+
+def _resolve_offline_github_params(
+    config: WorkspaceConfig,
+) -> tuple[str | None, str | None, str | None, str | None]:
+    if config.installer.source_code.repository_type != "github":
+        return None, None, None, None
+    secret_name = config.installer.source_code.github_secret_name or "accelerator/github-token"
+    owner = config.installer.source_code.owner or "awslabs"
+    repo_name = config.installer.source_code.repository_name or "landing-zone-accelerator-on-aws"
+    branch = config.installer.source_code.branch or resolve_installer_source_branch(
+        "github", None, config.lza.version
+    )
+    return secret_name, owner, repo_name, branch
+
+
 def _build_offline_bootstrap_plan(
     *,
     workspace_dir: Path,
@@ -189,37 +213,14 @@ def _build_offline_bootstrap_plan(
         if account_id != "Unknown" and region != "Unknown"
         else f"lza-workbench-assets-{region}"
     )
-    is_codecommit_config = config.configuration.repository.type == "codecommit"
-    cc_repo_name = (
-        config.configuration.repository.repository_name or "lza-config-source"
-        if is_codecommit_config
-        else None
-    )
-    cc_branch_name = (
-        config.configuration.repository.branch or "main"
-        if is_codecommit_config
-        else None
-    )
+    cc_repo_name, cc_branch_name = _resolve_offline_codecommit_params(config)
+    (
+        gh_secret_name,
+        gh_repo_owner,
+        gh_repo_name,
+        gh_repo_branch,
+    ) = _resolve_offline_github_params(config)
     is_github_source = config.installer.source_code.repository_type == "github"
-    gh_secret_name = (
-        config.installer.source_code.github_secret_name or "accelerator/github-token"
-        if is_github_source
-        else None
-    )
-    gh_repo_owner = (
-        config.installer.source_code.owner or "awslabs" if is_github_source else None
-    )
-    gh_repo_name = (
-        config.installer.source_code.repository_name or "landing-zone-accelerator-on-aws"
-        if is_github_source
-        else None
-    )
-    gh_repo_branch = (
-        config.installer.source_code.branch
-        or resolve_installer_source_branch("github", None, config.lza.version)
-        if is_github_source
-        else None
-    )
 
     return BootstrapPlanResult(
         workspace_dir=workspace_dir,
@@ -384,6 +385,156 @@ def _plan_codecommit_bootstrap(
     return cc_repo_name, cc_branch_name, cc_repo_exists, cc_branch_exists, cc_planned_op
 
 
+def _plan_existing_github_secret(
+    *,
+    github_secret_name: str,
+    github_repo_owner: str,
+    github_repo_name: str,
+    github_repo_branch: str,
+    github_secret_accessible: bool,
+    token_val: str | None,
+    secret_error: str | None,
+    actions: list[BootstrapAction],
+) -> tuple[bool, str]:
+    actions.append(
+        BootstrapAction(
+            subject=github_secret_name,
+            operation="NO_CHANGE",
+            message="Validate AWS Secrets Manager secret (exists)",
+        )
+    )
+    if github_secret_accessible or token_val:
+        gh_res = validate_github_repository_access(
+            owner=github_repo_owner,
+            repository_name=github_repo_name,
+            branch=github_repo_branch,
+            token=token_val,
+        )
+        if gh_res["accessible"]:
+            actions.append(
+                BootstrapAction(
+                    subject=f"{github_repo_owner}/{github_repo_name}",
+                    operation="NO_CHANGE",
+                    message=f"Validate GitHub repository branch '{github_repo_branch}' (accessible)",
+                )
+            )
+            return True, "NO_CHANGE"
+        actions.append(
+            BootstrapAction(
+                subject=f"{github_repo_owner}/{github_repo_name}",
+                operation="INACCESSIBLE",
+                message=f"GitHub repository access failed: {gh_res['error']}",
+                severity="error",
+            )
+        )
+        return False, "INACCESSIBLE"
+
+    actions.append(
+        BootstrapAction(
+            subject=github_secret_name,
+            operation="INACCESSIBLE",
+            message=f"AWS Secrets Manager secret access failed: {secret_error}",
+            severity="error",
+        )
+    )
+    return False, "INACCESSIBLE"
+
+
+def _plan_new_github_token(
+    *,
+    github_secret_name: str,
+    github_repo_owner: str,
+    github_repo_name: str,
+    github_repo_branch: str,
+    token: str,
+    actions: list[BootstrapAction],
+    warnings: list[str],
+) -> tuple[bool, str]:
+    actions.append(
+        BootstrapAction(
+            subject=github_secret_name,
+            operation="CREATE",
+            message="Create AWS Secrets Manager secret with provided token",
+        )
+    )
+    gh_res = validate_github_repository_access(
+        owner=github_repo_owner,
+        repository_name=github_repo_name,
+        branch=github_repo_branch,
+        token=token,
+    )
+    if gh_res["accessible"]:
+        actions.append(
+            BootstrapAction(
+                subject=f"{github_repo_owner}/{github_repo_name}",
+                operation="NO_CHANGE",
+                message=f"Validate GitHub repository branch '{github_repo_branch}' (accessible)",
+            )
+        )
+        return True, "CREATE"
+
+    warning_msg = (
+        f"GitHub repository '{github_repo_owner}/{github_repo_name}' "
+        f"check returned: {gh_res['error']}"
+    )
+    warnings.append(warning_msg)
+    actions.append(
+        BootstrapAction(
+            subject=github_secret_name,
+            operation="WARNING",
+            message=warning_msg,
+            severity="warning",
+        )
+    )
+    return False, "CREATE"
+
+
+def _plan_missing_github_secret(
+    *,
+    github_secret_name: str,
+    allow_missing_github_secret: bool,
+    actions: list[BootstrapAction],
+    warnings: list[str],
+) -> tuple[bool, str]:
+    if allow_missing_github_secret:
+        warning_msg = (
+            f"AWS Secrets Manager secret '{github_secret_name}' was not found. "
+            "You must create this secret containing a valid GitHub token before "
+            "deploying the installer."
+        )
+        warnings.append(warning_msg)
+        actions.append(
+            BootstrapAction(
+                subject=github_secret_name,
+                operation="WARNING",
+                message=(
+                    "AWS Secrets Manager secret not found "
+                    "(proceeding as requested; manual secret creation required)"
+                ),
+                severity="warning",
+            )
+        )
+        return False, "WARNING"
+
+    actions.append(
+        BootstrapAction(
+            subject=github_secret_name,
+            operation="MISSING",
+            message="AWS Secrets Manager secret not found",
+            severity="error",
+        )
+    )
+    actions.append(
+        BootstrapAction(
+            subject=github_secret_name,
+            operation="MISSING",
+            message="AWS LZA requires a GitHub token stored in this Secrets Manager secret",
+            severity="error",
+        )
+    )
+    return False, "MISSING"
+
+
 def _plan_github_bootstrap(
     *,
     config: WorkspaceConfig,
@@ -415,127 +566,33 @@ def _plan_github_bootstrap(
     github_secret_accessible = secret_details.accessible
     token_val = (github_token or "").strip() or secret_details.value
 
-    github_repo_accessible = False
-
     if github_secret_exists:
-        actions.append(
-            BootstrapAction(
-                subject=github_secret_name,
-                operation="NO_CHANGE",
-                message="Validate AWS Secrets Manager secret (exists)",
-            )
+        github_repo_accessible, github_planned_op = _plan_existing_github_secret(
+            github_secret_name=github_secret_name,
+            github_repo_owner=github_repo_owner,
+            github_repo_name=github_repo_name,
+            github_repo_branch=github_repo_branch,
+            github_secret_accessible=github_secret_accessible,
+            token_val=token_val,
+            secret_error=secret_details.error,
+            actions=actions,
         )
-        if github_secret_accessible or token_val:
-            gh_res = validate_github_repository_access(
-                owner=github_repo_owner,
-                repository_name=github_repo_name,
-                branch=github_repo_branch,
-                token=token_val,
-            )
-            if gh_res["accessible"]:
-                github_repo_accessible = True
-                github_planned_op = "NO_CHANGE"
-                actions.append(
-                    BootstrapAction(
-                        subject=f"{github_repo_owner}/{github_repo_name}",
-                        operation="NO_CHANGE",
-                        message=f"Validate GitHub repository branch '{github_repo_branch}' (accessible)",
-                    )
-                )
-            else:
-                github_planned_op = "INACCESSIBLE"
-                actions.append(
-                    BootstrapAction(
-                        subject=f"{github_repo_owner}/{github_repo_name}",
-                        operation="INACCESSIBLE",
-                        message=f"GitHub repository access failed: {gh_res['error']}",
-                        severity="error",
-                    )
-                )
-        else:
-            github_planned_op = "INACCESSIBLE"
-            actions.append(
-                BootstrapAction(
-                    subject=github_secret_name,
-                    operation="INACCESSIBLE",
-                    message=f"AWS Secrets Manager secret access failed: {secret_details.error}",
-                    severity="error",
-                )
-            )
     elif github_token and github_token.strip():
-        github_planned_op = "CREATE"
-        actions.append(
-            BootstrapAction(
-                subject=github_secret_name,
-                operation="CREATE",
-                message="Create AWS Secrets Manager secret with provided token",
-            )
-        )
-        gh_res = validate_github_repository_access(
-            owner=github_repo_owner,
-            repository_name=github_repo_name,
-            branch=github_repo_branch,
+        github_repo_accessible, github_planned_op = _plan_new_github_token(
+            github_secret_name=github_secret_name,
+            github_repo_owner=github_repo_owner,
+            github_repo_name=github_repo_name,
+            github_repo_branch=github_repo_branch,
             token=github_token.strip(),
-        )
-        if gh_res["accessible"]:
-            github_repo_accessible = True
-            actions.append(
-                BootstrapAction(
-                    subject=f"{github_repo_owner}/{github_repo_name}",
-                    operation="NO_CHANGE",
-                    message=f"Validate GitHub repository branch '{github_repo_branch}' (accessible)",
-                )
-            )
-        else:
-            warning_msg = (
-                f"GitHub repository '{github_repo_owner}/{github_repo_name}' "
-                f"check returned: {gh_res['error']}"
-            )
-            warnings.append(warning_msg)
-            actions.append(
-                BootstrapAction(
-                    subject=github_secret_name,
-                    operation="WARNING",
-                    message=warning_msg,
-                    severity="warning",
-                )
-            )
-    elif allow_missing_github_secret:
-        github_planned_op = "WARNING"
-        warning_msg = (
-            f"AWS Secrets Manager secret '{github_secret_name}' was not found. "
-            "You must create this secret containing a valid GitHub token before "
-            "deploying the installer."
-        )
-        warnings.append(warning_msg)
-        actions.append(
-            BootstrapAction(
-                subject=github_secret_name,
-                operation="WARNING",
-                message=(
-                    "AWS Secrets Manager secret not found "
-                    "(proceeding as requested; manual secret creation required)"
-                ),
-                severity="warning",
-            )
+            actions=actions,
+            warnings=warnings,
         )
     else:
-        github_planned_op = "MISSING"
-        actions.append(
-            BootstrapAction(
-                subject=github_secret_name,
-                operation="MISSING",
-                message="AWS Secrets Manager secret not found",
-                severity="error",
-            )
-        )
-        actions.append(
-            BootstrapAction(
-                subject=github_secret_name,
-                operation="MISSING",
-                message="AWS LZA requires a GitHub token stored in this Secrets Manager secret",
-                severity="error",
-            )
+        github_repo_accessible, github_planned_op = _plan_missing_github_secret(
+            github_secret_name=github_secret_name,
+            allow_missing_github_secret=allow_missing_github_secret,
+            actions=actions,
+            warnings=warnings,
         )
 
     return (

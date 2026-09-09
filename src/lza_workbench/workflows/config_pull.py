@@ -380,6 +380,87 @@ def _handle_s3_pull(
     )
 
 
+def _initialize_unversioned_git_repo(
+    config_dir: Path,
+    destination_remote_url: str,
+    destination_branch: str,
+    remote_name: str,
+    aws_profile: str | None,
+    force: bool,
+    overwrite_confirmed: bool,
+) -> None:
+    if config_dir.exists() and any(config_dir.iterdir()):
+        if not force and not overwrite_confirmed:
+            raise LzaError(
+                f"Local configuration directory '{config_dir}' is not a Git repository "
+                "and contains files. Use --force to initialize and synchronize."
+            )
+        init_git_repository(
+            config_dir,
+            remote_name=remote_name,
+            remote_url=destination_remote_url,
+            aws_profile=aws_profile,
+        )
+        fetch_git_remote(config_dir, remote=remote_name)
+        pull_git_branch(config_dir, remote=remote_name, branch=destination_branch)
+    else:
+        clone_git_repository(
+            config_dir,
+            remote_url=destination_remote_url,
+            branch=destination_branch,
+            aws_profile=aws_profile,
+        )
+
+
+def _sync_existing_git_repo(
+    config_dir: Path,
+    destination_remote_url: str,
+    destination_branch: str,
+    remote_name: str,
+    aws_profile: str | None,
+    repo_type: str,
+    force: bool,
+    overwrite_confirmed: bool,
+) -> bool:
+    existing_url = get_git_remote_url(config_dir, remote_name)
+    if not existing_url:
+        set_git_remote_url(config_dir, remote_name, destination_remote_url)
+    elif existing_url != destination_remote_url:
+        raise LzaError(
+            f"Git remote '{remote_name}' does not match lza-workspace.yaml: "
+            f"expected '{destination_remote_url}', received '{existing_url}'. "
+            "Update the local remote before pulling."
+        )
+
+    if repo_type == "codecommit" and aws_profile:
+        configure_codecommit_credential_helper(config_dir, aws_profile)
+
+    current_branch = get_git_branch(config_dir)
+    if current_branch != destination_branch:
+        raise LzaError(
+            f"Current Git branch '{current_branch}' is not the configured branch "
+            f"'{destination_branch}'. Check out '{destination_branch}' before pulling."
+        )
+
+    stashed = False
+    if has_uncommitted_changes(config_dir):
+        if not force and not overwrite_confirmed:
+            raise LzaError(
+                "Configuration repository contains uncommitted changes. "
+                "Use --force to automatically stash changes or "
+                "commit/stash them before pulling."
+            )
+        stashed = stash_git_changes(config_dir)
+
+    fetch_git_remote(config_dir, remote=remote_name)
+    pull_git_branch(config_dir, remote=remote_name, branch=destination_branch)
+
+    if stashed:
+        restore_git_stash(config_dir)
+
+    return stashed
+
+
 def _handle_git_pull(
     *,
     workspace_dir: Path,
@@ -422,67 +503,29 @@ def _handle_git_pull(
             files_count=count_git_files(config_dir) if is_git_repository(config_dir) else None,
         )
 
+    profile = config.aws.profile if repo_type == "codecommit" else None
     stashed = False
     if not is_git_repository(config_dir):
-        profile = config.aws.profile if repo_type == "codecommit" else None
-        if config_dir.exists() and any(config_dir.iterdir()):
-            if not force and not overwrite_confirmed:
-                if not overwrite_confirmed:
-                    raise LzaError(
-                        f"Local configuration directory '{config_dir}' is not a Git repository "
-                        "and contains files. Use --force to initialize and synchronize."
-                    )
-            init_git_repository(
-                config_dir,
-                remote_name=remote_name,
-                remote_url=destination.remote_url,
-                aws_profile=profile,
-            )
-            fetch_git_remote(config_dir, remote=remote_name)
-            pull_git_branch(config_dir, remote=remote_name, branch=destination.branch)
-        else:
-            clone_git_repository(
-                config_dir,
-                remote_url=destination.remote_url,
-                branch=destination.branch,
-                aws_profile=profile,
-            )
+        _initialize_unversioned_git_repo(
+            config_dir=config_dir,
+            destination_remote_url=destination.remote_url,
+            destination_branch=destination.branch,
+            remote_name=remote_name,
+            aws_profile=profile,
+            force=force,
+            overwrite_confirmed=overwrite_confirmed,
+        )
     else:
-        existing_url = get_git_remote_url(config_dir, remote_name)
-        if not existing_url:
-            set_git_remote_url(config_dir, remote_name, destination.remote_url)
-        elif existing_url != destination.remote_url:
-            raise LzaError(
-                f"Git remote '{remote_name}' does not match lza-workspace.yaml: "
-                f"expected '{destination.remote_url}', received '{existing_url}'. "
-                "Update the local remote before pulling."
-            )
-
-        if repo_type == "codecommit" and config.aws.profile:
-            configure_codecommit_credential_helper(config_dir, config.aws.profile)
-
-        current_branch = get_git_branch(config_dir)
-        if current_branch != destination.branch:
-            raise LzaError(
-                f"Current Git branch '{current_branch}' is not the configured branch "
-                f"'{destination.branch}'. Check out '{destination.branch}' before pulling."
-            )
-
-        if has_uncommitted_changes(config_dir):
-            if not force and not overwrite_confirmed:
-                if not overwrite_confirmed:
-                    raise LzaError(
-                        "Configuration repository contains uncommitted changes. "
-                        "Use --force to automatically stash changes or "
-                        "commit/stash them before pulling."
-                    )
-            stashed = stash_git_changes(config_dir)
-
-        fetch_git_remote(config_dir, remote=remote_name)
-        pull_git_branch(config_dir, remote=remote_name, branch=destination.branch)
-
-        if stashed:
-            restore_git_stash(config_dir)
+        stashed = _sync_existing_git_repo(
+            config_dir=config_dir,
+            destination_remote_url=destination.remote_url,
+            destination_branch=destination.branch,
+            remote_name=remote_name,
+            aws_profile=profile,
+            repo_type=repo_type,
+            force=force,
+            overwrite_confirmed=overwrite_confirmed,
+        )
 
     validate_template(config_dir)
 

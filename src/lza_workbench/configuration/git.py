@@ -363,6 +363,49 @@ def get_git_working_tree_status(repo_dir: Path) -> GitWorkingTreeStatus | None:
     )
 
 
+def _resolve_upstream_target_ref(
+    repo_dir: Path, remote_name: str, branch: str | None
+) -> str | None:
+    resolved_branch = branch or get_git_branch(repo_dir)
+    upstream_ref = f"{remote_name}/{resolved_branch}"
+    check_ref = _run_git_command(["rev-parse", "--verify", upstream_ref], cwd=repo_dir)
+    if check_ref.returncode == 0:
+        return upstream_ref
+
+    check_u = _run_git_command(["rev-parse", "--verify", "@{u}"], cwd=repo_dir)
+    if check_u.returncode == 0:
+        return "@{u}"
+
+    return None
+
+
+def _build_git_sync_status_from_counts(ahead: int, behind: int) -> GitRemoteSyncStatus:
+    if ahead == 0 and behind == 0:
+        return GitRemoteSyncStatus(status="Synchronized", ahead=0, behind=0, summary="In Sync")
+    if ahead > 0 and behind == 0:
+        suffix = "s" if ahead != 1 else ""
+        return GitRemoteSyncStatus(
+            status="Ahead",
+            ahead=ahead,
+            behind=0,
+            summary=f"Ahead by {ahead} commit{suffix}",
+        )
+    if ahead == 0 and behind > 0:
+        suffix = "s" if behind != 1 else ""
+        return GitRemoteSyncStatus(
+            status="Behind",
+            ahead=0,
+            behind=behind,
+            summary=f"Behind by {behind} commit{suffix}",
+        )
+    return GitRemoteSyncStatus(
+        status="Diverged",
+        ahead=ahead,
+        behind=behind,
+        summary=f"Diverged ({ahead} ahead, {behind} behind)",
+    )
+
+
 def get_git_remote_sync_status(
     repo_dir: Path,
     remote_name: str = "origin",
@@ -377,23 +420,14 @@ def get_git_remote_sync_status(
             summary="Not a Git repository or has no commits",
         )
 
-    resolved_branch = branch or get_git_branch(repo_dir)
-    upstream_ref = f"{remote_name}/{resolved_branch}"
-    check_ref = _run_git_command(["rev-parse", "--verify", upstream_ref], cwd=repo_dir)
-
-    if check_ref.returncode != 0:
-        check_u = _run_git_command(["rev-parse", "--verify", "@{u}"], cwd=repo_dir)
-        if check_u.returncode == 0:
-            target_ref = "@{u}"
-        else:
-            return GitRemoteSyncStatus(
-                status="No Upstream",
-                ahead=0,
-                behind=0,
-                summary="No remote tracking branch",
-            )
-    else:
-        target_ref = upstream_ref
+    target_ref = _resolve_upstream_target_ref(repo_dir, remote_name, branch)
+    if target_ref is None:
+        return GitRemoteSyncStatus(
+            status="No Upstream",
+            ahead=0,
+            behind=0,
+            summary="No remote tracking branch",
+        )
 
     proc = _run_git_command(
         ["rev-list", "--left-right", "--count", f"HEAD...{target_ref}"], cwd=repo_dir
@@ -408,38 +442,13 @@ def get_git_remote_sync_status(
 
     parts = proc.stdout.strip().split()
     if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
-        ahead = int(parts[0])
-        behind = int(parts[1])
-        if ahead == 0 and behind == 0:
-            return GitRemoteSyncStatus(status="Synchronized", ahead=0, behind=0, summary="In Sync")
-        if ahead > 0 and behind == 0:
-            suffix = "s" if ahead != 1 else ""
-            return GitRemoteSyncStatus(
-                status="Ahead",
-                ahead=ahead,
-                behind=0,
-                summary=f"Ahead by {ahead} commit{suffix}",
-            )
-        if ahead == 0 and behind > 0:
-            suffix = "s" if behind != 1 else ""
-            return GitRemoteSyncStatus(
-                status="Behind",
-                ahead=0,
-                behind=behind,
-                summary=f"Behind by {behind} commit{suffix}",
-            )
-        return GitRemoteSyncStatus(
-            status="Diverged",
-            ahead=ahead,
-            behind=behind,
-            summary=f"Diverged ({ahead} ahead, {behind} behind)",
-        )
+        return _build_git_sync_status_from_counts(int(parts[0]), int(parts[1]))
 
     return GitRemoteSyncStatus(
         status="Unknown",
         ahead=0,
         behind=0,
-        summary="Unknown sync state",
+        summary="Cannot compare with remote",
     )
 
 

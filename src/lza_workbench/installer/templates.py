@@ -143,22 +143,70 @@ def backup_installer_template(
     return backup_path
 
 
+def _resolve_local_installer_template(
+    workspace_dir: Path, template_path_str: str | None
+) -> Path:
+    if not template_path_str:
+        raise LzaError("installer.stack_template.path is required when source is 'local'.")
+    configured_path = Path(template_path_str).expanduser()
+    template_path = (
+        configured_path
+        if configured_path.is_absolute()
+        else (workspace_dir / configured_path).resolve()
+    )
+    if not template_path.is_file():
+        raise LzaError(f"Configured local installer template was not found: {template_path}")
+    return template_path
+
+
+def _resolve_amazon_installer_template(
+    installer_dir: Path, version: str, dry_run: bool
+) -> Path:
+    template_path = installer_dir / INSTALLER_TEMPLATE_FILENAME
+    if not template_path.exists():
+        if dry_run:
+            if (
+                normalize_lza_version(version)
+                == normalize_lza_version(PACKAGED_INSTALLER_VERSION)
+                and LOCAL_PACKAGED_INSTALLER_TEMPLATE.exists()
+            ):
+                return LOCAL_PACKAGED_INSTALLER_TEMPLATE
+            return template_path
+
+        return download_installer_template(version=version, local_path=template_path)
+
+    if not dry_run:
+        try:
+            existing_content = template_path.read_text(encoding="utf-8")
+            existing_ver = extract_template_version(existing_content)
+            if existing_ver and normalize_lza_version(existing_ver) != normalize_lza_version(version):
+                backup_installer_template(installer_dir, template_path, existing_ver)
+                template_path = download_installer_template(version=version, local_path=template_path)
+        except OSError as exc:
+            raise LzaError(f"Unable to inspect installer template {template_path}: {exc}") from exc
+
+    return template_path
+
+
+def _apply_anonymous_data_setting(template_path: Path, enable_anon: bool) -> None:
+    try:
+        content = template_path.read_text(encoding="utf-8")
+        configured = configure_anonymous_data(content, enable_anon)
+        if configured != content:
+            template_path.write_text(configured, encoding="utf-8")
+    except OSError as exc:
+        raise LzaError(
+            f"Unable to configure installer template {template_path}: {exc}"
+        ) from exc
+
+
 def resolve_installer_template(
     workspace_dir: Path, config: WorkspaceConfig, dry_run: bool = False
 ) -> Path:
     """Resolve the configured installer template into a local usable template path."""
     template_config = config.installer.stack_template
     if template_config.source == "local":
-        if not template_config.path:
-            raise LzaError("installer.stack_template.path is required when source is 'local'.")
-        configured_path = Path(template_config.path).expanduser()
-        template_path = (
-            configured_path
-            if configured_path.is_absolute()
-            else (workspace_dir / configured_path).resolve()
-        )
-        if not template_path.is_file():
-            raise LzaError(f"Configured local installer template was not found: {template_path}")
+        template_path = _resolve_local_installer_template(workspace_dir, template_config.path)
     elif template_config.source in {"git", "s3"}:
         raise LzaError(
             f"Installer template source '{template_config.source}' is not supported yet. "
@@ -166,54 +214,18 @@ def resolve_installer_template(
         )
     else:
         installer_dir = workspace_dir / config.installer.local_path
-        template_path = installer_dir / INSTALLER_TEMPLATE_FILENAME
-
-        if not template_path.exists():
-            if dry_run:
-                if (
-                    normalize_lza_version(config.lza.version)
-                    == normalize_lza_version(PACKAGED_INSTALLER_VERSION)
-                    and LOCAL_PACKAGED_INSTALLER_TEMPLATE.exists()
-                ):
-                    return LOCAL_PACKAGED_INSTALLER_TEMPLATE
-                return template_path
-
-            template_path = download_installer_template(
-                version=config.lza.version,
-                local_path=template_path,
-            )
-        elif not dry_run:
-            # Check if version has changed
-            try:
-                existing_content = template_path.read_text(encoding="utf-8")
-                existing_ver = extract_template_version(existing_content)
-                if existing_ver and normalize_lza_version(existing_ver) != normalize_lza_version(
-                    config.lza.version
-                ):
-                    backup_installer_template(installer_dir, template_path, existing_ver)
-                    template_path = download_installer_template(
-                        version=config.lza.version,
-                        local_path=template_path,
-                    )
-            except OSError as exc:
-                raise LzaError(
-                    f"Unable to inspect installer template {template_path}: {exc}"
-                ) from exc
+        template_path = _resolve_amazon_installer_template(
+            installer_dir=installer_dir,
+            version=config.lza.version,
+            dry_run=dry_run,
+        )
 
     # Configure anonymous data sharing in template if modified/disabled
     if template_path.exists() and not dry_run:
-        try:
-            content = template_path.read_text(encoding="utf-8")
-            enable_anon = config.installer.options.anonymous_data
-            configured = configure_anonymous_data(content, enable_anon)
-            if configured != content:
-                template_path.write_text(configured, encoding="utf-8")
-        except OSError as exc:
-            raise LzaError(
-                f"Unable to configure installer template {template_path}: {exc}"
-            ) from exc
+        _apply_anonymous_data_setting(template_path, config.installer.options.anonymous_data)
 
     return template_path
+
 
 
 
