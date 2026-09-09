@@ -9,6 +9,7 @@ from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 
+from lza_workbench.aws.errors import classify_aws_error
 from lza_workbench.errors import LzaError
 
 
@@ -58,18 +59,17 @@ def inspect_s3_bucket(
     clean_bucket = bucket_name.strip()
     try:
         client.head_bucket(Bucket=clean_bucket)
-    except ClientError as exc:
-        error = exc.response.get("Error", {})
-        code = error.get("Code", "Unknown")
-        if code in {"404", "NoSuchBucket", "NotFound"}:
+    except Exception as exc:
+        info = classify_aws_error(exc)
+        if info.is_not_found:
             return S3BucketObservation(exists=False, accessible=False)
-        if code in {"403", "AccessDenied"}:
+        if info.is_access_denied:
             raise LzaError(
                 f"Access denied to S3 bucket '{clean_bucket}'. Check your AWS permissions."
             ) from exc
-        raise LzaError(f"AWS S3 inspection error on bucket '{clean_bucket}': {exc}") from exc
-    except BotoCoreError as exc:
-        raise LzaError(f"AWS connection/client failure: {exc}") from exc
+        if info.is_unavailable:
+            raise LzaError(f"AWS connection/client failure: {info.message}") from exc
+        raise LzaError(f"AWS S3 inspection error on bucket '{clean_bucket}': {info.message}") from exc
 
     versioning_enabled = False
     try:
@@ -322,13 +322,12 @@ def inspect_s3_object_safe(
             version_id=head.get("VersionId"), content_length=head.get("ContentLength"),
             last_modified=head.get("LastModified"), metadata=head.get("Metadata") or {},
         )
-    except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "Unknown")
-        if code in {"404", "NoSuchKey", "NoSuchBucket", "NotFound"}:
+    except Exception as exc:
+        info = classify_aws_error(exc)
+        if info.is_not_found:
             return S3ObjectObservation(exists=False)
-        return S3ObjectObservation(exists=False, error=f"[{code}] {exc}")
-    except BotoCoreError as exc:
-        return S3ObjectObservation(exists=False, error=f"Connection failure: {exc}")
+        prefix = "Connection failure: " if info.is_unavailable else ""
+        return S3ObjectObservation(exists=False, error=f"{prefix}{info.message}")
 
 
 __all__ = [

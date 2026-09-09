@@ -29,7 +29,10 @@ from lza_workbench.configuration.repository import (
     resolve_git_configuration_destination,
     resolve_s3_configuration_destination,
 )
-from lza_workbench.configuration.state import record_config_git_push, record_config_upload
+from lza_workbench.configuration.state import (
+    record_config_git_push,
+    record_config_upload,
+)
 from lza_workbench.configuration.templates import validate_template
 from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import write_workspace_config

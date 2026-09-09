@@ -122,35 +122,83 @@ def get_installer_status_workflow(
         prime_credentials=resolved_config.aws.prime_credentials,
     )
     cfn_stack_name = resolved_config.installer.stack_name or "AWSAccelerator-InstallerStack"
-    cfn_client = (
-        aws_context.factory.get_client("cloudformation") if aws_context.identity else None
-    )
-    cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=cfn_stack_name)
-    ssm_client = aws_context.factory.get_client("ssm") if cfn_status.exists else None
-    deployed_version = (
-        resolve_deployed_installer_version(
-            cfn_client=cfn_client,
-            ssm_client=ssm_client,
-            stack_name=cfn_stack_name,
-            accelerator_prefix=(
-                cfn_status.deployed_parameters.get("AcceleratorPrefix")
-                or resolved_config.lza.accelerator_prefix
-            ),
-        )
-        if cfn_status.exists
-        else None
-    )
-
     prefix = resolved_config.lza.accelerator_prefix or "AWSAccelerator"
     installer_pipeline_name = (
         resolved_config.pipelines.installer.name or f"{prefix}-Installer"
     )
-    codepipeline_client = (
-        aws_context.factory.get_client("codepipeline") if aws_context.identity else None
-    )
-    pipeline_state = get_pipeline_state(
-        client=codepipeline_client, pipeline_name=installer_pipeline_name
-    )
+
+    if aws_context.is_live:
+        cfn_client = aws_context.factory.get_client("cloudformation")
+        cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=cfn_stack_name)
+        ssm_client = aws_context.factory.get_client("ssm") if cfn_status.exists else None
+        deployed_version = (
+            resolve_deployed_installer_version(
+                cfn_client=cfn_client,
+                ssm_client=ssm_client,
+                stack_name=cfn_stack_name,
+                accelerator_prefix=(
+                    cfn_status.deployed_parameters.get("AcceleratorPrefix")
+                    or resolved_config.lza.accelerator_prefix
+                ),
+            )
+            if cfn_status.exists
+            else None
+        )
+        codepipeline_client = aws_context.factory.get_client("codepipeline")
+        pipeline_state = get_pipeline_state(
+            client=codepipeline_client, pipeline_name=installer_pipeline_name
+        )
+
+        # If a connection/network failure occurred during live execution, fall back to recorded state
+        if (
+            isinstance(cfn_status.error, str)
+            and cfn_status.error.startswith("Connection failure")
+            and resolved_state
+        ):
+            recorded_status = resolved_state.installer_stack_status
+            if recorded_status:
+                cfn_status = CfnStackStatusResult(
+                    stack_name=cfn_stack_name,
+                    exists=True,
+                    stack_status=recorded_status,
+                    error=cfn_status.error,
+                )
+            if not deployed_version and resolved_state.installer_template_version:
+                deployed_version = resolved_state.installer_template_version
+        if (
+            isinstance(pipeline_state.error, str)
+            and pipeline_state.error.startswith("Connection failure")
+            and resolved_state
+        ):
+            pipeline_state = PipelineStateResult(
+                pipeline_name=installer_pipeline_name,
+                exists=bool(resolved_state.installer_pipeline_status),
+                status=resolved_state.installer_pipeline_status or "NOT_CHECKED",
+                latest_execution_id=resolved_state.installer_pipeline_execution_id,
+                error=pipeline_state.error,
+            )
+    else:
+        recorded_status = resolved_state.installer_stack_status if resolved_state else None
+        recorded_version = resolved_state.installer_template_version if resolved_state else None
+        cfn_status = CfnStackStatusResult(
+            stack_name=cfn_stack_name,
+            exists=bool(recorded_status),
+            stack_status=recorded_status,
+            error=aws_context.error,
+        )
+        deployed_version = recorded_version or resolved_config.lza.version
+        recorded_pipe_status = (
+            resolved_state.installer_pipeline_status if resolved_state else None
+        )
+        recorded_exec_id = (
+            resolved_state.installer_pipeline_execution_id if resolved_state else None
+        )
+        pipeline_state = PipelineStateResult(
+            pipeline_name=installer_pipeline_name,
+            exists=bool(recorded_pipe_status),
+            status=recorded_pipe_status or "NOT_CHECKED",
+            latest_execution_id=recorded_exec_id,
+        )
 
     return prepare_installer_status(
         workspace_dir=resolved_workspace_dir,

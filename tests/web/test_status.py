@@ -8,7 +8,10 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult, CfnStackStatusResult
+from lza_workbench.aws.cloudformation import (
+    CfnDeploymentPlanResult,
+    CfnStackStatusResult,
+)
 from lza_workbench.aws.codepipeline import PipelineStateResult
 from lza_workbench.configuration.archive import ConfigDiffResult
 from lza_workbench.configuration.git import GitRemoteSyncStatus, GitWorkingTreeStatus

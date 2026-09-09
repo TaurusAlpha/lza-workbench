@@ -7,8 +7,14 @@ from pathlib import Path
 import pytest
 
 from lza_workbench.errors import LzaError
-from lza_workbench.workflows.config_pull import ConfigPullResult, pull_configuration_workflow
-from lza_workbench.workflows.config_push import ConfigPushResult, push_configuration_workflow
+from lza_workbench.workflows.config_pull import (
+    ConfigPullResult,
+    pull_configuration_workflow,
+)
+from lza_workbench.workflows.config_push import (
+    ConfigPushResult,
+    push_configuration_workflow,
+)
 
 
 def test_pull_configuration_workflow_dry_run(configured_workspace: Path) -> None:

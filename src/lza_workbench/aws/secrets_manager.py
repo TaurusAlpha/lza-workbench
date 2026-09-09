@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from botocore.exceptions import ClientError
+from lza_workbench.aws.errors import classify_aws_error
 
 
 @dataclass(frozen=True)
@@ -28,13 +28,11 @@ def inspect_secret_exists(
     try:
         client.describe_secret(SecretId=secret_name)
         return True, None
-    except ClientError as err:
-        code = err.response.get("Error", {}).get("Code")
-        if code != "ResourceNotFoundException":
-            return False, str(err)
     except Exception as exc:
-        return False, str(exc)
-    return False, None
+        info = classify_aws_error(exc)
+        if info.is_not_found:
+            return False, None
+        return False, info.message
 
 
 def inspect_secret_details(
@@ -45,18 +43,19 @@ def inspect_secret_details(
     """Return existence, accessibility, and string value of a secret."""
     try:
         client.describe_secret(SecretId=secret_name)
-    except ClientError as err:
-        code = err.response.get("Error", {}).get("Code")
-        if code in ("ResourceNotFoundException", "404"):
+    except Exception as exc:
+        info = classify_aws_error(exc)
+        if info.is_not_found:
             return SecretObservation(
                 name=secret_name, exists=False, accessible=False, value=None, error=None
             )
+        prefix = "Access denied: " if info.is_access_denied else ""
         return SecretObservation(
-            name=secret_name, exists=False, accessible=False, value=None, error=str(err)
-        )
-    except Exception as exc:
-        return SecretObservation(
-            name=secret_name, exists=False, accessible=False, value=None, error=str(exc)
+            name=secret_name,
+            exists=False,
+            accessible=False,
+            value=None,
+            error=f"{prefix}{info.message}",
         )
 
     try:
@@ -65,17 +64,15 @@ def inspect_secret_details(
         return SecretObservation(
             name=secret_name, exists=True, accessible=True, value=secret_string, error=None
         )
-    except ClientError as err:
+    except Exception as exc:
+        info = classify_aws_error(exc)
+        prefix = "Access denied: " if info.is_access_denied else ""
         return SecretObservation(
             name=secret_name,
             exists=True,
             accessible=False,
             value=None,
-            error=f"Access denied: {err}",
-        )
-    except Exception as exc:
-        return SecretObservation(
-            name=secret_name, exists=True, accessible=False, value=None, error=str(exc)
+            error=f"{prefix}{info.message}",
         )
 
 

@@ -432,7 +432,11 @@ def get_root_status_workflow(
     )
 
     # Configuration Repository & Local Git
-    config_dir = ctx.config_dir
+    config_dir = (
+        ctx.config_dir
+        if isinstance(getattr(ctx, "config_dir", None), Path)
+        else (workspace_dir / config.configuration.local_path)
+    )
     config_dir_exists = config_dir.exists()
     repo = config.configuration.repository
 

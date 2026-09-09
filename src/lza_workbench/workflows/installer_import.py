@@ -68,7 +68,7 @@ def import_installer_workflow(
         prime_credentials=config.aws.prime_credentials,
         require_identity=True,
     )
-    cfn_client = aws_context.factory.get_client("cloudformation") if aws_context.identity else None
+    cfn_client = aws_context.factory.get_client("cloudformation")
     cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=resolved_stack_name)
 
     if not cfn_status.exists:
@@ -77,7 +77,7 @@ def import_installer_workflow(
             f"in region '{aws_context.region}' for profile '{config.aws.profile}'."
         )
 
-    ssm_client = aws_context.factory.get_client("ssm") if aws_context.identity else None
+    ssm_client = aws_context.factory.get_client("ssm")
     deployed_template = get_cloudformation_stack_template(
         client=cfn_client, stack_name=resolved_stack_name
     )
@@ -97,9 +97,7 @@ def import_installer_workflow(
 
     prefix = config.lza.accelerator_prefix or "AWSAccelerator"
     installer_pipeline_name = config.pipelines.installer.name or f"{prefix}-Installer"
-    codepipeline_client = (
-        aws_context.factory.get_client("codepipeline") if aws_context.identity else None
-    )
+    codepipeline_client = aws_context.factory.get_client("codepipeline")
     pipeline_state = get_pipeline_state(
         client=codepipeline_client, pipeline_name=installer_pipeline_name
     )

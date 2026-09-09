@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import ClientError
+
+from lza_workbench.aws.errors import classify_aws_error
 
 
 @dataclass(frozen=True)
@@ -30,39 +32,32 @@ def inspect_codecommit_repository(
     """Inspect a resolved CodeCommit repository and branch without feature policy."""
     try:
         client.get_repository(repositoryName=repository_name)
-    except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "")
-        not_found = code in {"RepositoryDoesNotExistException", "404"}
-        accessible = False
+    except Exception as exc:
+        info = classify_aws_error(exc)
         return CodeCommitRepositoryStatus(
             repository_name,
             branch_name,
-            False,
-            accessible,
-            False,
-            str(exc),
-            not_found,
-        )
-    except BotoCoreError as exc:
-        return CodeCommitRepositoryStatus(
-            repository_name, branch_name, False, False, False, str(exc)
+            exists=False,
+            accessible=False,
+            branch_exists=False,
+            error=info.message,
+            not_found=info.is_not_found,
         )
     try:
         client.get_branch(repositoryName=repository_name, branchName=branch_name)
         return CodeCommitRepositoryStatus(repository_name, branch_name, True, True, True)
-    except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "")
+    except Exception as exc:
+        info = classify_aws_error(exc)
+        branch_exists = False
+        accessible = not info.is_access_denied
+        err = None if info.code == "BranchDoesNotExistException" else info.message
         return CodeCommitRepositoryStatus(
             repository_name,
             branch_name,
-            True,
-            code == "BranchDoesNotExistException",
-            False,
-            str(exc),
-        )
-    except BotoCoreError as exc:
-        return CodeCommitRepositoryStatus(
-            repository_name, branch_name, True, False, False, str(exc)
+            exists=True,
+            accessible=accessible,
+            branch_exists=branch_exists,
+            error=err,
         )
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from botocore.exceptions import BotoCoreError, ClientError
+from lza_workbench.aws.errors import classify_aws_error
 
 
 @dataclass(frozen=True)
@@ -45,31 +45,30 @@ def inspect_codeconnection(
             provider_type=conn.get("ProviderType"),
             owner_account_id=conn.get("OwnerAccountId"),
         )
-    except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "")
-        message = exc.response.get("Error", {}).get("Message", str(exc))
-        if code in {"ResourceNotFoundException", "ConnectionNotFoundException"}:
+    except Exception as exc:
+        info = classify_aws_error(exc)
+        if info.is_not_found:
             return CodeConnectionStatusResult(
                 arn=clean_arn,
                 status="NOT_FOUND",
-                error=message,
+                error=info.message,
             )
-        if code in {"AccessDeniedException", "403"}:
+        if info.is_access_denied:
             return CodeConnectionStatusResult(
                 arn=clean_arn,
                 status="INACCESSIBLE",
-                error=f"AWS Access Denied: {message}",
+                error=f"AWS Access Denied: {info.message}",
+            )
+        if info.is_unavailable:
+            return CodeConnectionStatusResult(
+                arn=clean_arn,
+                status="INACCESSIBLE",
+                error=f"AWS connection failure: {info.message}",
             )
         return CodeConnectionStatusResult(
             arn=clean_arn,
             status="ERROR",
-            error=message,
-        )
-    except BotoCoreError as exc:
-        return CodeConnectionStatusResult(
-            arn=clean_arn,
-            status="INACCESSIBLE",
-            error=f"AWS connection failure: {exc}",
+            error=info.message,
         )
 
 

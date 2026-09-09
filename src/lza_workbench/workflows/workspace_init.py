@@ -7,7 +7,10 @@ from pathlib import Path
 
 from lza_workbench.aws.context import resolve_aws_execution_context
 from lza_workbench.errors import LzaError
-from lza_workbench.workspace.paths import normalize_customer_slug, resolve_init_workspace_dir
+from lza_workbench.workspace.paths import (
+    normalize_customer_slug,
+    resolve_init_workspace_dir,
+)
 from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,

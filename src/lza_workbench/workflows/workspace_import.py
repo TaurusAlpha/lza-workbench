@@ -482,79 +482,79 @@ def prepare_workspace_import(request: ImportWorkspaceRequest) -> ImportWorkspace
                 state.management_account_id = identity.get("account")
                 state.caller_arn = identity.get("arn")
 
-            stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
-            cfn_client = aws_ctx.factory.get_client("cloudformation") if aws_ctx.identity else None
-            cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=stack_name)
+                stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
+                cfn_client = aws_ctx.factory.get_client("cloudformation")
+                cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=stack_name)
 
-            if cfn_status.exists:
-                installer_discovered = True
-                discovered_stack_status = f"{cfn_status.stack_name} ({cfn_status.stack_status})"
-                ssm_client = aws_ctx.factory.get_client("ssm") if aws_ctx.identity else None
-                deployed_template = get_cloudformation_stack_template(
-                    client=cfn_client, stack_name=stack_name
-                )
-                if deployed_template is None:
-                    recommendations.append(
-                        "Live installer template could not be retrieved. Ensure the AWS identity "
-                        "has cloudformation:GetTemplate, then run 'lza installer import'."
+                if cfn_status.exists:
+                    installer_discovered = True
+                    discovered_stack_status = f"{cfn_status.stack_name} ({cfn_status.stack_status})"
+                    ssm_client = aws_ctx.factory.get_client("ssm")
+                    deployed_template = get_cloudformation_stack_template(
+                        client=cfn_client, stack_name=stack_name
                     )
-                deployed_version = resolve_deployed_installer_version(
-                    cfn_client=cfn_client,
-                    ssm_client=ssm_client,
-                    stack_name=stack_name,
-                    accelerator_prefix=(
-                        cfn_status.deployed_parameters.get("AcceleratorPrefix")
-                        or config.lza.accelerator_prefix
-                    ),
-                )
-                if deployed_template is not None:
-                    installer_template_path = prepare_installer_template_sync(
-                        workspace_dir=resolved_workspace_dir,
+                    if deployed_template is None:
+                        recommendations.append(
+                            "Live installer template could not be retrieved. Ensure the AWS identity "
+                            "has cloudformation:GetTemplate, then run 'lza installer import'."
+                        )
+                    deployed_version = resolve_deployed_installer_version(
+                        cfn_client=cfn_client,
+                        ssm_client=ssm_client,
+                        stack_name=stack_name,
+                        accelerator_prefix=(
+                            cfn_status.deployed_parameters.get("AcceleratorPrefix")
+                            or config.lza.accelerator_prefix
+                        ),
+                    )
+                    if deployed_template is not None:
+                        installer_template_path = prepare_installer_template_sync(
+                            workspace_dir=resolved_workspace_dir,
+                            config=config,
+                            state=state,
+                            template_body=deployed_template,
+                        )
+                        installer_template_body = deployed_template
+                    config = apply_installer_config_sync(
                         config=config,
-                        state=state,
-                        template_body=deployed_template,
+                        cfn_status=cfn_status,
+                        deployed_version=deployed_version,
                     )
-                    installer_template_body = deployed_template
-                config = apply_installer_config_sync(
-                    config=config,
-                    cfn_status=cfn_status,
-                    deployed_version=deployed_version,
-                )
-                state = apply_installer_state_sync(
-                    state=state,
-                    cfn_status=cfn_status,
-                    deployed_version=deployed_version,
-                )
-                if config.installer.source_code.repository_type == "github":
-                    try:
-                        sm_client = aws_ctx.factory.get_client("secretsmanager")
-                        secret_name = (
-                            config.installer.source_code.github_secret_name
-                            or "accelerator/github-token"
-                        )
-                        secret_details = inspect_secret_details(
-                            client=sm_client, secret_name=secret_name
-                        )
-                        if not secret_details.exists:
-                            recommendations.append(
-                                "GitHub installer source detected, but Secrets Manager "
-                                f"secret '{secret_name}' was not found. Create this secret "
-                                "containing a valid GitHub token before deployment."
+                    state = apply_installer_state_sync(
+                        state=state,
+                        cfn_status=cfn_status,
+                        deployed_version=deployed_version,
+                    )
+                    if config.installer.source_code.repository_type == "github":
+                        try:
+                            sm_client = aws_ctx.factory.get_client("secretsmanager")
+                            secret_name = (
+                                config.installer.source_code.github_secret_name
+                                or "accelerator/github-token"
                             )
-                        elif secret_details.value:
-                            gh_res = validate_github_repository_access(
-                                owner=config.installer.source_code.owner or "awslabs",
-                                repository_name=config.installer.source_code.repository_name
-                                or "landing-zone-accelerator-on-aws",
-                                branch=config.installer.source_code.branch,
-                                token=secret_details.value,
+                            secret_details = inspect_secret_details(
+                                client=sm_client, secret_name=secret_name
                             )
-                            if not gh_res["accessible"]:
+                            if not secret_details.exists:
                                 recommendations.append(
-                                    f"GitHub repository check returned: {gh_res['error']}"
+                                    "GitHub installer source detected, but Secrets Manager "
+                                    f"secret '{secret_name}' was not found. Create this secret "
+                                    "containing a valid GitHub token before deployment."
                                 )
-                    except Exception as gh_exc:
-                        recommendations.append(f"GitHub token validation check skipped: {gh_exc}")
+                            elif secret_details.value:
+                                gh_res = validate_github_repository_access(
+                                    owner=config.installer.source_code.owner or "awslabs",
+                                    repository_name=config.installer.source_code.repository_name
+                                    or "landing-zone-accelerator-on-aws",
+                                    branch=config.installer.source_code.branch,
+                                    token=secret_details.value,
+                                )
+                                if not gh_res["accessible"]:
+                                    recommendations.append(
+                                        f"GitHub repository check returned: {gh_res['error']}"
+                                    )
+                        except Exception as gh_exc:
+                            recommendations.append(f"GitHub token validation check skipped: {gh_exc}")
             elif aws_ctx.error:
                 recommendations.append(
                     f"AWS connection check failed ({aws_ctx.error}). "

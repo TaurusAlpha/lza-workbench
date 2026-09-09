@@ -16,7 +16,10 @@ from lza_workbench.workflows.workspace_init import (
     WorkspaceInitResult,
     init_workspace_workflow,
 )
-from lza_workbench.workspace.paths import normalize_customer_slug, resolve_init_workspace_dir
+from lza_workbench.workspace.paths import (
+    normalize_customer_slug,
+    resolve_init_workspace_dir,
+)
 from lza_workbench.workspace.schema import LzaConfig
 
 

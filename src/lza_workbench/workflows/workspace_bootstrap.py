@@ -622,6 +622,11 @@ def apply_bootstrap_preparation(
     plan = preparation.plan
     aws_context = preparation.aws_context
 
+    if not aws_context.is_live:
+        raise LzaError(
+            f"Cannot apply bootstrap changes: AWS is offline ({aws_context.error or 'Authentication required'})."
+        )
+
     if plan.codecommit_repo_planned_operation == "MISSING":
         raise LzaError(
             f"Configured CodeCommit configuration repository '{plan.codecommit_repo_name}' "

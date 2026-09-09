@@ -8,6 +8,7 @@ from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 
+from lza_workbench.aws.errors import classify_aws_error
 from lza_workbench.errors import LzaError
 
 
@@ -199,29 +200,20 @@ def get_pipeline_state(
             updated=updated,
         )
 
-    except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "")
-        if code in {
-            "PipelineNotFoundException",
-            "ResourceNotFoundException",
-        } or "does not exist" in str(exc):
+    except Exception as exc:
+        info = classify_aws_error(exc)
+        if info.is_not_found:
             return PipelineStateResult(
                 pipeline_name=clean_pipeline_name,
                 exists=False,
                 status="NOT_DEPLOYED",
             )
+        prefix = "Connection failure: " if info.is_unavailable else ""
         return PipelineStateResult(
             pipeline_name=clean_pipeline_name,
             exists=False,
             status="UNKNOWN",
-            error=str(exc),
-        )
-    except BotoCoreError as exc:
-        return PipelineStateResult(
-            pipeline_name=clean_pipeline_name,
-            exists=False,
-            status="UNKNOWN",
-            error=f"Connection failure: {exc}",
+            error=f"{prefix}{info.message}",
         )
 
 
@@ -308,35 +300,23 @@ def get_pipeline_execution(
             duration_seconds=duration_seconds,
         )
 
-    except ClientError as exc:
-        code = exc.response.get("Error", {}).get("Code", "")
-        message = exc.response.get("Error", {}).get("Message", str(exc))
-        if code in {
-            "PipelineNotFoundException",
-            "PipelineExecutionNotFoundException",
-            "ResourceNotFoundException",
-        }:
+    except Exception as exc:
+        info = classify_aws_error(exc)
+        if info.is_not_found:
             return PipelineExecutionResult(
                 pipeline_name=clean_pipeline_name,
                 exists=False,
                 execution_id=clean_execution_id,
                 status="NOT_FOUND",
-                error=message,
+                error=info.message,
             )
+        prefix = "Connection failure: " if info.is_unavailable else ""
         return PipelineExecutionResult(
             pipeline_name=clean_pipeline_name,
             exists=False,
             execution_id=clean_execution_id,
             status="UNKNOWN",
-            error=message,
-        )
-    except BotoCoreError as exc:
-        return PipelineExecutionResult(
-            pipeline_name=clean_pipeline_name,
-            exists=False,
-            execution_id=clean_execution_id,
-            status="UNKNOWN",
-            error=f"Connection failure: {exc}",
+            error=f"{prefix}{info.message}",
         )
 
 

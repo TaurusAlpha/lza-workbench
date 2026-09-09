@@ -10,6 +10,7 @@ from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 
+from lza_workbench.aws.errors import classify_aws_error
 from lza_workbench.errors import LzaError
 
 
@@ -41,15 +42,7 @@ class CfnStackStatusResult:
 
 def _is_stack_not_found(exc: Exception) -> bool:
     """Check if an AWS exception indicates that the CloudFormation stack does not exist."""
-    if isinstance(exc, ClientError):
-        error = exc.response.get("Error", {})
-        code = error.get("Code", "")
-        message = error.get("Message", "") or str(exc)
-        if code in {"StackNotFoundException", "ResourceNotFoundException", "404"}:
-            return True
-        if code == "ValidationError" and "does not exist" in message.lower():
-            return True
-    return False
+    return classify_aws_error(exc).is_not_found
 
 
 def inspect_cloudformation_stack(
@@ -102,25 +95,20 @@ def inspect_cloudformation_stack(
             parameter_diffs=diffs,
         )
 
-    except ClientError as exc:
-        if _is_stack_not_found(exc):
+    except Exception as exc:
+        info = classify_aws_error(exc)
+        if info.is_not_found:
             return CfnDeploymentPlanResult(
                 stack_name=clean_stack_name,
                 operation="CREATE",
                 stack_status=None,
                 resolved_parameters=resolved_parameters,
             )
+        prefix = "Connection failure" if info.is_unavailable else "Error"
         return CfnDeploymentPlanResult(
             stack_name=clean_stack_name,
             operation="UNKNOWN",
-            stack_status=f"Error: {exc}",
-            resolved_parameters=resolved_parameters,
-        )
-    except BotoCoreError as exc:
-        return CfnDeploymentPlanResult(
-            stack_name=clean_stack_name,
-            operation="UNKNOWN",
-            stack_status=f"Connection failure: {exc}",
+            stack_status=f"{prefix}: {info.message}",
             resolved_parameters=resolved_parameters,
         )
 
@@ -138,14 +126,6 @@ def get_cloudformation_stack_status(
             exists=False,
             stack_status="NOT_SPECIFIED",
             error="Stack name is empty",
-        )
-
-    if not client:
-        return CfnStackStatusResult(
-            stack_name=clean_stack_name,
-            exists=False,
-            stack_status="UNKNOWN",
-            error="Connection failure: client is not initialized",
         )
 
     try:
@@ -185,25 +165,20 @@ def get_cloudformation_stack_status(
             last_updated_time=last_updated_time,
         )
 
-    except ClientError as exc:
-        if _is_stack_not_found(exc):
+    except Exception as exc:
+        info = classify_aws_error(exc)
+        if info.is_not_found:
             return CfnStackStatusResult(
                 stack_name=clean_stack_name,
                 exists=False,
                 stack_status="NOT_DEPLOYED",
             )
+        prefix = "Connection failure: " if info.is_unavailable else ""
         return CfnStackStatusResult(
             stack_name=clean_stack_name,
             exists=False,
             stack_status="UNKNOWN",
-            error=str(exc),
-        )
-    except BotoCoreError as exc:
-        return CfnStackStatusResult(
-            stack_name=clean_stack_name,
-            exists=False,
-            stack_status="UNKNOWN",
-            error=f"Connection failure: {exc}",
+            error=f"{prefix}{info.message}",
         )
 
 
