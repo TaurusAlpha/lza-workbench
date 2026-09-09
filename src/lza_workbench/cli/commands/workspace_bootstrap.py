@@ -35,8 +35,7 @@ def _render_bootstrap_action(action: BootstrapAction) -> None:
         "NO_CHANGE": "dim",
     }.get(action.severity or action.operation, "blue")
     console.print(
-        f"  • [{color}]{action.operation}[/{color}] "
-        f"[bold]{action.subject}[/bold]: {action.message}"
+        f"  • [{color}]{action.operation}[/{color}] [bold]{action.subject}[/bold]: {action.message}"
     )
 
 
@@ -119,9 +118,7 @@ def _confirm_bootstrap(
     if dry_run or force or plan.planned_operation in {"NO_CHANGE", "WARNING"}:
         return True
 
-    prompt = (
-        f"Proceed with {plan.planned_operation.lower()} for AWS bootstrap resources?"
-    )
+    prompt = f"Proceed with {plan.planned_operation.lower()} for AWS bootstrap resources?"
     if not typer.confirm(prompt, default=True):
         console.print("[dim]Bootstrap aborted by user.[/dim]")
         return False
@@ -227,9 +224,7 @@ def workspace_bootstrap_command(
     )
 
     console.print()
-    print_notice(
-        f"Bootstrap prerequisite resources are ready ({result.planned_operation})."
-    )
+    print_notice(f"Bootstrap prerequisite resources are ready ({result.planned_operation}).")
     print_info(
         "Updated assets bucket in lza-workspace.yaml and operational state in .lza/state.json",
         dim=True,

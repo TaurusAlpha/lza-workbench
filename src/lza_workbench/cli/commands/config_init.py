@@ -70,9 +70,7 @@ def render_config_init_result(result: ConfigInitResult) -> None:
         for path in result.written_paths:
             console.print(f"  - {path}")
         if result.unresolved_placeholders:
-            print_warning(
-                f"Unresolved placeholders ({len(result.unresolved_placeholders)}):"
-            )
+            print_warning(f"Unresolved placeholders ({len(result.unresolved_placeholders)}):")
             for token in result.unresolved_placeholders:
                 console.print(f"  - {token}")
         if result.config.configuration.repository.type == "s3" and not result.git_skipped:
@@ -95,9 +93,7 @@ def render_config_init_result(result: ConfigInitResult) -> None:
 
     if result.unresolved_placeholders:
         console.print()
-        print_warning(
-            f"Unresolved placeholders remaining ({len(result.unresolved_placeholders)}):"
-        )
+        print_warning(f"Unresolved placeholders remaining ({len(result.unresolved_placeholders)}):")
         for token in result.unresolved_placeholders:
             console.print(f"  - {token}")
         print_info(

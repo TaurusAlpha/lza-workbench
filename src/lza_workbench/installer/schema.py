@@ -138,6 +138,7 @@ class InstallerOptionsConfig(BaseModel):
     )
     anonymous_data: bool = False
 
+
 class LzaInstaller(BaseModel):
     """Installer defaults persisted for later commands."""
 

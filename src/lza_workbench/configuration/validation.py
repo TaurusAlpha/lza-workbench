@@ -46,9 +46,8 @@ def _is_placeholder(val: Any) -> bool:
     """Check if a value is an un-rendered replacement variable or template placeholder."""
     if isinstance(val, str):
         cleaned = val.strip()
-        return (
-            (cleaned.startswith("{{") and cleaned.endswith("}}"))
-            or (cleaned.startswith("${") and cleaned.endswith("}"))
+        return (cleaned.startswith("{{") and cleaned.endswith("}}")) or (
+            cleaned.startswith("${") and cleaned.endswith("}")
         )
     return False
 
@@ -261,9 +260,7 @@ def _validate_iam_config(data: dict[str, Any]) -> None:
     }
     if not any(key in data for key in expected_keys):
         keys_str = ", ".join(sorted(expected_keys))
-        raise LzaError(
-            f"iam-config.yaml must define at least one IAM section ({keys_str})"
-        )
+        raise LzaError(f"iam-config.yaml must define at least one IAM section ({keys_str})")
 
 
 def _validate_version_compatibility(

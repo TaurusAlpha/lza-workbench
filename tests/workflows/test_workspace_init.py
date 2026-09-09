@@ -6,13 +6,13 @@ from pathlib import Path
 
 from lza_workbench.workflows.workspace_init import (
     WorkspaceInitResult,
-    build_workspace_config,
     init_workspace_workflow,
 )
+from lza_workbench.workspace.schema import WorkspaceConfig
 
 
-def test_build_workspace_config_uses_workspace_defaults() -> None:
-    config = build_workspace_config(
+def test_workspace_config_defaults() -> None:
+    config = WorkspaceConfig.create(
         customer_name="Example Customer",
         customer_slug="example-customer",
         aws_profile="example-root",
@@ -60,3 +60,19 @@ def test_init_workspace_workflow_execution(tmp_path: Path) -> None:
     assert (target_dir / ".lza" / "state.json").is_file()
     assert (target_dir / "aws-accelerator-installer").is_dir()
     assert not (target_dir / "aws-accelerator-config").exists()
+
+
+def test_init_workspace_workflow_role_arn(tmp_path: Path) -> None:
+    target_dir = tmp_path / "acme-corp"
+    result = init_workspace_workflow(
+        customer_name="Acme Corp",
+        workspace_dir=target_dir,
+        aws_auth_type="role_arn",
+        aws_role_arn="arn:aws:iam::123456789012:role/DeployRole",
+        aws_region="eu-west-1",
+        lza_version="v1.16.0",
+        dry_run=False,
+    )
+    assert result.config.aws.role_arn == "arn:aws:iam::123456789012:role/DeployRole"
+    assert result.config.aws.profile is None
+

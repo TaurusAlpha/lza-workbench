@@ -84,7 +84,6 @@ class ConfigurationRepoSummary:
     is_live: bool = True
 
 
-
 @dataclass(frozen=True)
 class OverallHealthSummary:
     """Concise overall deployment health summary."""
@@ -112,7 +111,6 @@ class RootStatusResult:
     configuration_pipeline: PipelineSummary
     health: OverallHealthSummary
     assessment: WorkspaceAssessment | None = None
-
 
 
 def _resolve_in_progress_stage_action(pipe_state: Any) -> tuple[str | None, str | None]:
@@ -272,18 +270,14 @@ def _derive_installer_health(
         or installer_pipe.status == "InProgress"
     ):
         return "Running"
-    if (
-        installer_stack.status
-        in (
-            "CREATE_FAILED",
-            "UPDATE_FAILED",
-            "UPDATE_ROLLBACK_FAILED",
-            "ROLLBACK_FAILED",
-            "UPDATE_ROLLBACK_COMPLETE",
-            "ROLLBACK_COMPLETE",
-        )
-        or installer_pipe.status in ("Failed", "Cancelled")
-    ):
+    if installer_stack.status in (
+        "CREATE_FAILED",
+        "UPDATE_FAILED",
+        "UPDATE_ROLLBACK_FAILED",
+        "ROLLBACK_FAILED",
+        "UPDATE_ROLLBACK_COMPLETE",
+        "ROLLBACK_COMPLETE",
+    ) or installer_pipe.status in ("Failed", "Cancelled"):
         return "Failed"
     if installer_stack.status in ("CREATE_COMPLETE", "UPDATE_COMPLETE", "IMPORT_COMPLETE") and (
         installer_pipe.status in ("Succeeded", None, "Not Started")
@@ -300,12 +294,13 @@ def _derive_configuration_health(
         return "Running"
     if config_pipe.status in ("Failed", "Cancelled"):
         return "Failed"
-    if not config_repo.local_git_clean or (
-        config_repo.remote_sync is not None
-        and config_repo.remote_sync.status == "Diverged"
-    ) or (
-        config_repo.git_sync_status is not None
-        and config_repo.git_sync_status.status == "Diverged"
+    if (
+        not config_repo.local_git_clean
+        or (config_repo.remote_sync is not None and config_repo.remote_sync.status == "Diverged")
+        or (
+            config_repo.git_sync_status is not None
+            and config_repo.git_sync_status.status == "Diverged"
+        )
     ):
         return "Attention Required"
     if config_pipe.status == "Succeeded":
@@ -561,9 +556,7 @@ def get_root_status_workflow(
     local_git_uncommitted = gwt.uncommitted_count if gwt else 0
 
     git_sync_status = (
-        get_git_remote_sync_status(config_dir, branch=repo.branch)
-        if gwt is not None
-        else None
+        get_git_remote_sync_status(config_dir, branch=repo.branch) if gwt is not None else None
     )
 
     remote_sync = _resolve_remote_sync_status(

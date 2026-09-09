@@ -37,9 +37,7 @@ def _render_local_config(result: ConfigurationStatusResult) -> None:
     if workspace.yaml_files:
         files_preview = ", ".join(workspace.yaml_files[:5])
         suffix = (
-            f" ... (+{len(workspace.yaml_files) - 5} more)"
-            if len(workspace.yaml_files) > 5
-            else ""
+            f" ... (+{len(workspace.yaml_files) - 5} more)" if len(workspace.yaml_files) > 5 else ""
         )
         print_kv(
             "YAML Config Files",
@@ -83,7 +81,6 @@ def _render_local_config(result: ConfigurationStatusResult) -> None:
                 print_kv("Remote Sync", format_status(local_git.sync_status.summary))
 
 
-
 def _render_s3_repository_settings(
     repository: S3ConfigurationRepositoryStatus,
     *,
@@ -91,7 +88,9 @@ def _render_s3_repository_settings(
 ) -> None:
     s3_bucket = repository.bucket or "Not configured"
     if repository.bucket_exists is True:
-        versioning = "Versioning: Enabled" if repository.bucket_versioning else "Versioning: Disabled"
+        versioning = (
+            "Versioning: Enabled" if repository.bucket_versioning else "Versioning: Disabled"
+        )
         encryption = "Encrypted" if repository.bucket_encryption else "Unencrypted"
         bucket_status = f"[green]Available[/green] ({versioning}, {encryption})"
     elif repository.bucket_exists is False:
@@ -202,11 +201,7 @@ def _render_pipeline_status(result: ConfigurationStatusResult) -> None:
     if pipeline.failed_action:
         print_kv("Failed Action", pipeline.failed_action, style="red")
     if pipeline.error:
-        error_lines = [
-            line.strip()
-            for line in pipeline.error.splitlines()
-            if line.strip()
-        ]
+        error_lines = [line.strip() for line in pipeline.error.splitlines() if line.strip()]
         if len(error_lines) == 1:
             print_kv("Error", error_lines[0], style="red")
         elif error_lines:
@@ -272,7 +267,6 @@ def status_config_command(
     """Query workspace configuration metadata and display configuration status."""
     result = get_config_status_workflow(target_dir=target_dir)
     render_config_status(result, has_state=result.synchronization.has_state)
-
 
 
 __all__ = [

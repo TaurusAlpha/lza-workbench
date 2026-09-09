@@ -127,7 +127,6 @@ class ImportWorkspacePreparation:
     installer_template_body: str | None = None
 
 
-
 def resolve_import_paths(*, workspace_dir: Path, config_dir: Path | None) -> tuple[Path, Path]:
     """Resolve the workspace and its existing LZA configuration directory."""
     if config_dir is not None:
@@ -403,9 +402,7 @@ def _metadata_paths(
     ]
 
 
-def _resolve_lza_version(
-    request: ImportWorkspaceRequest, existing: ExistingMetadata | None
-) -> str:
+def _resolve_lza_version(request: ImportWorkspaceRequest, existing: ExistingMetadata | None) -> str:
     if request.lza_version is not None:
         return request.lza_version
     if existing and existing.config:
@@ -490,13 +487,8 @@ def _check_github_installer_secret(
 ) -> None:
     try:
         sm_client = aws_ctx.factory.get_client("secretsmanager")
-        secret_name = (
-            config.installer.source_code.github_secret_name
-            or "accelerator/github-token"
-        )
-        secret_details = inspect_secret_details(
-            client=sm_client, secret_name=secret_name
-        )
+        secret_name = config.installer.source_code.github_secret_name or "accelerator/github-token"
+        secret_details = inspect_secret_details(client=sm_client, secret_name=secret_name)
         if not secret_details.exists:
             recommendations.append(
                 "GitHub installer source detected, but Secrets Manager "
@@ -512,9 +504,7 @@ def _check_github_installer_secret(
                 token=secret_details.value,
             )
             if not gh_res["accessible"]:
-                recommendations.append(
-                    f"GitHub repository check returned: {gh_res['error']}"
-                )
+                recommendations.append(f"GitHub repository check returned: {gh_res['error']}")
     except Exception as gh_exc:
         recommendations.append(f"GitHub token validation check skipped: {gh_exc}")
 
@@ -536,9 +526,7 @@ def _inspect_live_installer(
     installer_discovered = True
     discovered_stack_status = f"{cfn_status.stack_name} ({cfn_status.stack_status})"
     ssm_client = aws_ctx.factory.get_client("ssm")
-    deployed_template = get_cloudformation_stack_template(
-        client=cfn_client, stack_name=stack_name
-    )
+    deployed_template = get_cloudformation_stack_template(client=cfn_client, stack_name=stack_name)
     if deployed_template is None:
         recommendations.append(
             "Live installer template could not be retrieved. Ensure the AWS identity "
@@ -549,8 +537,7 @@ def _inspect_live_installer(
         ssm_client=ssm_client,
         stack_name=stack_name,
         accelerator_prefix=(
-            cfn_status.deployed_parameters.get("AcceleratorPrefix")
-            or config.lza.accelerator_prefix
+            cfn_status.deployed_parameters.get("AcceleratorPrefix") or config.lza.accelerator_prefix
         ),
     )
     installer_template_path: Path | None = None
@@ -634,9 +621,7 @@ def _discover_live_aws(
                 discovered_stack_status,
                 installer_template_path,
                 installer_template_body,
-            ) = _inspect_live_installer(
-                aws_ctx, workspace_dir, config, state, recommendations
-            )
+            ) = _inspect_live_installer(aws_ctx, workspace_dir, config, state, recommendations)
         elif aws_ctx.error:
             recommendations.append(
                 f"AWS connection check failed ({aws_ctx.error}). "

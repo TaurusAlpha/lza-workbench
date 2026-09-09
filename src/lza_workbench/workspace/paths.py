@@ -16,7 +16,7 @@ def normalize_customer_slug(customer_name: str) -> str:
     slug = re.sub(r"[^a-z0-9-]+", "", slug)
     slug = re.sub(r"-+", "-", slug).strip("-")
     if not slug:
-        raise ValueError("Customer name does not produce a valid workspace slug.")
+        raise LzaError("Customer name does not produce a valid workspace slug.")
     return slug
 
 
@@ -45,4 +45,4 @@ def resolve_init_workspace_dir(customer_name: str, workspace_dir: Path | None = 
     """Resolve an explicit init target or the default customer workspace path."""
     if workspace_dir is not None:
         return normalize_path(workspace_dir)
-    return normalize_path(Path.cwd() / normalize_customer_slug(customer_name))
+    return normalize_path(Path.cwd() / customer_name)

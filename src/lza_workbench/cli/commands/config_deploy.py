@@ -57,7 +57,6 @@ def render_config_deploy_result(
         )
 
 
-
 def config_deploy_command(
     dry_run: params.DryRun = False,
     no_watch: params.NoWatch = False,

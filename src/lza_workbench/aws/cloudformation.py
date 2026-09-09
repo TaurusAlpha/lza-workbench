@@ -335,9 +335,7 @@ def stream_cloudformation_stack_events(
     while True:
         try:
             events_resp = client.describe_stack_events(StackName=clean_stack_name)
-            _dispatch_new_stack_events(
-                events_resp.get("StackEvents", []), seen_event_ids, on_event
-            )
+            _dispatch_new_stack_events(events_resp.get("StackEvents", []), seen_event_ids, on_event)
 
             status_res = get_cloudformation_stack_status(client=client, stack_name=clean_stack_name)
             if status_res.error:
@@ -351,7 +349,9 @@ def stream_cloudformation_stack_events(
 
         except ClientError as exc:
             if _is_stack_not_found(exc):
-                status_res = get_cloudformation_stack_status(client=client, stack_name=clean_stack_name)
+                status_res = get_cloudformation_stack_status(
+                    client=client, stack_name=clean_stack_name
+                )
                 if not status_res.exists or status_res.stack_status in terminal_statuses:
                     return status_res
             consecutive_errors = _handle_monitoring_error(

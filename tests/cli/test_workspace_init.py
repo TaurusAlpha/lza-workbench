@@ -17,8 +17,9 @@ def test_resolve_init_workspace_dir_uses_customer_slug(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    workspace_dir = resolve_init_workspace_dir("Example Customer")
-    assert workspace_dir == tmp_path / "example-customer"
+    customer_slug = "example-customer"
+    workspace_dir = resolve_init_workspace_dir(customer_slug)
+    assert workspace_dir == tmp_path / customer_slug
 
 
 def test_cli_init_dry_run_does_not_create_workspace(
@@ -85,7 +86,7 @@ def test_cli_init_creates_workspace_metadata(
     assert (workspace_dir / ".lza" / "state.json").is_file()
     assert (workspace_dir / config.installer.local_path).is_dir()
     assert not (workspace_dir / config.configuration.local_path).exists()
-    assert state.initialized_at is None
+    assert state.initialized_at is not None
 
 
 def test_cli_init_existing_directory_directs_user_to_import(
@@ -95,7 +96,8 @@ def test_cli_init_existing_directory_directs_user_to_import(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     workspace_dir = tmp_path / "existing"
-    workspace_dir.mkdir()
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    (workspace_dir / "aws-accelerator-config").mkdir(parents=True, exist_ok=True)
 
     result = cli_runner.invoke(
         app,

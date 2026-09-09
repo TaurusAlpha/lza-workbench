@@ -88,7 +88,6 @@ def cache_verified_s3_sync(
 
 
 def record_config_git_push(
-
     state: WorkspaceState,
     *,
     files_count: int,
@@ -120,7 +119,6 @@ def record_config_git_pull(
 
 def _archive_sha256(zip_path: Path) -> str:
     return hashlib.sha256(zip_path.read_bytes()).hexdigest()
-
 
 
 def _diff_summary(diff_result: ConfigDiffResult) -> dict[str, int]:

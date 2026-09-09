@@ -31,6 +31,7 @@ def value_or_prompt(
         return cleaned
 
     if interactive:
+
         def value_proc(val: str) -> str:
             cleaned = (val or "").strip()
             if not cleaned and default is None:

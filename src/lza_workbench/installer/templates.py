@@ -89,9 +89,7 @@ def download_installer_template(version: str, local_path: Path | None = None) ->
     url = INSTALLER_TEMPLATE_URL_TEMPLATE.format(
         version=normalized_version, filename=INSTALLER_TEMPLATE_FILENAME
     )
-    template_content = download_installer_template_content(
-        url, fallback_version=normalized_version
-    )
+    template_content = download_installer_template_content(url, fallback_version=normalized_version)
     if local_path is None:
         local_path = Path.cwd() / INSTALLER_TEMPLATE_FILENAME
     local_path.parent.mkdir(parents=True, exist_ok=True)
@@ -143,9 +141,7 @@ def backup_installer_template(
     return backup_path
 
 
-def _resolve_local_installer_template(
-    workspace_dir: Path, template_path_str: str | None
-) -> Path:
+def _resolve_local_installer_template(workspace_dir: Path, template_path_str: str | None) -> Path:
     if not template_path_str:
         raise LzaError("installer.stack_template.path is required when source is 'local'.")
     configured_path = Path(template_path_str).expanduser()
@@ -159,15 +155,12 @@ def _resolve_local_installer_template(
     return template_path
 
 
-def _resolve_amazon_installer_template(
-    installer_dir: Path, version: str, dry_run: bool
-) -> Path:
+def _resolve_amazon_installer_template(installer_dir: Path, version: str, dry_run: bool) -> Path:
     template_path = installer_dir / INSTALLER_TEMPLATE_FILENAME
     if not template_path.exists():
         if dry_run:
             if (
-                normalize_lza_version(version)
-                == normalize_lza_version(PACKAGED_INSTALLER_VERSION)
+                normalize_lza_version(version) == normalize_lza_version(PACKAGED_INSTALLER_VERSION)
                 and LOCAL_PACKAGED_INSTALLER_TEMPLATE.exists()
             ):
                 return LOCAL_PACKAGED_INSTALLER_TEMPLATE
@@ -179,9 +172,13 @@ def _resolve_amazon_installer_template(
         try:
             existing_content = template_path.read_text(encoding="utf-8")
             existing_ver = extract_template_version(existing_content)
-            if existing_ver and normalize_lza_version(existing_ver) != normalize_lza_version(version):
+            if existing_ver and normalize_lza_version(existing_ver) != normalize_lza_version(
+                version
+            ):
                 backup_installer_template(installer_dir, template_path, existing_ver)
-                template_path = download_installer_template(version=version, local_path=template_path)
+                template_path = download_installer_template(
+                    version=version, local_path=template_path
+                )
         except OSError as exc:
             raise LzaError(f"Unable to inspect installer template {template_path}: {exc}") from exc
 
@@ -195,9 +192,7 @@ def _apply_anonymous_data_setting(template_path: Path, enable_anon: bool) -> Non
         if configured != content:
             template_path.write_text(configured, encoding="utf-8")
     except OSError as exc:
-        raise LzaError(
-            f"Unable to configure installer template {template_path}: {exc}"
-        ) from exc
+        raise LzaError(f"Unable to configure installer template {template_path}: {exc}") from exc
 
 
 def resolve_installer_template(
@@ -225,8 +220,6 @@ def resolve_installer_template(
         _apply_anonymous_data_setting(template_path, config.installer.options.anonymous_data)
 
     return template_path
-
-
 
 
 def inspect_template_parameters(template_path: Path) -> dict[str, dict[str, Any]]:

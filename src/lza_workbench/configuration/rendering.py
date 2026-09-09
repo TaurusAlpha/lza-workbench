@@ -30,7 +30,7 @@ def resolve_path_value(obj: Any, path: str) -> str | None:
     'customer.slug' or 'config.customer.slug').
     """
     if path.startswith("config."):
-        path = path[len("config."):]
+        path = path[len("config.") :]
 
     current: Any = obj
     for part in path.split("."):

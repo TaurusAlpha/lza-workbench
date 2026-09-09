@@ -138,7 +138,6 @@ def render_root_status(result: RootStatusResult) -> None:
     else:
         print_kv("Remote Sync", format_status("Not Checked (AWS Unavailable)"))
 
-
     console.print()
     _render_pipeline_summary(result.configuration_pipeline, label_prefix="Configuration")
 

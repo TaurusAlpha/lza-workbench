@@ -7,6 +7,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from lza_workbench.configuration.schema import ConfigurationConfig
+from lza_workbench.errors import LzaError
 from lza_workbench.installer.schema import LzaInstaller, PipelineInstaller
 
 
@@ -38,14 +39,14 @@ class AwsConfig(WorkspaceModel):
         has_profile = bool(self.profile and self.profile.strip())
         has_role_arn = bool(self.role_arn and self.role_arn.strip())
         if not has_profile and not has_role_arn:
-            raise ValueError("AWS configuration requires a profile or role_arn.")
+            raise LzaError("AWS configuration requires a profile or role_arn.")
         return self
 
 
 class LzaConfig(WorkspaceModel):
     """Landing Zone Accelerator settings stored in lza-workspace.yaml."""
 
-    version: str = "1.15.5"
+    version: str = "v1.15.5"
     accelerator_prefix: str = Field(
         default="AWSAccelerator",
         max_length=15,
@@ -98,16 +99,18 @@ class WorkspaceConfig(WorkspaceModel):
         *,
         customer_name: str,
         customer_slug: str,
-        aws_profile: str,
+        aws_profile: str | None = None,
+        aws_role_arn: str | None = None,
         aws_region: str,
-        lza_config: LzaConfig,
+        lza_version: str,
+        lza_config: LzaConfig | None = None,
         lza_installer: LzaInstaller | None = None,
     ) -> WorkspaceConfig:
         """Build workspace configuration from resolved command values."""
         return cls(
             customer=CustomerConfig(name=customer_name, slug=customer_slug),
-            aws=AwsConfig(profile=aws_profile, region=aws_region),
-            lza=lza_config or LzaConfig(),
+            aws=AwsConfig(profile=aws_profile, role_arn=aws_role_arn, region=aws_region),
+            lza=lza_config or LzaConfig(version=lza_version),
             installer=lza_installer or LzaInstaller(),
         )
 

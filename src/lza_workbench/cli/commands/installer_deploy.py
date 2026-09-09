@@ -58,9 +58,7 @@ def _render_deployment_plan(
         console.print(table)
 
 
-def _confirm_deployment(
-    *, operation: str, stack_name: str, dry_run: bool, force: bool
-) -> bool:
+def _confirm_deployment(*, operation: str, stack_name: str, dry_run: bool, force: bool) -> bool:
     if dry_run or force:
         return True
     prompt = f"Proceed with CloudFormation stack {operation.lower()} for '{stack_name}'?"

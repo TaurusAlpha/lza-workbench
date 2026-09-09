@@ -67,7 +67,6 @@ def render_installer_plan_report(plan: InstallerPlanResult) -> None:
 
     console.print()
 
-
     # CloudFormation Section
     print_section(2, "CloudFormation Deployment Planning")
     print_kv("Stack Name", cfn_plan.stack_name, bold_value=True)

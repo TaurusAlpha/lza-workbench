@@ -46,9 +46,9 @@ def test_domain_and_aws_modules_do_not_import_cli_presentation_frameworks() -> N
                             (str(path.relative_to(PROJECT_ROOT)), node.lineno, node.module)
                         )
 
-    assert (
-        not violations
-    ), f"Domain/AWS/Workflow modules import presentation frameworks: {violations}"
+    assert not violations, (
+        f"Domain/AWS/Workflow modules import presentation frameworks: {violations}"
+    )
 
 
 def test_lower_layers_do_not_import_higher_layers() -> None:
@@ -141,9 +141,9 @@ def test_cli_commands_do_not_import_aws_or_installer_internals() -> None:
                                 (str(path.relative_to(PROJECT_ROOT)), node.lineno, alias.name)
                             )
 
-    assert (
-        not violations
-    ), f"CLI command handlers import directly from AWS or installer internals: {violations}"
+    assert not violations, (
+        f"CLI command handlers import directly from AWS or installer internals: {violations}"
+    )
 
 
 def test_web_interface_does_not_import_feature_or_aws_packages() -> None:
@@ -189,6 +189,6 @@ def test_no_direct_boto3_session_or_client_outside_factory() -> None:
                     if node.func.value.id == "session" and node.func.attr == "client":
                         forbidden_calls.append((path.name, node.lineno, "session.client"))
 
-    assert (
-        not forbidden_calls
-    ), f"Direct boto3 session/client calls outside client_factory: {forbidden_calls}"
+    assert not forbidden_calls, (
+        f"Direct boto3 session/client calls outside client_factory: {forbidden_calls}"
+    )

@@ -18,10 +18,10 @@ from lza_workbench.workflows.config_init import (
     init_config_workflow,
 )
 from lza_workbench.workflows.workspace_init import (
-    build_workspace_config,
     init_workspace_workflow,
 )
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+from lza_workbench.workspace.schema import WorkspaceConfig
 from lza_workbench.workspace.state import load_workspace_state
 
 runner = CliRunner()
@@ -46,7 +46,7 @@ def test_list_packaged_templates() -> None:
 
 
 def test_resolve_path_value() -> None:
-    config = build_workspace_config(
+    config = WorkspaceConfig.create(
         customer_name="Acme Corp",
         customer_slug="acme-corp",
         aws_profile="acme-root",
@@ -65,7 +65,7 @@ def test_resolve_path_value() -> None:
 
 
 def test_placeholder_rendering_with_complete_config() -> None:
-    config = build_workspace_config(
+    config = WorkspaceConfig.create(
         customer_name="Acme Corp",
         customer_slug="acme-corp",
         aws_profile="acme-root",
@@ -97,11 +97,12 @@ def test_placeholder_rendering_with_complete_config() -> None:
 
 
 def test_placeholder_rendering_with_unresolved_emails() -> None:
-    config = build_workspace_config(
+    config = WorkspaceConfig.create(
         customer_name="Acme Corp",
         customer_slug="acme-corp",
         aws_profile="acme-root",
         aws_region="eu-central-1",
+        lza_version="v1.16.0",
     )
 
     sample_text = """

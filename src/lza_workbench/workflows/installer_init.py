@@ -105,9 +105,7 @@ def get_installer_parameters_schema(
     )
     candidate = ctx.config.model_copy(deep=True)
     _apply_values(candidate, values or {})
-    _ensure_canonical_s3_bucket(
-        candidate, ctx.state.management_account_id if ctx.state else None
-    )
+    _ensure_canonical_s3_bucket(candidate, ctx.state.management_account_id if ctx.state else None)
     candidate = _validate_candidate(candidate)
     template_path = resolve_installer_template(ctx.workspace_dir, candidate, dry_run=dry_run)
     schema = inspect_template_parameters(template_path)
@@ -148,9 +146,7 @@ def apply_installer_settings(request: InstallerSettingsRequest) -> InstallerSett
     )
     candidate = ctx.config.model_copy(deep=True)
     _apply_values(candidate, request.values)
-    _ensure_canonical_s3_bucket(
-        candidate, ctx.state.management_account_id if ctx.state else None
-    )
+    _ensure_canonical_s3_bucket(candidate, ctx.state.management_account_id if ctx.state else None)
     candidate = _validate_candidate(candidate)
     template_path = resolve_installer_template(
         ctx.workspace_dir, candidate, dry_run=request.dry_run

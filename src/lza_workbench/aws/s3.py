@@ -69,7 +69,9 @@ def inspect_s3_bucket(
             ) from exc
         if info.is_unavailable:
             raise LzaError(f"AWS connection/client failure: {info.message}") from exc
-        raise LzaError(f"AWS S3 inspection error on bucket '{clean_bucket}': {info.message}") from exc
+        raise LzaError(
+            f"AWS S3 inspection error on bucket '{clean_bucket}': {info.message}"
+        ) from exc
 
     versioning_enabled = False
     try:
@@ -221,9 +223,7 @@ def inspect_s3_object(
         if code in {"404", "NoSuchKey", "NoSuchBucket", "NotFound"}:
             raise LzaError(f"S3 object not found: s3://{clean_bucket}/{clean_key}") from exc
         if code in {"403", "AccessDenied"}:
-            raise LzaError(
-                f"Access denied to S3 object: s3://{clean_bucket}/{clean_key}"
-            ) from exc
+            raise LzaError(f"Access denied to S3 object: s3://{clean_bucket}/{clean_key}") from exc
         raise LzaError(
             f"AWS S3 inspection error on object 's3://{clean_bucket}/{clean_key}': {exc}"
         ) from exc
@@ -306,6 +306,7 @@ def download_s3_file(
 
         raise LzaError(f"AWS S3 error [{error_code}]: {error_message}") from exc
 
+
 def inspect_s3_object_safe(
     *,
     client: Any,
@@ -318,9 +319,12 @@ def inspect_s3_object_safe(
     try:
         head = client.head_object(Bucket=clean_bucket, Key=clean_key)
         return S3ObjectObservation(
-            exists=True, etag=head.get("ETag", "").strip('"') or None,
-            version_id=head.get("VersionId"), content_length=head.get("ContentLength"),
-            last_modified=head.get("LastModified"), metadata=head.get("Metadata") or {},
+            exists=True,
+            etag=head.get("ETag", "").strip('"') or None,
+            version_id=head.get("VersionId"),
+            content_length=head.get("ContentLength"),
+            last_modified=head.get("LastModified"),
+            metadata=head.get("Metadata") or {},
         )
     except Exception as exc:
         info = classify_aws_error(exc)

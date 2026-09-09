@@ -144,9 +144,7 @@ def _resolve_terminal_failures(
             stage_prefix = f"Stage '{fa.stage_name}', action" if fa.stage_name else "Action"
             if fa.diagnostic_details:
                 diag_text = "\n  - ".join(fa.diagnostic_details)
-                action_errs.append(
-                    f"{stage_prefix} '{fa.action_name}' failed:\n  - {diag_text}"
-                )
+                action_errs.append(f"{stage_prefix} '{fa.action_name}' failed:\n  - {diag_text}")
             else:
                 err_text = fa.error_message or fa.summary or "Unknown error"
                 action_errs.append(f"{stage_prefix} '{fa.action_name}' failed: {err_text}")

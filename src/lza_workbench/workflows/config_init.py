@@ -155,9 +155,7 @@ def _persist_config_init_provenance(
     validate_template(target_config_dir)
 
     template_source_type = (
-        "packaged"
-        if resolved_template.source_type == "bundled"
-        else resolved_template.source_type
+        "packaged" if resolved_template.source_type == "bundled" else resolved_template.source_type
     )
     current_template = config.configuration.template
     if (
@@ -203,9 +201,7 @@ def init_config_workflow(
 
     # Resolve template
     template_to_resolve = (
-        template_name
-        or config.configuration.template.name
-        or DEFAULT_TEMPLATE_SOURCE
+        template_name or config.configuration.template.name or DEFAULT_TEMPLATE_SOURCE
     )
     resolved_template = resolve_template_source(template_to_resolve)
     validate_template(resolved_template.config_dir)

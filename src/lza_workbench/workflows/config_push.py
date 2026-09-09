@@ -267,7 +267,6 @@ def _handle_s3_push(
         extra_args={"Metadata": {"lza-content-digest": sync_digest}},
     )
 
-
     record_config_upload(
         state,
         zip_path=zip_path,

@@ -36,7 +36,6 @@ def render_pipeline_start_result(result: PipelineStartResult) -> None:
     print_info("Recorded execution ID in workspace state", dim=True)
 
 
-
 def pipeline_start_command(
     pipeline_name: params.PipelineName = None,
     dry_run: params.DryRun = False,

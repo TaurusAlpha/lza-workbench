@@ -1,55 +1,44 @@
-# Review the provided code against the project’s coding principles
+# Review the provided code
 
 Output findings first. Do not modify code until all findings are listed.
 
 Prioritize concrete defects over preferences.
-Report a finding only when it is supported by the provided code or explicit project constraints.
+Report a finding only when you can point to the specific lines or behavior that demonstrate it.
 Do not invent issues, speculate about missing requirements, or report code merely because you would implement it differently.
 
 If the code is solid, output only: `No significant findings.`
 
-## Review Priorities
+## Scope of Analysis
 
-Evaluate the code for:
+You will be given one specific target command/entry point. Trace its full implementation: follow its callees, and their callees, as needed to evaluate whether responsibilities are well-separated, logic lives in the right place, and data flows correctly. Do not limit yourself to the entry-point function/file in isolation — follow the call chain as far as necessary to evaluate it properly, within the code actually provided to you.
 
-### Scope
+If a callee or caller is referenced but not available to you (out of context, external package, etc.), do not assume its behavior. Either state the assumption explicitly or mark the related finding as lower-confidence.
 
-- Changes must address only the requested task.
-- Identify unrelated changes or unnecessary scope expansion.
-- Identify new dependencies that are not clearly justified.
-- If the original task or diff is not provided, do not make scope findings that require knowing the intended change.
+## Project Architecture Constraints
 
-### Correctness & Security
+If a project architecture document is provided, treat its stated boundaries, ownership rules, and dependency directions as hard constraints — violations of them are findings, not lower-confidence observations, since they are explicit project requirements rather than general best-practice inference. Do not extend, generalize, or infer additional architectural rules beyond what the document states.
 
-- Identify logic bugs, realistic edge cases, missing error handling, race conditions, or incorrect assumptions.
-- Flag security risks, unsafe handling of sensitive data, or improper resource management.
-- Do not report purely hypothetical edge cases unless they are realistically reachable or violate an explicit requirement.
+If no architecture document is provided, evaluate structure and placement using the general Maintainability lens below, at lower confidence, without asserting project-specific conventions you cannot verify.
 
-### Simplicity
+## Review Lenses
 
-- Prefer the simplest solution that satisfies the requirements.
-- Prioritize readability over brevity.
-- Identify unnecessary abstractions, indirection, or overengineering.
-- Flag test shims, mock callbacks (e.g. injected sleeper/printer lambdas), or test-only parameters introduced into production code.
-- Ensure production code is not warped or made needlessly complex to satisfy automated tests.
-- Do not recommend redesign solely based on personal preference.
+Evaluate the code primarily through these lenses, but note anything else that looks like a real, concrete defect even if it doesn't fit neatly into one:
 
-### Maintainability
+- **DRY** — meaningful duplicated logic (not superficially similar but semantically different code).
+- **SOLID** — apply pragmatically. Flag a violation only when it currently causes a real problem (hard to test, hard to change safely, tangled responsibilities) — not because a pattern could theoretically be applied more purely.
+- **Simplicity** — prefer the simplest solution that satisfies the requirements. Flag unnecessary abstraction, indirection, or overengineering, and equally flag under-engineering that causes real fragility.
+- **Readability** — naming, nesting depth, overly clever or dense code, and structure that would be hard for a non-expert maintainer to follow.
+- **Correctness & Security** — logic bugs, realistic edge cases, missing error handling, race conditions, unsafe handling of sensitive data, improper resource management. Do not report purely hypothetical edge cases unless realistically reachable.
+- **Maintainability** — logic in the wrong module/package, consistency with existing visible patterns, large or mixed-responsibility functions when it materially reduces clarity or testability.
 
-- Prefer focused functions with clear responsibilities.
-- Flag large or mixed-responsibility functions only when they materially reduce clarity, correctness, or testability.
-- Check whether logic is placed in the appropriate packages/modules.
-- Verify consistency with existing project structure and coding patterns when those patterns are visible.
-- Identify meaningful duplicated logic or unnecessary helpers.
+## Confidence Gating
 
-### Readability
+This replaces topic restrictions as the main quality control — be broad in what you look for, strict in what you assert as a finding:
 
-- Check naming of variables, functions, classes, and modules.
-- Identify deeply nested control flow or unnecessarily complex expressions.
-- Flag clever or overly concise code when it materially reduces understandability.
-- Ignore cosmetic style issues unless they obscure behavior or increase maintenance risk.
+- **Finding**: you can cite the specific lines/behavior demonstrating a concrete problem.
+- **Lower-confidence observation**: a principle feels violated (e.g. "this might be a SOLID smell") but you can't point to concrete resulting harm, or it depends on code you can't see. List these separately, clearly labeled, and do not count them toward severity.
 
-### Project Constraints
+## Project Constraints
 
 - Prefer Python over shell when practical.
 - Keep AWS authentication external.
@@ -57,6 +46,8 @@ Evaluate the code for:
 - Do not recommend speculative, placeholder, or future functionality.
 - Do not add speculative unit tests alongside feature implementation unless explicitly requested.
 - Do not introduce new dependencies unless clearly justified.
+- Flag test shims, mock callbacks, or test-only parameters introduced into production code.
+- Do not report purely cosmetic style issues unless they obscure behavior or increase maintenance risk.
 
 ## Severity Guidelines
 
@@ -83,9 +74,13 @@ For each finding:
 - **Impact:** Why it matters in practice.
 - **Recommendation:** Specific corrective action.
 
+### Lower-Confidence Observations
+
+List separately, same format as findings but no severity required — just problem, why it seemed worth flagging, and what would confirm or refute it.
+
 ### Summary
 
-Provide a concise bulleted list containing each finding name and severity.
+Concise bulleted list of each finding's name and severity, followed by a one-line count of lower-confidence observations.
 
 ## Output Rules
 

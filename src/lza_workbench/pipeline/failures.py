@@ -450,14 +450,11 @@ def deduplicate_failure_diagnostics(
             if diag.specificity > existing.specificity:
                 unique[matched_idx] = diag
             elif (
-                diag.specificity == existing.specificity
-                and diag.resource
-                and not existing.resource
+                diag.specificity == existing.specificity and diag.resource and not existing.resource
             ):
                 unique[matched_idx] = diag
-            elif (
-                diag.specificity == existing.specificity
-                and len(diag.message) > len(existing.message)
+            elif diag.specificity == existing.specificity and len(diag.message) > len(
+                existing.message
             ):
                 unique[matched_idx] = diag
 
@@ -821,11 +818,7 @@ def _collect_error_block(
 def _is_standard_error_line(raw_line: str, cleaned: str) -> bool:
     if _is_wrapper_or_noise(cleaned):
         return False
-    return (
-        "| error |" in raw_line
-        or "error" in cleaned.lower()
-        or "failed" in cleaned.lower()
-    )
+    return "| error |" in raw_line or "error" in cleaned.lower() or "failed" in cleaned.lower()
 
 
 def extract_log_error_diagnostics(

@@ -58,14 +58,16 @@ def resolve_installer_source_branch(
     return "main"
 
 
-UNSUPPORTED_INSTALLER_PARAMETERS: frozenset[str] = frozenset({
-    "ConfigurationRepositoryLocation",
-    "UseExistingConfigRepo",
-    "ConfigCodeConnectionArn",
-    "ExistingConfigRepositoryOwner",
-    "ExistingConfigRepositoryName",
-    "ExistingConfigRepositoryBranchName",
-})
+UNSUPPORTED_INSTALLER_PARAMETERS: frozenset[str] = frozenset(
+    {
+        "ConfigurationRepositoryLocation",
+        "UseExistingConfigRepo",
+        "ConfigCodeConnectionArn",
+        "ExistingConfigRepositoryOwner",
+        "ExistingConfigRepositoryName",
+        "ExistingConfigRepositoryBranchName",
+    }
+)
 
 
 def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: str) -> bool:
@@ -91,9 +93,7 @@ def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: s
     return True
 
 
-def _apply_source_code_parameter(
-    config: WorkspaceConfig, parameter_name: str, value: str
-) -> bool:
+def _apply_source_code_parameter(config: WorkspaceConfig, parameter_name: str, value: str) -> bool:
     source_code = config.installer.source_code
     if parameter_name == "RepositorySource":
         source_code.repository_type = value  # type: ignore[assignment]
@@ -112,9 +112,7 @@ def _apply_source_code_parameter(
     return True
 
 
-def _apply_options_parameter(
-    config: WorkspaceConfig, parameter_name: str, value: str
-) -> bool:
+def _apply_options_parameter(config: WorkspaceConfig, parameter_name: str, value: str) -> bool:
     options = config.installer.options
     if parameter_name == "EnableApprovalStage":
         options.enable_approval_stage = value == "Yes"
@@ -137,9 +135,7 @@ def _apply_options_parameter(
     return True
 
 
-def _apply_config_repo_parameter(
-    config: WorkspaceConfig, parameter_name: str, value: str
-) -> bool:
+def _apply_config_repo_parameter(config: WorkspaceConfig, parameter_name: str, value: str) -> bool:
     repo = config.configuration.repository
     if parameter_name == "ConfigurationRepositoryLocation":
         repo.type = value  # type: ignore[assignment]
@@ -199,6 +195,7 @@ def apply_deployed_installer_parameters(
         and config.aws.region
     ):
         repository.bucket = get_canonical_config_s3_bucket(config.aws.account_id, config.aws.region)
+
 
 def _resolve_existing_config_repo_params(
     repo_config: Any,

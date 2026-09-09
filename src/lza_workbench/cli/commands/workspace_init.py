@@ -45,6 +45,8 @@ def render_workspace_init_result(result: WorkspaceInitResult) -> None:
     print_kv("Customer", f"{config.customer.name} ({config.customer.slug})")
     if config.aws.profile:
         print_kv("AWS profile", config.aws.profile)
+    if config.aws.role_arn:
+        print_kv("AWS role ARN", config.aws.role_arn)
     print_kv("AWS region", config.aws.region)
     print_kv("LZA version", config.lza.version)
     if identity:
@@ -53,11 +55,12 @@ def render_workspace_init_result(result: WorkspaceInitResult) -> None:
 
     console.print()
     console.print("[bold]Next steps:[/bold]")
+    console.print(f"  1. [cyan]cd {workspace_dir}[/cyan] - Change to the workspace directory")
     console.print(
-        "  1. [cyan]lza installer init[/cyan]  - Configure installer parameters and account emails"
+        "  2. [cyan]lza installer init[/cyan]  - Configure installer parameters and account emails"
     )
     console.print(
-        "  2. [cyan]lza config init[/cyan]     - Initialize local LZA configuration from template"
+        "  3. [cyan]lza config init[/cyan]     - Initialize local LZA configuration from template"
     )
 
 
@@ -67,16 +70,17 @@ def workspace_init_command(
     workspace_dir: params.WorkspaceDir = None,
     aws_auth_type: params.AwsAuthType = "profile",
     aws_profile: params.AwsProfile = "",
+    aws_role_arn: params.AwsRoleArn = "",
     aws_region: params.AwsRegion = "",
     lza_version: params.LzaVersion = None,
     dry_run: params.DryRun = False,
     force: params.Force = False,
-    skip_aws_check: params.SkipAwsCheck = True,
+    skip_aws_check: params.SkipAwsCheck = False,
     interactive: bool = False,
 ) -> None:
     """Create a customer workspace using the configured packaged template."""
     customer_slug = normalize_customer_slug(customer_name)
-    default_workspace_dir = resolve_init_workspace_dir(customer_name)
+    default_workspace_dir = resolve_init_workspace_dir(customer_slug)
 
     if workspace_dir is None:
         resolved_ws_dir = (
@@ -92,21 +96,28 @@ def workspace_init_command(
             .resolve()
         )
     else:
-        resolved_ws_dir = resolve_init_workspace_dir(customer_name, workspace_dir)
+        resolved_ws_dir = resolve_init_workspace_dir(customer_slug, workspace_dir)
 
-    resolved_profile = value_or_prompt(
-        "AWS profile", aws_profile or None, f"{customer_slug}-root", interactive
-    )
+    if aws_auth_type == "role_arn":
+        resolved_role_arn = value_or_prompt(
+            "AWS role ARN", aws_role_arn or None, None, interactive
+        )
+        resolved_profile = aws_profile.strip() or None if aws_profile else None
+    else:
+        resolved_profile = value_or_prompt(
+            "AWS profile", aws_profile or None, f"{customer_slug}-root", interactive
+        )
+        resolved_role_arn = aws_role_arn.strip() or None if aws_role_arn else None
+
     resolved_region = value_or_prompt("AWS region", aws_region or None, "us-east-1", interactive)
-    resolved_version = value_or_prompt(
-        "LZA version", lza_version, LzaConfig().version, interactive
-    )
+    resolved_version = value_or_prompt("LZA version", lza_version, LzaConfig().version, interactive)
 
     result = init_workspace_workflow(
         customer_name=customer_name,
         workspace_dir=resolved_ws_dir,
         aws_auth_type=aws_auth_type,
         aws_profile=resolved_profile,
+        aws_role_arn=resolved_role_arn,
         aws_region=resolved_region,
         lza_version=resolved_version,
         dry_run=dry_run,

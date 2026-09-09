@@ -10,6 +10,14 @@ from lza_workbench.workspace.paths import normalize_path
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.state import WORKSPACE_STATE_FILE, write_workspace_state
 
+WORKSPACE_MANAGED_PATHS = [
+    Path(".lza"),
+    Path("aws-accelerator-config"),
+    Path("aws-accelerator-installer"),
+    WORKSPACE_CONFIG_FILE,
+    WORKSPACE_STATE_FILE,
+]
+
 
 def validate_workspace_structure(
     workspace_dir: Path,
@@ -21,10 +29,16 @@ def validate_workspace_structure(
         return False
     if not target.is_dir():
         raise LzaError(f"Target path exists and is not a directory: {target}")
+    existing: list[Path] = []
     if not force:
-        raise LzaError(
-            f"Workspace directory already exists: {target}. To adopt it, run `lza import {target}`."
-        )
+        for path in WORKSPACE_MANAGED_PATHS:
+            if (target / path).exists():
+                existing.append(target / path)
+                raise LzaError(
+                    f"Found existing workspace-managed paths: {existing}. "
+                    f"To adopt existing workspace, run `lza import {target}` "
+                    "or use --force flag to overwrite."
+                )
     return True
 
 

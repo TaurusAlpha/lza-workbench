@@ -559,9 +559,7 @@ def _plan_github_bootstrap(
         "github", None, config.lza.version
     )
     sm_client = aws_ctx.factory.get_client("secretsmanager")
-    secret_details = inspect_secret_details(
-        client=sm_client, secret_name=github_secret_name
-    )
+    secret_details = inspect_secret_details(client=sm_client, secret_name=github_secret_name)
     github_secret_exists = secret_details.exists
     github_secret_accessible = secret_details.accessible
     token_val = (github_token or "").strip() or secret_details.value

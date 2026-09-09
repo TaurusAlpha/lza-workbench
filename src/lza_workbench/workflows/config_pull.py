@@ -362,7 +362,6 @@ def _handle_s3_pull(
         version_id=version_id,
     )
 
-
     write_workspace_state(workspace_dir, state)
 
     return ConfigPullResult(

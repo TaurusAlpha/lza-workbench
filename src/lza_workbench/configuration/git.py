@@ -476,4 +476,3 @@ def resolve_git_provenance(repo_dir: Path) -> GitProvenance | None:
         repo_type=repo_type,
         repo_name=repo_name,
     )
-

@@ -166,7 +166,6 @@ def status_config_command() -> None:
     run_cli_status_config()
 
 
-
 @pipeline_app.command("start")
 def pipeline_start_command(
     pipeline_name: params.PipelineName = None,
@@ -218,11 +217,12 @@ def init_command(
     workspace_dir: params.WorkspaceDir = None,
     aws_auth_type: params.AwsAuthType = "profile",
     aws_profile: params.AwsProfile = "",
+    aws_role_arn: params.AwsRoleArn = "",
     aws_region: params.AwsRegion = "",
     lza_version: params.LzaVersion = None,
     dry_run: params.DryRun = False,
     force: params.Force = False,
-    skip_aws_check: params.SkipAwsCheck = True,
+    skip_aws_check: params.SkipAwsCheck = False,
 ) -> None:
     """Create a new customer-specific LZA workspace."""
 
@@ -231,6 +231,7 @@ def init_command(
         workspace_dir=workspace_dir,
         aws_auth_type=aws_auth_type,
         aws_profile=aws_profile,
+        aws_role_arn=aws_role_arn,
         aws_region=aws_region,
         lza_version=lza_version,
         dry_run=dry_run,

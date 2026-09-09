@@ -59,8 +59,6 @@ def get_canonical_config_s3_bucket(account_id: str, region: str) -> str:
     return f"aws-accelerator-config-{clean_account}-{clean_region}"
 
 
-
-
 class ConfigurationTemplateConfig(BaseModel):
     """Source of the starter LZA configuration."""
 
@@ -109,4 +107,3 @@ __all__ = [
     "PackagingExcludeConfig",
     "get_canonical_config_s3_bucket",
 ]
-

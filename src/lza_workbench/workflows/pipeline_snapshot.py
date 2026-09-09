@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-
 from typing import Any
 
 from lza_workbench.aws.codepipeline import (
@@ -75,13 +74,10 @@ def _build_offline_pipeline_snapshot(
         if pipeline_type == "configuration"
         else state.installer_pipeline_status
     ) or "Unknown"
-    recorded_exec_id = (
-        execution_id
-        or (
-            state.config_pipeline_execution_id
-            if pipeline_type == "configuration"
-            else state.installer_pipeline_execution_id
-        )
+    recorded_exec_id = execution_id or (
+        state.config_pipeline_execution_id
+        if pipeline_type == "configuration"
+        else state.installer_pipeline_execution_id
     )
     return PipelineSnapshotResult(
         workspace_dir=workspace_dir,
@@ -141,9 +137,7 @@ def _resolve_pipeline_snapshot_data(
             execution_id=target_exec_id,
         )
 
-    state_result = get_pipeline_state(
-        client=codepipeline_client, pipeline_name=pipeline_name
-    )
+    state_result = get_pipeline_state(client=codepipeline_client, pipeline_name=pipeline_name)
     return pipeline_state_to_snapshot(state_result)
 
 
@@ -175,9 +169,7 @@ def get_pipeline_snapshot_workflow(
     )
 
     region = resolved_aws.region
-    account_id = (
-        resolved_aws.identity["account"] if resolved_aws.identity else "UNKNOWN_ACCOUNT"
-    )
+    account_id = resolved_aws.identity["account"] if resolved_aws.identity else "UNKNOWN_ACCOUNT"
     pipeline_arn = pipeline.arn(region=region, account_id=account_id)
 
     if not resolved_aws.is_live:
@@ -201,8 +193,8 @@ def get_pipeline_snapshot_workflow(
 
     status = snapshot.status or "Unknown"
     is_terminal = status in TERMINAL_STATUSES
-    current_stage, current_action, failed_stage, failed_action = (
-        _find_active_and_failed_actions(snapshot.stages)
+    current_stage, current_action, failed_stage, failed_action = _find_active_and_failed_actions(
+        snapshot.stages
     )
 
     return PipelineSnapshotResult(
@@ -226,7 +218,6 @@ def get_pipeline_snapshot_workflow(
         is_live=True,
         error=snapshot.error,
     )
-
 
 
 def get_pipeline_diagnostics_workflow(

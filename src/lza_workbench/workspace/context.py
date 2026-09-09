@@ -97,9 +97,7 @@ def evaluate_workspace_assessment(
 
 def load_workspace_context(
     target_dir: Path | None = None,
-    required_capabilities: tuple[WorkspaceCapability, ...] = (
-        WorkspaceCapability.METADATA_VALID,
-    ),
+    required_capabilities: tuple[WorkspaceCapability, ...] = (WorkspaceCapability.METADATA_VALID,),
 ) -> WorkspaceContext:
     """Resolve workspace information and enforce the requested capabilities."""
     workspace_dir = resolve_workspace_dir(target_dir)
@@ -130,10 +128,7 @@ def require_capabilities(
 ) -> None:
     """Raise the existing readiness error for the first missing required capability."""
     required = set(required_capabilities)
-    if (
-        WorkspaceCapability.METADATA_VALID in required
-        and not assessment.metadata_valid
-    ):
+    if WorkspaceCapability.METADATA_VALID in required and not assessment.metadata_valid:
         raise LzaError(
             f"Workspace at '{workspace_dir}' is missing required core configuration "
             "(AWS authentication/region or customer details in lza-workspace.yaml). "
@@ -148,10 +143,7 @@ def require_capabilities(
             f"Configuration directory '{config_dir}' does not exist or "
             "is missing required LZA templates. Run 'lza init' or 'lza import' first."
         )
-    if (
-        WorkspaceCapability.INSTALLER_CONFIGURED in required
-        and not assessment.installer_configured
-    ):
+    if WorkspaceCapability.INSTALLER_CONFIGURED in required and not assessment.installer_configured:
         raise LzaError(
             "Workspace is missing required installer configuration parameters in "
             "lza-workspace.yaml. Run 'lza installer plan' or update lza-workspace.yaml."

@@ -46,9 +46,7 @@ def _evaluate_offline_sync(
     if state and state.config_sync_digest:
         if local_digest == state.config_sync_digest:
             etag_label = (
-                f" (ETag: {state.config_artifact_etag})"
-                if state.config_artifact_etag
-                else ""
+                f" (ETag: {state.config_artifact_etag})" if state.config_artifact_etag else ""
             )
             return RemoteSyncStatus(
                 status="Synchronized",
@@ -235,7 +233,6 @@ def evaluate_s3_remote_sync(
         remote_etag=remote_etag,
         state=state,
     )
-
 
 
 __all__ = [

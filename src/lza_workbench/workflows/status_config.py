@@ -228,9 +228,7 @@ def _inspect_configuration_repository(
         )
 
     remote_sync = (
-        RemoteSyncStatus.from_git_sync(git_sync_status)
-        if git_sync_status is not None
-        else None
+        RemoteSyncStatus.from_git_sync(git_sync_status) if git_sync_status is not None else None
     )
 
     if repo.type == "codecommit":
@@ -459,7 +457,6 @@ def get_config_status_workflow(
         synchronization=synchronization,
         warnings=warnings,
     )
-
 
 
 __all__ = [

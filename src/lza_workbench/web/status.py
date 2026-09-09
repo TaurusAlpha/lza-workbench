@@ -104,10 +104,12 @@ class WorkspaceInitPayload(BaseModel):
     workspace_dir: str | None = None
     aws_auth_type: str = "profile"
     aws_profile: str | None = None
+    aws_role_arn: str | None = None
     aws_region: str = "us-east-1"
     lza_version: str = "v1.15.5"
     force: bool = False
     skip_aws_check: bool = True
+
 
 
 class WorkspaceImportDiscoverPayload(BaseModel):
@@ -146,9 +148,7 @@ class BootstrapApplyPayload(BaseModel):
     allow_missing_github_secret: bool = False
 
 
-def _register_workspace_routes(
-    router: APIRouter, context: ActiveWorkspaceContext
-) -> None:
+def _register_workspace_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
     @router.get("/api/workspace/active")
     def get_active_workspace() -> dict[str, Any]:
         if context.workspace_dir is None:
@@ -202,6 +202,7 @@ def _register_workspace_routes(
             workspace_dir=target_dir,
             aws_auth_type=payload.aws_auth_type,
             aws_profile=payload.aws_profile,
+            aws_role_arn=payload.aws_role_arn,
             aws_region=payload.aws_region,
             lza_version=payload.lza_version,
             dry_run=True,
@@ -218,6 +219,7 @@ def _register_workspace_routes(
             workspace_dir=target_dir,
             aws_auth_type=payload.aws_auth_type,
             aws_profile=payload.aws_profile,
+            aws_role_arn=payload.aws_role_arn,
             aws_region=payload.aws_region,
             lza_version=payload.lza_version,
             dry_run=False,
@@ -228,9 +230,7 @@ def _register_workspace_routes(
         return serialize_workspace_init_result(result)
 
 
-def _register_workspace_import_routes(
-    router: APIRouter, context: ActiveWorkspaceContext
-) -> None:
+def _register_workspace_import_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
     @router.post("/api/workspace/import/discover")
     def discover_workspace_import_endpoint(
         payload: WorkspaceImportDiscoverPayload,
@@ -277,9 +277,7 @@ def _register_workspace_import_routes(
         return serialize_workspace_import_result(result)
 
 
-def _register_status_routes(
-    router: APIRouter, context: ActiveWorkspaceContext
-) -> None:
+def _register_status_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
     @router.get("/api/status")
     def get_status() -> dict[str, Any]:
         return serialize_root_status(get_root_status_workflow(target_dir=context.get_target_dir()))
@@ -297,9 +295,7 @@ def _register_status_routes(
         return serialize_installer_status(status_res, form_res)
 
 
-def _register_installer_routes(
-    router: APIRouter, context: ActiveWorkspaceContext
-) -> None:
+def _register_installer_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
     @router.post("/api/installer/settings")
     def save_installer_settings(payload: InstallerSettingsPayload) -> dict[str, Any]:
         result = apply_installer_settings(
@@ -318,9 +314,7 @@ def _register_installer_routes(
         )
 
 
-def _register_config_routes(
-    router: APIRouter, context: ActiveWorkspaceContext
-) -> None:
+def _register_config_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
     @router.post("/api/config/pull/prepare")
     def prepare_pull() -> dict[str, Any]:
         prep = prepare_config_pull(ConfigPullRequest(target_dir=context.get_target_dir()))
@@ -361,17 +355,11 @@ def _register_config_routes(
             watch=False,
         )
         push_data = (
-            serialize_config_push_result(deploy_res.push_result)
-            if deploy_res.push_result
-            else None
+            serialize_config_push_result(deploy_res.push_result) if deploy_res.push_result else None
         )
         pipeline_started = deploy_res.start_result is not None
-        execution_id = (
-            deploy_res.start_result.execution_id if deploy_res.start_result else None
-        )
-        pipeline_name = (
-            deploy_res.start_result.pipeline_name if deploy_res.start_result else None
-        )
+        execution_id = deploy_res.start_result.execution_id if deploy_res.start_result else None
+        pipeline_name = deploy_res.start_result.pipeline_name if deploy_res.start_result else None
         message = (
             f"Configuration pushed and pipeline execution started ({execution_id})."
             if pipeline_started
@@ -388,9 +376,7 @@ def _register_config_routes(
         }
 
 
-def _register_pipeline_routes(
-    router: APIRouter, context: ActiveWorkspaceContext
-) -> None:
+def _register_pipeline_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
     @router.get("/api/pipeline/snapshot")
     def pipeline_snapshot(
         type: str = "configuration",
@@ -416,9 +402,7 @@ def _register_pipeline_routes(
         return serialize_pipeline_diagnostics(failures)
 
 
-def _register_bootstrap_routes(
-    router: APIRouter, context: ActiveWorkspaceContext
-) -> None:
+def _register_bootstrap_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
     @router.get("/api/bootstrap/plan")
     def get_bootstrap_plan() -> dict[str, Any]:
         return serialize_bootstrap_plan(
@@ -1185,6 +1169,7 @@ def serialize_workspace_init_result(result: WorkspaceInitResult) -> dict[str, An
         "customerName": result.config.customer.name,
         "aws": {
             "profile": result.config.aws.profile,
+            "roleArn": result.config.aws.role_arn,
             "region": result.config.aws.region,
         },
         "lzaVersion": result.config.lza.version,
@@ -1246,5 +1231,3 @@ def serialize_import_discovery(discovery: ImportWorkspaceDiscovery) -> dict[str,
         "existingLzaVersion": existing_config.lza.version if existing_config else None,
         "isRepaired": existing.is_repaired if existing else False,
     }
-
-

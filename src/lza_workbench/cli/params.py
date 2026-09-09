@@ -42,6 +42,12 @@ AwsProfile = Annotated[
     typer.Option("--aws-profile", help="AWS profile for the workspace."),
 ]
 
+AwsRoleArn = Annotated[
+    str,
+    typer.Option("--aws-role-arn", help="AWS IAM role ARN for the workspace."),
+]
+
+
 AwsRegion = Annotated[
     str,
     typer.Option("--aws-region", help="AWS region for the workspace."),

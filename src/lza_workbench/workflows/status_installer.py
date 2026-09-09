@@ -112,8 +112,7 @@ def _query_live_installer_status(
             ssm_client=ssm_client,
             stack_name=cfn_stack_name,
             accelerator_prefix=(
-                cfn_status.deployed_parameters.get("AcceleratorPrefix")
-                or accelerator_prefix
+                cfn_status.deployed_parameters.get("AcceleratorPrefix") or accelerator_prefix
             ),
         )
         if cfn_status.exists
@@ -172,12 +171,8 @@ def _query_recorded_installer_status(
         error=aws_error,
     )
     deployed_version = recorded_version or resolved_config_version
-    recorded_pipe_status = (
-        resolved_state.installer_pipeline_status if resolved_state else None
-    )
-    recorded_exec_id = (
-        resolved_state.installer_pipeline_execution_id if resolved_state else None
-    )
+    recorded_pipe_status = resolved_state.installer_pipeline_status if resolved_state else None
+    recorded_exec_id = resolved_state.installer_pipeline_execution_id if resolved_state else None
     pipeline_state = PipelineStateResult(
         pipeline_name=installer_pipeline_name,
         exists=bool(recorded_pipe_status),
@@ -216,9 +211,7 @@ def get_installer_status_workflow(
     )
     cfn_stack_name = resolved_config.installer.stack_name or "AWSAccelerator-InstallerStack"
     prefix = resolved_config.lza.accelerator_prefix or "AWSAccelerator"
-    installer_pipeline_name = (
-        resolved_config.pipelines.installer.name or f"{prefix}-Installer"
-    )
+    installer_pipeline_name = resolved_config.pipelines.installer.name or f"{prefix}-Installer"
 
     if aws_context.is_live:
         cfn_status, deployed_version, pipeline_state = _query_live_installer_status(
@@ -250,7 +243,6 @@ def get_installer_status_workflow(
         deployed_version=deployed_version or resolved_config.lza.version,
         pipeline_state=pipeline_state,
     )
-
 
 
 __all__ = [

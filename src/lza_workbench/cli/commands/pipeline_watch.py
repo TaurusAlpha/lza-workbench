@@ -229,7 +229,6 @@ def render_pipeline_watch_result(
         )
 
 
-
 def pipeline_watch_command(
     pipeline_name: params.PipelineName = None,
     execution_id: params.ExecutionId = None,
