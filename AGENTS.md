@@ -2,138 +2,114 @@
 
 ## Context
 
-- Read the minimum number of files required for the current task.
-- Read `PROJECT.md` only when architectural decisions, repository conventions, or feature design are relevant.
-- Read `TODO.md` only when implementing, planning, or discussing a feature described there.
-- Ask before scanning large parts of the repository or reading unrelated files.
+- Read only the files needed for the task.
+- Read `PROJECT.md` for architecture, repository conventions, or feature design.
+- Read `TODO.md` for planned, unresolved, or requested feature work.
+- Inspect broader repository context when required to understand ownership, dependencies, or existing patterns; avoid unrelated scanning.
 
 ## Rules
 
 - Implement only the requested task.
-- Do not change unrelated code or expand scope unless requested.
-- Prefer modifying existing code over creating new modules.
-- Do not create placeholder or speculative code.
+- Do not expand scope, refactor unrelated code, or add speculative functionality.
 - Prefer Python over shell when practical.
-- Customer projects are created outside this repository.
-- Do not introduce new dependencies unless explicitly requested or clearly justified.
+- Customer projects live outside this repository.
+- Do not introduce dependencies unless clearly required.
+- Prefer existing project patterns, but do not preserve a poor structure merely for consistency.
 
 ## Validation
 
 Before finishing:
 
 - Run `uv run ruff check . --fix`.
-- Run `uv run pytest tests/test_package.py` to enforce static architectural import boundaries.
-- Validate changed interface behavior through the real interface: exercise CLI changes against a
-  temporary workspace or directory, and exercise Web changes through the real local application.
-- Verify real outputs or responses, process/HTTP status, and file effects rather than relying on
-  mocks or test suites.
-- Do not run the full `pytest` suite unless explicitly requested.
+- Run `uv run pytest tests/test_package.py` to validate architectural boundaries.
+- Validate changed user-facing behavior through the real interface when practical:
+  - CLI changes through the CLI against a temporary workspace.
+  - Web changes through the running local application.
+- Verify actual output/status and relevant file effects rather than relying only on mocks.
+- Do not run the full pytest suite unless explicitly requested or clearly necessary.
 
 ## Testing Policy
 
-Automated tests are secondary to real interface behavior and must not drive production-code design.
+Tests support runtime behavior; they do not define it.
 
-### Core Rules
-
-- Do not create tests automatically when implementing features unless explicitly requested.
-- Never alter production function signatures (e.g. injecting sleep/print callbacks or mock hooks), add production branches, or introduce indirection solely to make code testable.
-- Requirements, command semantics, and real runtime behavior are the source of truth. Tests are supporting evidence only.
-- When an intentional requirement or behavior change causes existing tests to fail, update or delete the obsolete tests immediately. Do not preserve obsolete behavior or write production shims to keep stale tests passing.
-- Static architecture tests (`tests/test_package.py`) and pure schema/logic validations are always valid and run fast (<1s).
-- When tests are explicitly requested, focus on pure domain logic, deterministic transformations, or defect reproduction. Avoid mocking external systems (`boto3`, AWS APIs, subprocess Git calls).
+- Do not add tests automatically unless explicitly requested.
+- Do not change production APIs, add branches, callbacks, hooks, or indirection solely for tests.
+- Requirements and real runtime behavior are the source of truth.
+- Update or remove tests that assert intentionally obsolete behavior.
+- Prefer tests for deterministic domain logic, schemas, regressions, and architectural boundaries.
+- Avoid extensive mocking of AWS APIs, boto3, Git subprocesses, or other external systems.
 
 ## Responses
 
-- Keep responses concise.
-- Minimize token usage.
-- Do not provide long explanations.
+- Keep responses very short, straight to the point,concise and focused.
+- State material assumptions only if relevant.
 - Suggest follow-up work only when directly relevant.
-- State assumptions instead of silently making them.
 
-## Code Quality & Readability
+## Code Quality
 
-Before presenting code, review it against these principles.
+Optimize for code that is easy for a human to read, change, and debug.
 
-### Release & Project Metadata
+- Prefer simple, explicit, DRY code with clear ownership.
+- Keep functions and modules focused on a coherent responsibility.
+- Modify an existing module when the logic belongs there; create a focused module when it improves cohesion, reuse, or readability.
+- Do not optimize for minimum file count or minimum line count.
+- Avoid duplicated logic, large mixed-responsibility modules, deep nesting, clever expressions, and unnecessary indirection.
+- Introduce abstractions only when they remove meaningful duplication or establish a clear architectural boundary.
+- Use descriptive names and straightforward control flow.
 
-Every implementation must leave the project in a releasable state.
+### Architecture
 
-- Review `pyproject.toml` after every implementation.
-- Update the project version according to the project's versioning scheme.
-- Update dependencies, dependency constraints, optional dependencies, entry points, scripts, or other project metadata whenever required by the implementation.
-- Remove obsolete dependencies and metadata introduced by previous implementations.
-- Do not leave `pyproject.toml` inconsistent with the current codebase.
-- If GIT working tree is clean always update pyproject.toml with the new project version according to the project's versioning scheme.
-
-### Simplicity
-
-- Prefer the simplest solution that satisfies the requirements.
-- Prioritize readability over brevity.
-- Avoid unnecessary abstractions or indirection.
-
-### Maintainability
-
-- Write small, focused functions with a single responsibility.
-- Place new logic in the appropriate feature package rather than in command handlers or generic
-  `core`/`utils` modules.
-- Keep HTTP routing and browser-facing presentation in the Web layer; keep Typer, Rich, prompting,
-  confirmation, and terminal rendering in the CLI layer.
-- Implement reusable application use cases as workflows that return structured results.
+- Keep HTTP routing and browser-facing presentation in the Web layer.
+- Keep Typer, Rich, prompting, confirmation, and terminal rendering in the CLI layer.
+- Implement reusable application use cases as workflows returning structured results.
 - Keep workspace, installer, configuration, and pipeline rules in their owning feature packages.
-- Keep AWS modules as thin boto3 adapters; pass resolved values into them instead of importing
-  workspace or feature policy.
-- Do not introduce generic `core`, `utils`, or `helpers` modules when a feature owner exists.
-- Preserve the dependency direction `web/cli -> workflows -> features/AWS`; lower layers must not
-  import interface or workflow modules.
-- Extend existing modules when appropriate; create new modules when they improve organization.
-- Follow existing project structure and coding patterns.
+- Keep AWS modules as thin boto3 adapters; pass resolved inputs into them instead of importing workspace or feature policy.
+- Do not create generic `core`, `utils`, or `helpers` modules when a clear owner exists.
+- Preserve dependency direction:
 
-### Readability
+  `web/cli -> workflows -> features/AWS`
 
-- Use descriptive names for variables, functions, and classes.
-- Avoid deeply nested control flow.
-- Keep comprehensions and generator expressions simple and readable.
-- Avoid nested or difficult-to-read expressions within function calls.
+- Lower layers must not import interface or workflow modules.
+
+## Release & Project Metadata
+
+Keep project metadata consistent with the implementation.
+
+- Review `pyproject.toml` only when the change affects versioning, dependencies, entry points, scripts, packaging, or other project metadata.
+- Update the project version when the implementation represents a release according to the project's versioning scheme.
+- Remove obsolete dependency or packaging metadata when encountered as part of the requested change.
 
 ## Repository Specifics
 
-- **Toolchain**: Uses `uv` for package management and execution.
-- **CLI Entrypoints**: `lza` and `lza-workbench` (defined in `pyproject.toml`).
-- **Workspace Model**: Each customer has an independent local workspace (e.g., `example/`).
-- **Source of Truth**: `lza-workspace.yaml` is the declarative source of truth for a workspace. `.lza/state.json` stores runtime/execution metadata.
-- **AWS Client Factory**: All `boto3` sessions and clients MUST be created via `AwsClientFactory`. Service modules should not create their own sessions.
-- **Readiness**: Commands declare required `WorkspaceCapability` values (`METADATA_VALID`, `CONFIGURATION_PRESENT`, `INSTALLER_CONFIGURED`, `INSTALLER_RECORDED_DEPLOYED`, `IMPORTED`) and are gated by `load_workspace_context()`'s `require_capabilities()` check against the loaded `WorkspaceAssessment`.
+- **Toolchain:** `uv`.
+- **CLI entrypoints:** `lza` and `lza-workbench`.
+- **Workspace model:** each customer has an independent workspace outside this repository.
+- **Source of truth:** `lza-workspace.yaml` is declarative configuration; `.lza/state.json` stores runtime/execution metadata.
+- **AWS clients:** all boto3 sessions and clients are created through `AwsClientFactory`.
+- **Readiness:** commands declare required `WorkspaceCapability` values and are gated through `load_workspace_context()` / `require_capabilities()` against `WorkspaceAssessment`.
 
 ## Documentation
 
-Documentation files have separate responsibilities.
+Documentation files have distinct responsibilities.
 
-### PROJECT.md
+### `PROJECT.md`
 
-Update only when a durable project-wide architectural decision or invariant changes.
+Durable project-wide architecture, invariants, and design decisions only.
+
 Do not add detailed feature specifications or implementation status.
 
-### TODO.md
+### `TODO.md`
 
-Focuses exclusively on active, planned, unresolved, refactoring, and technical-debt work.
+Active, planned, unresolved, refactoring, and technical-debt work.
 
-Update when:
+Update when work is added, removed, redesigned, or remains unresolved.
 
-- Work is planned, added, removed, or redesigned.
-- A feature has unresolved design decisions.
-- Technical debt or a meaningful refactor is identified.
-- Work is completed and needs to be cleaned up / summarized into `docs/DONE.md`.
+### `docs/DONE.md`
 
-### docs/DONE.md
+Concise history of completed features and meaningful refactors.
 
-Maintain as a concise, high-level historical log of completed feature milestones and refactors.
+Move work here only after implementation, integration, review, and required validation are complete. Summarize outcomes rather than copying implementation checklists.
 
-Rules:
+### `README.md`
 
-- Move work to `docs/DONE.md` only after implementation, integration, code review, and validation/tests are complete.
-- Summarize delivered capabilities concisely; do not copy verbose micro-checklists, commit logs, or full specs.
-- Retain remaining unfinished follow-up items in `TODO.md`.
-
-### README.md
-
-Update when current user-facing behavior, command usage, installation, or repository-development instructions change.
+Update when current user-facing behavior, usage, installation, or development instructions change.
