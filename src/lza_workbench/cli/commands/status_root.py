@@ -21,6 +21,39 @@ from lza_workbench.workflows.status_root import (
 )
 
 
+def _render_recorded_pipeline_summary(pipe: PipelineSummary) -> None:
+    if pipe.status:
+        print_kv("Latest Execution", f"{format_status(pipe.status)} (Recorded)")
+    else:
+        print_kv("Latest Execution", "None Recorded", style="dim")
+    if pipe.execution_id:
+        print_kv("Execution ID", f"{pipe.execution_id} (Recorded)", style="dim")
+    if pipe.failed_stage:
+        print_kv("Failed Stage", f"{pipe.failed_stage} (Recorded)", style="red")
+    if pipe.failed_action:
+        print_kv("Failed Action", f"{pipe.failed_action} (Recorded)", style="red")
+    if pipe.failure_summary:
+        print_kv("Failure", pipe.failure_summary, style="red")
+
+
+def _render_live_pipeline_details(pipe: PipelineSummary) -> None:
+    if pipe.start_time:
+        print_kv("Started", format_timestamp(pipe.start_time))
+    if pipe.duration_seconds is not None:
+        duration = format_duration(pipe.duration_seconds)
+        if duration:
+            print_kv("Duration", duration)
+    if pipe.current_stage or pipe.current_action:
+        stage_action = " / ".join(filter(None, [pipe.current_stage, pipe.current_action]))
+        print_kv("Current Stage/Action", stage_action, style="yellow")
+    if pipe.failed_stage:
+        print_kv("Failed Stage", pipe.failed_stage, style="red")
+    if pipe.failed_action:
+        print_kv("Failed Action", pipe.failed_action, style="red")
+    if pipe.failure_summary:
+        print_kv("Failure", pipe.failure_summary, style="red")
+
+
 def _render_pipeline_summary(
     pipe: PipelineSummary,
     *,
@@ -28,18 +61,7 @@ def _render_pipeline_summary(
 ) -> None:
     print_kv(f"{label_prefix} Pipeline", pipe.name, bold_value=True)
     if not pipe.is_live:
-        if pipe.status:
-            print_kv("Latest Execution", f"{format_status(pipe.status)} (Recorded)")
-        else:
-            print_kv("Latest Execution", "None Recorded", style="dim")
-        if pipe.execution_id:
-            print_kv("Execution ID", f"{pipe.execution_id} (Recorded)", style="dim")
-        if pipe.failed_stage:
-            print_kv("Failed Stage", f"{pipe.failed_stage} (Recorded)", style="red")
-        if pipe.failed_action:
-            print_kv("Failed Action", f"{pipe.failed_action} (Recorded)", style="red")
-        if pipe.failure_summary:
-            print_kv("Failure", pipe.failure_summary, style="red")
+        _render_recorded_pipeline_summary(pipe)
         return
 
     if not pipe.exists:
@@ -49,21 +71,7 @@ def _render_pipeline_summary(
     print_kv("Latest Execution", format_status(pipe.status or "Unknown"))
     if pipe.execution_id:
         print_kv("Execution ID", pipe.execution_id, style="dim")
-    if pipe.start_time:
-        print_kv("Started", format_timestamp(pipe.start_time))
-    if pipe.duration_seconds is not None:
-        dur_str = format_duration(pipe.duration_seconds)
-        if dur_str:
-            print_kv("Duration", dur_str)
-    if pipe.current_stage or pipe.current_action:
-        stage_act = " / ".join(filter(None, [pipe.current_stage, pipe.current_action]))
-        print_kv("Current Stage/Action", stage_act, style="yellow")
-    if pipe.failed_stage:
-        print_kv("Failed Stage", pipe.failed_stage, style="red")
-    if pipe.failed_action:
-        print_kv("Failed Action", pipe.failed_action, style="red")
-    if pipe.failure_summary:
-        print_kv("Failure", pipe.failure_summary, style="red")
+    _render_live_pipeline_details(pipe)
 
 
 def render_root_status(result: RootStatusResult) -> None:
@@ -166,4 +174,3 @@ __all__ = [
     "render_root_status",
     "status_root_command",
 ]
-
