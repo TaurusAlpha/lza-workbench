@@ -71,6 +71,58 @@ class PipelineExecutionResult:
     error: str | None = None
 
 
+def _parse_stage_state(stage: dict[str, Any]) -> StageStateResult:
+    """Convert a CodePipeline stage-state response into an observation."""
+    stage_name = stage.get("stageName", "")
+    latest_execution = stage.get("latestExecution") or {}
+    actions = [
+        _parse_action_state(action, stage_name=stage_name)
+        for action in stage.get("actionStates", [])
+    ]
+    return StageStateResult(
+        stage_name=stage_name,
+        status=latest_execution.get("status"),
+        actions=actions,
+        execution_id=latest_execution.get("pipelineExecutionId"),
+    )
+
+
+def _parse_action_state(action: dict[str, Any], *, stage_name: str) -> ActionStateResult:
+    """Convert a CodePipeline action-state response into an observation."""
+    latest_execution = action.get("latestExecution") or {}
+    last_status_change = latest_execution.get("lastStatusChange")
+    error_details = latest_execution.get("errorDetails") or {}
+    return ActionStateResult(
+        action_name=action.get("actionName", ""),
+        stage_name=stage_name,
+        status=latest_execution.get("status"),
+        summary=latest_execution.get("summary"),
+        last_status_change=str(last_status_change) if last_status_change else None,
+        error_message=error_details.get("message"),
+        external_execution_id=latest_execution.get("externalExecutionId"),
+        external_execution_url=latest_execution.get("externalExecutionUrl"),
+        execution_id=latest_execution.get("pipelineExecutionId"),
+    )
+
+
+def _derive_pipeline_status(stages: list[StageStateResult]) -> str:
+    """Derive the pipeline status using CodePipeline stage-state precedence."""
+    statuses = {stage.status for stage in stages if stage.status}
+    if not statuses:
+        return "Not Started"
+    if "InProgress" in statuses:
+        return "InProgress"
+    if "Failed" in statuses:
+        return "Failed"
+    if "Cancelled" in statuses:
+        return "Cancelled"
+    if statuses & {"Stopped", "Stopping"}:
+        return "Stopped"
+    if all(stage.status == "Succeeded" for stage in stages):
+        return "Succeeded"
+    return "Unknown"
+
+
 def get_pipeline_state(
     *,
     client: Any,
@@ -97,95 +149,12 @@ def get_pipeline_state(
         response = client.get_pipeline_state(name=clean_pipeline_name)
         stage_states_raw = response.get("stageStates", [])
 
-        stage_results: list[StageStateResult] = []
+        stage_results = [_parse_stage_state(stage) for stage in stage_states_raw]
         latest_execution_id: str | None = None
-
-        has_in_progress = False
-        has_failed = False
-        has_cancelled = False
-        has_stopped = False
-        all_succeeded = bool(stage_states_raw)
-        any_executed = False
-
-        for stage in stage_states_raw:
-            s_name = stage.get("stageName", "")
-            latest_exec = stage.get("latestExecution") or {}
-            s_status = latest_exec.get("status")
-            s_exec_id = latest_exec.get("pipelineExecutionId")
-
-            if s_exec_id and not latest_execution_id:
-                latest_execution_id = s_exec_id
-
-            actions: list[ActionStateResult] = []
-            for action in stage.get("actionStates", []):
-                a_name = action.get("actionName", "")
-                a_exec = action.get("latestExecution") or {}
-                a_status = a_exec.get("status")
-                a_summary = a_exec.get("summary")
-                a_time = (
-                    str(a_exec.get("lastStatusChange")) if a_exec.get("lastStatusChange") else None
-                )
-                err_details = a_exec.get("errorDetails") or {}
-                a_err = err_details.get("message")
-                a_ext_id = a_exec.get("externalExecutionId")
-                a_ext_url = a_exec.get("externalExecutionUrl")
-                a_exec_id = a_exec.get("pipelineExecutionId")
-                actions.append(
-                    ActionStateResult(
-                        action_name=a_name,
-                        stage_name=s_name,
-                        status=a_status,
-                        summary=a_summary,
-                        last_status_change=a_time,
-                        error_message=a_err,
-                        external_execution_id=a_ext_id,
-                        external_execution_url=a_ext_url,
-                        execution_id=a_exec_id,
-                    )
-                )
-
-            if s_status:
-                any_executed = True
-                if s_status == "InProgress":
-                    has_in_progress = True
-                    all_succeeded = False
-                elif s_status == "Failed":
-                    has_failed = True
-                    all_succeeded = False
-                elif s_status == "Cancelled":
-                    has_cancelled = True
-                    all_succeeded = False
-                elif s_status in {"Stopped", "Stopping"}:
-                    has_stopped = True
-                    all_succeeded = False
-                elif s_status != "Succeeded":
-                    all_succeeded = False
-            else:
-                all_succeeded = False
-
-            stage_results.append(
-                StageStateResult(
-                    stage_name=s_name,
-                    status=s_status,
-                    actions=actions,
-                    execution_id=s_exec_id,
-                )
-            )
-
-        if not any_executed:
-            derived_status = "Not Started"
-        elif has_in_progress:
-            derived_status = "InProgress"
-        elif has_failed:
-            derived_status = "Failed"
-        elif has_cancelled:
-            derived_status = "Cancelled"
-        elif has_stopped:
-            derived_status = "Stopped"
-        elif all_succeeded:
-            derived_status = "Succeeded"
-        else:
-            derived_status = "Unknown"
+        for stage in stage_results:
+            if stage.execution_id:
+                latest_execution_id = stage.execution_id
+                break
 
         created = str(response.get("created")) if response.get("created") else None
         updated = str(response.get("updated")) if response.get("updated") else None
@@ -193,7 +162,7 @@ def get_pipeline_state(
         return PipelineStateResult(
             pipeline_name=clean_pipeline_name,
             exists=True,
-            status=derived_status,
+            status=_derive_pipeline_status(stage_results),
             stages=stage_results,
             latest_execution_id=latest_execution_id,
             created=created,
