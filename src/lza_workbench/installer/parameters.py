@@ -91,11 +91,10 @@ def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: s
     return True
 
 
-def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, value: str) -> None:
-    """Persist an accepted template parameter in its owning workspace setting."""
+def _apply_source_code_parameter(
+    config: WorkspaceConfig, parameter_name: str, value: str
+) -> bool:
     source_code = config.installer.source_code
-    options = config.installer.options
-
     if parameter_name == "RepositorySource":
         source_code.repository_type = value  # type: ignore[assignment]
     elif parameter_name == "RepositoryOwner":
@@ -108,7 +107,16 @@ def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, valu
         source_code.bucket = value or None
     elif parameter_name == "RepositoryBucketObject":
         source_code.key = value or None
-    elif parameter_name == "EnableApprovalStage":
+    else:
+        return False
+    return True
+
+
+def _apply_options_parameter(
+    config: WorkspaceConfig, parameter_name: str, value: str
+) -> bool:
+    options = config.installer.options
+    if parameter_name == "EnableApprovalStage":
         options.enable_approval_stage = value == "Yes"
     elif parameter_name == "ApprovalStageNotifyEmailList":
         options.approval_stage_notify_email_list = [
@@ -122,22 +130,45 @@ def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, valu
         options.audit_account_email = value
     elif parameter_name == "ControlTowerEnabled":
         options.control_tower_enabled = value == "Yes"
-    elif parameter_name == "AcceleratorPrefix":
-        config.lza.accelerator_prefix = value
-    elif parameter_name == "ConfigurationRepositoryLocation":
-        config.configuration.repository.type = value  # type: ignore[assignment]
-    elif parameter_name == "UseExistingConfigRepo":
-        return
-    elif parameter_name == "ConfigCodeConnectionArn":
-        config.configuration.repository.codeconnection_arn = value or None
-    elif parameter_name == "ExistingConfigRepositoryOwner":
-        config.configuration.repository.owner = value or None
-    elif parameter_name == "ExistingConfigRepositoryName":
-        config.configuration.repository.repository_name = value or None
-    elif parameter_name == "ExistingConfigRepositoryBranchName":
-        config.configuration.repository.branch = value or None
     elif parameter_name == "EnableDiagnosticsPack":
         options.enable_diagnostics_pack = value == "Yes"
+    else:
+        return False
+    return True
+
+
+def _apply_config_repo_parameter(
+    config: WorkspaceConfig, parameter_name: str, value: str
+) -> bool:
+    repo = config.configuration.repository
+    if parameter_name == "ConfigurationRepositoryLocation":
+        repo.type = value  # type: ignore[assignment]
+    elif parameter_name == "ConfigCodeConnectionArn":
+        repo.codeconnection_arn = value or None
+    elif parameter_name == "ExistingConfigRepositoryOwner":
+        repo.owner = value or None
+    elif parameter_name == "ExistingConfigRepositoryName":
+        repo.repository_name = value or None
+    elif parameter_name == "ExistingConfigRepositoryBranchName":
+        repo.branch = value or None
+    else:
+        return False
+    return True
+
+
+def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, value: str) -> None:
+    """Persist an accepted template parameter in its owning workspace setting."""
+    if _apply_source_code_parameter(config, parameter_name, value):
+        return
+    if _apply_options_parameter(config, parameter_name, value):
+        return
+    if _apply_config_repo_parameter(config, parameter_name, value):
+        return
+
+    if parameter_name == "AcceleratorPrefix":
+        config.lza.accelerator_prefix = value
+    elif parameter_name == "UseExistingConfigRepo":
+        return
     else:
         config.installer.extra_parameters[parameter_name] = value
 
