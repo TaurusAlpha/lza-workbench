@@ -38,6 +38,59 @@ def record_pipeline_execution(
         state.config_pipeline_error = None
 
 
+def _find_stage_for_action(
+    stages: list[PipelineStageState] | None, action_name: str | None
+) -> str | None:
+    if not stages or not action_name:
+        return None
+    for st in stages:
+        st_name = getattr(st, "stage_name", "")
+        for act in getattr(st, "actions", []):
+            if getattr(act, "action_name", "") == action_name:
+                return st_name
+    return None
+
+
+def _extract_watch_failure_details(
+    *,
+    status: str,
+    stages: list[PipelineStageState] | None,
+    failed_actions: list[PipelineActionFailure] | None,
+    error_message: str | None,
+) -> tuple[str | None, str | None, str | None, str | None]:
+    if status not in {"Failed", "Cancelled", "TimedOut"}:
+        return None, None, None, None
+
+    failed_stage: str | None = None
+    failed_action: str | None = None
+    failed_build_url: str | None = None
+    resolved_error: str | None = None
+
+    if failed_actions:
+        first_fa = failed_actions[0]
+        failed_action = first_fa.action_name
+        failed_build_url = first_fa.external_execution_url
+        diags = first_fa.diagnostic_details
+        resolved_error = "\n".join(diags) if diags else (first_fa.error_message or first_fa.summary)
+        failed_stage = _find_stage_for_action(stages, failed_action)
+    elif stages:
+        for st in stages:
+            if st.status == "Failed":
+                failed_stage = st.stage_name
+                for act in st.actions:
+                    if act.status == "Failed":
+                        failed_action = act.action_name
+                        failed_build_url = act.external_execution_url
+                        resolved_error = act.error_message or act.summary
+                        break
+                break
+
+    if not resolved_error:
+        resolved_error = error_message
+
+    return failed_stage, failed_action, failed_build_url, resolved_error
+
+
 def record_pipeline_watch_result(
     state: WorkspaceState,
     *,
@@ -50,52 +103,14 @@ def record_pipeline_watch_result(
     pipeline_type: str = "configuration",
 ) -> None:
     """Record execution completion, stage outcomes, and failure diagnostics in state."""
-    now = datetime.now(UTC)
-    state.updated_at = now
+    state.updated_at = datetime.now(UTC)
 
-    failed_stage: str | None = None
-    failed_action: str | None = None
-    failed_build_url: str | None = None
-    resolved_error: str | None = None
-
-    if status in {"Failed", "Cancelled", "TimedOut"}:
-        if failed_actions:
-            first_fa = failed_actions[0]
-            failed_action = first_fa.action_name
-            failed_build_url = first_fa.external_execution_url
-
-            # Prioritize extracted actual error diagnostics from CloudWatch/CodeBuild
-            diags = first_fa.diagnostic_details
-            if diags:
-                resolved_error = "\n".join(diags)
-            else:
-                resolved_error = (
-                    first_fa.error_message or first_fa.summary
-                )
-
-            if stages:
-                for st in stages:
-                    st_name = getattr(st, "stage_name", "")
-                    for act in getattr(st, "actions", []):
-                        if getattr(act, "action_name", "") == failed_action:
-                            failed_stage = st_name
-                            break
-                    if failed_stage:
-                        break
-        elif stages:
-            for st in stages:
-                if st.status == "Failed":
-                    failed_stage = st.stage_name
-                    for act in st.actions:
-                        if act.status == "Failed":
-                            failed_action = act.action_name
-                            failed_build_url = act.external_execution_url
-                            resolved_error = act.error_message or act.summary
-                            break
-                    break
-
-        if not resolved_error:
-            resolved_error = error_message
+    failed_stage, failed_action, failed_build_url, resolved_error = _extract_watch_failure_details(
+        status=status,
+        stages=stages,
+        failed_actions=failed_actions,
+        error_message=error_message,
+    )
 
     if pipeline_type == "installer":
         state.installer_pipeline_execution_id = execution_id
