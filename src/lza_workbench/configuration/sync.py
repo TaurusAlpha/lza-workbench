@@ -39,80 +39,46 @@ class RemoteSyncStatus:
         )
 
 
-def evaluate_s3_remote_sync(
-    *,
-    config_dir: Path,
-    exclude_dirs: set[str],
-    exclude_files: set[str],
-    s3_object_info: S3ObjectObservation | None,
-    state: WorkspaceState | None = None,
-    is_live: bool = True,
+def _evaluate_offline_sync(
+    local_digest: str,
+    state: WorkspaceState | None,
 ) -> RemoteSyncStatus:
-    """Evaluate S3 remote synchronization using metadata and recorded state (Tier 1)."""
-    if not config_dir.exists():
-        return RemoteSyncStatus(
-            status="Missing",
-            summary="Local configuration directory does not exist",
-            is_synced=False,
-        )
-
-    local_digest = compute_config_directory_digest(config_dir, exclude_dirs, exclude_files)
-
-    # Offline / No Live AWS Context
-    if not is_live or s3_object_info is None:
-        if state and state.config_sync_digest:
-            if local_digest == state.config_sync_digest:
-                etag_label = (
-                    f" (ETag: {state.config_artifact_etag})"
-                    if state.config_artifact_etag
-                    else ""
-                )
-                return RemoteSyncStatus(
-                    status="Synchronized",
-                    summary=f"Local clean since last sync{etag_label} (Offline)",
-                    is_synced=True,
-                    details={"offline": True, "local_digest": local_digest},
-                )
-
+    if state and state.config_sync_digest:
+        if local_digest == state.config_sync_digest:
+            etag_label = (
+                f" (ETag: {state.config_artifact_etag})"
+                if state.config_artifact_etag
+                else ""
+            )
             return RemoteSyncStatus(
-                status="Ahead",
-                ahead=1,
-                summary="Local changes since last sync (Offline)",
-                is_synced=False,
+                status="Synchronized",
+                summary=f"Local clean since last sync{etag_label} (Offline)",
+                is_synced=True,
                 details={"offline": True, "local_digest": local_digest},
             )
+
         return RemoteSyncStatus(
-            status="Unknown",
-            summary="Sync status unavailable (Offline)",
+            status="Ahead",
+            ahead=1,
+            summary="Local changes since last sync (Offline)",
             is_synced=False,
-            details={"offline": True},
+            details={"offline": True, "local_digest": local_digest},
         )
-
-    # Live S3 inspection evaluation
-    if not s3_object_info.exists:
-        err = s3_object_info.error
-        if err:
-            return RemoteSyncStatus(
-                status="Unknown",
-                summary=f"S3 access error: {err}",
-                is_synced=False,
-                details={"error": err},
-            )
-        return RemoteSyncStatus(
-            status="Not Uploaded",
-            summary="Not uploaded yet to S3",
-            is_synced=False,
-            details={"exists": False},
-        )
-
-    raw_etag = s3_object_info.etag
-    remote_etag = raw_etag if isinstance(raw_etag, str) else None
-    metadata = s3_object_info.metadata
-    raw_digest = metadata.get("lza-content-digest") if isinstance(metadata, dict) else None
-    remote_digest = raw_digest if isinstance(raw_digest, str) else None
+    return RemoteSyncStatus(
+        status="Unknown",
+        summary="Sync status unavailable (Offline)",
+        is_synced=False,
+        details={"offline": True},
+    )
 
 
-    # Check if remote matches local
+def _check_remote_matches_local(
+    *,
+    local_digest: str,
+    remote_digest: str | None,
+    remote_etag: str | None,
+    state: WorkspaceState | None,
+) -> RemoteSyncStatus | None:
     if remote_digest:
         if local_digest == remote_digest:
             etag_str = f" (ETag: {remote_etag})" if remote_etag else ""
@@ -139,6 +105,24 @@ def evaluate_s3_remote_sync(
                     "matched_by": "state_etag",
                 },
             )
+    return None
+
+
+def _evaluate_live_drift(
+    *,
+    local_digest: str,
+    remote_digest: str | None,
+    remote_etag: str | None,
+    state: WorkspaceState | None,
+) -> RemoteSyncStatus:
+    matched = _check_remote_matches_local(
+        local_digest=local_digest,
+        remote_digest=remote_digest,
+        remote_etag=remote_etag,
+        state=state,
+    )
+    if matched:
+        return matched
 
     # Determine drift direction if state is recorded
     if state and state.config_sync_digest:
@@ -196,6 +180,60 @@ def evaluate_s3_remote_sync(
         summary=f"Never synced with workspace ({etag_part}, no local state)",
         is_synced=False,
         details={"remote_etag": remote_etag, "never_synced": True},
+    )
+
+
+def evaluate_s3_remote_sync(
+    *,
+    config_dir: Path,
+    exclude_dirs: set[str],
+    exclude_files: set[str],
+    s3_object_info: S3ObjectObservation | None,
+    state: WorkspaceState | None = None,
+    is_live: bool = True,
+) -> RemoteSyncStatus:
+    """Evaluate S3 remote synchronization using metadata and recorded state (Tier 1)."""
+    if not config_dir.exists():
+        return RemoteSyncStatus(
+            status="Missing",
+            summary="Local configuration directory does not exist",
+            is_synced=False,
+        )
+
+    local_digest = compute_config_directory_digest(config_dir, exclude_dirs, exclude_files)
+
+    # Offline / No Live AWS Context
+    if not is_live or s3_object_info is None:
+        return _evaluate_offline_sync(local_digest, state)
+
+    # Live S3 inspection evaluation
+    if not s3_object_info.exists:
+        err = s3_object_info.error
+        if err:
+            return RemoteSyncStatus(
+                status="Unknown",
+                summary=f"S3 access error: {err}",
+                is_synced=False,
+                details={"error": err},
+            )
+        return RemoteSyncStatus(
+            status="Not Uploaded",
+            summary="Not uploaded yet to S3",
+            is_synced=False,
+            details={"exists": False},
+        )
+
+    raw_etag = s3_object_info.etag
+    remote_etag = raw_etag if isinstance(raw_etag, str) else None
+    metadata = s3_object_info.metadata
+    raw_digest = metadata.get("lza-content-digest") if isinstance(metadata, dict) else None
+    remote_digest = raw_digest if isinstance(raw_digest, str) else None
+
+    return _evaluate_live_drift(
+        local_digest=local_digest,
+        remote_digest=remote_digest,
+        remote_etag=remote_etag,
+        state=state,
     )
 
 
