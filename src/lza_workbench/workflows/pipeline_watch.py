@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from lza_workbench.aws.codepipeline import (
     get_latest_pipeline_execution_id,
@@ -75,6 +76,103 @@ def require_successful_pipeline_watch(result: PipelineWatchResult) -> None:
         raise PipelineWatchError(result)
 
 
+def _resolve_watch_execution_id(
+    *,
+    client: Any,
+    state: Any,
+    pipeline_type: str,
+    pipeline_name: str,
+    execution_id: str | None,
+) -> str:
+    if execution_id:
+        return execution_id
+
+    recorded_execution_id = None
+    recorded_pipeline_name = None
+    if state is not None:
+        if pipeline_type == "installer":
+            recorded_execution_id = state.installer_pipeline_execution_id
+            recorded_pipeline_name = state.installer_pipeline_name
+        else:
+            recorded_execution_id = state.config_pipeline_execution_id
+            recorded_pipeline_name = state.config_pipeline_name
+
+    if recorded_execution_id and recorded_pipeline_name == pipeline_name:
+        return recorded_execution_id
+
+    latest = get_latest_pipeline_execution_id(
+        client=client,
+        pipeline_name=pipeline_name,
+    )
+    if latest:
+        return latest
+
+    raise LzaError(
+        f"No execution found to watch for pipeline '{pipeline_name}'. "
+        "Start a pipeline execution before watching."
+    )
+
+
+def _resolve_terminal_failures(
+    *,
+    stage_summaries: list[PipelineStageState],
+    last_status: str,
+    aws_context: AwsExecutionContext,
+) -> tuple[list[PipelineActionFailure], str | None]:
+    has_failed_action = any(
+        action.status == "Failed" for stage in stage_summaries for action in stage.actions
+    )
+    failed_actions: list[PipelineActionFailure] = []
+    if has_failed_action:
+        codebuild_client = aws_context.factory.get_client("codebuild")
+        logs_client = aws_context.factory.get_client("logs")
+        failed_actions = collect_pipeline_action_failures(
+            stage_summaries,
+            fetch_diagnostics=lambda build_id, cb=codebuild_client, lc=logs_client: (
+                fetch_codebuild_diagnostics(
+                    codebuild_client=cb,
+                    logs_client=lc,
+                    build_id=build_id,
+                )
+            ),
+        )
+
+    error_message = None
+    if last_status == "Failed" and failed_actions:
+        action_errs = []
+        for fa in failed_actions:
+            stage_prefix = f"Stage '{fa.stage_name}', action" if fa.stage_name else "Action"
+            if fa.diagnostic_details:
+                diag_text = "\n  - ".join(fa.diagnostic_details)
+                action_errs.append(
+                    f"{stage_prefix} '{fa.action_name}' failed:\n  - {diag_text}"
+                )
+            else:
+                err_text = fa.error_message or fa.summary or "Unknown error"
+                action_errs.append(f"{stage_prefix} '{fa.action_name}' failed: {err_text}")
+        error_message = "\n".join(action_errs)
+
+    return failed_actions, error_message
+
+
+def _calculate_watch_elapsed(
+    *,
+    last_snapshot: Any,
+    start_time: float,
+) -> float | None:
+    if (
+        last_snapshot
+        and last_snapshot.duration_seconds is not None
+        and last_snapshot.duration_seconds > 0
+    ):
+        return float(last_snapshot.duration_seconds)
+
+    live_dur = time.time() - start_time
+    if live_dur >= 1.0:
+        return live_dur
+    return None
+
+
 def watch_pipeline_workflow(
     *,
     target_dir: Path | None = None,
@@ -122,28 +220,13 @@ def watch_pipeline_workflow(
     pipeline_arn = pipeline.arn(region=region, account_id=account_id)
     client = resolved_aws_context.factory.get_client("codepipeline")
 
-    resolved_execution_id = execution_id
-    if not resolved_execution_id:
-        if pipeline_type == "installer":
-            recorded_execution_id = state.installer_pipeline_execution_id
-            recorded_pipeline_name = state.installer_pipeline_name
-        else:
-            recorded_execution_id = state.config_pipeline_execution_id
-            recorded_pipeline_name = state.config_pipeline_name
-
-        if recorded_execution_id and recorded_pipeline_name == resolved_pipeline_name:
-            resolved_execution_id = recorded_execution_id
-        else:
-            resolved_execution_id = get_latest_pipeline_execution_id(
-                client=client,
-                pipeline_name=resolved_pipeline_name,
-            )
-
-    if not resolved_execution_id:
-        raise LzaError(
-            f"No execution found to watch for pipeline '{resolved_pipeline_name}'. "
-            "Start a pipeline execution before watching."
-        )
+    resolved_execution_id = _resolve_watch_execution_id(
+        client=client,
+        state=state,
+        pipeline_type=pipeline_type,
+        pipeline_name=resolved_pipeline_name,
+        execution_id=execution_id,
+    )
 
     if initial_delay_seconds > 0:
         time.sleep(initial_delay_seconds)
@@ -202,52 +285,19 @@ def watch_pipeline_workflow(
             )
 
         if last_status in TERMINAL_STATUSES:
-            has_failed_action = any(
-                action.status == "Failed" for stage in stage_summaries for action in stage.actions
+            failed_actions, error_message = _resolve_terminal_failures(
+                stage_summaries=stage_summaries,
+                last_status=last_status,
+                aws_context=resolved_aws_context,
             )
-            if has_failed_action:
-                codebuild_client = resolved_aws_context.factory.get_client("codebuild")
-                logs_client = resolved_aws_context.factory.get_client("logs")
-                failure_details = collect_pipeline_action_failures(
-                    stage_summaries,
-                    fetch_diagnostics=lambda build_id, cb=codebuild_client, lc=logs_client: (
-                        fetch_codebuild_diagnostics(
-                            codebuild_client=cb,
-                            logs_client=lc,
-                            build_id=build_id,
-                        )
-                    ),
-                )
-                failed_actions = failure_details
-
-            if last_status == "Failed" and failed_actions:
-                action_errs = []
-                for fa in failed_actions:
-                    stage_prefix = f"Stage '{fa.stage_name}', action" if fa.stage_name else "Action"
-                    if fa.diagnostic_details:
-                        diag_text = "\n  - ".join(fa.diagnostic_details)
-                        action_errs.append(
-                            f"{stage_prefix} '{fa.action_name}' failed:\n  - {diag_text}"
-                        )
-                    else:
-                        err_text = fa.error_message or fa.summary or "Unknown error"
-                        action_errs.append(f"{stage_prefix} '{fa.action_name}' failed: {err_text}")
-                error_message = "\n".join(action_errs)
             break
 
         time.sleep(interval)
 
-    total_elapsed: float | None = None
-    if (
-        last_snapshot
-        and last_snapshot.duration_seconds is not None
-        and last_snapshot.duration_seconds > 0
-    ):
-        total_elapsed = last_snapshot.duration_seconds
-    else:
-        live_dur = time.time() - start_time
-        if live_dur >= 1.0:
-            total_elapsed = live_dur
+    total_elapsed = _calculate_watch_elapsed(
+        last_snapshot=last_snapshot,
+        start_time=start_time,
+    )
 
     watch_result = PipelineWatchResult(
         workspace_dir=workspace_dir,
