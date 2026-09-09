@@ -89,6 +89,11 @@ class ActiveWorkspaceContext:
         self.workspace_dir = workspace_dir.resolve()
         self.prepared_import = None
 
+    def get_target_dir(self) -> Path:
+        if self.workspace_dir is None:
+            raise LzaError("No active workspace is open. Please open or create a workspace.")
+        return self.workspace_dir
+
 
 class WorkspaceOpenPayload(BaseModel):
     directory: str
@@ -141,24 +146,9 @@ class BootstrapApplyPayload(BaseModel):
     allow_missing_github_secret: bool = False
 
 
-def create_status_router(
-    *, workspace_dir: Path | ActiveWorkspaceContext | None = None
-) -> APIRouter:
-    """Create status and workspace routes bound to an active workspace context."""
-    if isinstance(workspace_dir, ActiveWorkspaceContext):
-        context = workspace_dir
-    elif workspace_dir is not None:
-        context = ActiveWorkspaceContext(workspace_dir)
-    else:
-        context = ActiveWorkspaceContext(None)
-
-    router = APIRouter()
-
-    def get_target_dir() -> Path:
-        if context.workspace_dir is None:
-            raise LzaError("No active workspace is open. Please open or create a workspace.")
-        return context.workspace_dir
-
+def _register_workspace_routes(
+    router: APIRouter, context: ActiveWorkspaceContext
+) -> None:
     @router.get("/api/workspace/active")
     def get_active_workspace() -> dict[str, Any]:
         if context.workspace_dir is None:
@@ -237,6 +227,10 @@ def create_status_router(
         context.set_workspace_dir(result.workspace_dir)
         return serialize_workspace_init_result(result)
 
+
+def _register_workspace_import_routes(
+    router: APIRouter, context: ActiveWorkspaceContext
+) -> None:
     @router.post("/api/workspace/import/discover")
     def discover_workspace_import_endpoint(
         payload: WorkspaceImportDiscoverPayload,
@@ -282,26 +276,34 @@ def create_status_router(
         context.set_workspace_dir(result.workspace_dir)
         return serialize_workspace_import_result(result)
 
+
+def _register_status_routes(
+    router: APIRouter, context: ActiveWorkspaceContext
+) -> None:
     @router.get("/api/status")
     def get_status() -> dict[str, Any]:
-        return serialize_root_status(get_root_status_workflow(target_dir=get_target_dir()))
+        return serialize_root_status(get_root_status_workflow(target_dir=context.get_target_dir()))
 
     @router.get("/api/status/config")
     def get_config_status() -> dict[str, Any]:
-        status_res = get_config_status_workflow(target_dir=get_target_dir())
+        status_res = get_config_status_workflow(target_dir=context.get_target_dir())
         return serialize_configuration_status(status_res)
 
     @router.get("/api/status/installer")
     def get_installer_status() -> dict[str, Any]:
-        target = get_target_dir()
+        target = context.get_target_dir()
         status_res = get_installer_status_workflow(target_dir=target)
         form_res = get_installer_parameters_schema(target_dir=target, all_fields=True)
         return serialize_installer_status(status_res, form_res)
 
+
+def _register_installer_routes(
+    router: APIRouter, context: ActiveWorkspaceContext
+) -> None:
     @router.post("/api/installer/settings")
     def save_installer_settings(payload: InstallerSettingsPayload) -> dict[str, Any]:
         result = apply_installer_settings(
-            InstallerSettingsRequest(target_dir=get_target_dir(), values=payload.values)
+            InstallerSettingsRequest(target_dir=context.get_target_dir(), values=payload.values)
         )
         return {
             "success": True,
@@ -312,18 +314,22 @@ def create_status_router(
     @router.post("/api/installer/plan")
     def get_installer_plan() -> dict[str, Any]:
         return serialize_installer_plan(
-            plan_installer_workflow(target_dir=get_target_dir(), dry_run=True)
+            plan_installer_workflow(target_dir=context.get_target_dir(), dry_run=True)
         )
 
+
+def _register_config_routes(
+    router: APIRouter, context: ActiveWorkspaceContext
+) -> None:
     @router.post("/api/config/pull/prepare")
     def prepare_pull() -> dict[str, Any]:
-        prep = prepare_config_pull(ConfigPullRequest(target_dir=get_target_dir()))
+        prep = prepare_config_pull(ConfigPullRequest(target_dir=context.get_target_dir()))
         return serialize_config_pull_preparation(prep)
 
     @router.post("/api/config/pull/apply")
     def apply_pull(payload: ConfigActionApplyPayload | None = None) -> dict[str, Any]:
         req = ConfigPullRequest(
-            target_dir=get_target_dir(),
+            target_dir=context.get_target_dir(),
             overwrite_confirmed=payload.overwrite_confirmed if payload else False,
             force=payload.force if payload else False,
         )
@@ -332,47 +338,23 @@ def create_status_router(
 
     @router.post("/api/config/push/prepare")
     def prepare_push() -> dict[str, Any]:
-        prep = prepare_config_push(ConfigPushRequest(target_dir=get_target_dir()))
+        prep = prepare_config_push(ConfigPushRequest(target_dir=context.get_target_dir()))
         return serialize_config_push_preparation(prep)
 
     @router.post("/api/config/push/apply")
     def apply_push(payload: ConfigActionApplyPayload | None = None) -> dict[str, Any]:
         req = ConfigPushRequest(
-            target_dir=get_target_dir(),
+            target_dir=context.get_target_dir(),
             overwrite_confirmed=payload.overwrite_confirmed if payload else False,
             force=payload.force if payload else False,
         )
         res = apply_config_push(req)
         return serialize_config_push_result(res)
 
-    @router.get("/api/pipeline/snapshot")
-    def pipeline_snapshot(
-        type: str = "configuration",
-        execution_id: str | None = None,
-    ) -> dict[str, Any]:
-        snapshot = get_pipeline_snapshot_workflow(
-            target_dir=get_target_dir(),
-            pipeline_type=type,
-            execution_id=execution_id,
-        )
-        return serialize_pipeline_snapshot(snapshot)
-
-    @router.get("/api/pipeline/diagnostics")
-    def pipeline_diagnostics(
-        type: str = "configuration",
-        execution_id: str | None = None,
-    ) -> list[dict[str, Any]]:
-        failures = get_pipeline_diagnostics_workflow(
-            target_dir=get_target_dir(),
-            pipeline_type=type,
-            execution_id=execution_id,
-        )
-        return serialize_pipeline_diagnostics(failures)
-
     @router.post("/api/config/deploy")
     def apply_deploy(payload: ConfigActionApplyPayload | None = None) -> dict[str, Any]:
         deploy_res = deploy_configuration_workflow(
-            target_dir=get_target_dir(),
+            target_dir=context.get_target_dir(),
             dry_run=False,
             force=payload.force if payload else False,
             overwrite_confirmed=payload.overwrite_confirmed if payload else False,
@@ -405,21 +387,75 @@ def create_status_router(
             "message": message,
         }
 
+
+def _register_pipeline_routes(
+    router: APIRouter, context: ActiveWorkspaceContext
+) -> None:
+    @router.get("/api/pipeline/snapshot")
+    def pipeline_snapshot(
+        type: str = "configuration",
+        execution_id: str | None = None,
+    ) -> dict[str, Any]:
+        snapshot = get_pipeline_snapshot_workflow(
+            target_dir=context.get_target_dir(),
+            pipeline_type=type,
+            execution_id=execution_id,
+        )
+        return serialize_pipeline_snapshot(snapshot)
+
+    @router.get("/api/pipeline/diagnostics")
+    def pipeline_diagnostics(
+        type: str = "configuration",
+        execution_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        failures = get_pipeline_diagnostics_workflow(
+            target_dir=context.get_target_dir(),
+            pipeline_type=type,
+            execution_id=execution_id,
+        )
+        return serialize_pipeline_diagnostics(failures)
+
+
+def _register_bootstrap_routes(
+    router: APIRouter, context: ActiveWorkspaceContext
+) -> None:
     @router.get("/api/bootstrap/plan")
     def get_bootstrap_plan() -> dict[str, Any]:
         return serialize_bootstrap_plan(
-            plan_bootstrap_workflow(target_dir=get_target_dir(), dry_run=True)
+            plan_bootstrap_workflow(target_dir=context.get_target_dir(), dry_run=True)
         )
 
     @router.post("/api/bootstrap/apply")
     def apply_bootstrap(payload: BootstrapApplyPayload | None = None) -> dict[str, Any]:
         result = bootstrap_workspace_workflow(
-            target_dir=get_target_dir(),
+            target_dir=context.get_target_dir(),
             dry_run=False,
             github_token=payload.github_token if payload else None,
             allow_missing_github_secret=payload.allow_missing_github_secret if payload else False,
         )
         return serialize_bootstrap_result(result)
+
+
+def create_status_router(
+    *, workspace_dir: Path | ActiveWorkspaceContext | None = None
+) -> APIRouter:
+    """Create status and workspace routes bound to an active workspace context."""
+    if isinstance(workspace_dir, ActiveWorkspaceContext):
+        context = workspace_dir
+    elif workspace_dir is not None:
+        context = ActiveWorkspaceContext(workspace_dir)
+    else:
+        context = ActiveWorkspaceContext(None)
+
+    router = APIRouter()
+
+    _register_workspace_routes(router, context)
+    _register_workspace_import_routes(router, context)
+    _register_status_routes(router, context)
+    _register_installer_routes(router, context)
+    _register_config_routes(router, context)
+    _register_pipeline_routes(router, context)
+    _register_bootstrap_routes(router, context)
 
     return router
 
