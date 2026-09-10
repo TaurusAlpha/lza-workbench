@@ -25,7 +25,6 @@ from lza_workbench.configuration.inspection import (
 )
 from lza_workbench.configuration.templates import capture_init_values_snapshot
 from lza_workbench.configuration.warnings import compile_configuration_warnings
-from lza_workbench.infrastructure.aws.codepipeline import get_pipeline_state
 from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
 from lza_workbench.workspace.context import load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState

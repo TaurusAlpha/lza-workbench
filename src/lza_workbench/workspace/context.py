@@ -5,12 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from lza_workbench.workspace.validation import (
-    WorkspaceAssessment,
-    WorkspaceCapability,
-    evaluate_workspace_assessment,
-    require_capabilities,
-)
 from lza_workbench.workspace.paths import resolve_workspace_dir
 from lza_workbench.workspace.persistence import (
     WORKSPACE_CONFIG_FILE,
@@ -19,6 +13,12 @@ from lza_workbench.workspace.persistence import (
     load_workspace_state,
 )
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
+from lza_workbench.workspace.validation import (
+    WorkspaceAssessment,
+    WorkspaceCapability,
+    evaluate_workspace_assessment,
+    require_capabilities,
+)
 
 
 @dataclass(frozen=True)

@@ -1,11 +1,5 @@
 """Workspace management, metadata, and lifecycle workflows."""
 
-from lza_workbench.workspace.validation import (
-    WorkspaceAssessment,
-    WorkspaceCapability,
-    evaluate_workspace_assessment,
-    require_capabilities,
-)
 from lza_workbench.workspace.bootstrap import (
     BootstrapAction,
     BootstrapPlanResult,
@@ -65,6 +59,12 @@ from lza_workbench.workspace.schema import (
     WorkspaceConfig,
     WorkspaceModel,
     WorkspaceState,
+)
+from lza_workbench.workspace.validation import (
+    WorkspaceAssessment,
+    WorkspaceCapability,
+    evaluate_workspace_assessment,
+    require_capabilities,
 )
 
 __all__ = [

@@ -4,6 +4,7 @@ from lza_workbench.configuration.git.operations import (
     GitProvenance,
     GitRemoteSyncStatus,
     GitWorkingTreeStatus,
+    _run_git_command,
     clone_git_repository,
     configure_codecommit_credential_helper,
     count_git_files,
@@ -29,7 +30,6 @@ from lza_workbench.configuration.git.operations import (
     restore_git_stash,
     set_git_remote_url,
     stash_git_changes,
-    _run_git_command,
 )
 
 __all__ = [

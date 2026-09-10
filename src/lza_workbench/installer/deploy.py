@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -19,21 +18,16 @@ from lza_workbench.infrastructure.aws.cloudformation import (
     inspect_cloudformation_stack,
     stream_cloudformation_stack_events,
 )
-from lza_workbench.infrastructure.aws.codecommit import inspect_codecommit_repository
 from lza_workbench.infrastructure.aws.s3 import (
     get_s3_https_url,
     inspect_s3_bucket,
-    inspect_s3_object,
     upload_s3_file,
 )
-from lza_workbench.infrastructure.aws.secrets_manager import inspect_secret_exists
 from lza_workbench.infrastructure.aws.session import (
-    AwsClientFactory,
     AwsExecutionContext,
     resolve_aws_execution_context,
 )
 from lza_workbench.installer.source import (
-    CodeCommitPlanResult,
     inspect_installer_source,
 )
 from lza_workbench.installer.state import (

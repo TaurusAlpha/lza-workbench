@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from lza_workbench.configuration.git import (
-    GitRemoteSyncStatus,
     get_git_remote_sync_status,
     get_git_working_tree_status,
 )
@@ -42,7 +40,6 @@ from lza_workbench.status.summary import (
 from lza_workbench.workspace.context import load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.validation import (
-    WorkspaceAssessment,
     WorkspaceCapability,
 )
 

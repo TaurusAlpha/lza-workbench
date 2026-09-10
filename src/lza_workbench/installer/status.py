@@ -19,7 +19,6 @@ from lza_workbench.installer.drift import (
     calculate_configuration_drift,
     calculate_state_alignment,
 )
-from lza_workbench.installer.parameters import build_installer_cfn_parameters
 from lza_workbench.installer.versions import (
     normalize_lza_version,
     resolve_deployed_installer_version,
