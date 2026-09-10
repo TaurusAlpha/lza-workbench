@@ -9,7 +9,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from lza_workbench.errors import LzaError
-from lza_workbench.workflows.workspace_bootstrap import (
+from lza_workbench.workspace.application.bootstrap import (
     bootstrap_workspace_workflow,
     ensure_s3_workbench_assets_bucket,
     get_workbench_assets_bucket_name,
@@ -52,8 +52,8 @@ def test_plan_bootstrap_workflow_create(initialized_workspace: Path) -> None:
     write_workspace_config(initialized_workspace, config)
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
         mock_s3 = MagicMock()
@@ -77,8 +77,8 @@ def test_plan_bootstrap_workflow_no_change(initialized_workspace: Path) -> None:
     write_workspace_config(initialized_workspace, config)
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
         mock_s3 = MagicMock()
@@ -112,8 +112,8 @@ def test_bootstrap_workspace_workflow_executes_and_saves_state(
     write_workspace_config(initialized_workspace, config)
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
         mock_s3 = MagicMock()
@@ -148,8 +148,8 @@ def test_plan_bootstrap_workflow_with_codecommit_create(initialized_workspace: P
     write_workspace_config(initialized_workspace, config)
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
         mock_s3 = MagicMock()
@@ -185,8 +185,8 @@ def test_plan_bootstrap_workflow_with_codecommit_imported_missing(
     imported_workspace: Path,
 ) -> None:
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
         mock_s3 = MagicMock()
@@ -221,8 +221,8 @@ def test_plan_bootstrap_uses_configuration_repository_provider(
     write_workspace_config(initialized_workspace, config)
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
         mock_s3 = MagicMock()
@@ -255,8 +255,8 @@ def test_plan_bootstrap_does_not_recreate_git_provenance_import(
     write_workspace_state(imported_workspace, state)
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
         mock_s3 = MagicMock()
@@ -282,8 +282,8 @@ def test_plan_bootstrap_rejects_inaccessible_codecommit_before_mutation(
     initialized_workspace: Path,
 ) -> None:
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
         mock_s3 = MagicMock()
@@ -311,8 +311,8 @@ def test_bootstrap_workspace_workflow_with_codecommit_create(initialized_workspa
     write_workspace_config(initialized_workspace, config)
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
         mock_s3 = MagicMock()
@@ -355,10 +355,10 @@ def test_plan_bootstrap_workflow_with_github_source_success(
     write_workspace_config(initialized_workspace, config)
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
         patch(
-            "lza_workbench.workflows.workspace_bootstrap.validate_github_repository_access"
+            "lza_workbench.workspace.application.bootstrap.validate_github_repository_access"
         ) as mock_gh,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
@@ -397,8 +397,8 @@ def test_plan_bootstrap_workflow_with_github_source_missing_secret(
     write_workspace_config(initialized_workspace, config)
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
         mock_s3 = MagicMock()
@@ -434,8 +434,8 @@ def test_plan_bootstrap_workflow_with_github_source_allow_missing_secret(
     write_workspace_config(initialized_workspace, config)
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
         mock_s3 = MagicMock()
@@ -475,10 +475,10 @@ def test_bootstrap_workspace_workflow_with_github_token_provided(
     write_workspace_config(initialized_workspace, config)
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
         patch(
-            "lza_workbench.workflows.workspace_bootstrap.validate_github_repository_access"
+            "lza_workbench.workspace.application.bootstrap.validate_github_repository_access"
         ) as mock_gh,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}

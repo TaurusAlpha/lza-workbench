@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from lza_workbench.aws.codecommit import CodeCommitRepositoryStatus
+from lza_workbench.infrastructure.aws.codecommit import CodeCommitRepositoryStatus
 
 
 @dataclass(frozen=True)

@@ -7,11 +7,11 @@ from pathlib import Path
 import pytest
 
 from lza_workbench.errors import LzaError
-from lza_workbench.workflows.config_pull import (
+from lza_workbench.configuration.application.pull import (
     ConfigPullResult,
     pull_configuration_workflow,
 )
-from lza_workbench.workflows.config_push import (
+from lza_workbench.configuration.application.push import (
     ConfigPushResult,
     push_configuration_workflow,
 )

@@ -10,8 +10,8 @@ import pytest
 from lza_workbench.configuration.git import init_git_repository, set_git_remote_url
 from lza_workbench.configuration.templates import resolve_template_source
 from lza_workbench.errors import LzaError
-from lza_workbench.workflows.installer_plan import plan_installer_workflow
-from lza_workbench.workflows.workspace_import import (
+from lza_workbench.installer.application.plan import plan_installer_workflow
+from lza_workbench.workspace.application.import_workspace import (
     ImportWorkspaceRequest,
     WorkspaceImportResult,
     apply_workspace_import,
@@ -235,9 +235,9 @@ def test_import_workspace_live_aws_discovery(tmp_path: Path) -> None:
     }
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client",
             return_value=mock_cfn,
         ),
     ):
@@ -317,9 +317,9 @@ def test_import_workspace_live_aws_discovery_s3_repository(tmp_path: Path) -> No
     }
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client",
             return_value=mock_cfn,
         ),
     ):
@@ -347,8 +347,8 @@ def test_import_workspace_live_aws_discovery_s3_repository(tmp_path: Path) -> No
     )
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {
             "account": "123456789012",

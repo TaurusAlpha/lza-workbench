@@ -7,8 +7,8 @@ from datetime import UTC
 
 import pytest
 
-from lza_workbench.cli.input import validate_email, value_or_prompt
-from lza_workbench.cli.output import (
+from lza_workbench.interfaces.cli.input import validate_email, value_or_prompt
+from lza_workbench.interfaces.cli.output import (
     print_diff_summary,
     print_dry_run_header,
     print_error,
@@ -108,7 +108,7 @@ def test_value_or_prompt_email_validation() -> None:
 def test_format_timestamp() -> None:
     from datetime import datetime
 
-    from lza_workbench.cli.output import format_timestamp
+    from lza_workbench.interfaces.cli.output import format_timestamp
 
     assert format_timestamp(None) is None
     assert format_timestamp("") is None
@@ -133,7 +133,7 @@ def test_format_timestamp() -> None:
 
 
 def test_format_status() -> None:
-    from lza_workbench.cli.output import format_status
+    from lza_workbench.interfaces.cli.output import format_status
 
     assert "Update Complete" in format_status("UPDATE_COMPLETE")
     assert "green" in format_status("UPDATE_COMPLETE")
@@ -147,7 +147,7 @@ def test_format_status() -> None:
 
 
 def test_render_workspace_header(capsys: pytest.CaptureFixture[str]) -> None:
-    from lza_workbench.cli.output import render_workspace_header
+    from lza_workbench.interfaces.cli.output import render_workspace_header
 
     render_workspace_header(
         "LZA Test Status",
@@ -170,7 +170,7 @@ def test_render_workspace_header(capsys: pytest.CaptureFixture[str]) -> None:
 def test_render_failure_section(capsys: pytest.CaptureFixture[str]) -> None:
     from dataclasses import dataclass
 
-    from lza_workbench.cli.output import render_failure_section
+    from lza_workbench.interfaces.cli.output import render_failure_section
 
     @dataclass
     class DummyAction:

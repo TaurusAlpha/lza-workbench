@@ -7,14 +7,14 @@ from unittest.mock import MagicMock, patch
 
 from botocore.exceptions import ClientError
 
-from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult
+from lza_workbench.infrastructure.aws.cloudformation import CfnDeploymentPlanResult
 from lza_workbench.installer.planning import InstallerPlanResult
-from lza_workbench.workflows.installer_init import (
+from lza_workbench.installer.application.initialize import (
     InstallerSettingsRequest,
     apply_installer_settings,
     get_installer_parameters_schema,
 )
-from lza_workbench.workflows.installer_plan import plan_installer_workflow
+from lza_workbench.installer.application.plan import plan_installer_workflow
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.schema import (
     AwsConfig,
@@ -29,9 +29,9 @@ from lza_workbench.workspace.state import write_workspace_state
 def test_plan_installer_workflow_returns_structured_result(
     configured_workspace: Path,
 ) -> None:
-    with patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val:
+    with patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val:
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
-        with patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client:
+        with patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client:
             mock_client.return_value = MagicMock()
             result = plan_installer_workflow(
                 target_dir=configured_workspace,
@@ -68,8 +68,8 @@ def test_plan_installer_workflow_does_not_mutate_local_template(
     write_workspace_config(configured_workspace, config)
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -86,9 +86,9 @@ def test_plan_installer_workflow_marks_changed_template_for_update(
     write_workspace_state(configured_workspace, state)
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.workflows.installer_plan.inspect_cloudformation_stack") as mock_cfn,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.installer.application.plan.inspect_cloudformation_stack") as mock_cfn,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -127,8 +127,8 @@ def test_installer_init_persists_new_template_defaults(tmp_path: Path) -> None:
     )
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -172,8 +172,8 @@ def test_installer_init_prompts_for_every_selected_template_parameter(tmp_path: 
         return "mandatory-value" if default is None else "accepted-optional-value"
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -345,9 +345,9 @@ def test_installer_plan_github_secret_check(tmp_path: Path) -> None:
         return MagicMock()
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client",
             side_effect=client_side_effect,
         ),
     ):

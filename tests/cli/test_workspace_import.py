@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from lza_workbench.cli import app
+from lza_workbench.interfaces.cli import app
 from lza_workbench.configuration.git import init_git_repository, set_git_remote_url
 from lza_workbench.configuration.templates import (
     REQUIRED_TEMPLATE_FILES,
@@ -272,9 +272,9 @@ def test_cli_import_live_aws_discovery_display(
     }
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client",
             return_value=mock_cfn,
         ),
     ):

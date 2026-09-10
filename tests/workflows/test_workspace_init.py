@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lza_workbench.workflows.workspace_init import (
+from lza_workbench.workspace.application.initialize import (
     WorkspaceInitResult,
     init_workspace_workflow,
 )

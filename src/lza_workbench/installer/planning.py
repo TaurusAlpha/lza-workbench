@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult
+from lza_workbench.infrastructure.aws.cloudformation import CfnDeploymentPlanResult
 from lza_workbench.installer.source import CodeCommitPlanResult
 from lza_workbench.workspace.schema import WorkspaceConfig
 

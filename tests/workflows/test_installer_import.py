@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lza_workbench.errors import LzaError
-from lza_workbench.workflows.installer_import import import_installer_workflow
+from lza_workbench.installer.application.import_deployed import import_installer_workflow
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.schema import (
     AwsConfig,
@@ -92,9 +92,9 @@ def test_import_installer_workflow_success(tmp_path: Path) -> None:
         return MagicMock()
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client",
             side_effect=mock_get_client,
         ),
     ):
@@ -155,9 +155,9 @@ def test_import_installer_workflow_dry_run(tmp_path: Path) -> None:
     }
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client",
             return_value=mock_cfn,
         ),
     ):
@@ -189,9 +189,9 @@ def test_import_installer_requires_live_template_for_sync(tmp_path: Path) -> Non
     mock_cfn.get_template.return_value = {}
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client",
             return_value=mock_cfn,
         ),
     ):
@@ -216,9 +216,9 @@ def test_import_installer_workflow_missing_stack_raises(tmp_path: Path) -> None:
     )
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client",
             return_value=mock_cfn,
         ),
     ):

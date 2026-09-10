@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from botocore.exceptions import ClientError, EndpointConnectionError
 
-from lza_workbench.aws.errors import AwsErrorCategory, classify_aws_error
+from lza_workbench.infrastructure.aws.errors import AwsErrorCategory, classify_aws_error
 
 
 def _make_client_error(code: str, message: str) -> ClientError:

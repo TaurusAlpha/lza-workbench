@@ -7,13 +7,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from lza_workbench.aws.cloudformation import (
+from lza_workbench.infrastructure.aws.cloudformation import (
     CfnDeploymentPlanResult,
     CfnStackStatusResult,
 )
-from lza_workbench.aws.context import AwsExecutionContext
+from lza_workbench.infrastructure.aws.session import AwsExecutionContext
 from lza_workbench.errors import LzaError
-from lza_workbench.workflows.installer_deploy import (
+from lza_workbench.installer.application.deploy import (
     InstallerDeploymentPreparation,
     InstallerDeployResult,
     apply_installer_deployment,
@@ -26,11 +26,11 @@ from lza_workbench.workspace.state import load_workspace_state, write_workspace_
 
 def test_deploy_installer_workflow_dry_run(configured_workspace: Path) -> None:
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
         patch("lza_workbench.installer.deployment.inspect_installer_source") as mock_src,
         patch(
-            "lza_workbench.workflows.installer_deploy.inspect_cloudformation_stack"
+            "lza_workbench.installer.application.deploy.inspect_cloudformation_stack"
         ) as mock_inspect,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
@@ -55,9 +55,9 @@ def test_deploy_installer_workflow_dry_run(configured_workspace: Path) -> None:
         assert result.stack_name == "AWSAccelerator-InstallerStack"
 
 
-@patch("lza_workbench.workflows.installer_deploy.inspect_cloudformation_stack")
-@patch("lza_workbench.workflows.installer_deploy.inspect_installer_source")
-@patch("lza_workbench.workflows.installer_deploy.resolve_aws_execution_context")
+@patch("lza_workbench.installer.application.deploy.inspect_cloudformation_stack")
+@patch("lza_workbench.installer.application.deploy.inspect_installer_source")
+@patch("lza_workbench.installer.application.deploy.resolve_aws_execution_context")
 def test_prepare_installer_deployment_updates_for_changed_template(
     mock_resolve_context: MagicMock,
     mock_inspect_source: MagicMock,
@@ -92,10 +92,10 @@ def test_prepare_installer_deployment_updates_for_changed_template(
     assert preparation.operation == "UPDATE"
 
 
-@patch("lza_workbench.workflows.installer_deploy.stream_cloudformation_stack_events")
-@patch("lza_workbench.workflows.installer_deploy.deploy_cloudformation_stack")
-@patch("lza_workbench.workflows.installer_deploy.upload_s3_file")
-@patch("lza_workbench.workflows.installer_deploy.inspect_s3_bucket")
+@patch("lza_workbench.installer.application.deploy.stream_cloudformation_stack_events")
+@patch("lza_workbench.installer.application.deploy.deploy_cloudformation_stack")
+@patch("lza_workbench.installer.application.deploy.upload_s3_file")
+@patch("lza_workbench.installer.application.deploy.inspect_s3_bucket")
 def test_apply_installer_deployment_records_terminal_failure(
     mock_inspect_bucket: MagicMock,
     mock_upload: MagicMock,
@@ -131,7 +131,7 @@ def test_apply_installer_deployment_records_terminal_failure(
         profile="test",
         account_id="123456789012",
     )
-    from lza_workbench.aws.s3 import S3BucketObservation
+    from lza_workbench.infrastructure.aws.s3 import S3BucketObservation
 
     mock_inspect_bucket.return_value = S3BucketObservation(exists=True, accessible=True)
     mock_deploy.return_value = "stack-id"

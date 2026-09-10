@@ -7,10 +7,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from lza_workbench.aws.codepipeline import PipelineExecutionResult
+from lza_workbench.infrastructure.aws.codepipeline import PipelineExecutionResult
 from lza_workbench.errors import LzaError
 from lza_workbench.pipeline.failures import PipelineActionFailure
-from lza_workbench.workflows.pipeline_watch import (
+from lza_workbench.pipeline.watcher import (
     PipelineWatchResult,
     PipelineWatchUpdate,
     watch_pipeline_workflow,
@@ -55,9 +55,9 @@ def test_watch_pipeline_success(configured_workspace: Path) -> None:
     updates: list[PipelineWatchUpdate] = []
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client", return_value=mock_client
         ),
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
@@ -92,12 +92,12 @@ def test_watch_pipeline_ignores_execution_for_a_different_recorded_pipeline(
     mock_client.get_pipeline_state.return_value = {"stageStates": []}
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client", return_value=mock_client
         ),
         patch(
-            "lza_workbench.workflows.pipeline_watch.get_latest_pipeline_execution_id",
+            "lza_workbench.pipeline.watcher.get_latest_pipeline_execution_id",
             return_value="exec-current-pipeline",
         ) as mock_latest,
     ):
@@ -138,9 +138,9 @@ def test_watch_pipeline_failed_action(configured_workspace: Path) -> None:
     }
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client", return_value=mock_client
         ),
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
@@ -221,9 +221,9 @@ def test_watch_pipeline_failed_action_with_codebuild_diagnostics(
         return MagicMock()
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client",
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client",
             side_effect=get_client,
         ),
     ):
@@ -250,9 +250,9 @@ def test_watch_pipeline_no_execution_id(configured_workspace: Path) -> None:
     mock_client.get_pipeline_state.return_value = {"stageStates": []}
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client", return_value=mock_client
         ),
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
@@ -273,12 +273,12 @@ def test_watch_pipeline_stops_when_execution_is_not_found(configured_workspace: 
     )
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client", return_value=mock_client
         ),
         patch(
-            "lza_workbench.workflows.pipeline_watch.observe_pipeline_execution",
+            "lza_workbench.pipeline.watcher.observe_pipeline_execution",
             return_value=missing_execution,
         ),
     ):
@@ -321,9 +321,9 @@ def test_watch_pipeline_timeout(configured_workspace: Path) -> None:
     times = [0.0, 100.0, 100.0]
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client", return_value=mock_client
         ),
         patch("time.time", side_effect=times),
     ):

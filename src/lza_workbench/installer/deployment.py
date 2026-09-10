@@ -6,11 +6,11 @@ from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 
-from lza_workbench.aws.client_factory import AwsClientFactory
-from lza_workbench.aws.cloudformation import CfnDeploymentPlanResult
-from lza_workbench.aws.codecommit import inspect_codecommit_repository
-from lza_workbench.aws.s3 import inspect_s3_object
-from lza_workbench.aws.secrets_manager import inspect_secret_exists
+from lza_workbench.infrastructure.aws.session import AwsClientFactory
+from lza_workbench.infrastructure.aws.cloudformation import CfnDeploymentPlanResult
+from lza_workbench.infrastructure.aws.codecommit import inspect_codecommit_repository
+from lza_workbench.infrastructure.aws.s3 import inspect_s3_object
+from lza_workbench.infrastructure.aws.secrets_manager import inspect_secret_exists
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.config import (
     InstallerConfigValidationResult,

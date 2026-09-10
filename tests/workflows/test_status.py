@@ -7,11 +7,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import lza_workbench.workflows.status_root as status_root_mod
-from lza_workbench.aws.cloudformation import CfnStackStatusResult
-from lza_workbench.aws.codecommit import CodeCommitRepositoryStatus
-from lza_workbench.aws.codepipeline import PipelineStateResult
-from lza_workbench.cli.commands.status_root import render_root_status
+import lza_workbench.status.observer as status_root_mod
+from lza_workbench.infrastructure.aws.cloudformation import CfnStackStatusResult
+from lza_workbench.infrastructure.aws.codecommit import CodeCommitRepositoryStatus
+from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult
+from lza_workbench.interfaces.cli.status import render_root_status
 from lza_workbench.configuration.git import GitRemoteSyncStatus
 from lza_workbench.configuration.status import (
     CodeCommitConfigurationRepositoryStatus,
@@ -23,16 +23,16 @@ from lza_workbench.installer.sync import (
     sync_installer_config,
     sync_installer_state,
 )
-from lza_workbench.workflows.status_config import (
+from lza_workbench.configuration.application.status import (
     ConfigurationStatusResult,
     get_config_status_workflow,
 )
-from lza_workbench.workflows.status_installer import (
+from lza_workbench.installer.application.status import (
     InstallerStatusResult,
     get_installer_status_workflow,
     prepare_installer_status,
 )
-from lza_workbench.workflows.status_root import (
+from lza_workbench.status.observer import (
     ConfigurationRepoSummary,
     InstallerStackSummary,
     PipelineSummary,
@@ -53,13 +53,13 @@ from lza_workbench.workspace.state import load_workspace_state
 def test_get_root_status_workflow(configured_workspace: Path) -> None:
     with (
         patch(
-            "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+            "lza_workbench.status.observer.resolve_aws_execution_context",
             wraps=status_root_mod.resolve_aws_execution_context,
         ) as mock_resolve_aws,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
         patch(
-            "lza_workbench.workflows.status_root.get_pipeline_state",
+            "lza_workbench.status.observer.get_pipeline_state",
             wraps=status_root_mod.get_pipeline_state,
         ) as mock_pipe_state,
     ):
@@ -98,8 +98,8 @@ def test_get_root_status_workflow(configured_workspace: Path) -> None:
 
 def test_get_config_status_workflow(configured_workspace: Path) -> None:
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         s3_mock = MagicMock()
@@ -168,8 +168,8 @@ def test_get_config_status_workflow_s3_derived_bucket(tmp_path: Path) -> None:
     config.configuration.repository.bucket = None
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         s3_mock = MagicMock()
@@ -208,10 +208,10 @@ def test_get_config_status_workflow_codecommit(tmp_path: Path) -> None:
     config.configuration.repository.branch = "main"
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.workflows.status_config.inspect_codecommit_repository") as mock_cc,
-        patch("lza_workbench.workflows.status_config.get_pipeline_state") as mock_pipe,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.configuration.application.status.inspect_codecommit_repository") as mock_cc,
+        patch("lza_workbench.configuration.application.status.get_pipeline_state") as mock_pipe,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -250,9 +250,9 @@ def test_get_config_status_workflow_codeconnection(tmp_path: Path) -> None:
     config.configuration.repository.repository_name = "my-repo"
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.workflows.status_config.inspect_codeconnection") as mock_conn,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.configuration.application.status.inspect_codeconnection") as mock_conn,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -326,11 +326,11 @@ def test_git_working_tree_and_remote_sync_helpers(tmp_path: Path) -> None:
 
 def test_get_root_status_workflow_live_healthy(configured_workspace: Path) -> None:
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.workflows.status_root.get_cloudformation_stack_status") as mock_cfn,
-        patch("lza_workbench.workflows.status_root.get_pipeline_state") as mock_pipe_state,
-        patch("lza_workbench.workflows.status_root.get_pipeline_execution") as mock_pipe_exec,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.status.observer.get_cloudformation_stack_status") as mock_cfn,
+        patch("lza_workbench.status.observer.get_pipeline_state") as mock_pipe_state,
+        patch("lza_workbench.status.observer.get_pipeline_execution") as mock_pipe_exec,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -399,11 +399,11 @@ def test_get_root_status_workflow_aws_unavailable_fallback_with_state(
     )
     mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=state)
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.load_workspace_context",
+        "lza_workbench.status.observer.load_workspace_context",
         lambda *_args, **_kwargs: mock_ctx,
     )
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        "lza_workbench.status.observer.resolve_aws_execution_context",
         lambda **_kwargs: MagicMock(
             factory=MagicMock(),
             region="us-east-1",
@@ -445,11 +445,11 @@ def test_get_root_status_workflow_aws_unavailable_fallback_no_state(
     )
     mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=None)
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.load_workspace_context",
+        "lza_workbench.status.observer.load_workspace_context",
         lambda *_args, **_kwargs: mock_ctx,
     )
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        "lza_workbench.status.observer.resolve_aws_execution_context",
         lambda **_kwargs: MagicMock(
             factory=MagicMock(),
             region="us-east-1",
@@ -521,11 +521,11 @@ def test_get_root_status_evaluates_git_sync_when_aws_unavailable(
 
     mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=None)
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.load_workspace_context",
+        "lza_workbench.status.observer.load_workspace_context",
         lambda *_args, **_kwargs: mock_ctx,
     )
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        "lza_workbench.status.observer.resolve_aws_execution_context",
         lambda **_kwargs: MagicMock(
             factory=MagicMock(),
             region="us-east-1",
@@ -534,7 +534,7 @@ def test_get_root_status_evaluates_git_sync_when_aws_unavailable(
         ),
     )
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.get_git_working_tree_status",
+        "lza_workbench.status.observer.get_git_working_tree_status",
         lambda _dir: MagicMock(branch="main", has_uncommitted=False, uncommitted_count=0),
     )
     sync_status = GitRemoteSyncStatus(
@@ -545,7 +545,7 @@ def test_get_root_status_evaluates_git_sync_when_aws_unavailable(
     )
     mock_get_sync = MagicMock(return_value=sync_status)
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.get_git_remote_sync_status",
+        "lza_workbench.status.observer.get_git_remote_sync_status",
         mock_get_sync,
     )
 
@@ -571,13 +571,13 @@ def test_root_status_non_git_directory_renders_remote_sync_fallback(
 
     mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=None)
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.load_workspace_context",
+        "lza_workbench.status.observer.load_workspace_context",
         lambda *_args, **_kwargs: mock_ctx,
     )
 
     # 1. AWS Live -> Remote Sync displays Not Git
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        "lza_workbench.status.observer.resolve_aws_execution_context",
         lambda **_kwargs: MagicMock(
             factory=MagicMock(),
             region="us-east-1",
@@ -593,7 +593,7 @@ def test_root_status_non_git_directory_renders_remote_sync_fallback(
 
     # 2. AWS Unavailable -> Remote Sync displays Not Checked (AWS Unavailable)
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        "lza_workbench.status.observer.resolve_aws_execution_context",
         lambda **_kwargs: MagicMock(
             factory=MagicMock(),
             region="us-east-1",
@@ -618,13 +618,13 @@ def test_root_status_missing_directory_renders_remote_sync_fallback(
 
     mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=None)
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.load_workspace_context",
+        "lza_workbench.status.observer.load_workspace_context",
         lambda *_args, **_kwargs: mock_ctx,
     )
 
     # 1. AWS Live -> Remote Sync displays Not Git
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        "lza_workbench.status.observer.resolve_aws_execution_context",
         lambda **_kwargs: MagicMock(
             factory=MagicMock(),
             region="us-east-1",
@@ -640,7 +640,7 @@ def test_root_status_missing_directory_renders_remote_sync_fallback(
 
     # 2. AWS Unavailable -> Remote Sync displays Not Checked (AWS Unavailable)
     monkeypatch.setattr(
-        "lza_workbench.workflows.status_root.resolve_aws_execution_context",
+        "lza_workbench.status.observer.resolve_aws_execution_context",
         lambda **_kwargs: MagicMock(
             factory=MagicMock(),
             region="us-east-1",
@@ -657,12 +657,12 @@ def test_root_status_missing_directory_renders_remote_sync_fallback(
 
 def test_get_installer_status_workflow(configured_workspace: Path) -> None:
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
         patch(
-            "lza_workbench.workflows.status_installer.get_cloudformation_stack_status"
+            "lza_workbench.installer.application.status.get_cloudformation_stack_status"
         ) as mock_st,
-        patch("lza_workbench.workflows.status_installer.get_pipeline_state") as mock_pipe,
+        patch("lza_workbench.installer.application.status.get_pipeline_state") as mock_pipe,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -822,9 +822,9 @@ def test_get_config_status_prefers_observed_pipeline_state_over_recorded_state(
     )
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.workflows.status_config.get_pipeline_state") as mock_pipeline_state,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.configuration.application.status.get_pipeline_state") as mock_pipeline_state,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_pipeline_state.return_value = MagicMock(
@@ -846,7 +846,7 @@ def test_get_config_status_prefers_observed_pipeline_state_over_recorded_state(
 
 
 def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: Path) -> None:
-    from lza_workbench.aws.codepipeline import ActionStateResult, StageStateResult
+    from lza_workbench.infrastructure.aws.codepipeline import ActionStateResult, StageStateResult
 
     config = WorkspaceConfig(
         customer=CustomerConfig(name="Test Customer", slug="test-customer"),
@@ -876,10 +876,10 @@ def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: 
     )
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.workflows.status_config.get_pipeline_state") as mock_get_pipe,
-        patch("lza_workbench.workflows.status_config.fetch_codebuild_diagnostics") as mock_diag,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.configuration.application.status.get_pipeline_state") as mock_get_pipe,
+        patch("lza_workbench.configuration.application.status.fetch_codebuild_diagnostics") as mock_diag,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -934,8 +934,8 @@ def test_get_config_status_workflow_s3_remote_sync(tmp_path: Path) -> None:
     }
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = mock_s3

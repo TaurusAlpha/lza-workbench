@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lza_workbench.errors import LzaError
-from lza_workbench.workflows.pipeline_start import (
+from lza_workbench.pipeline.application.start import (
     PipelineStartResult,
     start_pipeline_workflow,
 )
@@ -31,9 +31,9 @@ def test_start_pipeline_success(configured_workspace: Path) -> None:
     mock_client.start_pipeline_execution.return_value = {"pipelineExecutionId": "exec-abc-123"}
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client", return_value=mock_client
         ),
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
@@ -55,9 +55,9 @@ def test_start_pipeline_installer_type(configured_workspace: Path) -> None:
     mock_client.start_pipeline_execution.return_value = {"pipelineExecutionId": "exec-inst-456"}
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client", return_value=mock_client
         ),
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
@@ -81,9 +81,9 @@ def test_start_pipeline_records_explicit_pipeline_name(configured_workspace: Pat
     mock_client.start_pipeline_execution.return_value = {"pipelineExecutionId": "exec-custom-456"}
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client", return_value=mock_client
         ),
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
@@ -110,9 +110,9 @@ def test_start_pipeline_blocks_concurrent_execution(configured_workspace: Path) 
     }
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client", return_value=mock_client
         ),
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
@@ -129,9 +129,9 @@ def test_start_pipeline_allows_concurrent_execution_when_requested(
     mock_client.start_pipeline_execution.return_value = {"pipelineExecutionId": "exec-concurrent"}
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client", return_value=mock_client
         ),
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
@@ -151,12 +151,12 @@ def test_start_pipeline_reports_execution_id_when_state_save_fails(
     mock_client.start_pipeline_execution.return_value = {"pipelineExecutionId": "exec-lost"}
 
     with (
-        patch("lza_workbench.aws.client_factory.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch(
-            "lza_workbench.aws.client_factory.AwsClientFactory.get_client", return_value=mock_client
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client", return_value=mock_client
         ),
         patch(
-            "lza_workbench.workflows.pipeline_start.write_workspace_state",
+            "lza_workbench.pipeline.application.start.write_workspace_state",
             side_effect=OSError("disk full"),
         ),
     ):

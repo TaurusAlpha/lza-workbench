@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from lza_workbench.aws.cloudformation import get_cloudformation_stack_template
-from lza_workbench.aws.ssm import get_parameter_value
+from lza_workbench.infrastructure.aws.cloudformation import get_cloudformation_stack_template
+from lza_workbench.infrastructure.aws.ssm import get_parameter_value
 from lza_workbench.installer.templates import extract_template_version
 from lza_workbench.installer.versions import normalize_lza_version
 

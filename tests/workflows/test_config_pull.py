@@ -6,8 +6,8 @@ from unittest.mock import Mock
 import pytest
 
 from lza_workbench.errors import LzaError
-from lza_workbench.workflows.config_pull import pull_configuration_workflow
-from lza_workbench.workflows.config_push import push_configuration_workflow
+from lza_workbench.configuration.application.pull import pull_configuration_workflow
+from lza_workbench.configuration.application.push import push_configuration_workflow
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
@@ -41,7 +41,7 @@ def test_s3_destination_persistence(
     }
     resolver = Mock(return_value=mock_aws_execution_context)
     monkeypatch.setattr(
-        f"lza_workbench.workflows.config_{operation}.resolve_aws_execution_context", resolver
+        f"lza_workbench.configuration.application.{operation}.resolve_aws_execution_context", resolver
     )
     client = mock_aws_execution_context.factory.get_client.return_value
     client.head_object.return_value = {}
@@ -81,7 +81,7 @@ def test_imported_s3_pull_then_push(
     state.imported = True
     write_workspace_state(configured_workspace, state)
     monkeypatch.setattr(
-        "lza_workbench.workflows.config_pull.resolve_aws_execution_context",
+        "lza_workbench.configuration.application.pull.resolve_aws_execution_context",
         lambda **kwargs: mock_aws_execution_context,
     )
     client = mock_aws_execution_context.factory.get_client.return_value

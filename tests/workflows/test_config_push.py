@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from lza_workbench.errors import LzaError
-from lza_workbench.workflows.config_push import (
+from lza_workbench.configuration.application.push import (
     ConfigPushRequest,
     apply_config_push,
     push_configuration_workflow,

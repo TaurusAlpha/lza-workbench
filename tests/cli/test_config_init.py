@@ -7,17 +7,17 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from lza_workbench.cli.main import app
+from lza_workbench.interfaces.cli.main import app
 from lza_workbench.configuration.rendering import (
     render_template_text,
     resolve_path_value,
 )
 from lza_workbench.configuration.templates import list_packaged_templates
-from lza_workbench.workflows.config_init import (
+from lza_workbench.configuration.application.initialize import (
     ConfigInitResult,
     init_config_workflow,
 )
-from lza_workbench.workflows.workspace_init import (
+from lza_workbench.workspace.application.initialize import (
     init_workspace_workflow,
 )
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
@@ -309,7 +309,7 @@ def test_config_init_cli_single_template_no_prompt(
 ) -> None:
     monkeypatch.chdir(workspace_without_config)
     monkeypatch.setattr(
-        "lza_workbench.cli.commands.config_init.list_packaged_templates",
+        "lza_workbench.interfaces.cli.configuration.list_packaged_templates",
         lambda: ["default"],
     )
 
@@ -324,7 +324,7 @@ def test_config_init_cli_multiple_templates_explicit_flag(
 ) -> None:
     monkeypatch.chdir(workspace_without_config)
     monkeypatch.setattr(
-        "lza_workbench.cli.commands.config_init.list_packaged_templates",
+        "lza_workbench.interfaces.cli.configuration.list_packaged_templates",
         lambda: ["default", "custom-corp"],
     )
 
@@ -339,7 +339,7 @@ def test_config_init_cli_multiple_templates_prompt_selection(
 ) -> None:
     monkeypatch.chdir(workspace_without_config)
     monkeypatch.setattr(
-        "lza_workbench.cli.commands.config_init.list_packaged_templates",
+        "lza_workbench.interfaces.cli.configuration.list_packaged_templates",
         lambda: ["default", "enterprise"],
     )
 
@@ -361,7 +361,7 @@ def test_config_init_cli_multiple_templates_prompt_selection(
             config=cfg,
         )
 
-    monkeypatch.setattr("lza_workbench.cli.commands.config_init.init_config_workflow", mock_init)
+    monkeypatch.setattr("lza_workbench.interfaces.cli.configuration.init_config_workflow", mock_init)
 
     res = runner.invoke(app, ["config", "init"], input="2\n")
     assert res.exit_code == 0
@@ -542,7 +542,7 @@ def test_config_init_git_failure_surfaces_clean_error(
     def mock_fail(repo_dir: Path) -> None:
         raise LzaError("Simulated git initialization failure")
 
-    monkeypatch.setattr("lza_workbench.workflows.config_init.init_git_repository", mock_fail)
+    monkeypatch.setattr("lza_workbench.configuration.application.initialize.init_git_repository", mock_fail)
 
     with pytest.raises(LzaError, match="Simulated git initialization failure"):
         init_config_workflow(

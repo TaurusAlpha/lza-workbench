@@ -20,8 +20,8 @@ dependencies = [
 ]
 
 [project.scripts]
-lza = "lza_workbench.cli:main"
-lza-workbench = "lza_workbench.cli:main"
+lza = "lza_workbench.interfaces.cli.main:main"
+lza-workbench = "lza_workbench.interfaces.cli.main:main"
 
 [dependency-groups]
 dev = [
@@ -57,12 +57,12 @@ root_packages = ["lza_workbench"]
 name = "Layered architecture"
 type = "layers"
 layers = [
-  "lza_workbench.cli | lza_workbench.web",
-  "lza_workbench.workflows",
-  "lza_workbench.configuration : lza_workbench.installer : lza_workbench.pipeline : lza_workbench.workspace",
-  "lza_workbench.aws",
+  "lza_workbench.interfaces.cli | lza_workbench.interfaces.web",
+  "lza_workbench.configuration.application | lza_workbench.installer.application | lza_workbench.pipeline.application | lza_workbench.workspace.application",
+  "lza_workbench.configuration : lza_workbench.installer : lza_workbench.pipeline : lza_workbench.workspace : lza_workbench.status",
+  "lza_workbench.infrastructure.aws | lza_workbench.infrastructure.github",
 ]
-ignore_imports = ["lza_workbench.cli.main -> lza_workbench.web.main"]
+ignore_imports = ["lza_workbench.interfaces.cli.main -> lza_workbench.interfaces.web.main"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
