@@ -19,7 +19,7 @@ from lza_workbench.configuration.application.pull import (
     ConfigPullResult,
     apply_config_pull,
     prepare_config_pull,
-    pull_config_workflow,
+    pull_configuration_workflow,
 )
 from lza_workbench.configuration.application.push import (
     ConfigPushPreparation,
@@ -27,7 +27,7 @@ from lza_workbench.configuration.application.push import (
     ConfigPushResult,
     apply_config_push,
     prepare_config_push,
-    push_config_workflow,
+    push_configuration_workflow,
 )
 from lza_workbench.configuration.application.status import (
     CodeCommitConfigurationRepositoryStatus,
@@ -35,7 +35,7 @@ from lza_workbench.configuration.application.status import (
     ConfigurationStatusResult,
     GitConfigurationRepositoryStatus,
     S3ConfigurationRepositoryStatus,
-    status_config_workflow,
+    get_config_status_workflow,
 )
 
 __all__ = [
@@ -58,10 +58,10 @@ __all__ = [
     "apply_config_push",
     "deploy_configuration_workflow",
     "diff_configuration",
+    "get_config_status_workflow",
     "init_config_workflow",
     "prepare_config_pull",
     "prepare_config_push",
-    "pull_config_workflow",
-    "push_config_workflow",
-    "status_config_workflow",
+    "pull_configuration_workflow",
+    "push_configuration_workflow",
 ]

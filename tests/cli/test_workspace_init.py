@@ -8,9 +8,8 @@ import pytest
 from typer.testing import CliRunner
 
 from lza_workbench.interfaces.cli import app
-from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.paths import resolve_init_workspace_dir
-from lza_workbench.workspace.state import load_workspace_state
+from lza_workbench.workspace.persistence import load_workspace_config, load_workspace_state
 
 
 def test_resolve_init_workspace_dir_uses_customer_slug(

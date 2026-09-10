@@ -5,10 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from lza_workbench.errors import LzaError
-from lza_workbench.workspace.config import WORKSPACE_CONFIG_FILE, write_workspace_config
 from lza_workbench.workspace.paths import normalize_path
+from lza_workbench.workspace.persistence import (
+    WORKSPACE_CONFIG_FILE,
+    WORKSPACE_STATE_FILE,
+    write_workspace_config,
+    write_workspace_state,
+)
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
-from lza_workbench.workspace.state import WORKSPACE_STATE_FILE, write_workspace_state
 
 WORKSPACE_MANAGED_PATHS = [
     Path(".lza"),

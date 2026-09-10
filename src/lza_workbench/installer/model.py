@@ -15,12 +15,8 @@ from lza_workbench.installer.state import (
     record_installer_deployment_failure,
 )
 
-# Counterfactual aliases
-InstallerDocument = LzaInstaller
-
 __all__ = [
     "KNOWN_INSTALLER_PARAMETER_NAMES",
-    "InstallerDocument",
     "InstallerOptionsConfig",
     "InstallerSourceCodeConfig",
     "InstallerStackTemplateConfig",

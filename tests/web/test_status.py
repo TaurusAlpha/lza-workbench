@@ -44,7 +44,7 @@ from lza_workbench.pipeline.application.status import (
     PipelineSnapshotResult,
 )
 from lza_workbench.pipeline.failures import FailureCategory, FailureDiagnostic
-from lza_workbench.pipeline.models import PipelineActionState, PipelineStageState
+from lza_workbench.pipeline.model import PipelineActionState, PipelineStageState
 from lza_workbench.status.observer import (
     ConfigurationRepoSummary,
     InstallerStackSummary,
@@ -996,7 +996,7 @@ def test_workspace_init_preview_and_apply(tmp_path: Path) -> None:
         dry_run=False,
     )
 
-    with patch("lza_workbench.interfaces.web.status.init_workspace_workflow", return_value=preview_res):
+    with patch("lza_workbench.interfaces.web.status.init_workspace", return_value=preview_res):
         resp_preview = TestClient(app).post(
             "/api/workspace/init/preview",
             json={"customer_name": "New Customer"},
@@ -1006,7 +1006,7 @@ def test_workspace_init_preview_and_apply(tmp_path: Path) -> None:
     assert preview_data["customerSlug"] == "new-customer"
     assert preview_data["dryRun"] is True
 
-    with patch("lza_workbench.interfaces.web.status.init_workspace_workflow", return_value=apply_res):
+    with patch("lza_workbench.interfaces.web.status.init_workspace", return_value=apply_res):
         resp_apply = TestClient(app).post(
             "/api/workspace/init/apply",
             json={"customer_name": "New Customer"},

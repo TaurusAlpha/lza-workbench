@@ -6,9 +6,8 @@ from lza_workbench.status.model import (
     OverallHealthSummary,
     PipelineSummary,
     RootStatusResult,
-    WorkspaceSnapshot,
 )
-from lza_workbench.status.observer import status_root_workflow
+from lza_workbench.status.observer import get_root_status_workflow
 
 __all__ = [
     "ConfigurationRepoSummary",
@@ -16,6 +15,5 @@ __all__ = [
     "OverallHealthSummary",
     "PipelineSummary",
     "RootStatusResult",
-    "WorkspaceSnapshot",
-    "status_root_workflow",
+    "get_root_status_workflow",
 ]

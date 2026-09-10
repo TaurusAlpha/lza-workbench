@@ -34,7 +34,7 @@ from lza_workbench.workspace.application.import_workspace import (
 )
 from lza_workbench.workspace.application.initialize import (
     WorkspaceInitResult,
-    init_workspace_workflow,
+    init_workspace,
 )
 from lza_workbench.workspace.paths import (
     normalize_customer_slug,
@@ -130,7 +130,7 @@ def workspace_init_command(
     resolved_region = value_or_prompt("AWS region", aws_region or None, "us-east-1", interactive)
     resolved_version = value_or_prompt("LZA version", lza_version, LzaConfig().version, interactive)
 
-    result = init_workspace_workflow(
+    result = init_workspace(
         customer_name=customer_name,
         workspace_dir=resolved_ws_dir,
         aws_auth_type=aws_auth_type,

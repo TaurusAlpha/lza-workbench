@@ -612,7 +612,4 @@ __all__ = [
     "PipelineSummary",
     "RootStatusResult",
     "get_root_status_workflow",
-    "status_root_workflow",
 ]
-
-status_root_workflow = get_root_status_workflow

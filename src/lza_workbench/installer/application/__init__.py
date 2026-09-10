@@ -28,7 +28,7 @@ from lza_workbench.installer.application.plan import (
 )
 from lza_workbench.installer.application.status import (
     InstallerStatusResult,
-    status_installer_workflow,
+    get_installer_status_workflow,
 )
 
 __all__ = [
@@ -48,8 +48,8 @@ __all__ = [
     "apply_installer_settings",
     "deploy_installer_workflow",
     "get_installer_parameters_schema",
+    "get_installer_status_workflow",
     "import_installer_workflow",
     "plan_installer_workflow",
     "prepare_installer_deployment",
-    "status_installer_workflow",
 ]

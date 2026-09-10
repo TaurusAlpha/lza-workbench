@@ -10,14 +10,10 @@ from lza_workbench.status.observer import (
     RootStatusResult,
 )
 
-# Counterfactual aliases
-WorkspaceSnapshot = RootStatusResult
-
 __all__ = [
     "ConfigurationRepoSummary",
     "InstallerStackSummary",
     "OverallHealthSummary",
     "PipelineSummary",
     "RootStatusResult",
-    "WorkspaceSnapshot",
 ]

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from lza_workbench.workspace.application.initialize import (
     WorkspaceInitResult,
-    init_workspace_workflow,
+    init_workspace,
 )
 from lza_workbench.workspace.schema import WorkspaceConfig
 
@@ -26,9 +26,9 @@ def test_workspace_config_defaults() -> None:
     assert config.installer.local_path == "aws-accelerator-installer"
 
 
-def test_init_workspace_workflow_dry_run(tmp_path: Path) -> None:
+def test_init_workspace_dry_run(tmp_path: Path) -> None:
     target_dir = tmp_path / "acme-corp"
-    result = init_workspace_workflow(
+    result = init_workspace(
         customer_name="Acme Corp",
         workspace_dir=target_dir,
         aws_profile="acme-admin",
@@ -44,9 +44,9 @@ def test_init_workspace_workflow_dry_run(tmp_path: Path) -> None:
     assert not target_dir.exists()
 
 
-def test_init_workspace_workflow_execution(tmp_path: Path) -> None:
+def test_init_workspace_execution(tmp_path: Path) -> None:
     target_dir = tmp_path / "acme-corp"
-    result = init_workspace_workflow(
+    result = init_workspace(
         customer_name="Acme Corp",
         workspace_dir=target_dir,
         aws_profile="acme-admin",
@@ -62,9 +62,9 @@ def test_init_workspace_workflow_execution(tmp_path: Path) -> None:
     assert not (target_dir / "aws-accelerator-config").exists()
 
 
-def test_init_workspace_workflow_role_arn(tmp_path: Path) -> None:
+def test_init_workspace_role_arn(tmp_path: Path) -> None:
     target_dir = tmp_path / "acme-corp"
-    result = init_workspace_workflow(
+    result = init_workspace(
         customer_name="Acme Corp",
         workspace_dir=target_dir,
         aws_auth_type="role_arn",

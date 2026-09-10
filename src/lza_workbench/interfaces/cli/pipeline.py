@@ -25,7 +25,7 @@ from lza_workbench.pipeline.application.start import (
     PipelineStartResult,
     start_pipeline_workflow,
 )
-from lza_workbench.pipeline.models import PipelineActionState
+from lza_workbench.pipeline.model import PipelineActionState
 from lza_workbench.pipeline.watcher import (
     PipelineWatchResult,
     PipelineWatchUpdate,

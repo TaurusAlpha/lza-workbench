@@ -14,8 +14,12 @@ from typer.testing import CliRunner
 from lza_workbench.configuration.application.initialize import init_config_workflow
 from lza_workbench.infrastructure.aws.session import AwsExecutionContext
 from lza_workbench.installer.versions import PACKAGED_INSTALLER_VERSION
-from lza_workbench.workspace.application.initialize import init_workspace_workflow
-from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+from lza_workbench.workspace.application.initialize import init_workspace
+from lza_workbench.workspace.persistence import (
+    load_workspace_config,
+    write_workspace_config,
+    write_workspace_state,
+)
 from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,
@@ -23,7 +27,6 @@ from lza_workbench.workspace.schema import (
     WorkspaceConfig,
     WorkspaceState,
 )
-from lza_workbench.workspace.state import write_workspace_state
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -95,7 +98,7 @@ def sample_workspace_config() -> WorkspaceConfig:
 def initialized_workspace(tmp_path: Path) -> Path:
     """Create a temporary initialized workspace directory."""
     ws_dir = tmp_path / "initialized-workspace"
-    init_workspace_workflow(
+    init_workspace(
         customer_name="Acme Corp",
         workspace_dir=ws_dir,
         aws_profile="acme-root",
@@ -139,7 +142,7 @@ def imported_workspace(tmp_path: Path) -> Path:
 def configured_workspace(tmp_path: Path) -> Path:
     """Create a fully configured workspace with configuration and installer setup."""
     ws_dir = tmp_path / "configured-workspace"
-    init_workspace_workflow(
+    init_workspace(
         customer_name="Acme Corp",
         workspace_dir=ws_dir,
         aws_profile="acme-root",

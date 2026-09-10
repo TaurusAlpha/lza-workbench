@@ -12,7 +12,7 @@ from lza_workbench.pipeline.application.start import (
     PipelineStartResult,
     start_pipeline_workflow,
 )
-from lza_workbench.workspace.state import load_workspace_state
+from lza_workbench.workspace.persistence import load_workspace_state
 
 
 def test_start_pipeline_dry_run(configured_workspace: Path) -> None:

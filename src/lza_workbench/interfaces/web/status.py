@@ -74,7 +74,7 @@ from lza_workbench.workspace.application.import_workspace import (
 )
 from lza_workbench.workspace.application.initialize import (
     WorkspaceInitResult,
-    init_workspace_workflow,
+    init_workspace,
 )
 
 
@@ -197,7 +197,7 @@ def _register_workspace_routes(router: APIRouter, context: ActiveWorkspaceContex
     @router.post("/api/workspace/init/preview")
     def preview_workspace_init(payload: WorkspaceInitPayload) -> dict[str, Any]:
         target_dir = Path(payload.workspace_dir).expanduser() if payload.workspace_dir else None
-        result = init_workspace_workflow(
+        result = init_workspace(
             customer_name=payload.customer_name,
             workspace_dir=target_dir,
             aws_auth_type=payload.aws_auth_type,
@@ -214,7 +214,7 @@ def _register_workspace_routes(router: APIRouter, context: ActiveWorkspaceContex
     @router.post("/api/workspace/init/apply")
     def apply_workspace_init_endpoint(payload: WorkspaceInitPayload) -> dict[str, Any]:
         target_dir = Path(payload.workspace_dir).expanduser() if payload.workspace_dir else None
-        result = init_workspace_workflow(
+        result = init_workspace(
             customer_name=payload.customer_name,
             workspace_dir=target_dir,
             aws_auth_type=payload.aws_auth_type,

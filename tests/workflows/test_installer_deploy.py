@@ -20,8 +20,11 @@ from lza_workbench.installer.application.deploy import (
     deploy_installer_workflow,
     prepare_installer_deployment,
 )
-from lza_workbench.workspace.config import load_workspace_config
-from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
+from lza_workbench.workspace.persistence import (
+    load_workspace_config,
+    load_workspace_state,
+    write_workspace_state,
+)
 
 
 def test_deploy_installer_workflow_dry_run(configured_workspace: Path) -> None:

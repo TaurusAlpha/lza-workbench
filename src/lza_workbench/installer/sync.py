@@ -11,9 +11,8 @@ from lza_workbench.infrastructure.aws.cloudformation import CfnStackStatusResult
 from lza_workbench.installer.parameters import apply_deployed_installer_parameters
 from lza_workbench.installer.templates import INSTALLER_TEMPLATE_FILENAME
 from lza_workbench.installer.versions import normalize_lza_version
-from lza_workbench.workspace.config import write_workspace_config
+from lza_workbench.workspace.persistence import write_workspace_config, write_workspace_state
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
-from lza_workbench.workspace.state import write_workspace_state
 
 
 def apply_installer_state_sync(

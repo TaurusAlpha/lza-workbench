@@ -396,14 +396,11 @@ def _handle_git_push(
     )
 
 
-push_config_workflow = push_configuration_workflow
-
 __all__ = [
     "ConfigPushPreparation",
     "ConfigPushRequest",
     "ConfigPushResult",
     "apply_config_push",
     "prepare_config_push",
-    "push_config_workflow",
     "push_configuration_workflow",
 ]

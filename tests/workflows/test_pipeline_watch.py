@@ -15,7 +15,7 @@ from lza_workbench.pipeline.watcher import (
     PipelineWatchUpdate,
     watch_pipeline_workflow,
 )
-from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
+from lza_workbench.workspace.persistence import load_workspace_state, write_workspace_state
 
 
 @pytest.fixture(autouse=True)

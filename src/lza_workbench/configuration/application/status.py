@@ -471,7 +471,4 @@ __all__ = [
     "LocalGitStatus",
     "S3ConfigurationRepositoryStatus",
     "get_config_status_workflow",
-    "status_config_workflow",
 ]
-
-status_config_workflow = get_config_status_workflow

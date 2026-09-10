@@ -1,0 +1,226 @@
+[
+  {
+    "complexity": 16,
+    "file_name": "status.py",
+    "function_name": "_inspect_configuration_pipeline",
+    "path": "src/lza_workbench/configuration/application/status.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 21,
+    "file_name": "status.py",
+    "function_name": "get_config_status_workflow",
+    "path": "src/lza_workbench/configuration/application/status.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 17,
+    "file_name": "sync.py",
+    "function_name": "_evaluate_live_drift",
+    "path": "src/lza_workbench/configuration/sync.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 25,
+    "file_name": "templates.py",
+    "function_name": "render_and_copy_template",
+    "path": "src/lza_workbench/configuration/templates.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 21,
+    "file_name": "cloudformation.py",
+    "function_name": "stream_cloudformation_stack_events",
+    "path": "src/lza_workbench/infrastructure/aws/cloudformation.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 17,
+    "file_name": "s3.py",
+    "function_name": "inspect_s3_bucket",
+    "path": "src/lza_workbench/infrastructure/aws/s3.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 20,
+    "file_name": "github.py",
+    "function_name": "validate_github_repository_access",
+    "path": "src/lza_workbench/infrastructure/github.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 16,
+    "file_name": "plan.py",
+    "function_name": "plan_installer_workflow",
+    "path": "src/lza_workbench/installer/application/plan.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 20,
+    "file_name": "source.py",
+    "function_name": "validate_github_repository_access",
+    "path": "src/lza_workbench/installer/source.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 20,
+    "file_name": "configuration.py",
+    "function_name": "config_init_command",
+    "path": "src/lza_workbench/interfaces/cli/configuration.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 21,
+    "file_name": "configuration.py",
+    "function_name": "render_config_pull_result",
+    "path": "src/lza_workbench/interfaces/cli/configuration.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 31,
+    "file_name": "configuration.py",
+    "function_name": "render_config_init_result",
+    "path": "src/lza_workbench/interfaces/cli/configuration.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 18,
+    "file_name": "input.py",
+    "function_name": "value_or_prompt",
+    "path": "src/lza_workbench/interfaces/cli/input.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 16,
+    "file_name": "installer.py",
+    "function_name": "installer_deploy_command",
+    "path": "src/lza_workbench/interfaces/cli/installer.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 34,
+    "file_name": "output.py",
+    "function_name": "render_failure_section",
+    "path": "src/lza_workbench/interfaces/cli/output.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 51,
+    "file_name": "pipeline.py",
+    "function_name": "render_pipeline_watch_result",
+    "path": "src/lza_workbench/interfaces/cli/pipeline.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 17,
+    "file_name": "status.py",
+    "function_name": "_render_resources",
+    "path": "src/lza_workbench/interfaces/cli/status.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 22,
+    "file_name": "status.py",
+    "function_name": "render_root_status",
+    "path": "src/lza_workbench/interfaces/cli/status.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 25,
+    "file_name": "status.py",
+    "function_name": "_render_local_config",
+    "path": "src/lza_workbench/interfaces/cli/status.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 16,
+    "file_name": "workspace.py",
+    "function_name": "_render_bootstrap_plan",
+    "path": "src/lza_workbench/interfaces/cli/workspace.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 18,
+    "file_name": "workspace.py",
+    "function_name": "workspace_bootstrap_command",
+    "path": "src/lza_workbench/interfaces/cli/workspace.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 19,
+    "file_name": "status.py",
+    "function_name": "serialize_configuration_status",
+    "path": "src/lza_workbench/interfaces/web/status.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 25,
+    "file_name": "status.py",
+    "function_name": "serialize_installer_status",
+    "path": "src/lza_workbench/interfaces/web/status.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 20,
+    "file_name": "status.py",
+    "function_name": "_find_active_and_failed_actions",
+    "path": "src/lza_workbench/pipeline/application/status.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 18,
+    "file_name": "failures.py",
+    "function_name": "_deduplicate_messages",
+    "path": "src/lza_workbench/pipeline/failures.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 18,
+    "file_name": "failures.py",
+    "function_name": "deduplicate_failure_diagnostics",
+    "path": "src/lza_workbench/pipeline/failures.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 18,
+    "file_name": "failures.py",
+    "function_name": "extract_log_error_diagnostics",
+    "path": "src/lza_workbench/pipeline/failures.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 19,
+    "file_name": "failures.py",
+    "function_name": "_build_diagnostic_details",
+    "path": "src/lza_workbench/pipeline/failures.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 22,
+    "file_name": "failures.py",
+    "function_name": "fetch_codebuild_diagnostics",
+    "path": "src/lza_workbench/pipeline/failures.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 24,
+    "file_name": "failures.py",
+    "function_name": "_recognize_cloudformation",
+    "path": "src/lza_workbench/pipeline/failures.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 22,
+    "file_name": "state.py",
+    "function_name": "_extract_watch_failure_details",
+    "path": "src/lza_workbench/pipeline/state.py",
+    "refactor_plans": []
+  },
+  {
+    "complexity": 27,
+    "file_name": "watcher.py",
+    "function_name": "watch_pipeline_workflow",
+    "path": "src/lza_workbench/pipeline/watcher.py",
+    "refactor_plans": []
+  }
+]

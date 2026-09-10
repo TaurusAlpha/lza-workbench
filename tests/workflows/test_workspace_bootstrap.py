@@ -15,8 +15,12 @@ from lza_workbench.workspace.application.bootstrap import (
     get_workbench_assets_bucket_name,
     plan_bootstrap_workflow,
 )
-from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
-from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
+from lza_workbench.workspace.persistence import (
+    load_workspace_config,
+    load_workspace_state,
+    write_workspace_config,
+    write_workspace_state,
+)
 
 
 def test_get_workbench_assets_bucket_name() -> None:

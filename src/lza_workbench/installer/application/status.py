@@ -253,7 +253,4 @@ __all__ = [
     "get_installer_status_workflow",
     "normalize_lza_version",
     "prepare_installer_status",
-    "status_installer_workflow",
 ]
-
-status_installer_workflow = get_installer_status_workflow

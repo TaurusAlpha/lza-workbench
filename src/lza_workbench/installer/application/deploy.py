@@ -38,8 +38,8 @@ from lza_workbench.installer.state import (
     record_installer_deployment_failure,
 )
 from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
+from lza_workbench.workspace.persistence import load_workspace_state, write_workspace_state
 from lza_workbench.workspace.schema import WorkspaceConfig
-from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
 
 
 @dataclass(frozen=True)

@@ -19,7 +19,7 @@ from lza_workbench.workspace.application.import_workspace import (
     prepare_workspace_import,
     resolve_import_paths,
 )
-from lza_workbench.workspace.config import write_workspace_config
+from lza_workbench.workspace.persistence import write_workspace_config
 from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,

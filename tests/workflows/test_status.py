@@ -40,14 +40,13 @@ from lza_workbench.status.observer import (
     _derive_overall_health,
     get_root_status_workflow,
 )
-from lza_workbench.workspace.config import load_workspace_config
+from lza_workbench.workspace.persistence import load_workspace_config, load_workspace_state
 from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,
     WorkspaceConfig,
     WorkspaceState,
 )
-from lza_workbench.workspace.state import load_workspace_state
 
 
 def test_get_root_status_workflow(configured_workspace: Path) -> None:
@@ -831,7 +830,7 @@ def test_get_config_status_prefers_observed_pipeline_state_over_recorded_state(
             exists=True,
             status="Succeeded",
             latest_execution_id="live-exec-789",
-            stage_states=[],
+            stages=[],
         )
         result = get_config_status_workflow(
             config=config,

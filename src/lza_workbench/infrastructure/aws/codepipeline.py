@@ -50,11 +50,6 @@ class PipelineStateResult:
     updated: str | None = None
     error: str | None = None
 
-    @property
-    def stage_states(self) -> list[StageStateResult]:
-        """Backward-compatibility alias for stages."""
-        return self.stages
-
 
 @dataclass(frozen=True)
 class PipelineExecutionResult:

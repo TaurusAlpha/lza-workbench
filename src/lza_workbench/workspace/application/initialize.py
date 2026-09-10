@@ -130,11 +130,7 @@ def init_workspace(
     )
 
 
-# Alias for backward-compatible naming
-init_workspace_workflow = init_workspace
-
 __all__ = [
     "WorkspaceInitResult",
     "init_workspace",
-    "init_workspace_workflow",
 ]

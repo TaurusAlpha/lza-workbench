@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from lza_workbench.errors import LzaError
-from lza_workbench.workspace.config import WORKSPACE_CONFIG_FILE
+from lza_workbench.workspace.persistence import WORKSPACE_CONFIG_FILE
 
 
 def normalize_customer_slug(customer_name: str) -> str:

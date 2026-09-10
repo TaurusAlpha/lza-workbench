@@ -8,13 +8,11 @@ src/lza_workbench/
 ├── errors.py                        # Base exception hierarchy (LzaError, LzaConfigurationError, etc.)
 │
 ├── workspace/                       # Workspace lifecycle, configuration, and state
-│   ├── model.py                     # Canonical workspace models (WorkspaceDocument, WorkspaceRuntime)
+│   ├── model.py                     # Canonical workspace models (WorkspaceConfig, WorkspaceState)
 │   ├── schema.py                    # Pydantic schemas for lza-workspace.yaml and .lza/state.json
 │   ├── persistence.py               # Low-level YAML/JSON loaders, dumpers, and atomic write operations
 │   ├── assessment.py                # WorkspaceCapability and WorkspaceAssessment readiness evaluations
 │   ├── context.py                   # WorkspaceContext resolution and environment management
-│   ├── config.py                    # Workspace YAML declarative config helpers and loaders
-│   ├── state.py                     # Workspace JSON runtime execution state helpers
 │   ├── paths.py                     # Filesystem path resolvers for workspace directories and artifacts
 │   ├── setup.py                     # Filesystem scaffolding, gitignore generation, and workspace bootstrap
 │   └── application/
@@ -23,7 +21,7 @@ src/lza_workbench/
 │       └── bootstrap.py             # Workflow for validating and provisioning AWS prerequisite resources
 │
 ├── installer/                       # LZA Installer CloudFormation stack management
-│   ├── model.py                     # Canonical installer domain models (InstallerDocument, LzaInstaller)
+│   ├── model.py                     # Canonical installer domain models (LzaInstaller, PipelineInstaller)
 │   ├── schema.py                    # Pydantic schemas for installer options, templates, and parameters
 │   ├── parameters.py                # CloudFormation parameter codec, validation, and overrides
 │   ├── templates.py                 # Installer CloudFormation template retrieval, caching, and hashing
@@ -70,21 +68,18 @@ src/lza_workbench/
 │
 ├── pipeline/                        # CodePipeline execution tracking and diagnostics
 │   ├── model.py                     # Domain pipeline models (PipelineExecutionSnapshot, stage/action states)
-│   ├── models.py                    # Legacy pipeline state models and status representations
-│   ├── diagnostics.py               # Pipeline failure diagnosis and root-cause classification
-│   ├── failures.py                  # Pattern recognizers for known CodePipeline and CodeBuild errors
+│   ├── failures.py                  # Pattern recognizers and diagnostics for CodePipeline and CodeBuild errors
 │   ├── watcher.py                   # Reusable lifecycle watcher and update generator for pipeline runs
 │   ├── observation.py               # CodePipeline polling, stage details, and snapshot aggregators
 │   ├── resolution.py                # Pipeline name resolution for installer and configuration workflows
-│   ├── starter.py                   # Pipeline execution triggering and execution ID tracking
 │   ├── state.py                     # Operational state transitions for recorded pipeline runs
 │   └── application/
 │       ├── start.py                 # Workflow to trigger a pipeline execution
 │       └── status.py                # Workflow to fetch execution snapshots and stage breakdown
 │
 ├── status/                          # Unified status aggregation and health reporting
-│   ├── model.py                     # Aggregated WorkspaceSnapshot and component health models
-│   └── observer.py                  # Observer workflows (get_root_status_workflow, status_root_workflow)
+│   ├── model.py                     # Aggregated RootStatusResult and component health models
+│   └── observer.py                  # Observer workflows (get_root_status_workflow)
 │
 ├── infrastructure/                  # Thin external service adapters
 │   ├── aws/
@@ -129,15 +124,15 @@ src/lza_workbench/
 The declarative configuration and runtime execution states are split into explicit documents:
 
 ```text
-WorkspaceDocument (lza-workspace.yaml)
+WorkspaceConfig (lza-workspace.yaml)
 ├── customer
-├── aws_target
+├── aws
 ├── lza
 ├── installer        # canonical desired installer state
 └── configuration    # canonical desired configuration state
 
-WorkspaceRuntime (.lza/state.json)
-├── import_record
+WorkspaceState (.lza/state.json)
+├── imported
 ├── installer
 ├── configuration
 └── pipelines
@@ -156,7 +151,7 @@ WorkspaceContext + AWS context
        WorkspaceObserver (observer.py)
               │
               ▼
-       WorkspaceSnapshot (status/model.py)
+       RootStatusResult (status/model.py)
        ├── installer
        ├── configuration remote/local
        ├── pipelines

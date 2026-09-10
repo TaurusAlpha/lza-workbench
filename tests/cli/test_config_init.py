@@ -17,12 +17,13 @@ from lza_workbench.configuration.rendering import (
 )
 from lza_workbench.configuration.templates import list_packaged_templates
 from lza_workbench.interfaces.cli.main import app
-from lza_workbench.workspace.application.initialize import (
-    init_workspace_workflow,
+from lza_workbench.workspace.application.initialize import init_workspace
+from lza_workbench.workspace.persistence import (
+    load_workspace_config,
+    load_workspace_state,
+    write_workspace_config,
 )
-from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.schema import WorkspaceConfig
-from lza_workbench.workspace.state import load_workspace_state
 
 runner = CliRunner()
 
@@ -30,7 +31,7 @@ runner = CliRunner()
 @pytest.fixture
 def workspace_without_config(tmp_path: Path) -> Path:
     ws_dir = tmp_path / "test-workspace"
-    init_workspace_workflow(
+    init_workspace(
         customer_name="Test Customer",
         workspace_dir=ws_dir,
         aws_profile="test-root",

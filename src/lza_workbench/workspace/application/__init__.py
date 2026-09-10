@@ -29,7 +29,6 @@ from lza_workbench.workspace.application.import_workspace import (
 from lza_workbench.workspace.application.initialize import (
     WorkspaceInitResult,
     init_workspace,
-    init_workspace_workflow,
 )
 
 __all__ = [
@@ -52,7 +51,6 @@ __all__ = [
     "get_workbench_assets_bucket_name",
     "import_workspace_workflow",
     "init_workspace",
-    "init_workspace_workflow",
     "load_existing_metadata",
     "plan_bootstrap_workflow",
     "prepare_bootstrap_workflow",

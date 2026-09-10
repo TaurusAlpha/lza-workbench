@@ -8,8 +8,12 @@ import pytest
 from lza_workbench.configuration.application.pull import pull_configuration_workflow
 from lza_workbench.configuration.application.push import push_configuration_workflow
 from lza_workbench.errors import LzaError
-from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
-from lza_workbench.workspace.state import load_workspace_state, write_workspace_state
+from lza_workbench.workspace.persistence import (
+    load_workspace_config,
+    load_workspace_state,
+    write_workspace_config,
+    write_workspace_state,
+)
 
 
 @pytest.mark.parametrize("operation", ["push", "pull"])

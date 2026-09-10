@@ -13,8 +13,12 @@ from lza_workbench.configuration.application.push import (
     push_configuration_workflow,
 )
 from lza_workbench.errors import LzaError
-from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
-from lza_workbench.workspace.state import load_workspace_state
+from lza_workbench.workspace.persistence import (
+    load_workspace_config,
+    load_workspace_state,
+    write_workspace_config,
+    write_workspace_state,
+)
 
 
 def _configure_codecommit_workspace(workspace_dir: Path, *, branch: str = "main") -> Path:
@@ -121,8 +125,6 @@ def test_imported_s3_push_without_sync_is_protected(
     mock_aws_execution_context,
     dry_run,
 ):
-    from lza_workbench.workspace.state import write_workspace_state
-
     state = load_workspace_state(configured_workspace)
     state.imported = True
     write_workspace_state(configured_workspace, state)
@@ -160,8 +162,6 @@ def test_imported_s3_push_without_sync_is_protected(
 
 @pytest.mark.parametrize("override", ["force", "confirm", "decline"])
 def test_imported_s3_push_overrides(configured_workspace, mock_aws_execution_context, override):
-    from lza_workbench.workspace.state import write_workspace_state
-
     state = load_workspace_state(configured_workspace)
     state.imported = True
     write_workspace_state(configured_workspace, state)

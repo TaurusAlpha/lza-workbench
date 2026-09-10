@@ -14,10 +14,6 @@ from lza_workbench.workspace.schema import (
     WorkspaceState,
 )
 
-# Counterfactual aliases
-WorkspaceDocument = WorkspaceConfig
-WorkspaceRuntime = WorkspaceState
-
 __all__ = [
     "AwsConfig",
     "CliConfig",
@@ -26,8 +22,6 @@ __all__ = [
     "PipelineConfig",
     "PipelinesConfig",
     "WorkspaceConfig",
-    "WorkspaceDocument",
     "WorkspaceModel",
-    "WorkspaceRuntime",
     "WorkspaceState",
 ]

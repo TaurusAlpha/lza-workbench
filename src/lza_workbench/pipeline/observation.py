@@ -10,7 +10,7 @@ from lza_workbench.infrastructure.aws.codepipeline import (
     get_pipeline_execution,
     get_pipeline_state,
 )
-from lza_workbench.pipeline.models import (
+from lza_workbench.pipeline.model import (
     PipelineActionState,
     PipelineExecutionSnapshot,
     PipelineStageState,

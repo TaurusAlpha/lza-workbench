@@ -552,8 +552,6 @@ def _handle_git_pull(
     )
 
 
-pull_config_workflow = pull_configuration_workflow
-
 __all__ = [
     "ConfigPullConfirmationRequired",
     "ConfigPullPreparation",
@@ -561,6 +559,5 @@ __all__ = [
     "ConfigPullResult",
     "apply_config_pull",
     "prepare_config_pull",
-    "pull_config_workflow",
     "pull_configuration_workflow",
 ]

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from lza_workbench.pipeline.failures import PipelineActionFailure
-from lza_workbench.pipeline.models import PipelineStageState
+from lza_workbench.pipeline.model import PipelineStageState
 from lza_workbench.workspace.schema import WorkspaceState
 
 

@@ -14,8 +14,7 @@ from lza_workbench.configuration.templates import (
     resolve_template_source,
 )
 from lza_workbench.interfaces.cli import app
-from lza_workbench.workspace.config import load_workspace_config
-from lza_workbench.workspace.state import load_workspace_state
+from lza_workbench.workspace.persistence import load_workspace_config, load_workspace_state
 
 
 def _write_required_files(config_dir: Path) -> None:

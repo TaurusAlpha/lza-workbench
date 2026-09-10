@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from lza_workbench.errors import LzaError
-from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+from lza_workbench.workspace.persistence import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.schema import AwsConfig, CustomerConfig, WorkspaceConfig
 
 WORKSPACE_EXAMPLES_DIR = (

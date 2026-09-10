@@ -15,7 +15,12 @@ from lza_workbench.installer.application.initialize import (
 )
 from lza_workbench.installer.application.plan import plan_installer_workflow
 from lza_workbench.installer.planning import InstallerPlanResult
-from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
+from lza_workbench.workspace.persistence import (
+    load_workspace_config,
+    load_workspace_state,
+    write_workspace_config,
+    write_workspace_state,
+)
 from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,
@@ -23,7 +28,6 @@ from lza_workbench.workspace.schema import (
     WorkspaceConfig,
     WorkspaceState,
 )
-from lza_workbench.workspace.state import write_workspace_state
 
 
 def test_plan_installer_workflow_returns_structured_result(
@@ -419,8 +423,6 @@ def test_apply_installer_settings_tracks_pending_parameters(tmp_path: Path) -> N
             },
         )
     )
-
-    from lza_workbench.workspace.state import load_workspace_state
 
     saved_state = load_workspace_state(ws_dir)
     assert saved_state.pending_installer_parameters is not None
