@@ -1,6 +1,6 @@
 """Workspace management, metadata, and lifecycle workflows."""
 
-from lza_workbench.workspace.assessment import (
+from lza_workbench.workspace.validation import (
     WorkspaceAssessment,
     WorkspaceCapability,
     evaluate_workspace_assessment,

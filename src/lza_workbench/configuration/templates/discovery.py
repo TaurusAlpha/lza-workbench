@@ -9,7 +9,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from lza_workbench.configuration.rendering import render_template_text
+from lza_workbench.configuration.templates.rendering import render_template_text
 from lza_workbench.errors import LzaError
 
 if TYPE_CHECKING:

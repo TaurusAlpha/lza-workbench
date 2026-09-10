@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-from lza_workbench.workspace.schema import WorkspaceState
+if TYPE_CHECKING:
+    from lza_workbench.workspace.schema import WorkspaceState
 
 
 def record_installer_deployment(

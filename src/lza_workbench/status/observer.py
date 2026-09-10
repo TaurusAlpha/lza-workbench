@@ -26,90 +26,25 @@ from lza_workbench.infrastructure.aws.codepipeline import (
 )
 from lza_workbench.infrastructure.aws.s3 import S3ObjectObservation, inspect_s3_object_safe
 from lza_workbench.infrastructure.aws.session import AwsClientFactory, resolve_aws_execution_context
-from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
+from lza_workbench.installer.versions import resolve_deployed_installer_version
 from lza_workbench.pipeline.failures import (
     collect_pipeline_action_failures,
     fetch_codebuild_diagnostics,
 )
 from lza_workbench.pipeline.resolution import resolve_pipeline
-from lza_workbench.workspace.context import (
+from lza_workbench.status.summary import (
+    ConfigurationRepoSummary,
+    InstallerStackSummary,
+    OverallHealthSummary,
+    PipelineSummary,
+    RootStatusResult,
+)
+from lza_workbench.workspace.context import load_workspace_context
+from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
+from lza_workbench.workspace.validation import (
     WorkspaceAssessment,
     WorkspaceCapability,
-    load_workspace_context,
 )
-from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
-
-
-@dataclass(frozen=True)
-class PipelineSummary:
-    """Concise operational summary of a CodePipeline."""
-
-    name: str
-    exists: bool = False
-    status: str | None = None
-    execution_id: str | None = None
-    start_time: str | None = None
-    duration_seconds: float | None = None
-    current_stage: str | None = None
-    current_action: str | None = None
-    failed_stage: str | None = None
-    failed_action: str | None = None
-    failure_summary: str | None = None
-    is_live: bool = True
-
-
-@dataclass(frozen=True)
-class InstallerStackSummary:
-    """Concise operational summary of the CloudFormation installer stack."""
-
-    name: str
-    status: str | None = None
-    exists: bool = False
-    deployed_version: str | None = None
-    is_live: bool = True
-
-
-@dataclass(frozen=True)
-class ConfigurationRepoSummary:
-    """Concise operational summary of configuration repository and local git state."""
-
-    repository_type: str
-    target: str | None = None
-    local_git_branch: str | None = None
-    local_git_clean: bool = True
-    local_git_uncommitted: int = 0
-    git_sync_status: GitRemoteSyncStatus | None = None
-    remote_sync: RemoteSyncStatus | None = None
-    is_live: bool = True
-
-
-@dataclass(frozen=True)
-class OverallHealthSummary:
-    """Concise overall deployment health summary."""
-
-    installer: str
-    configuration: str
-    workspace: str
-    is_live: bool = True
-
-
-@dataclass(frozen=True)
-class RootStatusResult:
-    """All data needed to render the root workspace status report."""
-
-    workspace_dir: Path
-    customer_name: str
-    lza_version: str
-    profile: str
-    region: str
-    aws_identity: dict[str, str] | None
-    aws_error: str | None
-    installer: InstallerStackSummary
-    installer_pipeline: PipelineSummary
-    configuration_repo: ConfigurationRepoSummary
-    configuration_pipeline: PipelineSummary
-    health: OverallHealthSummary
-    assessment: WorkspaceAssessment | None = None
 
 
 def _resolve_in_progress_stage_action(pipe_state: Any) -> tuple[str | None, str | None]:

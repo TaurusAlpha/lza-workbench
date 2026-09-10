@@ -7,7 +7,7 @@ from typing import Any
 from lza_workbench.infrastructure.aws.cloudformation import get_cloudformation_stack_template
 from lza_workbench.infrastructure.aws.ssm import get_parameter_value
 from lza_workbench.installer.templates import extract_template_version
-from lza_workbench.installer.versions import normalize_lza_version
+from lza_workbench.installer.versions.constants import normalize_lza_version
 
 
 def installer_version_parameter_name(accelerator_prefix: str, stack_name: str) -> str:
@@ -34,3 +34,9 @@ def resolve_deployed_installer_version(
     if template_body is None:
         return None
     return extract_template_version(template_body)
+
+
+__all__ = [
+    "installer_version_parameter_name",
+    "resolve_deployed_installer_version",
+]

@@ -38,3 +38,11 @@ def branch_to_version(branch: str | None) -> str:
     if not cleaned:
         return "Unknown"
     return normalize_lza_version(cleaned)
+
+
+__all__ = [
+    "PACKAGED_INSTALLER_VERSION",
+    "branch_to_version",
+    "normalize_lza_version",
+    "version_to_branch",
+]

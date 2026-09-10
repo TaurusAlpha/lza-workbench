@@ -6,10 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.configuration.archive import ConfigDiffResult
-from lza_workbench.workspace.context import (
-    WorkspaceCapability,
-    load_workspace_context,
-)
+from lza_workbench.workspace.context import load_workspace_context
+from lza_workbench.workspace.validation import WorkspaceCapability
 
 
 @dataclass(frozen=True)

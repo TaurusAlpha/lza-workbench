@@ -1,16 +1,15 @@
 """Configuration domain models, workflows, and utilities."""
 
 from lza_workbench.configuration.deploy import (
-    ConfigDeployRequest,
+    ConfigDeployError,
     ConfigDeployResult,
     deploy_configuration_workflow,
 )
 from lza_workbench.configuration.diff import (
-    ConfigDiffRequest,
-    diff_configuration_workflow,
+    ConfigDiffExecutionResult,
+    diff_configuration,
 )
 from lza_workbench.configuration.initialize import (
-    ConfigInitRequest,
     ConfigInitResult,
     init_config_workflow,
 )
@@ -32,9 +31,10 @@ from lza_workbench.configuration.push import (
 )
 from lza_workbench.configuration.schema import (
     ConfigurationConfig,
-    ConfigurationPackagingConfig,
-    ConfigurationPackagingExcludeConfig,
     ConfigurationRepositoryConfig,
+    ConfigurationTemplateConfig,
+    PackagingConfig,
+    PackagingExcludeConfig,
 )
 from lza_workbench.configuration.status import (
     ConfigurationStatusResult,
@@ -42,10 +42,9 @@ from lza_workbench.configuration.status import (
 )
 
 __all__ = [
-    "ConfigDeployRequest",
+    "ConfigDeployError",
     "ConfigDeployResult",
-    "ConfigDiffRequest",
-    "ConfigInitRequest",
+    "ConfigDiffExecutionResult",
     "ConfigInitResult",
     "ConfigPullPreparation",
     "ConfigPullRequest",
@@ -54,14 +53,15 @@ __all__ = [
     "ConfigPushRequest",
     "ConfigPushResult",
     "ConfigurationConfig",
-    "ConfigurationPackagingConfig",
-    "ConfigurationPackagingExcludeConfig",
     "ConfigurationRepositoryConfig",
     "ConfigurationStatusResult",
+    "ConfigurationTemplateConfig",
+    "PackagingConfig",
+    "PackagingExcludeConfig",
     "apply_config_pull",
     "apply_config_push",
     "deploy_configuration_workflow",
-    "diff_configuration_workflow",
+    "diff_configuration",
     "get_config_status_workflow",
     "init_config_workflow",
     "prepare_config_pull",

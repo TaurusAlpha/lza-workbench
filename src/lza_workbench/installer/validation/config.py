@@ -1,10 +1,14 @@
-"""Validate installer configuration completeness before planning or deployment."""
+"""Installer configuration completeness validation."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from lza_workbench.workspace.schema import WorkspaceConfig
+from lza_workbench.errors import LzaError
+
+if TYPE_CHECKING:
+    from lza_workbench.workspace.schema import WorkspaceConfig
 
 
 @dataclass(frozen=True)
@@ -27,6 +31,19 @@ class InstallerConfigValidationResult:
     def is_complete(self) -> bool:
         """Return whether every required installer configuration field is present."""
         return not self.missing_fields
+
+
+class InstallerConfigValidationError(LzaError):
+    """Raised when installer configuration is incomplete for deployment."""
+
+    def __init__(self, validation: InstallerConfigValidationResult) -> None:
+        self.validation = validation
+        missing = ", ".join(f"{s.section}.{s.attribute}" for s in validation.missing_fields)
+        super().__init__(
+            f"{len(validation.missing_fields)} required parameter(s) missing from "
+            f"lza-workspace.yaml ({missing}). "
+            "Run 'lza installer plan' to resolve and configure missing values."
+        )
 
 
 def validate_installer_configuration(config: WorkspaceConfig) -> InstallerConfigValidationResult:
@@ -98,3 +115,11 @@ def validate_installer_configuration(config: WorkspaceConfig) -> InstallerConfig
     require("Accelerator Prefix", "lza", "accelerator_prefix", config.lza.accelerator_prefix)
 
     return InstallerConfigValidationResult(missing_fields=tuple(missing))
+
+
+__all__ = [
+    "InstallerConfigValidationError",
+    "InstallerConfigValidationResult",
+    "MissingInstallerConfigField",
+    "validate_installer_configuration",
+]

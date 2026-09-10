@@ -1,10 +1,12 @@
-"""Resolve and persist CloudFormation parameters for the LZA installer stack."""
+from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.installer.versions import version_to_branch
-from lza_workbench.workspace.schema import WorkspaceConfig
+
+if TYPE_CHECKING:
+    from lza_workbench.workspace.schema import WorkspaceConfig
 
 INSTALLER_PARAMETER_LABELS = {
     "RepositorySource": "Source location",
@@ -28,6 +30,17 @@ INSTALLER_PARAMETER_LABELS = {
     "ExistingConfigRepositoryBranchName": "Existing config repository branch",
     "EnableDiagnosticsPack": "Enable diagnostics pack",
 }
+
+UNSUPPORTED_INSTALLER_PARAMETERS: frozenset[str] = frozenset(
+    {
+        "ConfigurationRepositoryLocation",
+        "UseExistingConfigRepo",
+        "ConfigCodeConnectionArn",
+        "ExistingConfigRepositoryOwner",
+        "ExistingConfigRepositoryName",
+        "ExistingConfigRepositoryBranchName",
+    }
+)
 
 
 def get_installer_parameter_label(
@@ -56,18 +69,6 @@ def resolve_installer_source_branch(
     if repository_type == "github":
         return version_to_branch(lza_version)
     return "main"
-
-
-UNSUPPORTED_INSTALLER_PARAMETERS: frozenset[str] = frozenset(
-    {
-        "ConfigurationRepositoryLocation",
-        "UseExistingConfigRepo",
-        "ConfigCodeConnectionArn",
-        "ExistingConfigRepositoryOwner",
-        "ExistingConfigRepositoryName",
-        "ExistingConfigRepositoryBranchName",
-    }
-)
 
 
 def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: str) -> bool:
@@ -289,3 +290,15 @@ def build_installer_cfn_parameters(
 
     _apply_schema_defaults(params, schema, config.installer.extra_parameters)
     return params
+
+
+__all__ = [
+    "INSTALLER_PARAMETER_LABELS",
+    "UNSUPPORTED_INSTALLER_PARAMETERS",
+    "apply_deployed_installer_parameters",
+    "apply_installer_parameter",
+    "build_installer_cfn_parameters",
+    "get_installer_parameter_label",
+    "is_installer_parameter_applicable",
+    "resolve_installer_source_branch",
+]

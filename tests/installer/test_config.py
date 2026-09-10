@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import build_installer_cfn_parameters
+from lza_workbench.installer.validation import validate_installer_configuration
 from lza_workbench.workspace.schema import AwsConfig, CustomerConfig, WorkspaceConfig
 
 

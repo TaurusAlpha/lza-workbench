@@ -9,23 +9,26 @@ from lza_workbench.installer.deploy import (
 )
 from lza_workbench.installer.import_deployed import (
     InstallerImportResult,
-    import_deployed_installer_workflow,
+    import_installer_workflow,
 )
 from lza_workbench.installer.initialize import (
+    InstallerForm,
     InstallerFormField,
-    apply_installer_form,
-    detect_installer_configuration,
-    init_installer_workflow,
-    prepare_installer_form,
+    InstallerSettingsRequest,
+    InstallerSettingsResult,
+    apply_installer_settings,
+    get_installer_parameters_schema,
 )
 from lza_workbench.installer.plan import (
     InstallerPlanResult,
     plan_installer_workflow,
 )
 from lza_workbench.installer.schema import (
-    InstallerConfig,
-    InstallerParametersConfig,
+    InstallerOptionsConfig,
     InstallerSourceCodeConfig,
+    InstallerStackTemplateConfig,
+    LzaInstaller,
+    PipelineInstaller,
 )
 from lza_workbench.installer.status import (
     InstallerStatusResult,
@@ -38,26 +41,29 @@ from lza_workbench.installer.versions import (
 )
 
 __all__ = [
-    "InstallerConfig",
     "InstallerDeploymentPreparation",
     "InstallerDeployResult",
+    "InstallerForm",
     "InstallerFormField",
     "InstallerImportResult",
-    "InstallerParametersConfig",
+    "InstallerOptionsConfig",
     "InstallerPlanResult",
+    "InstallerSettingsRequest",
+    "InstallerSettingsResult",
     "InstallerSourceCodeConfig",
+    "InstallerStackTemplateConfig",
     "InstallerStatusResult",
+    "LzaInstaller",
     "PACKAGED_INSTALLER_VERSION",
+    "PipelineInstaller",
     "StateAlignment",
     "apply_installer_deployment",
-    "apply_installer_form",
+    "apply_installer_settings",
     "deploy_installer_workflow",
-    "detect_installer_configuration",
+    "get_installer_parameters_schema",
     "get_installer_status_workflow",
-    "import_deployed_installer_workflow",
-    "init_installer_workflow",
+    "import_installer_workflow",
     "normalize_lza_version",
     "plan_installer_workflow",
     "prepare_installer_deployment",
-    "prepare_installer_form",
 ]

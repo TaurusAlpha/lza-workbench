@@ -32,7 +32,7 @@ from lza_workbench.infrastructure.aws.cloudformation import (
 from lza_workbench.infrastructure.aws.secrets_manager import inspect_secret_details
 from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
 from lza_workbench.infrastructure.github import validate_github_repository_access
-from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
+from lza_workbench.installer.versions import resolve_deployed_installer_version
 from lza_workbench.installer.schema import LzaInstaller
 from lza_workbench.installer.sync import (
     apply_installer_config_sync,

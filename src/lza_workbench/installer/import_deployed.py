@@ -13,14 +13,15 @@ from lza_workbench.infrastructure.aws.cloudformation import (
 )
 from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult, get_pipeline_state
 from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
-from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.installer.sync import (
     sync_installer_config,
     sync_installer_state,
     sync_installer_template,
 )
-from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
+from lza_workbench.installer.versions import resolve_deployed_installer_version
+from lza_workbench.workspace.context import load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
+from lza_workbench.workspace.validation import WorkspaceCapability
 
 
 @dataclass(frozen=True)

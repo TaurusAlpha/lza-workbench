@@ -271,3 +271,30 @@ def validate_parameters_against_schema(
                 f"Invalid parameter value '{value}' for {key}. "
                 f"It must match template pattern: {pattern}"
             )
+
+
+def prepare_installer_template(
+    *, workspace_dir: Path, config: WorkspaceConfig, dry_run: bool = False
+) -> tuple[Path, dict[str, str]]:
+    """Resolve and validate the local template and its parameters against the schema."""
+    from lza_workbench.installer.parameters import build_installer_cfn_parameters
+
+    template_path = resolve_installer_template(workspace_dir, config, dry_run=dry_run)
+    schema = inspect_template_parameters(template_path)
+    parameters = build_installer_cfn_parameters(config, schema=schema)
+    validate_parameters_against_schema(parameters, schema)
+    return template_path, parameters
+
+
+__all__ = [
+    "INSTALLER_TEMPLATE_FILENAME",
+    "INSTALLER_TEMPLATE_URL_TEMPLATE",
+    "LOCAL_PACKAGED_INSTALLER_TEMPLATE",
+    "configure_anonymous_data",
+    "download_installer_template",
+    "download_installer_template_content",
+    "inspect_template_parameters",
+    "prepare_installer_template",
+    "resolve_installer_template",
+    "validate_parameters_against_schema",
+]

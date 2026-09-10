@@ -9,7 +9,6 @@ from typing import Any
 
 from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.errors import LzaError
-from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import (
     UNSUPPORTED_INSTALLER_PARAMETERS,
     apply_installer_parameter,
@@ -22,9 +21,11 @@ from lza_workbench.installer.templates import (
     resolve_installer_template,
     validate_parameters_against_schema,
 )
-from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
+from lza_workbench.installer.validation import validate_installer_configuration
+from lza_workbench.workspace.context import load_workspace_context
 from lza_workbench.workspace.persistence import write_workspace_config, write_workspace_state
 from lza_workbench.workspace.schema import WorkspaceConfig
+from lza_workbench.workspace.validation import WorkspaceCapability
 
 
 @dataclass(frozen=True)

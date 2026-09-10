@@ -27,11 +27,11 @@ from lza_workbench.pipeline.observation import (
 )
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.workspace.context import (
-    WorkspaceCapability,
     WorkspaceContext,
     load_workspace_context,
 )
 from lza_workbench.workspace.schema import WorkspaceState
+from lza_workbench.workspace.validation import WorkspaceCapability
 
 TERMINAL_STATUSES = {"Succeeded", "Failed", "Cancelled", "Stopped", "Superseded"}
 

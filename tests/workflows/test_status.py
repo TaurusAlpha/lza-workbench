@@ -207,8 +207,8 @@ def test_get_config_status_workflow_codecommit(tmp_path: Path) -> None:
     with (
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.configuration.status.inspect_codecommit_repository") as mock_cc,
-        patch("lza_workbench.configuration.status.get_pipeline_state") as mock_pipe,
+        patch("lza_workbench.configuration.inspection.repository.inspect_codecommit_repository") as mock_cc,
+        patch("lza_workbench.configuration.inspection.pipeline.get_pipeline_state") as mock_pipe,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -249,7 +249,7 @@ def test_get_config_status_workflow_codeconnection(tmp_path: Path) -> None:
     with (
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.configuration.status.inspect_codeconnection") as mock_conn,
+        patch("lza_workbench.configuration.inspection.repository.inspect_codeconnection") as mock_conn,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -821,7 +821,7 @@ def test_get_config_status_prefers_observed_pipeline_state_over_recorded_state(
     with (
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.configuration.status.get_pipeline_state") as mock_pipeline_state,
+        patch("lza_workbench.configuration.inspection.pipeline.get_pipeline_state") as mock_pipeline_state,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_pipeline_state.return_value = MagicMock(
@@ -875,8 +875,8 @@ def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: 
     with (
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.configuration.status.get_pipeline_state") as mock_get_pipe,
-        patch("lza_workbench.configuration.status.fetch_codebuild_diagnostics") as mock_diag,
+        patch("lza_workbench.configuration.inspection.pipeline.get_pipeline_state") as mock_get_pipe,
+        patch("lza_workbench.configuration.inspection.pipeline.fetch_codebuild_diagnostics") as mock_diag,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()

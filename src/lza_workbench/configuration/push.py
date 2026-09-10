@@ -39,12 +39,12 @@ from lza_workbench.infrastructure.aws.session import (
     resolve_aws_execution_context,
 )
 from lza_workbench.workspace.context import (
-    WorkspaceCapability,
     WorkspaceContext,
     load_workspace_context,
 )
 from lza_workbench.workspace.persistence import write_workspace_config, write_workspace_state
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
+from lza_workbench.workspace.validation import WorkspaceCapability
 
 
 @dataclass(frozen=True)

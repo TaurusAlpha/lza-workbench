@@ -161,7 +161,9 @@ def test_backup_installer_template_on_version_change(tmp_path: Path) -> None:
         lza=LzaConfig(version="v1.16.0"),
     )
 
-    with patch("lza_workbench.installer.templates.download_installer_template") as mock_dl:
+    with patch(
+        "lza_workbench.installer.templates.retrieval.download_installer_template"
+    ) as mock_dl:
         mock_dl.return_value = template_path
         resolve_installer_template(workspace_dir, config, dry_run=False)
 
@@ -223,7 +225,7 @@ def test_download_installer_template_normalizes_version_in_url(tmp_path: Path) -
     """Un-prefixed version strings (e.g. 1.15.5) are normalized to v1.15.5 in download URL."""
     out_file = tmp_path / INSTALLER_TEMPLATE_FILENAME
     with patch(
-        "lza_workbench.installer.templates.download_installer_template_content"
+        "lza_workbench.installer.templates.retrieval.download_installer_template_content"
     ) as mock_download:
         mock_download.return_value = '{"Description": "Mocked Template"}'
         download_installer_template(version="1.15.5", local_path=out_file)

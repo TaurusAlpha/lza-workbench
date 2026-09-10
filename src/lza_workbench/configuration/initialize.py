@@ -15,21 +15,20 @@ from lza_workbench.configuration.git import (
     is_git_root,
     is_inside_parent_git_repo,
 )
-from lza_workbench.configuration.rendering import (
-    capture_init_values_snapshot,
-    compute_config_directory_digest,
-)
 from lza_workbench.configuration.templates import (
     DEFAULT_TEMPLATE_SOURCE,
     ResolvedTemplateSource,
+    capture_init_values_snapshot,
+    compute_config_directory_digest,
     render_and_copy_template,
     resolve_template_source,
     validate_template,
 )
 from lza_workbench.errors import LzaError
-from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
+from lza_workbench.workspace.context import load_workspace_context
 from lza_workbench.workspace.persistence import write_workspace_config, write_workspace_state
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
+from lza_workbench.workspace.validation import WorkspaceCapability
 
 
 @dataclass(frozen=True)

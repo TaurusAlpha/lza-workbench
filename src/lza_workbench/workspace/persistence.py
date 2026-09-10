@@ -10,10 +10,8 @@ from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from lza_workbench.errors import LzaError
+from lza_workbench.workspace.paths import WORKSPACE_CONFIG_FILE, WORKSPACE_STATE_FILE
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
-
-WORKSPACE_CONFIG_FILE = Path("lza-workspace.yaml")
-WORKSPACE_STATE_FILE = Path(".lza") / "state.json"
 
 
 def get_config_path(workspace_dir: Path) -> Path:

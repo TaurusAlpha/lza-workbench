@@ -11,11 +11,11 @@ from lza_workbench.configuration.initialize import (
     ConfigInitResult,
     init_config_workflow,
 )
-from lza_workbench.configuration.rendering import (
+from lza_workbench.configuration.templates import (
+    list_packaged_templates,
     render_template_text,
     resolve_path_value,
 )
-from lza_workbench.configuration.templates import list_packaged_templates
 from lza_workbench.interfaces.cli.main import app
 from lza_workbench.workspace.initialize import init_workspace
 from lza_workbench.workspace.persistence import (

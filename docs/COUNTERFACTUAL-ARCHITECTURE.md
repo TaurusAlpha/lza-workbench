@@ -1,66 +1,115 @@
 ## Counterfactual Architecture
 
-The LZA Workbench is structured around feature-owned domain modules and thin infrastructure adapters without artificial subpackage nesting or shadow application layers:
+The LZA Workbench is structured around feature-owned domain packages with explicit separation between **Supported Actions** (primary public orchestrations) and **Dedicated Support Modules** (single-purpose domain helpers, diagnostics, models, and low-level adapters):
 
 ```text
 src/lza_workbench/
 ├── constants.py                     # Global constants, default timeouts, and formatting symbols
 ├── errors.py                        # Base exception hierarchy (LzaError, LzaConfigurationError, etc.)
 │
-├── workspace/                       # Workspace lifecycle, configuration, state, and workflows
-│   ├── schema.py                    # Pydantic schemas for lza-workspace.yaml and .lza/state.json
-│   ├── persistence.py               # Low-level YAML/JSON loaders, dumpers, and atomic write operations
-│   ├── assessment.py                # WorkspaceCapability and WorkspaceAssessment readiness evaluations
-│   ├── context.py                   # WorkspaceContext resolution and environment management
-│   ├── paths.py                     # Filesystem path resolvers for workspace directories and artifacts
-│   ├── initialize.py                # Workflow and helpers for initializing a new customer workspace
-│   ├── import_workspace.py          # Workflow for adopting and importing existing LZA deployments
-│   └── bootstrap.py                 # Workflow for validating and provisioning AWS prerequisite resources
+├── workspace/                       # Workspace lifecycle, configuration, and state
+│   ├── # Actions (CLI / Web operations)
+│   ├── initialize.py                # Action: initialize new customer workspace ('lza init')
+│   ├── import_workspace.py          # Action: adopt and import existing LZA deployment ('lza import')
+│   ├── bootstrap.py                 # Action: validate/provision AWS prerequisite resources ('lza bootstrap')
+│   │
+│   ├── # Support Subdirectories
+│   ├── layout/                      # Filesystem layout, directory scaffolding, and managed paths
+│   │   └── scaffolding.py
+│   ├── validation/                  # Capability assessment, readiness rules, and structure validation
+│   │   ├── capabilities.py
+│   │   └── readiness.py
+│   │
+│   ├── # Package Support Modules
+│   ├── context.py                   # Request-scoped WorkspaceContext loader and environment manager
+│   ├── persistence.py               # YAML/JSON loaders, dumpers, and atomic file operations
+│   ├── paths.py                     # Path resolvers and directory normalization
+│   └── schema.py                    # Pydantic schemas for WorkspaceConfig and WorkspaceState
 │
-├── installer/                       # LZA Installer CloudFormation stack management and workflows
-│   ├── schema.py                    # Pydantic schemas for installer options, templates, and parameters
-│   ├── parameters.py                # CloudFormation parameter codec, validation, and overrides
-│   ├── templates.py                 # Installer CloudFormation template retrieval, caching, and hashing
-│   ├── deploy.py                    # Preflight checks, plan validation, stack deployment, and monitoring
-│   ├── plan.py                      # Stack change calculations, parameter planning, and plan workflow
-│   ├── initialize.py                # Workflow to initialize and collect installer settings
-│   ├── import_deployed.py           # Workflow to discover and adopt an already deployed installer stack
-│   ├── deployed_version.py          # Live CloudFormation stack inspection and version detection
+├── installer/                       # LZA Installer CloudFormation stack management
+│   ├── # Actions (CLI / Web operations)
+│   ├── initialize.py                # Action: collect/configure installer settings ('lza installer init')
+│   ├── plan.py                      # Action: calculate stack changes and parameter plan ('lza installer plan')
+│   ├── deploy.py                    # Action: deploy CloudFormation installer stack ('lza installer deploy')
+│   ├── import_deployed.py           # Action: discover and adopt deployed stack ('lza installer import')
+│   ├── status.py                    # Action: query live/recorded installer status ('lza installer status')
+│   │
+│   ├── # Support Subdirectories
+│   ├── validation/                  # Configuration completeness, preflight checks, and CFN plan safety
+│   │   ├── config.py
+│   │   └── preflight.py
+│   ├── drift/                       # Configuration drift and state alignment calculations
+│   │   └── alignment.py
+│   ├── templates/                   # CloudFormation template retrieval, caching, schemas, and hashing
+│   │   ├── retrieval.py
+│   │   └── digest.py
+│   ├── source/                      # Source prerequisite validation and planning (CodeCommit, S3, GitHub)
+│   │   ├── inspection.py
+│   │   └── planning.py
+│   ├── parameters/                  # CloudFormation parameter codecs, resolution, and overrides
+│   │   └── codec.py
+│   ├── versions/                    # LZA version constants, normalization, and deployed version detection
+│   │   ├── constants.py
+│   │   └── detection.py
+│   │
+│   ├── # Package Support Modules
 │   ├── state.py                     # Operational state transitions for installer deployments
-│   ├── status.py                    # Calculations, warnings, and status query workflow
-│   ├── sync.py                      # Source repository synchronization and branch validation
-│   ├── source.py                    # Source prerequisite validation and planning (CodeCommit, S3, GitHub)
-│   └── versions.py                  # Packaged LZA installer version constants and version checks
+│   ├── schema.py                    # Pydantic schemas for installer configuration and options
+│   └── sync.py                      # Source repository synchronization rules
 │
-├── configuration/                   # LZA configuration repository, packaging, and workflows
-│   ├── schema.py                    # Pydantic schemas for repositories, templates, and packaging exclusions
-│   ├── archive.py                   # Zip packaging, checksum hashing, and file diffing
-│   ├── git.py                       # Git CLI subprocess operations (branch, commit, diff, push, pull)
-│   ├── state.py                     # Operational state transitions for configuration archive transfers
-│   ├── status.py                    # Status evaluation, warning compilers, and status query workflow
-│   ├── sync.py                      # Synchronization coordinator between local files and remote targets
-│   ├── templates.py                 # Starter configuration template extractors and loaders
-│   ├── rendering.py                 # Template rendering and variable replacement
+├── configuration/                   # LZA customer configuration repository & packaging
+│   ├── # Actions (CLI / Web operations)
+│   ├── initialize.py                # Action: initialize local config with template ('lza config init')
+│   ├── pull.py                      # Action: pull remote configuration into workspace ('lza config pull')
+│   ├── push.py                      # Action: push local configuration to remote destination ('lza config push')
+│   ├── deploy.py                    # Action: push configuration and trigger pipeline ('lza config deploy')
+│   ├── diff.py                      # Action: compute differences against remote package ('lza config diff')
+│   ├── status.py                    # Action: query configuration and remote sync status ('lza config status')
+│   │
+│   ├── # Support Subdirectories
+│   ├── warnings/                    # Actionable warning compilers for workspace, git, repo, and pipeline
+│   │   └── compiler.py
+│   ├── inspection/                  # Remote repository (S3, CodeCommit, CodeConnection) and pipeline inspection
+│   │   ├── models.py
+│   │   ├── pipeline.py
+│   │   └── repository.py
+│   ├── validation/                  # Local configuration directory structure and YAML syntax validation
+│   │   └── structure.py
+│   ├── archive/                     # Zip packaging, checksum hashing, and archive diffing
+│   │   └── packaging.py
+│   ├── git/                         # Local Git subprocess operations (commit, push, pull, branch status)
+│   │   └── operations.py
+│   ├── templates/                   # Starter configuration template extractors and loaders
+│   │   ├── discovery.py
+│   │   └── rendering.py
+│   │
+│   ├── # Package Support Modules
+│   ├── sync.py                      # Remote sync evaluation and digest comparisons
 │   ├── repository.py                # Repository destination and naming helpers
-│   ├── validation.py                # Local configuration structure validation
-│   ├── initialize.py                # Workflow to initialize customer configuration repository and templates
-│   ├── push.py                      # Workflow to push local configuration to remote destination
-│   ├── pull.py                      # Workflow to pull remote configuration into local workspace
-│   ├── deploy.py                    # Workflow to push configuration and immediately start the pipeline
-│   └── diff.py                      # Workflow to compute differences between local config and remote package
+│   ├── state.py                     # Operational state transitions for configuration archive transfers
+│   └── schema.py                    # Pydantic schemas for repositories, packaging, and exclude rules
 │
-├── pipeline/                        # CodePipeline execution tracking, diagnostics, and workflows
-│   ├── model.py                     # Domain pipeline models (PipelineExecutionSnapshot, stage/action states)
-│   ├── failures.py                  # Pattern recognizers and diagnostics for CodePipeline and CodeBuild errors
-│   ├── watcher.py                   # Reusable lifecycle watcher and update generator for pipeline runs
-│   ├── observation.py               # CodePipeline polling, stage details, and snapshot aggregators
-│   ├── resolution.py                # Pipeline name resolution for installer and configuration workflows
+├── pipeline/                        # CodePipeline execution tracking and diagnostics
+│   ├── # Actions (CLI / Web operations)
+│   ├── start.py                     # Action: trigger CodePipeline execution ('lza pipeline start')
+│   ├── watcher.py                   # Action: stream pipeline execution lifecycle events ('lza pipeline watch')
+│   ├── status.py                    # Action: fetch execution snapshot and diagnostics ('lza pipeline status')
+│   │
+│   ├── # Support Subdirectories
+│   ├── failures/                    # CodeBuild log analyzers, failure classification, and diagnostics
+│   │   └── diagnostics.py
+│   ├── observation/                 # CodePipeline polling and stage state extraction
+│   │   └── polling.py
+│   │
+│   ├── # Package Support Modules
+│   ├── resolution.py                # Pipeline name resolution from workspace configuration
 │   ├── state.py                     # Operational state transitions for recorded pipeline runs
-│   ├── start.py                     # Workflow to trigger a pipeline execution
-│   └── status.py                    # Workflow to fetch execution snapshots and stage diagnostics
+│   └── model.py                     # Domain dataclasses (PipelineExecutionSnapshot, stage/action states)
 │
 ├── status/                          # Unified status aggregation and health reporting
-│   └── observer.py                  # Observer workflows and status models (get_root_status_workflow)
+│   ├── observer.py                  # Root observer workflow ('lza status' / GET /api/status)
+│   └── summary.py                   # Typed summary models (HealthSummary, InstallerSummary, ConfigSummary)
+
 │
 ├── infrastructure/                  # Thin external service adapters
 │   ├── aws/
@@ -132,7 +181,7 @@ WorkspaceContext + AWS context
        WorkspaceObserver (status/observer.py)
               │
               ▼
-       RootStatusResult (status/observer.py)
+       RootStatusResult (status/summary.py)
        ├── installer
        ├── configuration remote/local
        ├── pipelines

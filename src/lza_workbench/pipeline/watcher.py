@@ -26,11 +26,11 @@ from lza_workbench.pipeline.observation import observe_pipeline_execution
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.pipeline.state import record_pipeline_watch_result
 from lza_workbench.workspace.context import (
-    WorkspaceCapability,
     WorkspaceContext,
     load_workspace_context,
 )
 from lza_workbench.workspace.persistence import write_workspace_state
+from lza_workbench.workspace.validation import WorkspaceCapability
 
 
 @dataclass(frozen=True)

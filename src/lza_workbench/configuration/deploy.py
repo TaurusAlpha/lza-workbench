@@ -24,7 +24,8 @@ from lza_workbench.pipeline.watcher import (
     require_successful_pipeline_watch,
     watch_pipeline_workflow,
 )
-from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
+from lza_workbench.workspace.context import load_workspace_context
+from lza_workbench.workspace.validation import WorkspaceCapability
 
 
 @dataclass(frozen=True)

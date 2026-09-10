@@ -16,14 +16,7 @@ from lza_workbench.infrastructure.aws.codecommit import (
 )
 from lza_workbench.infrastructure.aws.secrets_manager import inspect_secret_exists
 from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
-from lza_workbench.installer.config import validate_installer_configuration
-from lza_workbench.installer.deploy import (
-    get_installer_template_digest,
-    include_template_digest_change,
-)
-from lza_workbench.installer.parameters import (
-    build_installer_cfn_parameters,
-)
+from lza_workbench.installer.parameters import build_installer_cfn_parameters
 from lza_workbench.installer.source import (
     CodeCommitPlanResult,
     prepare_codecommit_source_plan,
@@ -32,12 +25,16 @@ from lza_workbench.installer.source import (
     github_secret_warning as build_github_secret_warning,
 )
 from lza_workbench.installer.templates import (
+    get_installer_template_digest,
+    include_template_digest_change,
     inspect_template_parameters,
     resolve_installer_template,
     validate_parameters_against_schema,
 )
-from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
+from lza_workbench.installer.validation import validate_installer_configuration
+from lza_workbench.workspace.context import load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig
+from lza_workbench.workspace.validation import WorkspaceCapability
 
 
 @dataclass(frozen=True)

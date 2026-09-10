@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from lza_workbench.workspace.assessment import (
+from lza_workbench.workspace.validation import (
     WorkspaceAssessment,
     WorkspaceCapability,
     evaluate_workspace_assessment,

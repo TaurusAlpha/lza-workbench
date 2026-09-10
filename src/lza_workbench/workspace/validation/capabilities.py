@@ -1,14 +1,14 @@
-"""Workspace assessment and capability evaluation."""
+"""Workspace capability enumeration and evaluation."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from lza_workbench.errors import LzaError
-from lza_workbench.installer.config import validate_installer_configuration
-from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
+if TYPE_CHECKING:
+    from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
 
 class WorkspaceCapability(StrEnum):
@@ -48,6 +48,8 @@ def evaluate_workspace_assessment(
     state: WorkspaceState,
 ) -> WorkspaceAssessment:
     """Assess independent workspace capabilities from config, filesystem, and state."""
+    from lza_workbench.installer.validation.config import validate_installer_configuration
+
     config_dir = workspace_dir / config.configuration.local_path
     return WorkspaceAssessment(
         metadata_valid=bool((config.customer.slug or "").strip())
@@ -59,47 +61,8 @@ def evaluate_workspace_assessment(
     )
 
 
-def require_capabilities(
-    assessment: WorkspaceAssessment,
-    *required_capabilities: WorkspaceCapability,
-    workspace_dir: Path,
-    config: WorkspaceConfig,
-) -> None:
-    """Raise the existing readiness error for the first missing required capability."""
-    required = set(required_capabilities)
-    if WorkspaceCapability.METADATA_VALID in required and not assessment.metadata_valid:
-        raise LzaError(
-            f"Workspace at '{workspace_dir}' is missing required core configuration "
-            "(AWS authentication/region or customer details in lza-workspace.yaml). "
-            "Initialize the workspace with 'lza init' or update lza-workspace.yaml."
-        )
-    if (
-        WorkspaceCapability.CONFIGURATION_PRESENT in required
-        and not assessment.configuration_present
-    ):
-        config_dir = workspace_dir / config.configuration.local_path
-        raise LzaError(
-            f"Configuration directory '{config_dir}' does not exist or "
-            "is missing required LZA templates. Run 'lza init' or 'lza import' first."
-        )
-    if WorkspaceCapability.INSTALLER_CONFIGURED in required and not assessment.installer_configured:
-        raise LzaError(
-            "Workspace is missing required installer configuration parameters in "
-            "lza-workspace.yaml. Run 'lza installer plan' or update lza-workspace.yaml."
-        )
-    if (
-        WorkspaceCapability.INSTALLER_RECORDED_DEPLOYED in required
-        and not assessment.installer_recorded_deployed
-    ):
-        raise LzaError(
-            "Installer CloudFormation stack has not been deployed for this workspace "
-            "(missing installer_stack_id in .lza/state.json). Run 'lza installer deploy' first."
-        )
-
-
 __all__ = [
     "WorkspaceAssessment",
     "WorkspaceCapability",
     "evaluate_workspace_assessment",
-    "require_capabilities",
 ]
