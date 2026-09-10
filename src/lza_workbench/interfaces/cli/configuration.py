@@ -7,22 +7,22 @@ from pathlib import Path
 
 import typer
 
-from lza_workbench.configuration.application.deploy import (
+from lza_workbench.configuration.deploy import (
     ConfigDeployError,
     ConfigDeployResult,
     deploy_configuration_workflow,
 )
-from lza_workbench.configuration.application.initialize import (
+from lza_workbench.configuration.initialize import (
     ConfigInitResult,
     init_config_workflow,
 )
-from lza_workbench.configuration.application.pull import (
+from lza_workbench.configuration.pull import (
     ConfigPullRequest,
     ConfigPullResult,
     apply_config_pull,
     prepare_config_pull,
 )
-from lza_workbench.configuration.application.push import (
+from lza_workbench.configuration.push import (
     ConfigPushRequest,
     ConfigPushResult,
     apply_config_push,

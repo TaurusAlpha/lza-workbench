@@ -8,7 +8,7 @@ from lza_workbench.workspace.schema import (
     WorkspaceConfig,
     WorkspaceState,
 )
-from lza_workbench.workspace.setup import (
+from lza_workbench.workspace.initialize import (
     create_workspace,
     planned_write_paths,
 )

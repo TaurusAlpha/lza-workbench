@@ -11,10 +11,10 @@ from unittest.mock import MagicMock
 import pytest
 from typer.testing import CliRunner
 
-from lza_workbench.configuration.application.initialize import init_config_workflow
+from lza_workbench.configuration.initialize import init_config_workflow
 from lza_workbench.infrastructure.aws.session import AwsExecutionContext
 from lza_workbench.installer.versions import PACKAGED_INSTALLER_VERSION
-from lza_workbench.workspace.application.initialize import init_workspace
+from lza_workbench.workspace.initialize import init_workspace
 from lza_workbench.workspace.persistence import (
     load_workspace_config,
     write_workspace_config,
@@ -117,7 +117,7 @@ def imported_workspace(tmp_path: Path) -> Path:
     import shutil
 
     from lza_workbench.configuration.templates import resolve_template_source
-    from lza_workbench.workspace.application.import_workspace import import_workspace_workflow
+    from lza_workbench.workspace.import_workspace import import_workspace_workflow
 
     ws_dir = tmp_path / "imported-workspace"
     config_dir = ws_dir / "aws-accelerator-config"

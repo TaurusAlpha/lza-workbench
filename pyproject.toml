@@ -58,8 +58,8 @@ name = "Layered architecture"
 type = "layers"
 layers = [
   "lza_workbench.interfaces.cli | lza_workbench.interfaces.web",
-  "lza_workbench.configuration.application | lza_workbench.installer.application | lza_workbench.pipeline.application | lza_workbench.workspace.application",
-  "lza_workbench.configuration : lza_workbench.installer : lza_workbench.pipeline : lza_workbench.workspace : lza_workbench.status",
+  "lza_workbench.status",
+  "lza_workbench.configuration : lza_workbench.installer : lza_workbench.pipeline : lza_workbench.workspace",
   "lza_workbench.infrastructure.aws | lza_workbench.infrastructure.github",
 ]
 ignore_imports = ["lza_workbench.interfaces.cli.main -> lza_workbench.interfaces.web.main"]

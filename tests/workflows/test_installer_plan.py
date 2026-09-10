@@ -8,13 +8,15 @@ from unittest.mock import MagicMock, patch
 from botocore.exceptions import ClientError
 
 from lza_workbench.infrastructure.aws.cloudformation import CfnDeploymentPlanResult
-from lza_workbench.installer.application.initialize import (
+from lza_workbench.installer.initialize import (
     InstallerSettingsRequest,
     apply_installer_settings,
     get_installer_parameters_schema,
 )
-from lza_workbench.installer.application.plan import plan_installer_workflow
-from lza_workbench.installer.planning import InstallerPlanResult
+from lza_workbench.installer.plan import (
+    InstallerPlanResult,
+    plan_installer_workflow,
+)
 from lza_workbench.workspace.persistence import (
     load_workspace_config,
     load_workspace_state,
@@ -92,7 +94,7 @@ def test_plan_installer_workflow_marks_changed_template_for_update(
     with (
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.installer.application.plan.inspect_cloudformation_stack") as mock_cfn,
+        patch("lza_workbench.installer.plan.inspect_cloudformation_stack") as mock_cfn,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lza_workbench.installer.application.initialize import (
+from lza_workbench.installer.initialize import (
     InstallerForm,
     InstallerFormField,
     InstallerSettingsResult,

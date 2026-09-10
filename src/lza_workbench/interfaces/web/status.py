@@ -8,22 +8,22 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from lza_workbench.configuration.application.deploy import deploy_configuration_workflow
-from lza_workbench.configuration.application.pull import (
+from lza_workbench.configuration.deploy import deploy_configuration_workflow
+from lza_workbench.configuration.pull import (
     ConfigPullPreparation,
     ConfigPullRequest,
     ConfigPullResult,
     apply_config_pull,
     prepare_config_pull,
 )
-from lza_workbench.configuration.application.push import (
+from lza_workbench.configuration.push import (
     ConfigPushPreparation,
     ConfigPushRequest,
     ConfigPushResult,
     apply_config_push,
     prepare_config_push,
 )
-from lza_workbench.configuration.application.status import (
+from lza_workbench.configuration.status import (
     CodeCommitConfigurationRepositoryStatus,
     CodeConnectionConfigurationRepositoryStatus,
     ConfigurationStatusResult,
@@ -32,21 +32,21 @@ from lza_workbench.configuration.application.status import (
     get_config_status_workflow,
 )
 from lza_workbench.errors import LzaError
-from lza_workbench.installer.application.initialize import (
+from lza_workbench.installer.initialize import (
     InstallerForm,
     InstallerSettingsRequest,
     apply_installer_settings,
     get_installer_parameters_schema,
 )
-from lza_workbench.installer.application.plan import (
+from lza_workbench.installer.plan import (
     InstallerPlanResult,
     plan_installer_workflow,
 )
-from lza_workbench.installer.application.status import (
+from lza_workbench.installer.status import (
     InstallerStatusResult,
     get_installer_status_workflow,
 )
-from lza_workbench.pipeline.application.status import (
+from lza_workbench.pipeline.status import (
     PipelineActionFailure,
     PipelineSnapshotResult,
     get_pipeline_diagnostics_workflow,
@@ -57,13 +57,13 @@ from lza_workbench.status.observer import (
     RootStatusResult,
     get_root_status_workflow,
 )
-from lza_workbench.workspace.application.bootstrap import (
+from lza_workbench.workspace.bootstrap import (
     BootstrapPlanResult,
     WorkspaceBootstrapResult,
     bootstrap_workspace_workflow,
     plan_bootstrap_workflow,
 )
-from lza_workbench.workspace.application.import_workspace import (
+from lza_workbench.workspace.import_workspace import (
     ImportWorkspaceDiscovery,
     ImportWorkspacePreparation,
     ImportWorkspaceRequest,
@@ -72,7 +72,7 @@ from lza_workbench.workspace.application.import_workspace import (
     discover_import_workspace,
     prepare_workspace_import,
 )
-from lza_workbench.workspace.application.initialize import (
+from lza_workbench.workspace.initialize import (
     WorkspaceInitResult,
     init_workspace,
 )

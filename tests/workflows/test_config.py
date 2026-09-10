@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.configuration.application.pull import (
+from lza_workbench.configuration.pull import (
     ConfigPullResult,
     pull_configuration_workflow,
 )
-from lza_workbench.configuration.application.push import (
+from lza_workbench.configuration.push import (
     ConfigPushResult,
     push_configuration_workflow,
 )

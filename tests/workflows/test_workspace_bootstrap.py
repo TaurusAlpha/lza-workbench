@@ -9,7 +9,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from lza_workbench.errors import LzaError
-from lza_workbench.workspace.application.bootstrap import (
+from lza_workbench.workspace.bootstrap import (
     bootstrap_workspace_workflow,
     ensure_s3_workbench_assets_bucket,
     get_workbench_assets_bucket_name,
@@ -362,7 +362,7 @@ def test_plan_bootstrap_workflow_with_github_source_success(
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
         patch(
-            "lza_workbench.workspace.application.bootstrap.validate_github_repository_access"
+            "lza_workbench.workspace.bootstrap.validate_github_repository_access"
         ) as mock_gh,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}
@@ -482,7 +482,7 @@ def test_bootstrap_workspace_workflow_with_github_token_provided(
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
         patch(
-            "lza_workbench.workspace.application.bootstrap.validate_github_repository_access"
+            "lza_workbench.workspace.bootstrap.validate_github_repository_access"
         ) as mock_gh,
     ):
         mock_val.return_value = {"account": "111222333444", "arn": "arn:aws:iam::111222333444:root"}

@@ -37,7 +37,7 @@ from lza_workbench.workspace.context import (
     WorkspaceCapability,
     load_workspace_context,
 )
-from lza_workbench.workspace.model import WorkspaceConfig, WorkspaceState
+from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
 
 @dataclass(frozen=True)

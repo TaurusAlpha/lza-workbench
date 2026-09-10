@@ -9,7 +9,7 @@ import typer
 from rich.panel import Panel
 from rich.table import Table
 
-from lza_workbench.installer.application.deploy import (
+from lza_workbench.installer.deploy import (
     CfnDeploymentPlanResult,
     CfnStackStatusResult,
     InstallerConfigValidationError,
@@ -19,17 +19,17 @@ from lza_workbench.installer.application.deploy import (
     apply_installer_deployment,
     prepare_installer_deployment,
 )
-from lza_workbench.installer.application.import_deployed import (
+from lza_workbench.installer.import_deployed import (
     InstallerImportResult,
     import_installer_workflow,
 )
-from lza_workbench.installer.application.initialize import (
+from lza_workbench.installer.initialize import (
     InstallerSettingsRequest,
     InstallerSettingsResult,
     apply_installer_settings,
     get_installer_parameters_schema,
 )
-from lza_workbench.installer.application.plan import (
+from lza_workbench.installer.plan import (
     InstallerPlanResult,
     plan_installer_workflow,
 )

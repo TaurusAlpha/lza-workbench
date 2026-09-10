@@ -6,17 +6,15 @@ from pathlib import Path
 
 from rich.table import Table
 
-from lza_workbench.configuration.application.status import (
-    get_config_status_workflow,
-)
 from lza_workbench.configuration.status import (
     CodeCommitConfigurationRepositoryStatus,
     CodeConnectionConfigurationRepositoryStatus,
     ConfigurationStatusResult,
     GitConfigurationRepositoryStatus,
     S3ConfigurationRepositoryStatus,
+    get_config_status_workflow,
 )
-from lza_workbench.installer.application.status import (
+from lza_workbench.installer.status import (
     InstallerStatusResult,
     get_installer_status_workflow,
     normalize_lza_version,
@@ -33,11 +31,9 @@ from lza_workbench.interfaces.cli.output import (
     print_warning,
     render_workspace_header,
 )
-from lza_workbench.status.model import (
+from lza_workbench.status.observer import (
     PipelineSummary,
     RootStatusResult,
-)
-from lza_workbench.status.observer import (
     get_root_status_workflow,
 )
 

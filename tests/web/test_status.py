@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from lza_workbench.configuration.application.deploy import ConfigDeployResult
-from lza_workbench.configuration.application.pull import ConfigPullPreparation, ConfigPullResult
-from lza_workbench.configuration.application.push import ConfigPushPreparation, ConfigPushResult
+from lza_workbench.configuration.deploy import ConfigDeployResult
+from lza_workbench.configuration.pull import ConfigPullPreparation, ConfigPullResult
+from lza_workbench.configuration.push import ConfigPushPreparation, ConfigPushResult
 from lza_workbench.configuration.archive import ConfigDiffResult
 from lza_workbench.configuration.git import GitRemoteSyncStatus, GitWorkingTreeStatus
 from lza_workbench.configuration.status import (
@@ -28,18 +28,17 @@ from lza_workbench.infrastructure.aws.cloudformation import (
     CfnStackStatusResult,
 )
 from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult
-from lza_workbench.installer.application.initialize import (
+from lza_workbench.installer.initialize import (
     InstallerForm,
     InstallerFormField,
     InstallerSettingsResult,
 )
-from lza_workbench.installer.application.status import InstallerStatusResult
-from lza_workbench.installer.planning import InstallerPlanResult
+from lza_workbench.installer.plan import InstallerPlanResult
 from lza_workbench.installer.source import CodeCommitPlanResult
-from lza_workbench.installer.status import StateAlignment
+from lza_workbench.installer.status import InstallerStatusResult, StateAlignment
 from lza_workbench.interfaces.web.app import create_app
-from lza_workbench.pipeline.application.start import PipelineStartResult
-from lza_workbench.pipeline.application.status import (
+from lza_workbench.pipeline.start import PipelineStartResult
+from lza_workbench.pipeline.status import (
     PipelineActionFailure,
     PipelineSnapshotResult,
 )
@@ -52,7 +51,7 @@ from lza_workbench.status.observer import (
     PipelineSummary,
     RootStatusResult,
 )
-from lza_workbench.workspace.application.bootstrap import (
+from lza_workbench.workspace.bootstrap import (
     BootstrapAction,
     BootstrapPlanResult,
     WorkspaceBootstrapResult,
@@ -957,7 +956,7 @@ def test_workspace_open_api(tmp_path: Path) -> None:
 
 def test_workspace_init_preview_and_apply(tmp_path: Path) -> None:
     from lza_workbench.interfaces.web.status import ActiveWorkspaceContext
-    from lza_workbench.workspace.application.initialize import WorkspaceInitResult
+    from lza_workbench.workspace.initialize import WorkspaceInitResult
     from lza_workbench.workspace.schema import (
         AwsConfig,
         CustomerConfig,
@@ -1020,7 +1019,7 @@ def test_workspace_init_preview_and_apply(tmp_path: Path) -> None:
 
 def test_workspace_import_discover_prepare_apply(tmp_path: Path) -> None:
     from lza_workbench.interfaces.web.status import ActiveWorkspaceContext
-    from lza_workbench.workspace.application.import_workspace import (
+    from lza_workbench.workspace.import_workspace import (
         ImportWorkspaceDiscovery,
         ImportWorkspacePreparation,
         WorkspaceImportResult,

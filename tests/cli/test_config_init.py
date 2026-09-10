@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from lza_workbench.configuration.application.initialize import (
+from lza_workbench.configuration.initialize import (
     ConfigInitResult,
     init_config_workflow,
 )
@@ -17,7 +17,7 @@ from lza_workbench.configuration.rendering import (
 )
 from lza_workbench.configuration.templates import list_packaged_templates
 from lza_workbench.interfaces.cli.main import app
-from lza_workbench.workspace.application.initialize import init_workspace
+from lza_workbench.workspace.initialize import init_workspace
 from lza_workbench.workspace.persistence import (
     load_workspace_config,
     load_workspace_state,
@@ -543,7 +543,7 @@ def test_config_init_git_failure_surfaces_clean_error(
     def mock_fail(repo_dir: Path) -> None:
         raise LzaError("Simulated git initialization failure")
 
-    monkeypatch.setattr("lza_workbench.configuration.application.initialize.init_git_repository", mock_fail)
+    monkeypatch.setattr("lza_workbench.configuration.initialize.init_git_repository", mock_fail)
 
     with pytest.raises(LzaError, match="Simulated git initialization failure"):
         init_config_workflow(

@@ -1,7 +1,8 @@
-"""Workflow for planning LZA installer CloudFormation deployment."""
+"""Workflow and result models for planning LZA installer CloudFormation deployment."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.errors import LzaError
@@ -16,21 +17,16 @@ from lza_workbench.infrastructure.aws.codecommit import (
 from lza_workbench.infrastructure.aws.secrets_manager import inspect_secret_exists
 from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
 from lza_workbench.installer.config import validate_installer_configuration
-from lza_workbench.installer.deployment import (
+from lza_workbench.installer.deploy import (
     get_installer_template_digest,
     include_template_digest_change,
 )
 from lza_workbench.installer.parameters import (
     build_installer_cfn_parameters,
 )
-from lza_workbench.installer.planning import (
-    InstallerPlanResult,
-    prepare_installer_plan_result,
-)
 from lza_workbench.installer.source import (
+    CodeCommitPlanResult,
     github_secret_warning as build_github_secret_warning,
-)
-from lza_workbench.installer.source import (
     prepare_codecommit_source_plan,
 )
 from lza_workbench.installer.templates import (
@@ -39,6 +35,50 @@ from lza_workbench.installer.templates import (
     validate_parameters_against_schema,
 )
 from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
+from lza_workbench.workspace.schema import WorkspaceConfig
+
+
+@dataclass(frozen=True)
+class InstallerPlanResult:
+    """All data needed to render a read-only installer deployment plan."""
+
+    workspace_dir: Path
+    config: WorkspaceConfig
+    profile: str
+    region: str
+    aws_identity: dict[str, str] | None
+    aws_error: str | None
+    codecommit_plan: CodeCommitPlanResult
+    cloudformation_plan: CfnDeploymentPlanResult
+    dry_run: bool
+    github_secret_warning: str | None = None
+
+
+def prepare_installer_plan_result(
+    *,
+    workspace_dir: Path,
+    config: WorkspaceConfig,
+    region: str,
+    aws_identity: dict[str, str] | None,
+    aws_error: str | None,
+    codecommit_plan: CodeCommitPlanResult,
+    cloudformation_plan: CfnDeploymentPlanResult,
+    dry_run: bool,
+    github_secret_warning: str | None = None,
+) -> InstallerPlanResult:
+    """Collect command results into the presentation-independent plan result."""
+    return InstallerPlanResult(
+        workspace_dir=workspace_dir,
+        config=config,
+        profile=config.aws.profile or "",
+        region=region,
+        aws_identity=aws_identity,
+        aws_error=aws_error,
+        codecommit_plan=codecommit_plan,
+        cloudformation_plan=cloudformation_plan,
+        dry_run=dry_run,
+        github_secret_warning=github_secret_warning,
+    )
 
 
 def plan_installer_workflow(
@@ -85,7 +125,7 @@ def plan_installer_workflow(
     aws_identity = aws_context.identity
     aws_error = aws_context.error
 
-    # Step 4: CodeCommit Source Planning
+    # CodeCommit Source Planning
     codecommit_client = factory.get_client("codecommit") if aws_identity else None
     version_ref = resolved_params["RepositoryBranchName"]
     repo_name = config.installer.source_code.repository_name or "aws-accelerator-codecommit"
@@ -128,7 +168,7 @@ def plan_installer_workflow(
                 config.installer.source_code.github_secret_name, exists, error
             )
 
-    # Step 5: CloudFormation Deployment Planning
+    # CloudFormation Deployment Planning
     stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
     cfn_client = factory.get_client("cloudformation") if aws_identity else None
     if cfn_client is not None:
@@ -150,7 +190,7 @@ def plan_installer_workflow(
         deployed_template_digest=ctx.state.installer_template_digest,
     )
 
-    # Step 6: Return Structured Plan Result
+    # Return Structured Plan Result
     return prepare_installer_plan_result(
         workspace_dir=workspace_dir,
         config=config,
@@ -167,4 +207,5 @@ def plan_installer_workflow(
 __all__ = [
     "InstallerPlanResult",
     "plan_installer_workflow",
+    "prepare_installer_plan_result",
 ]

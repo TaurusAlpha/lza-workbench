@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from lza_workbench.configuration.application.deploy import (
+from lza_workbench.configuration.deploy import (
     ConfigDeployError,
     ConfigDeployResult,
     deploy_configuration_workflow,
@@ -125,15 +125,15 @@ def test_deploy_configuration_preserves_push_when_start_fails(configured_workspa
     aws_context = MagicMock()
     with (
         patch(
-            "lza_workbench.configuration.application.deploy.resolve_aws_execution_context",
+            "lza_workbench.configuration.deploy.resolve_aws_execution_context",
             return_value=aws_context,
         ),
         patch(
-            "lza_workbench.configuration.application.deploy.apply_config_push",
+            "lza_workbench.configuration.deploy.apply_config_push",
             return_value=push_result,
         ),
         patch(
-            "lza_workbench.configuration.application.deploy.start_pipeline_workflow",
+            "lza_workbench.configuration.deploy.start_pipeline_workflow",
             side_effect=LzaError("start failed"),
         ),
     ):
@@ -149,11 +149,11 @@ def test_deploy_configuration_does_not_wrap_unexpected_push_errors(
 ) -> None:
     with (
         patch(
-            "lza_workbench.configuration.application.deploy.resolve_aws_execution_context",
+            "lza_workbench.configuration.deploy.resolve_aws_execution_context",
             return_value=MagicMock(),
         ),
         patch(
-            "lza_workbench.configuration.application.deploy.apply_config_push",
+            "lza_workbench.configuration.deploy.apply_config_push",
             side_effect=RuntimeError("unexpected push defect"),
         ),
     ):
@@ -169,19 +169,19 @@ def test_deploy_configuration_preserves_execution_when_watch_fails(
     aws_context = MagicMock()
     with (
         patch(
-            "lza_workbench.configuration.application.deploy.resolve_aws_execution_context",
+            "lza_workbench.configuration.deploy.resolve_aws_execution_context",
             return_value=aws_context,
         ),
         patch(
-            "lza_workbench.configuration.application.deploy.apply_config_push",
+            "lza_workbench.configuration.deploy.apply_config_push",
             return_value=push_result,
         ),
         patch(
-            "lza_workbench.configuration.application.deploy.start_pipeline_workflow",
+            "lza_workbench.configuration.deploy.start_pipeline_workflow",
             return_value=start_result,
         ),
         patch(
-            "lza_workbench.configuration.application.deploy.watch_pipeline_workflow",
+            "lza_workbench.configuration.deploy.watch_pipeline_workflow",
             side_effect=LzaError("watch failed"),
         ),
     ):

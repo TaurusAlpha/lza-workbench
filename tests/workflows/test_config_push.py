@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.configuration.application.push import (
+from lza_workbench.configuration.push import (
     ConfigPushRequest,
     apply_config_push,
     push_configuration_workflow,

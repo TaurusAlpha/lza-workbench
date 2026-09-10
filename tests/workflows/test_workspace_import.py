@@ -10,8 +10,8 @@ import pytest
 from lza_workbench.configuration.git import init_git_repository, set_git_remote_url
 from lza_workbench.configuration.templates import resolve_template_source
 from lza_workbench.errors import LzaError
-from lza_workbench.installer.application.plan import plan_installer_workflow
-from lza_workbench.workspace.application.import_workspace import (
+from lza_workbench.installer.plan import plan_installer_workflow
+from lza_workbench.workspace.import_workspace import (
     ImportWorkspaceRequest,
     WorkspaceImportResult,
     apply_workspace_import,

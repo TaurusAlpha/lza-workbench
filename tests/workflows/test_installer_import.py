@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lza_workbench.errors import LzaError
-from lza_workbench.installer.application.import_deployed import import_installer_workflow
+from lza_workbench.installer.import_deployed import import_installer_workflow
 from lza_workbench.workspace.persistence import (
     load_workspace_config,
     load_workspace_state,

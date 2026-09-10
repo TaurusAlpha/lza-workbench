@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lza_workbench.errors import LzaError
-from lza_workbench.pipeline.application.start import (
+from lza_workbench.pipeline.start import (
     PipelineStartResult,
     start_pipeline_workflow,
 )
@@ -156,7 +156,7 @@ def test_start_pipeline_reports_execution_id_when_state_save_fails(
             "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client", return_value=mock_client
         ),
         patch(
-            "lza_workbench.pipeline.application.start.write_workspace_state",
+            "lza_workbench.pipeline.start.write_workspace_state",
             side_effect=OSError("disk full"),
         ),
     ):

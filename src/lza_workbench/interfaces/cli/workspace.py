@@ -18,21 +18,21 @@ from lza_workbench.interfaces.cli.output import (
     print_section,
     print_success,
 )
-from lza_workbench.workspace.application.bootstrap import (
+from lza_workbench.workspace.bootstrap import (
     BootstrapAction,
     BootstrapPlanResult,
     WorkspaceBootstrapResult,
     apply_bootstrap_preparation,
     prepare_bootstrap_workflow,
 )
-from lza_workbench.workspace.application.import_workspace import (
+from lza_workbench.workspace.import_workspace import (
     ImportWorkspaceRequest,
     WorkspaceImportResult,
     apply_workspace_import,
     discover_import_workspace,
     prepare_workspace_import,
 )
-from lza_workbench.workspace.application.initialize import (
+from lza_workbench.workspace.initialize import (
     WorkspaceInitResult,
     init_workspace,
 )

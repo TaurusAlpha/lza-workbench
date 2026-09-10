@@ -1,85 +1,66 @@
 ## Counterfactual Architecture
 
-The LZA Workbench is structured around feature-owned application layers, domain models, provider abstractions, and thin infrastructure adapters rather than a monolithic global workflow layer:
+The LZA Workbench is structured around feature-owned domain modules and thin infrastructure adapters without artificial subpackage nesting or shadow application layers:
 
 ```text
 src/lza_workbench/
 ├── constants.py                     # Global constants, default timeouts, and formatting symbols
 ├── errors.py                        # Base exception hierarchy (LzaError, LzaConfigurationError, etc.)
 │
-├── workspace/                       # Workspace lifecycle, configuration, and state
-│   ├── model.py                     # Canonical workspace models (WorkspaceConfig, WorkspaceState)
+├── workspace/                       # Workspace lifecycle, configuration, state, and workflows
 │   ├── schema.py                    # Pydantic schemas for lza-workspace.yaml and .lza/state.json
 │   ├── persistence.py               # Low-level YAML/JSON loaders, dumpers, and atomic write operations
 │   ├── assessment.py                # WorkspaceCapability and WorkspaceAssessment readiness evaluations
 │   ├── context.py                   # WorkspaceContext resolution and environment management
 │   ├── paths.py                     # Filesystem path resolvers for workspace directories and artifacts
-│   ├── setup.py                     # Filesystem scaffolding, gitignore generation, and workspace bootstrap
-│   └── application/
-│       ├── initialize.py            # Workflow for initializing a new customer workspace
-│       ├── import_workspace.py      # Workflow for adopting and importing existing LZA deployments
-│       └── bootstrap.py             # Workflow for validating and provisioning AWS prerequisite resources
+│   ├── initialize.py                # Workflow and helpers for initializing a new customer workspace
+│   ├── import_workspace.py          # Workflow for adopting and importing existing LZA deployments
+│   └── bootstrap.py                 # Workflow for validating and provisioning AWS prerequisite resources
 │
-├── installer/                       # LZA Installer CloudFormation stack management
-│   ├── model.py                     # Canonical installer domain models (LzaInstaller, PipelineInstaller)
+├── installer/                       # LZA Installer CloudFormation stack management and workflows
 │   ├── schema.py                    # Pydantic schemas for installer options, templates, and parameters
 │   ├── parameters.py                # CloudFormation parameter codec, validation, and overrides
 │   ├── templates.py                 # Installer CloudFormation template retrieval, caching, and hashing
-│   ├── deployment.py                # CloudFormation stack creation, updates, changesets, and polling
-│   ├── planning.py                  # Stack change calculations and parameter planning
+│   ├── deploy.py                    # Preflight checks, plan validation, stack deployment, and monitoring
+│   ├── plan.py                      # Stack change calculations, parameter planning, and plan workflow
+│   ├── initialize.py                # Workflow to initialize and collect installer settings
+│   ├── import_deployed.py           # Workflow to discover and adopt an already deployed installer stack
 │   ├── deployed_version.py          # Live CloudFormation stack inspection and version detection
 │   ├── state.py                     # Operational state transitions for installer deployments
-│   ├── status.py                    # Installer component status evaluation and observation builders
+│   ├── status.py                    # Calculations, warnings, and status query workflow
 │   ├── sync.py                      # Source repository synchronization and branch validation
-│   ├── versions.py                  # Packaged LZA installer version constants and version checks
-│   ├── sources/                     # Installer source provider abstractions
-│   │   ├── protocol.py              # InstallerSourceProvider protocol definition
-│   │   ├── github.py                # GitHub source provider (secret inspection and repo accessibility)
-│   │   ├── codecommit.py            # AWS CodeCommit source provider (repo existence and branch checks)
-│   │   ├── s3.py                    # AWS S3 source provider (bucket/key object inspection)
-│   │   └── codeconnection.py        # AWS CodeConnections provider (connection ARN status checks)
-│   └── application/
-│       ├── initialize.py            # Workflow to initialize installer settings
-│       ├── plan.py                  # Workflow to calculate changes and validate installer stack parameters
-│       ├── deploy.py                # Workflow to deploy or update the CloudFormation installer stack
-│       ├── import_deployed.py       # Workflow to adopt an already deployed installer stack
-│       └── status.py                # Workflow to inspect and report live installer stack status
+│   ├── source.py                    # Source prerequisite validation and planning (CodeCommit, S3, GitHub)
+│   └── versions.py                  # Packaged LZA installer version constants and version checks
 │
-├── configuration/                   # LZA configuration repository and packaging management
-│   ├── model.py                     # Canonical configuration domain models and schemas
+├── configuration/                   # LZA configuration repository, packaging, and workflows
 │   ├── schema.py                    # Pydantic schemas for repositories, templates, and packaging exclusions
 │   ├── archive.py                   # Zip packaging, checksum hashing, and file diffing
 │   ├── git.py                       # Git CLI subprocess operations (branch, commit, diff, push, pull)
 │   ├── state.py                     # Operational state transitions for configuration archive transfers
-│   ├── status.py                    # Configuration component status evaluation and observation builders
+│   ├── status.py                    # Status evaluation, warning compilers, and status query workflow
 │   ├── sync.py                      # Synchronization coordinator between local files and remote targets
 │   ├── templates.py                 # Starter configuration template extractors and loaders
-│   ├── remotes/                     # Configuration remote provider abstractions
-│   │   ├── protocol.py              # ConfigurationRemote protocol definition
-│   │   ├── s3.py                    # S3 configuration remote provider (direct archive push/pull/inspect)
-│   │   └── git_remote.py            # Git configuration remote provider (CodeCommit/Git push/pull/inspect)
-│   └── application/
-│       ├── initialize.py            # Workflow to initialize customer configuration repository and templates
-│       ├── push.py                  # Workflow to push local configuration to remote destination
-│       ├── pull.py                  # Workflow to pull remote configuration into local workspace
-│       ├── deploy.py                # Workflow to push configuration and immediately start the pipeline
-│       ├── status.py                # Workflow to inspect configuration status against remote
-│       └── diff.py                  # Workflow to compute differences between local config and remote package
+│   ├── rendering.py                 # Template rendering and variable replacement
+│   ├── repository.py                # Repository destination and naming helpers
+│   ├── validation.py                # Local configuration structure validation
+│   ├── initialize.py                # Workflow to initialize customer configuration repository and templates
+│   ├── push.py                      # Workflow to push local configuration to remote destination
+│   ├── pull.py                      # Workflow to pull remote configuration into local workspace
+│   ├── deploy.py                    # Workflow to push configuration and immediately start the pipeline
+│   └── diff.py                      # Workflow to compute differences between local config and remote package
 │
-├── pipeline/                        # CodePipeline execution tracking and diagnostics
+├── pipeline/                        # CodePipeline execution tracking, diagnostics, and workflows
 │   ├── model.py                     # Domain pipeline models (PipelineExecutionSnapshot, stage/action states)
 │   ├── failures.py                  # Pattern recognizers and diagnostics for CodePipeline and CodeBuild errors
 │   ├── watcher.py                   # Reusable lifecycle watcher and update generator for pipeline runs
 │   ├── observation.py               # CodePipeline polling, stage details, and snapshot aggregators
 │   ├── resolution.py                # Pipeline name resolution for installer and configuration workflows
 │   ├── state.py                     # Operational state transitions for recorded pipeline runs
-│   └── application/
-│       ├── start.py                 # Workflow to trigger a pipeline execution
-│       └── status.py                # Workflow to fetch execution snapshots and stage breakdown
+│   ├── start.py                     # Workflow to trigger a pipeline execution
+│   └── status.py                    # Workflow to fetch execution snapshots and stage diagnostics
 │
 ├── status/                          # Unified status aggregation and health reporting
-│   ├── model.py                     # Aggregated RootStatusResult and component health models
-│   └── observer.py                  # Observer workflows (get_root_status_workflow)
+│   └── observer.py                  # Observer workflows and status models (get_root_status_workflow)
 │
 ├── infrastructure/                  # Thin external service adapters
 │   ├── aws/
@@ -148,10 +129,10 @@ Status observation is centralized through a single observer pipeline producing a
 WorkspaceContext + AWS context
               │
               ▼
-       WorkspaceObserver (observer.py)
+       WorkspaceObserver (status/observer.py)
               │
               ▼
-       RootStatusResult (status/model.py)
+       RootStatusResult (status/observer.py)
        ├── installer
        ├── configuration remote/local
        ├── pipelines
