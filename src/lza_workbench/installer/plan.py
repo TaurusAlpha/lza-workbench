@@ -26,8 +26,10 @@ from lza_workbench.installer.parameters import (
 )
 from lza_workbench.installer.source import (
     CodeCommitPlanResult,
-    github_secret_warning as build_github_secret_warning,
     prepare_codecommit_source_plan,
+)
+from lza_workbench.installer.source import (
+    github_secret_warning as build_github_secret_warning,
 )
 from lza_workbench.installer.templates import (
     inspect_template_parameters,

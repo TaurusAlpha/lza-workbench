@@ -21,11 +21,11 @@ from lza_workbench.interfaces.cli.output import (
     print_success,
     render_failure_section,
 )
+from lza_workbench.pipeline.model import PipelineActionState
 from lza_workbench.pipeline.start import (
     PipelineStartResult,
     start_pipeline_workflow,
 )
-from lza_workbench.pipeline.model import PipelineActionState
 from lza_workbench.pipeline.watcher import (
     PipelineWatchResult,
     PipelineWatchUpdate,
