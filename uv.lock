@@ -293,7 +293,7 @@ wheels = [
 
 [[package]]
 name = "lza-workbench"
-version = "0.38.2"
+version = "0.39.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },

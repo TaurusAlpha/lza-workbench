@@ -7,13 +7,16 @@ import {
   getPipelineDiagnostics,
   getPipelineSnapshot,
   getStatus,
+  openWorkspace,
 } from "./api.js";
 import { renderBootstrapDetails } from "./bootstrap.js";
 import { renderConfigurationDetails } from "./configuration.js";
 import { renderInstallerDetails } from "./installer.js";
-import { renderOverview } from "./overview.js";
+import { escapeHtml, renderOverview } from "./overview.js";
 import { renderPipelineDetails } from "./pipeline.js";
+import { getRecentWorkspaces, recordRecentWorkspace } from "./recents.js";
 import { renderSetup } from "./setup.js";
+import { renderWelcome } from "./welcome.js";
 
 const viewContent = document.querySelector("#view-content") || document.querySelector("#overview");
 const notice = document.querySelector("#notice");
@@ -22,9 +25,215 @@ const refresh = document.querySelector("#refresh");
 const pageEyebrow = document.querySelector("#page-eyebrow");
 const pageTitle = document.querySelector("#page-title");
 const breadcrumb = document.querySelector("#breadcrumb");
+const pageHeader = document.querySelector("#page-header");
+
+// Navbar elements
+const mainNav = document.querySelector("#main-nav");
+const wsSwitcherBtn = document.querySelector("#ws-switcher-btn");
+const wsSwitcherMenu = document.querySelector("#ws-switcher-menu");
+const wsSwitcherName = document.querySelector("#ws-switcher-name");
+const wsSwitcherDot = document.querySelector("#ws-switcher-dot");
+const wsMenuRecents = document.querySelector("#ws-menu-recents");
+const awsStatusChip = document.querySelector("#aws-status-chip");
+const awsStatusLabel = document.querySelector("#aws-status-label");
+const themeToggle = document.querySelector("#theme-toggle");
+const toastContainer = document.querySelector("#toast-container");
 
 let pipelinePollTimer = null;
+let currentActiveWorkspace = null;
 
+// ==========================================
+// Toast Notification System
+// ==========================================
+export function showToast(message, type = "info", duration = 3500) {
+  if (!toastContainer) return;
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `
+    <div class="toast-content">
+      <span class="toast-icon"></span>
+      <span class="toast-msg">${escapeHtml(message)}</span>
+    </div>
+    <button type="button" class="toast-close" aria-label="Close">&times;</button>
+  `;
+
+  const closeBtn = toast.querySelector(".toast-close");
+  const removeToast = () => {
+    toast.classList.add("toast-hiding");
+    toast.addEventListener("animationend", () => toast.remove());
+  };
+
+  closeBtn.addEventListener("click", removeToast);
+  toastContainer.appendChild(toast);
+
+  if (duration > 0) {
+    setTimeout(() => {
+      if (toast.parentElement) removeToast();
+    }, duration);
+  }
+}
+
+// ==========================================
+// Theme Management
+// ==========================================
+function initTheme() {
+  const savedTheme = localStorage.getItem("lza_theme") || "dark";
+  applyTheme(savedTheme);
+
+  if (themeToggle) {
+    themeToggle.addEventListener("click", () => {
+      const current = document.documentElement.getAttribute("data-theme") || "dark";
+      const next = current === "dark" ? "light" : "dark";
+      applyTheme(next);
+      localStorage.setItem("lza_theme", next);
+    });
+  }
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  const sun = document.querySelector(".theme-icon-sun");
+  const moon = document.querySelector(".theme-icon-moon");
+  if (sun && moon) {
+    if (theme === "light") {
+      sun.hidden = false;
+      moon.hidden = true;
+    } else {
+      sun.hidden = true;
+      moon.hidden = false;
+    }
+  }
+}
+
+// ==========================================
+// Workspace Switcher Dropdown
+// ==========================================
+function updateWorkspaceSwitcher(ws) {
+  currentActiveWorkspace = ws;
+  if (!wsSwitcherName) return;
+
+  if (ws && ws.hasWorkspace) {
+    wsSwitcherName.textContent = ws.customerName || "Customer Workspace";
+    wsSwitcherName.title = `${ws.customerName || "Workspace"} (${ws.workspaceDir})`;
+    if (wsSwitcherDot) wsSwitcherDot.className = "ws-switcher-dot active";
+  } else {
+    wsSwitcherName.textContent = "No Active Workspace";
+    wsSwitcherName.removeAttribute("title");
+    if (wsSwitcherDot) wsSwitcherDot.className = "ws-switcher-dot";
+  }
+  renderSwitcherRecents();
+}
+
+function renderSwitcherRecents() {
+  if (!wsMenuRecents) return;
+  const recents = getRecentWorkspaces();
+  if (recents.length === 0) {
+    wsMenuRecents.innerHTML = `<div class="ws-menu-empty">No recent workspaces</div>`;
+    return;
+  }
+
+  wsMenuRecents.innerHTML = recents
+    .map(
+      (item) => `
+      <div class="ws-recent-item" data-dir="${escapeHtml(item.workspaceDir)}">
+        <div class="ws-recent-info">
+          <strong class="ws-recent-title">${escapeHtml(item.customerName)}</strong>
+          <span class="ws-recent-path" title="${escapeHtml(item.workspaceDir)}">${escapeHtml(item.workspaceDir)}</span>
+        </div>
+        <span class="ws-recent-badge badge badge-neutral">${escapeHtml(item.lzaVersion || "v1.15.5")}</span>
+      </div>
+    `
+    )
+    .join("");
+
+  wsMenuRecents.querySelectorAll(".ws-recent-item").forEach((el) => {
+    el.addEventListener("click", async () => {
+      const dir = el.dataset.dir;
+      closeSwitcherMenu();
+      try {
+        const res = await openWorkspace(dir);
+        recordRecentWorkspace({
+          customerName: res.customerName,
+          workspaceDir: res.workspaceDir,
+          lzaVersion: res.lzaVersion,
+        });
+        showToast(`Switched to workspace: ${res.customerName}`, "success");
+        window.location.hash = "#/overview";
+        handleRoute();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    });
+  });
+}
+
+function toggleSwitcherMenu() {
+  if (!wsSwitcherMenu) return;
+  const isHidden = wsSwitcherMenu.hidden;
+  if (isHidden) {
+    renderSwitcherRecents();
+    wsSwitcherMenu.hidden = false;
+    wsSwitcherBtn.setAttribute("aria-expanded", "true");
+  } else {
+    closeSwitcherMenu();
+  }
+}
+
+function closeSwitcherMenu() {
+  if (!wsSwitcherMenu) return;
+  wsSwitcherMenu.hidden = true;
+  if (wsSwitcherBtn) wsSwitcherBtn.setAttribute("aria-expanded", "false");
+}
+
+if (wsSwitcherBtn) {
+  wsSwitcherBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleSwitcherMenu();
+  });
+}
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#ws-switcher")) {
+    closeSwitcherMenu();
+  }
+});
+
+// ==========================================
+// AWS Status Indicator
+// ==========================================
+function updateAwsStatus(aws) {
+  if (!awsStatusChip || !awsStatusLabel) return;
+  if (aws && aws.isLive) {
+    awsStatusChip.className = "aws-status-pill live";
+    const accountStr = aws.identity?.account ? ` (${aws.identity.account})` : "";
+    const regionStr = aws.region ? ` [${aws.region}]` : "";
+    awsStatusLabel.textContent = `AWS Live${regionStr}`;
+    awsStatusChip.title = `AWS Live: Profile ${aws.profile || "default"}${accountStr}${regionStr}`;
+  } else {
+    awsStatusChip.className = "aws-status-pill offline";
+    awsStatusLabel.textContent = "AWS Offline";
+    awsStatusChip.title = aws?.error ? `AWS Offline: ${aws.error}` : "AWS Offline / Not Connected";
+  }
+}
+
+// ==========================================
+// Navigation Highlight
+// ==========================================
+function updateNavHighlight(routeName) {
+  if (!mainNav) return;
+  mainNav.querySelectorAll(".nav-link").forEach((link) => {
+    const route = link.dataset.route;
+    if (route === routeName) {
+      link.classList.add("active");
+    } else {
+      link.classList.remove("active");
+    }
+  });
+}
+
+// ==========================================
+// Polling & Routing
+// ==========================================
 function stopPipelinePolling() {
   if (pipelinePollTimer) {
     clearInterval(pipelinePollTimer);
@@ -39,6 +248,9 @@ function parseRoute() {
   const params = new URLSearchParams(queryPart || "");
   const executionId = params.get("executionId") || params.get("execution_id");
 
+  if (clean === "/welcome") {
+    return { name: "welcome" };
+  }
   if (clean === "/" || clean === "/overview") {
     return { name: "overview" };
   }
@@ -81,7 +293,52 @@ function getOfflineWarning(awsError) {
   return `AWS is offline${reason}. Displayed deployment, stack, and pipeline statuses are not live and reflect the last recorded state.`;
 }
 
+// ==========================================
+// View Loaders
+// ==========================================
+async function loadWelcome() {
+  stopPipelinePolling();
+  updateNavHighlight("welcome");
+  viewContent.className = "view-container";
+  viewContent.setAttribute("aria-busy", "true");
+  clearNotice();
+  refresh.disabled = true;
+
+  if (pageHeader) pageHeader.hidden = true;
+  if (breadcrumb) breadcrumb.hidden = true;
+
+  let activeWs = null;
+  try {
+    activeWs = await getActiveWorkspace();
+    if (activeWs && activeWs.hasWorkspace) {
+      updateWorkspaceSwitcher(activeWs);
+    }
+  } catch {
+    activeWs = null;
+  }
+
+  renderWelcome(
+    viewContent,
+    activeWs,
+    (openedWs) => {
+      updateWorkspaceSwitcher({
+        hasWorkspace: true,
+        customerName: openedWs.customerName,
+        workspaceDir: openedWs.workspaceDir,
+      });
+      window.location.hash = "#/overview";
+      handleRoute();
+    },
+    showToast
+  );
+
+  viewContent.setAttribute("aria-busy", "false");
+  refresh.disabled = false;
+}
+
 async function loadOverview() {
+  updateNavHighlight("overview");
+  if (pageHeader) pageHeader.hidden = false;
   viewContent.className = "card-grid";
   viewContent.setAttribute("aria-busy", "true");
   clearNotice();
@@ -95,8 +352,23 @@ async function loadOverview() {
       getStatus(),
       getBootstrapPlan().catch(() => null),
     ]);
+
     workspacePath.textContent = status.workspace.directory;
     workspacePath.title = status.workspace.directory;
+
+    // Record recents and update switcher
+    recordRecentWorkspace({
+      customerName: status.workspace.customerName,
+      workspaceDir: status.workspace.directory,
+      lzaVersion: status.workspace.lzaVersion,
+    });
+    updateWorkspaceSwitcher({
+      hasWorkspace: true,
+      customerName: status.workspace.customerName,
+      workspaceDir: status.workspace.directory,
+    });
+    updateAwsStatus(status.aws);
+
     renderOverview(viewContent, status, bootstrapPlan);
     if (!status.aws.isLive) {
       showNotice(getOfflineWarning(status.aws.error), "warning");
@@ -109,7 +381,8 @@ async function loadOverview() {
       error.message?.includes("No workspace") ||
       error.message?.includes("workspace_unavailable")
     ) {
-      window.location.hash = "#/setup";
+      updateWorkspaceSwitcher({ hasWorkspace: false });
+      window.location.hash = "#/welcome";
       return;
     }
     workspacePath.textContent = "Workspace status unavailable";
@@ -123,6 +396,8 @@ async function loadOverview() {
 }
 
 async function loadConfiguration() {
+  updateNavHighlight("configuration");
+  if (pageHeader) pageHeader.hidden = false;
   viewContent.className = "view-container";
   viewContent.setAttribute("aria-busy", "true");
   clearNotice();
@@ -154,6 +429,8 @@ async function loadConfiguration() {
 
 async function loadPipeline(pipelineType = "configuration", executionId = null) {
   stopPipelinePolling();
+  updateNavHighlight("pipeline");
+  if (pageHeader) pageHeader.hidden = false;
   viewContent.className = "view-container";
   viewContent.setAttribute("aria-busy", "true");
   clearNotice();
@@ -268,6 +545,8 @@ async function loadPipeline(pipelineType = "configuration", executionId = null) 
 
 async function loadInstaller() {
   stopPipelinePolling();
+  updateNavHighlight("installer");
+  if (pageHeader) pageHeader.hidden = false;
   viewContent.className = "view-container";
   viewContent.setAttribute("aria-busy", "true");
   clearNotice();
@@ -299,6 +578,8 @@ async function loadInstaller() {
 
 async function loadBootstrap() {
   stopPipelinePolling();
+  updateNavHighlight("bootstrap");
+  if (pageHeader) pageHeader.hidden = false;
   viewContent.className = "view-container";
   viewContent.setAttribute("aria-busy", "true");
   clearNotice();
@@ -326,6 +607,8 @@ async function loadBootstrap() {
 
 async function loadSetup() {
   stopPipelinePolling();
+  updateNavHighlight("overview");
+  if (pageHeader) pageHeader.hidden = false;
   viewContent.className = "view-container";
   viewContent.setAttribute("aria-busy", "true");
   clearNotice();
@@ -349,9 +632,11 @@ async function loadSetup() {
   if (hasActive) {
     workspacePath.textContent = activeWs.workspaceDir;
     workspacePath.title = activeWs.workspaceDir;
+    updateWorkspaceSwitcher(activeWs);
   } else {
     workspacePath.textContent = "No active workspace";
     workspacePath.removeAttribute("title");
+    updateWorkspaceSwitcher({ hasWorkspace: false });
   }
 
   renderSetup(viewContent, activeWs, () => {
@@ -366,7 +651,9 @@ async function loadSetup() {
 function handleRoute() {
   stopPipelinePolling();
   const route = parseRoute();
-  if (route.name === "setup") {
+  if (route.name === "welcome") {
+    loadWelcome();
+  } else if (route.name === "setup") {
     loadSetup();
   } else if (route.name === "installer") {
     loadInstaller();
@@ -381,6 +668,8 @@ function handleRoute() {
   }
 }
 
+// Initial setup
+initTheme();
 refresh.addEventListener("click", handleRoute);
 window.addEventListener("hashchange", handleRoute);
 handleRoute();
