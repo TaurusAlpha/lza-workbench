@@ -6,9 +6,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from lza_workbench.infrastructure.aws.s3 import S3ObjectObservation
 from lza_workbench.configuration.archive import compute_config_directory_digest
 from lza_workbench.configuration.git import GitRemoteSyncStatus
+from lza_workbench.infrastructure.aws.s3 import S3ObjectObservation
 from lza_workbench.workspace.schema import WorkspaceState
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from lza_workbench.errors import LzaError
 from lza_workbench.infrastructure.aws.cloudformation import (
     CfnDeploymentPlanResult,
     inspect_cloudformation_stack,
@@ -12,9 +13,8 @@ from lza_workbench.infrastructure.aws.codecommit import (
     CodeCommitRepositoryStatus,
     inspect_codecommit_repository,
 )
-from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
 from lza_workbench.infrastructure.aws.secrets_manager import inspect_secret_exists
-from lza_workbench.errors import LzaError
+from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
 from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.deployment import (
     get_installer_template_digest,

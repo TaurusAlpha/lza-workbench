@@ -8,12 +8,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from lza_workbench.interfaces.cli import app
 from lza_workbench.configuration.git import init_git_repository, set_git_remote_url
 from lza_workbench.configuration.templates import (
     REQUIRED_TEMPLATE_FILES,
     resolve_template_source,
 )
+from lza_workbench.interfaces.cli import app
 from lza_workbench.workspace.config import load_workspace_config
 from lza_workbench.workspace.state import load_workspace_state
 

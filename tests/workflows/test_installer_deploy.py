@@ -7,12 +7,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from lza_workbench.errors import LzaError
 from lza_workbench.infrastructure.aws.cloudformation import (
     CfnDeploymentPlanResult,
     CfnStackStatusResult,
 )
 from lza_workbench.infrastructure.aws.session import AwsExecutionContext
-from lza_workbench.errors import LzaError
 from lza_workbench.installer.application.deploy import (
     InstallerDeploymentPreparation,
     InstallerDeployResult,

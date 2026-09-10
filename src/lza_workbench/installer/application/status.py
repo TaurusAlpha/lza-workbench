@@ -10,7 +10,10 @@ from lza_workbench.infrastructure.aws.cloudformation import (
     get_cloudformation_stack_status,
 )
 from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult, get_pipeline_state
-from lza_workbench.infrastructure.aws.session import AwsExecutionContext, resolve_aws_execution_context
+from lza_workbench.infrastructure.aws.session import (
+    AwsExecutionContext,
+    resolve_aws_execution_context,
+)
 from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.installer.status import (
     StateAlignment,

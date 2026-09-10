@@ -7,16 +7,16 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from lza_workbench.interfaces.cli.main import app
+from lza_workbench.configuration.application.initialize import (
+    ConfigInitResult,
+    init_config_workflow,
+)
 from lza_workbench.configuration.rendering import (
     render_template_text,
     resolve_path_value,
 )
 from lza_workbench.configuration.templates import list_packaged_templates
-from lza_workbench.configuration.application.initialize import (
-    ConfigInitResult,
-    init_config_workflow,
-)
+from lza_workbench.interfaces.cli.main import app
 from lza_workbench.workspace.application.initialize import (
     init_workspace_workflow,
 )

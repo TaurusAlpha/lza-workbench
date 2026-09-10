@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 
-from lza_workbench.infrastructure.aws.cloudformation import CfnStackStatusResult
 from lza_workbench.errors import LzaError
+from lza_workbench.infrastructure.aws.cloudformation import CfnStackStatusResult
 from lza_workbench.installer.parameters import apply_deployed_installer_parameters
 from lza_workbench.installer.templates import INSTALLER_TEMPLATE_FILENAME
 from lza_workbench.installer.versions import normalize_lza_version

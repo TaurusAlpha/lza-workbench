@@ -11,9 +11,9 @@ from unittest.mock import MagicMock
 import pytest
 from typer.testing import CliRunner
 
+from lza_workbench.configuration.application.initialize import init_config_workflow
 from lza_workbench.infrastructure.aws.session import AwsExecutionContext
 from lza_workbench.installer.versions import PACKAGED_INSTALLER_VERSION
-from lza_workbench.configuration.application.initialize import init_config_workflow
 from lza_workbench.workspace.application.initialize import init_workspace_workflow
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.schema import (

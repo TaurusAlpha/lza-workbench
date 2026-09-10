@@ -7,12 +7,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from lza_workbench.errors import LzaError
 from lza_workbench.configuration.application.deploy import (
     ConfigDeployError,
     ConfigDeployResult,
     deploy_configuration_workflow,
 )
+from lza_workbench.errors import LzaError
 
 
 def test_deploy_configuration_dry_run(configured_workspace: Path) -> None:

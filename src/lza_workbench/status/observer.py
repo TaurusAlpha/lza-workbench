@@ -6,14 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from lza_workbench.infrastructure.aws.session import AwsClientFactory
-from lza_workbench.infrastructure.aws.cloudformation import get_cloudformation_stack_status
-from lza_workbench.infrastructure.aws.codepipeline import (
-    get_pipeline_execution,
-    get_pipeline_state,
-)
-from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
-from lza_workbench.infrastructure.aws.s3 import S3ObjectObservation, inspect_s3_object_safe
 from lza_workbench.configuration.git import (
     GitRemoteSyncStatus,
     get_git_remote_sync_status,
@@ -27,6 +19,13 @@ from lza_workbench.configuration.sync import (
     RemoteSyncStatus,
     evaluate_s3_remote_sync,
 )
+from lza_workbench.infrastructure.aws.cloudformation import get_cloudformation_stack_status
+from lza_workbench.infrastructure.aws.codepipeline import (
+    get_pipeline_execution,
+    get_pipeline_state,
+)
+from lza_workbench.infrastructure.aws.s3 import S3ObjectObservation, inspect_s3_object_safe
+from lza_workbench.infrastructure.aws.session import AwsClientFactory, resolve_aws_execution_context
 from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.pipeline.failures import (
     collect_pipeline_action_failures,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lza_workbench.infrastructure.aws.s3 import S3ObjectObservation
 from lza_workbench.configuration.archive import (
     compute_config_directory_digest,
 )
@@ -13,6 +12,7 @@ from lza_workbench.configuration.sync import (
     RemoteSyncStatus,
     evaluate_s3_remote_sync,
 )
+from lza_workbench.infrastructure.aws.s3 import S3ObjectObservation
 from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,

@@ -8,10 +8,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import lza_workbench.status.observer as status_root_mod
-from lza_workbench.infrastructure.aws.cloudformation import CfnStackStatusResult
-from lza_workbench.infrastructure.aws.codecommit import CodeCommitRepositoryStatus
-from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult
-from lza_workbench.interfaces.cli.status import render_root_status
+from lza_workbench.configuration.application.status import (
+    ConfigurationStatusResult,
+    get_config_status_workflow,
+)
 from lza_workbench.configuration.git import GitRemoteSyncStatus
 from lza_workbench.configuration.status import (
     CodeCommitConfigurationRepositoryStatus,
@@ -19,19 +19,19 @@ from lza_workbench.configuration.status import (
     S3ConfigurationRepositoryStatus,
 )
 from lza_workbench.errors import LzaError
-from lza_workbench.installer.sync import (
-    sync_installer_config,
-    sync_installer_state,
-)
-from lza_workbench.configuration.application.status import (
-    ConfigurationStatusResult,
-    get_config_status_workflow,
-)
+from lza_workbench.infrastructure.aws.cloudformation import CfnStackStatusResult
+from lza_workbench.infrastructure.aws.codecommit import CodeCommitRepositoryStatus
+from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult
 from lza_workbench.installer.application.status import (
     InstallerStatusResult,
     get_installer_status_workflow,
     prepare_installer_status,
 )
+from lza_workbench.installer.sync import (
+    sync_installer_config,
+    sync_installer_state,
+)
+from lza_workbench.interfaces.cli.status import render_root_status
 from lza_workbench.status.observer import (
     ConfigurationRepoSummary,
     InstallerStackSummary,

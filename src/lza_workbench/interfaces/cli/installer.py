@@ -5,30 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import typer
 from rich.panel import Panel
 from rich.table import Table
-import typer
 
-from lza_workbench.interfaces.cli import params
-from lza_workbench.interfaces.cli.input import value_or_prompt
-from lza_workbench.interfaces.cli.output import (
-    console,
-    print_dry_run_header,
-    print_kv,
-    print_notice,
-    print_success,
-    print_warning,
-)
-from lza_workbench.installer.application.initialize import (
-    InstallerSettingsRequest,
-    InstallerSettingsResult,
-    apply_installer_settings,
-    get_installer_parameters_schema,
-)
-from lza_workbench.installer.application.plan import (
-    InstallerPlanResult,
-    plan_installer_workflow,
-)
 from lza_workbench.installer.application.deploy import (
     CfnDeploymentPlanResult,
     CfnStackStatusResult,
@@ -42,6 +22,26 @@ from lza_workbench.installer.application.deploy import (
 from lza_workbench.installer.application.import_deployed import (
     InstallerImportResult,
     import_installer_workflow,
+)
+from lza_workbench.installer.application.initialize import (
+    InstallerSettingsRequest,
+    InstallerSettingsResult,
+    apply_installer_settings,
+    get_installer_parameters_schema,
+)
+from lza_workbench.installer.application.plan import (
+    InstallerPlanResult,
+    plan_installer_workflow,
+)
+from lza_workbench.interfaces.cli import params
+from lza_workbench.interfaces.cli.input import value_or_prompt
+from lza_workbench.interfaces.cli.output import (
+    console,
+    print_dry_run_header,
+    print_kv,
+    print_notice,
+    print_success,
+    print_warning,
 )
 
 

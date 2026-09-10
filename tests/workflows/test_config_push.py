@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from lza_workbench.errors import LzaError
 from lza_workbench.configuration.application.push import (
     ConfigPushRequest,
     apply_config_push,
     push_configuration_workflow,
 )
+from lza_workbench.errors import LzaError
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.state import load_workspace_state
 

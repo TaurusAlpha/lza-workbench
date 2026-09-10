@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from lza_workbench.infrastructure.aws.codepipeline import PipelineExecutionResult
 from lza_workbench.errors import LzaError
+from lza_workbench.infrastructure.aws.codepipeline import PipelineExecutionResult
 from lza_workbench.pipeline.failures import PipelineActionFailure
 from lza_workbench.pipeline.watcher import (
     PipelineWatchResult,

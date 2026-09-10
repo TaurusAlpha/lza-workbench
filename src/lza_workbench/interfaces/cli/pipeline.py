@@ -2,34 +2,28 @@
 
 from __future__ import annotations
 
-import sys
-import time
 from pathlib import Path
 from typing import Any
 
-from rich.live import Live
 from rich.table import Table
-import typer
 
 from lza_workbench.interfaces.cli import params
 from lza_workbench.interfaces.cli.output import (
     console,
     print_dry_run_header,
-    print_error,
     print_kv,
     print_success,
-    print_warning,
 )
 from lza_workbench.pipeline.application.start import (
     PipelineStartResult,
     start_pipeline_workflow,
 )
+from lza_workbench.pipeline.models import PipelineActionState
 from lza_workbench.pipeline.watcher import (
     PipelineWatchResult,
     PipelineWatchUpdate,
     watch_pipeline_workflow,
 )
-from lza_workbench.pipeline.models import PipelineActionState, PipelineStageState
 
 
 def render_pipeline_start_result(result: PipelineStartResult) -> None:

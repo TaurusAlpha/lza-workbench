@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lza_workbench.interfaces.cli import installer as command
 from lza_workbench.installer.application.initialize import (
     InstallerForm,
     InstallerFormField,
     InstallerSettingsResult,
 )
+from lza_workbench.interfaces.cli import installer as command
 from lza_workbench.workspace.schema import AwsConfig, CustomerConfig, WorkspaceConfig
 
 

@@ -22,10 +22,9 @@ from lza_workbench.installer.templates import (
     resolve_installer_template,
     validate_parameters_against_schema,
 )
-from lza_workbench.workspace.persistence import write_workspace_config
 from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
+from lza_workbench.workspace.persistence import write_workspace_config, write_workspace_state
 from lza_workbench.workspace.schema import WorkspaceConfig
-from lza_workbench.workspace.persistence import write_workspace_state
 
 
 @dataclass(frozen=True)

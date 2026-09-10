@@ -10,7 +10,10 @@ from lza_workbench.infrastructure.aws.codepipeline import (
     get_latest_pipeline_execution_id,
     get_pipeline_state,
 )
-from lza_workbench.infrastructure.aws.session import AwsExecutionContext, resolve_aws_execution_context
+from lza_workbench.infrastructure.aws.session import (
+    AwsExecutionContext,
+    resolve_aws_execution_context,
+)
 from lza_workbench.pipeline.failures import (
     PipelineActionFailure,
     collect_pipeline_action_failures,

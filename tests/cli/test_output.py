@@ -7,6 +7,7 @@ from datetime import UTC
 
 import pytest
 
+from lza_workbench.errors import LzaError
 from lza_workbench.interfaces.cli.input import validate_email, value_or_prompt
 from lza_workbench.interfaces.cli.output import (
     print_diff_summary,
@@ -19,7 +20,6 @@ from lza_workbench.interfaces.cli.output import (
     print_success,
     print_warning,
 )
-from lza_workbench.errors import LzaError
 
 
 @pytest.mark.parametrize(

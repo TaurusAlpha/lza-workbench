@@ -10,35 +10,57 @@ from pathlib import Path
 
 import typer
 
+from lza_workbench.errors import LzaError
 from lza_workbench.interfaces.cli import params
 from lza_workbench.interfaces.cli.configuration import (
     config_deploy_command as run_cli_deploy_config,
+)
+from lza_workbench.interfaces.cli.configuration import (
     config_init_command as run_cli_init_config,
+)
+from lza_workbench.interfaces.cli.configuration import (
     config_pull_command as run_cli_pull_config,
+)
+from lza_workbench.interfaces.cli.configuration import (
     config_push_command as run_cli_push_config,
 )
 from lza_workbench.interfaces.cli.installer import (
     installer_deploy_command as run_cli_installer_deploy,
+)
+from lza_workbench.interfaces.cli.installer import (
     installer_import_command as run_cli_installer_import,
+)
+from lza_workbench.interfaces.cli.installer import (
     installer_init_command as run_cli_installer_init,
+)
+from lza_workbench.interfaces.cli.installer import (
     installer_plan_command as run_cli_installer_plan,
 )
+from lza_workbench.interfaces.cli.output import print_error
 from lza_workbench.interfaces.cli.pipeline import (
     pipeline_start_command as run_cli_pipeline_start,
+)
+from lza_workbench.interfaces.cli.pipeline import (
     pipeline_watch_command as run_cli_pipeline_watch,
 )
 from lza_workbench.interfaces.cli.status import (
     status_config_command as run_cli_status_config,
+)
+from lza_workbench.interfaces.cli.status import (
     status_installer_command as run_cli_status_installer,
+)
+from lza_workbench.interfaces.cli.status import (
     status_root_command as run_cli_status_root,
 )
 from lza_workbench.interfaces.cli.workspace import (
     workspace_bootstrap_command as run_cli_workspace_bootstrap,
+)
+from lza_workbench.interfaces.cli.workspace import (
     workspace_import_command as run_cli_workspace_import,
+)
+from lza_workbench.interfaces.cli.workspace import (
     workspace_init_command as run_cli_workspace_init,
 )
-from lza_workbench.interfaces.cli.output import print_error
-from lza_workbench.errors import LzaError
 
 app = typer.Typer(
     help="LZA Workbench CLI",

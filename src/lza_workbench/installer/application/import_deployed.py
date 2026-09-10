@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from lza_workbench.errors import LzaError
 from lza_workbench.infrastructure.aws.cloudformation import (
     CfnStackStatusResult,
     get_cloudformation_stack_status,
@@ -12,7 +13,6 @@ from lza_workbench.infrastructure.aws.cloudformation import (
 )
 from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult, get_pipeline_state
 from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
-from lza_workbench.errors import LzaError
 from lza_workbench.installer.deployed_version import resolve_deployed_installer_version
 from lza_workbench.installer.sync import (
     sync_installer_config,

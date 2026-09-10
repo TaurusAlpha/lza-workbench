@@ -10,8 +10,8 @@ from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 
-from lza_workbench.infrastructure.aws.errors import classify_aws_error
 from lza_workbench.errors import LzaError
+from lza_workbench.infrastructure.aws.errors import classify_aws_error
 
 
 @dataclass

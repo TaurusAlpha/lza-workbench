@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import datetime
 from pathlib import Path
-from typing import Any
 
-from rich.table import Table
 import typer
 
 from lza_workbench.interfaces.cli import params
@@ -16,11 +13,13 @@ from lza_workbench.interfaces.cli.output import (
     print_dry_run_header,
     print_kv,
     print_success,
-    print_warning,
 )
-from lza_workbench.workspace.application.initialize import (
-    WorkspaceInitResult,
-    init_workspace_workflow,
+from lza_workbench.workspace.application.bootstrap import (
+    BootstrapAction,
+    BootstrapPlanResult,
+    WorkspaceBootstrapResult,
+    apply_bootstrap_preparation,
+    prepare_bootstrap_workflow,
 )
 from lza_workbench.workspace.application.import_workspace import (
     ImportWorkspaceRequest,
@@ -29,12 +28,9 @@ from lza_workbench.workspace.application.import_workspace import (
     discover_import_workspace,
     prepare_workspace_import,
 )
-from lza_workbench.workspace.application.bootstrap import (
-    BootstrapAction,
-    BootstrapPlanResult,
-    WorkspaceBootstrapResult,
-    apply_bootstrap_preparation,
-    prepare_bootstrap_workflow,
+from lza_workbench.workspace.application.initialize import (
+    WorkspaceInitResult,
+    init_workspace_workflow,
 )
 from lza_workbench.workspace.paths import (
     normalize_customer_slug,

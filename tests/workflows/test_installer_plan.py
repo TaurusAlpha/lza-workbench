@@ -8,13 +8,13 @@ from unittest.mock import MagicMock, patch
 from botocore.exceptions import ClientError
 
 from lza_workbench.infrastructure.aws.cloudformation import CfnDeploymentPlanResult
-from lza_workbench.installer.planning import InstallerPlanResult
 from lza_workbench.installer.application.initialize import (
     InstallerSettingsRequest,
     apply_installer_settings,
     get_installer_parameters_schema,
 )
 from lza_workbench.installer.application.plan import plan_installer_workflow
+from lza_workbench.installer.planning import InstallerPlanResult
 from lza_workbench.workspace.config import load_workspace_config, write_workspace_config
 from lza_workbench.workspace.schema import (
     AwsConfig,

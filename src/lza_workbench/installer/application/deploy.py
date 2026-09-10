@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from lza_workbench.errors import LzaError
 from lza_workbench.infrastructure.aws.cloudformation import (
     CfnDeploymentPlanResult,
     CfnStackStatusResult,
@@ -17,9 +18,11 @@ from lza_workbench.infrastructure.aws.cloudformation import (
     inspect_cloudformation_stack,
     stream_cloudformation_stack_events,
 )
-from lza_workbench.infrastructure.aws.session import AwsExecutionContext, resolve_aws_execution_context
 from lza_workbench.infrastructure.aws.s3 import get_s3_https_url, inspect_s3_bucket, upload_s3_file
-from lza_workbench.errors import LzaError
+from lza_workbench.infrastructure.aws.session import (
+    AwsExecutionContext,
+    resolve_aws_execution_context,
+)
 from lza_workbench.installer.deployment import (
     InstallerConfigValidationError,
     InstallerConfigValidationResult,

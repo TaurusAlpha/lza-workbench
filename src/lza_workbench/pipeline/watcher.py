@@ -8,11 +8,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from lza_workbench.errors import LzaError
 from lza_workbench.infrastructure.aws.codepipeline import (
     get_latest_pipeline_execution_id,
 )
-from lza_workbench.infrastructure.aws.session import AwsExecutionContext, resolve_aws_execution_context
-from lza_workbench.errors import LzaError
+from lza_workbench.infrastructure.aws.session import (
+    AwsExecutionContext,
+    resolve_aws_execution_context,
+)
 from lza_workbench.pipeline.failures import (
     PipelineActionFailure,
     collect_pipeline_action_failures,

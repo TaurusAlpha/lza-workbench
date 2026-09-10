@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from lza_workbench.infrastructure.aws.session import AwsExecutionContext, resolve_aws_execution_context
-from lza_workbench.infrastructure.aws.s3 import upload_s3_file
 from lza_workbench.configuration.archive import (
     ConfigDiffResult,
     compute_config_directory_digest,
@@ -35,14 +33,18 @@ from lza_workbench.configuration.state import (
 )
 from lza_workbench.configuration.templates import validate_template
 from lza_workbench.errors import LzaError
-from lza_workbench.workspace.persistence import write_workspace_config
+from lza_workbench.infrastructure.aws.s3 import upload_s3_file
+from lza_workbench.infrastructure.aws.session import (
+    AwsExecutionContext,
+    resolve_aws_execution_context,
+)
 from lza_workbench.workspace.context import (
     WorkspaceCapability,
     WorkspaceContext,
     load_workspace_context,
 )
+from lza_workbench.workspace.persistence import write_workspace_config, write_workspace_state
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
-from lza_workbench.workspace.persistence import write_workspace_state
 
 
 @dataclass(frozen=True)

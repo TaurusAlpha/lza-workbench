@@ -6,7 +6,6 @@ from typing import Any
 
 from lza_workbench.infrastructure.aws.codecommit import inspect_codecommit_repository
 from lza_workbench.installer.source import (
-    CodeCommitPlanResult,
     prepare_codecommit_source_plan,
 )
 

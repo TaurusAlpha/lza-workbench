@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult
 from lza_workbench.configuration.git import GitRemoteSyncStatus, GitWorkingTreeStatus
 from lza_workbench.configuration.sync import RemoteSyncStatus
+from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult
 
 
 @dataclass(frozen=True)

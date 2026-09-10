@@ -27,10 +27,9 @@ from lza_workbench.configuration.templates import (
     validate_template,
 )
 from lza_workbench.errors import LzaError
-from lza_workbench.workspace.persistence import write_workspace_config
 from lza_workbench.workspace.context import WorkspaceCapability, load_workspace_context
+from lza_workbench.workspace.persistence import write_workspace_config, write_workspace_state
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
-from lza_workbench.workspace.persistence import write_workspace_state
 
 
 @dataclass(frozen=True)

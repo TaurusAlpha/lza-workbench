@@ -5,15 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from lza_workbench.infrastructure.aws.codecommit import inspect_codecommit_repository
-from lza_workbench.infrastructure.aws.codeconnections import inspect_codeconnection
-from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult, get_pipeline_state
-from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
-from lza_workbench.infrastructure.aws.s3 import (
-    S3ObjectObservation,
-    inspect_s3_bucket,
-    inspect_s3_object_safe,
-)
 from lza_workbench.configuration.git import (
     get_git_remote_sync_status,
     get_git_working_tree_status,
@@ -40,6 +31,15 @@ from lza_workbench.configuration.sync import (
     RemoteSyncStatus,
     evaluate_s3_remote_sync,
 )
+from lza_workbench.infrastructure.aws.codecommit import inspect_codecommit_repository
+from lza_workbench.infrastructure.aws.codeconnections import inspect_codeconnection
+from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult, get_pipeline_state
+from lza_workbench.infrastructure.aws.s3 import (
+    S3ObjectObservation,
+    inspect_s3_bucket,
+    inspect_s3_object_safe,
+)
+from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
 from lza_workbench.pipeline.failures import (
     collect_pipeline_action_failures,
     fetch_codebuild_diagnostics,
