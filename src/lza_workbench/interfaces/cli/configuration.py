@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import typer
@@ -9,6 +10,7 @@ import typer
 from lza_workbench.configuration.application.deploy import (
     ConfigDeployError,
     ConfigDeployResult,
+    deploy_configuration_workflow,
 )
 from lza_workbench.configuration.application.initialize import (
     ConfigInitResult,
@@ -41,6 +43,11 @@ from lza_workbench.interfaces.cli.output import (
     print_section,
     print_success,
     print_warning,
+)
+from lza_workbench.interfaces.cli.pipeline import (
+    PipelineWatchMonitor,
+    render_pipeline_start_result,
+    render_pipeline_watch_result,
 )
 
 
@@ -171,6 +178,7 @@ def config_init_command(
     )
     render_config_init_result(result)
 
+
 def render_config_push_result(result: ConfigPushResult) -> None:
     """Render the results of a configuration push workflow."""
     if result.dry_run:
@@ -232,6 +240,7 @@ def config_push_command(
     result = apply_config_push(request)
     render_config_push_result(result)
     return result
+
 
 def render_config_pull_result(result: ConfigPullResult) -> None:
     """Render the results of a configuration pull workflow."""
@@ -304,6 +313,7 @@ def config_pull_command(
     result = apply_config_pull(request)
     render_config_pull_result(result)
     return result
+
 
 def render_config_deploy_result(
     result: ConfigDeployResult,

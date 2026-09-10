@@ -28,17 +28,17 @@ class S3ConfigurationRemote:
             "exists": obs.exists,
             "accessible": obs.accessible,
             "versioning_enabled": obs.versioning_enabled,
-            "encrypted": obs.encrypted,
-            "error": obs.error,
+            "encryption_enabled": obs.encryption_enabled,
+            "kms_encrypted": obs.kms_encrypted,
         }
 
-    def push(self, local_zip_path: Path, **kwargs: Any) -> dict[str, Any]:
+    def push(self, local_zip_path: Path, **kwargs: Any) -> tuple[str | None, str | None]:
         """Upload local configuration zip archive to S3 bucket."""
         return upload_s3_file(
             client=self.client,
+            file_path=local_zip_path,
             bucket_name=self.bucket_name,
-            key=self.key,
-            source_path=local_zip_path,
+            object_key=self.key,
         )
 
     def pull(self, destination_zip_path: Path, **kwargs: Any) -> None:
@@ -46,8 +46,8 @@ class S3ConfigurationRemote:
         download_s3_file(
             client=self.client,
             bucket_name=self.bucket_name,
-            key=self.key,
-            destination_path=destination_zip_path,
+            object_key=self.key,
+            file_path=destination_zip_path,
         )
 
 

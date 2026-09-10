@@ -37,11 +37,15 @@ from lza_workbench.interfaces.cli import params
 from lza_workbench.interfaces.cli.input import value_or_prompt
 from lza_workbench.interfaces.cli.output import (
     console,
+    format_status,
     print_dry_run_header,
+    print_info,
     print_kv,
     print_notice,
+    print_section,
     print_success,
     print_warning,
+    render_workspace_header,
 )
 
 
@@ -115,6 +119,7 @@ __all__ = [
     "installer_init_command",
     "render_installer_init_report",
 ]
+
 
 def render_installer_plan_report(plan: InstallerPlanResult) -> None:
     """Render structured rich summary plan output for the user."""
@@ -214,6 +219,7 @@ __all__ = [
     "installer_plan_command",
     "render_installer_plan_report",
 ]
+
 
 def _render_deployment_plan(
     *,
@@ -369,6 +375,7 @@ __all__ = [
     "installer_deploy_command",
     "prepare_installer_deployment",
 ]
+
 
 def render_installer_import_result(result: InstallerImportResult) -> None:
     """Render the results of an installer import workflow."""

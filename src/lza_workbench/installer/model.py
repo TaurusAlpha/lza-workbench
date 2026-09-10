@@ -1,11 +1,9 @@
-"""Installer domain and persistence models."""
+"""Installer domain models."""
 
 from __future__ import annotations
 
 from lza_workbench.installer.schema import (
     KNOWN_INSTALLER_PARAMETER_NAMES,
-    InstallerApprovalConfig,
-    InstallerEmailsConfig,
     InstallerOptionsConfig,
     InstallerSourceCodeConfig,
     InstallerStackTemplateConfig,
@@ -13,27 +11,21 @@ from lza_workbench.installer.schema import (
     PipelineInstaller,
 )
 from lza_workbench.installer.state import (
-    InstallerState,
-    load_installer_state,
-    write_installer_state,
+    record_installer_deployment,
+    record_installer_deployment_failure,
 )
 
 # Counterfactual aliases
 InstallerDocument = LzaInstaller
-InstallerRuntime = InstallerState
 
 __all__ = [
     "KNOWN_INSTALLER_PARAMETER_NAMES",
-    "InstallerApprovalConfig",
     "InstallerDocument",
-    "InstallerEmailsConfig",
     "InstallerOptionsConfig",
-    "InstallerRuntime",
     "InstallerSourceCodeConfig",
     "InstallerStackTemplateConfig",
-    "InstallerState",
     "LzaInstaller",
     "PipelineInstaller",
-    "load_installer_state",
-    "write_installer_state",
+    "record_installer_deployment",
+    "record_installer_deployment_failure",
 ]

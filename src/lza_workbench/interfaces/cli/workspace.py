@@ -5,13 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
+from rich.panel import Panel
 
 from lza_workbench.interfaces.cli import params
 from lza_workbench.interfaces.cli.input import value_or_prompt
 from lza_workbench.interfaces.cli.output import (
     console,
     print_dry_run_header,
+    print_info,
     print_kv,
+    print_notice,
+    print_section,
     print_success,
 )
 from lza_workbench.workspace.application.bootstrap import (
@@ -115,9 +119,7 @@ def workspace_init_command(
         resolved_ws_dir = resolve_init_workspace_dir(customer_slug, workspace_dir)
 
     if aws_auth_type == "role_arn":
-        resolved_role_arn = value_or_prompt(
-            "AWS role ARN", aws_role_arn or None, None, interactive
-        )
+        resolved_role_arn = value_or_prompt("AWS role ARN", aws_role_arn or None, None, interactive)
         resolved_profile = aws_profile.strip() or None if aws_profile else None
     else:
         resolved_profile = value_or_prompt(
@@ -141,6 +143,7 @@ def workspace_init_command(
         skip_aws_check=skip_aws_check,
     )
     render_workspace_init_result(result)
+
 
 def _render_import_provenance(result: WorkspaceImportResult) -> None:
     provenance = result.provenance
@@ -314,6 +317,7 @@ def workspace_import_command(
     )
     result = apply_workspace_import(preparation)
     render_workspace_import_result(result)
+
 
 def _render_bootstrap_action(action: BootstrapAction) -> None:
     """Render a typed bootstrap action using CLI-specific Rich styling."""

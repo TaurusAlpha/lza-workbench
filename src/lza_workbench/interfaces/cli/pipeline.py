@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -10,9 +11,15 @@ from rich.table import Table
 from lza_workbench.interfaces.cli import params
 from lza_workbench.interfaces.cli.output import (
     console,
+    format_duration,
+    format_status,
     print_dry_run_header,
+    print_info,
     print_kv,
+    print_notice,
+    print_section,
     print_success,
+    render_failure_section,
 )
 from lza_workbench.pipeline.application.start import (
     PipelineStartResult,
@@ -22,6 +29,7 @@ from lza_workbench.pipeline.models import PipelineActionState
 from lza_workbench.pipeline.watcher import (
     PipelineWatchResult,
     PipelineWatchUpdate,
+    require_successful_pipeline_watch,
     watch_pipeline_workflow,
 )
 
@@ -67,6 +75,7 @@ __all__ = [
     "pipeline_start_command",
     "render_pipeline_start_result",
 ]
+
 
 def _format_action_table_detail(action: PipelineActionState) -> str:
     """Format concise action status detail for breakdown table without buildspec dumps."""
@@ -188,7 +197,7 @@ def render_pipeline_watch_result(
     print_section(start_section_number, section_title)
     print_kv("Pipeline Name", result.pipeline_name, bold_value=True)
     print_kv("Execution ID", result.execution_id, bold_value=True)
-    dur_str = _format_duration(result.elapsed_seconds)
+    dur_str = format_duration(result.elapsed_seconds)
     if dur_str:
         print_kv("Duration", dur_str)
     print_kv("Final Status", format_status(result.status), bold_value=True)

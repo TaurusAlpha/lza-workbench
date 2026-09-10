@@ -31,9 +31,9 @@ class CodeCommitInstallerSourceProvider:
         observation = None
         if self.codecommit_client:
             observation = inspect_codecommit_repository(
-                self.codecommit_client,
-                self.repository_name,
-                branch=self.branch_name,
+                client=self.codecommit_client,
+                repository_name=self.repository_name,
+                branch_name=self.branch_name,
             )
 
         plan = prepare_codecommit_source_plan(
@@ -59,9 +59,9 @@ class CodeCommitInstallerSourceProvider:
         if not self.codecommit_client:
             return True
         obs = inspect_codecommit_repository(
-            self.codecommit_client,
-            self.repository_name,
-            branch=self.branch_name,
+            client=self.codecommit_client,
+            repository_name=self.repository_name,
+            branch_name=self.branch_name,
         )
         return obs.exists and obs.branch_exists
 

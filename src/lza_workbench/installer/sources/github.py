@@ -32,7 +32,10 @@ class GitHubInstallerSourceProvider:
         secret_obs = None
         warning = None
         if self.secrets_client:
-            secret_obs = inspect_secret_details(self.secrets_client, self.secret_name)
+            secret_obs = inspect_secret_details(
+                client=self.secrets_client,
+                secret_name=self.secret_name,
+            )
             warning = github_secret_warning(self.secret_name, secret_obs.exists, secret_obs.error)
 
         repo_check = validate_github_repository_access(

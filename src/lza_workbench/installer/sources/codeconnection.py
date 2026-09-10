@@ -24,9 +24,12 @@ class CodeConnectionInstallerSourceProvider:
         status = "UNKNOWN"
         exists = False
         if self.codeconnections_client:
-            obs = inspect_codeconnection(self.codeconnections_client, self.connection_arn)
-            status = obs.status
-            exists = obs.exists
+            obs = inspect_codeconnection(
+                client=self.codeconnections_client,
+                connection_arn=self.connection_arn,
+            )
+            status = obs.status or "UNKNOWN"
+            exists = obs.status not in {"NOT_FOUND", "NOT_SPECIFIED", None}
 
         return {
             "connection_arn": self.connection_arn,
@@ -38,7 +41,10 @@ class CodeConnectionInstallerSourceProvider:
         """Validate if the connection is available."""
         if not self.codeconnections_client:
             return True
-        obs = inspect_codeconnection(self.codeconnections_client, self.connection_arn)
+        obs = inspect_codeconnection(
+            client=self.codeconnections_client,
+            connection_arn=self.connection_arn,
+        )
         return obs.status == "AVAILABLE"
 
 

@@ -43,9 +43,9 @@ class GitConfigurationRemote:
         current_remote = get_git_remote_url(local_path, self.remote_name)
         if current_remote != self.remote_url:
             set_git_remote_url(local_path, self.remote_name, self.remote_url)
-        if self.is_codecommit:
+        if self.is_codecommit and self.aws_profile:
             configure_codecommit_credential_helper(
-                local_path, profile=self.aws_profile, region=self.aws_region
+                local_path, aws_profile=self.aws_profile
             )
 
     def inspect(self, local_path: Path | None = None) -> dict[str, Any]:
@@ -59,10 +59,10 @@ class GitConfigurationRemote:
             }
         return {"remote_url": self.remote_url, "branch": self.branch}
 
-    def push(self, local_path: Path, force: bool = False, **kwargs: Any) -> None:
+    def push(self, local_path: Path, **kwargs: Any) -> None:
         """Push local changes to the remote Git branch."""
         self.setup_repository(local_path)
-        push_git_branch(local_path, self.remote_name, self.branch, force=force)
+        push_git_branch(local_path, self.remote_name, self.branch)
 
     def pull(self, local_path: Path, **kwargs: Any) -> None:
         """Pull remote changes into local Git branch."""
