@@ -933,6 +933,7 @@ def apply_bootstrap_preparation(
 
     # Persist operational bootstrap metadata to .lza/state.json.
     state.bootstrapped_at = datetime.now(UTC)
+    state.bootstrap_status = "OK"
     state.management_account_id = plan.account_id
     write_workspace_state(workspace_dir, state)
 

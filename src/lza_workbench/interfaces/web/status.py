@@ -499,6 +499,11 @@ def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
             "isLive": result.configuration_repo.is_live,
         },
         "configurationPipeline": _serialize_pipeline(result.configuration_pipeline),
+        "bootstrap": {
+            "status": result.bootstrap.status if result.bootstrap else "Undeployed",
+            "bootstrappedAt": result.bootstrap.bootstrapped_at if result.bootstrap else None,
+            "isLive": result.bootstrap.is_live if result.bootstrap else False,
+        },
         "health": {
             "installer": result.health.installer,
             "configuration": result.health.configuration,

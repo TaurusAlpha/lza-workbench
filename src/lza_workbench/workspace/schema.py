@@ -121,6 +121,7 @@ class WorkspaceState(WorkspaceModel):
     initialized_at: datetime | None = None
     updated_at: datetime | None = None
     bootstrapped_at: datetime | None = None
+    bootstrap_status: str | None = None
     management_account_id: str | None = None
     caller_arn: str | None = None
     installer_stack_id: str | None = None

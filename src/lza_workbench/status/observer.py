@@ -31,6 +31,7 @@ from lza_workbench.pipeline.failures import (
 )
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.status.summary import (
+    BootstrapSummary,
     ConfigurationRepoSummary,
     InstallerStackSummary,
     OverallHealthSummary,
@@ -520,6 +521,21 @@ def get_root_status_workflow(
         config_pipe=config_pipe_summary,
     )
 
+    recorded_bootstrap_status = state.bootstrap_status if state else None
+    if not recorded_bootstrap_status:
+        if state and (state.bootstrapped_at or state.installer_stack_status or config.assets_bucket):
+            recorded_bootstrap_status = "OK"
+        else:
+            recorded_bootstrap_status = "Undeployed"
+    bootstrapped_at_str = (
+        state.bootstrapped_at.isoformat() if (state and state.bootstrapped_at) else None
+    )
+    bootstrap_summary = BootstrapSummary(
+        status=recorded_bootstrap_status,
+        bootstrapped_at=bootstrapped_at_str,
+        is_live=is_live,
+    )
+
     return RootStatusResult(
         workspace_dir=workspace_dir,
         customer_name=config.customer.name,
@@ -534,10 +550,12 @@ def get_root_status_workflow(
         configuration_pipeline=config_pipe_summary,
         health=health,
         assessment=ctx.assessment,
+        bootstrap=bootstrap_summary,
     )
 
 
 __all__ = [
+    "BootstrapSummary",
     "ConfigurationRepoSummary",
     "InstallerStackSummary",
     "OverallHealthSummary",

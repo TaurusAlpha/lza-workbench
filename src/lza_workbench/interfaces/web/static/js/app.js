@@ -39,8 +39,19 @@ const awsStatusLabel = document.querySelector("#aws-status-label");
 const themeToggle = document.querySelector("#theme-toggle");
 const toastContainer = document.querySelector("#toast-container");
 
+// Offline bar elements
+const offlineBar = document.querySelector("#offline-bar");
+const offlineCmdWrapper = document.querySelector("#offline-cmd-wrapper");
+const offlineCmdText = document.querySelector("#offline-cmd-text");
+const offlineCmdCopy = document.querySelector("#offline-cmd-copy");
+const offlineDetailsBtn = document.querySelector("#offline-details-btn");
+const offlineDismissBtn = document.querySelector("#offline-dismiss-btn");
+const offlineDetailsPanel = document.querySelector("#offline-details-panel");
+const offlineDetailsText = document.querySelector("#offline-details-text");
+
 let pipelinePollTimer = null;
 let currentActiveWorkspace = null;
+let currentAwsState = null;
 
 // ==========================================
 // Toast Notification System
@@ -199,7 +210,7 @@ document.addEventListener("click", (e) => {
 });
 
 // ==========================================
-// AWS Status Indicator
+// AWS Status & Offline Bar Management
 // ==========================================
 function updateAwsStatus(aws) {
   if (!awsStatusChip || !awsStatusLabel) return;
@@ -212,8 +223,88 @@ function updateAwsStatus(aws) {
   } else {
     awsStatusChip.className = "aws-status-pill offline";
     awsStatusLabel.textContent = "AWS Offline";
-    awsStatusChip.title = aws?.error ? `AWS Offline: ${aws.error}` : "AWS Offline / Not Connected";
+    awsStatusChip.title = "AWS Offline. Click to view details and authentication instructions.";
   }
+}
+
+function updateOfflineStatus(aws) {
+  currentAwsState = aws;
+  updateAwsStatus(aws);
+
+  if (!offlineBar) return;
+
+  if (aws && aws.isLive) {
+    offlineBar.hidden = true;
+    return;
+  }
+
+  // If dismissed during this session, keep banner closed
+  const isDismissed = sessionStorage.getItem("lza_offline_dismissed") === "true";
+  if (isDismissed) {
+    offlineBar.hidden = true;
+    return;
+  }
+
+  // Populate details
+  const errorMsg = aws?.error || "AWS authentication or connectivity is inactive.";
+  if (offlineDetailsText) offlineDetailsText.textContent = errorMsg;
+
+  // Extract actionable SSO command if present
+  const match = errorMsg.match(/Run '([^']+)'/i) || errorMsg.match(/(aws sso login [^\s.'"]+)/i);
+  if (match && match[1] && offlineCmdWrapper && offlineCmdText) {
+    offlineCmdText.textContent = match[1];
+    offlineCmdWrapper.hidden = false;
+    if (offlineCmdCopy) offlineCmdCopy.dataset.copy = match[1];
+  } else if (offlineCmdWrapper) {
+    offlineCmdWrapper.hidden = true;
+  }
+
+  offlineBar.hidden = false;
+}
+
+if (offlineDismissBtn) {
+  offlineDismissBtn.addEventListener("click", () => {
+    if (offlineBar) offlineBar.hidden = true;
+    sessionStorage.setItem("lza_offline_dismissed", "true");
+    showToast("Working in offline mode. Details remain accessible via the top status pill.", "info", 3500);
+  });
+}
+
+if (offlineDetailsBtn) {
+  offlineDetailsBtn.addEventListener("click", () => {
+    if (offlineDetailsPanel) {
+      offlineDetailsPanel.hidden = !offlineDetailsPanel.hidden;
+      offlineDetailsBtn.textContent = offlineDetailsPanel.hidden ? "Details" : "Hide Details";
+    }
+  });
+}
+
+if (offlineCmdCopy) {
+  offlineCmdCopy.addEventListener("click", async () => {
+    const text = offlineCmdCopy.dataset.copy;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      offlineCmdCopy.classList.add("copied");
+      showToast("Authentication command copied to clipboard", "success", 2500);
+      setTimeout(() => offlineCmdCopy.classList.remove("copied"), 1500);
+    } catch (e) {
+      console.warn("Clipboard copy failed:", e);
+    }
+  });
+}
+
+if (awsStatusChip) {
+  awsStatusChip.addEventListener("click", () => {
+    if (!offlineBar) return;
+    if (currentAwsState && !currentAwsState.isLive) {
+      const isNowHidden = !offlineBar.hidden;
+      offlineBar.hidden = isNowHidden;
+      if (!isNowHidden) {
+        sessionStorage.removeItem("lza_offline_dismissed");
+      }
+    }
+  });
 }
 
 // ==========================================
@@ -286,11 +377,6 @@ function showNotice(text, type = "warning") {
   notice.textContent = text;
   notice.className = `notice ${type}`;
   notice.hidden = false;
-}
-
-function getOfflineWarning(awsError) {
-  const reason = awsError ? `: ${awsError}` : "";
-  return `AWS is offline${reason}. Displayed deployment, stack, and pipeline statuses are not live and reflect the last recorded state.`;
 }
 
 // ==========================================
@@ -367,14 +453,10 @@ async function loadOverview() {
       customerName: status.workspace.customerName,
       workspaceDir: status.workspace.directory,
     });
-    updateAwsStatus(status.aws);
+    updateOfflineStatus(status.aws);
 
     renderOverview(viewContent, status, bootstrapPlan);
-    if (!status.aws.isLive) {
-      showNotice(getOfflineWarning(status.aws.error), "warning");
-    } else {
-      clearNotice();
-    }
+    clearNotice();
   } catch (error) {
     if (
       error.message?.includes("No active workspace") ||
@@ -411,11 +493,8 @@ async function loadConfiguration() {
     workspacePath.textContent = status.workspace.directory;
     workspacePath.title = status.workspace.directory;
     renderConfigurationDetails(viewContent, status, loadConfiguration);
-    if (!status.workspace.isLive) {
-      showNotice(getOfflineWarning(status.workspace.error), "warning");
-    } else {
-      clearNotice();
-    }
+    updateOfflineStatus({ isLive: status.workspace.isLive, error: status.workspace.error });
+    clearNotice();
   } catch (error) {
     workspacePath.textContent = "Configuration status unavailable";
     workspacePath.removeAttribute("title");
@@ -497,11 +576,8 @@ async function loadPipeline(pipelineType = "configuration", executionId = null) 
       () => fetchAndRenderDiagnostics(snapshot)
     );
 
-    if (!snapshot.isLive) {
-      showNotice(getOfflineWarning(snapshot.error), "warning");
-    } else {
-      clearNotice();
-    }
+    updateOfflineStatus({ isLive: snapshot.isLive, error: snapshot.error });
+    clearNotice();
 
     // Single-pass periodic polling while active (not terminal)
     if (!snapshot.isTerminal && snapshot.isLive) {
@@ -560,11 +636,8 @@ async function loadInstaller() {
     workspacePath.textContent = status.workspace.directory;
     workspacePath.title = status.workspace.directory;
     renderInstallerDetails(viewContent, status, loadInstaller);
-    if (!status.aws.isLive) {
-      showNotice(getOfflineWarning(status.aws.error), "warning");
-    } else {
-      clearNotice();
-    }
+    updateOfflineStatus(status.aws);
+    clearNotice();
   } catch (error) {
     workspacePath.textContent = "Installer status unavailable";
     workspacePath.removeAttribute("title");
@@ -591,11 +664,8 @@ async function loadBootstrap() {
   try {
     const plan = await getBootstrapPlan();
     renderBootstrapDetails(viewContent, plan, loadBootstrap);
-    if (!plan.isLive) {
-      showNotice(getOfflineWarning(plan.error), "warning");
-    } else {
-      clearNotice();
-    }
+    updateOfflineStatus({ isLive: plan.isLive, error: plan.error });
+    clearNotice();
   } catch (error) {
     viewContent.replaceChildren();
     showNotice(error.message, "error");

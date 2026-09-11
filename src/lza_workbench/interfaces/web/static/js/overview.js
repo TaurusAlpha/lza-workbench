@@ -204,21 +204,36 @@ function renderLifecycleStepper(status, bootstrapPlan) {
   const s1Text = status.workspace.customerName || "Configured";
 
   // Step 2: Bootstrap Prerequisites
-  let s2Status = "In sync";
-  let s2Variant = "success";
-  let s2Text = "Prerequisites Ready";
-  if (!status.aws.isLive) {
-    s2Status = "Offline";
-    s2Variant = "warning";
-    s2Text = "AWS Offline";
-  } else if (bootstrapPlan?.isBlocked) {
-    s2Status = "Blocked";
-    s2Variant = "danger";
-    s2Text = "Prerequisites Blocked";
-  } else if (bootstrapPlan?.isMutationRequired) {
-    s2Status = "Action required";
-    s2Variant = "warning";
-    s2Text = "Bootstrap Required";
+  const recordedBootstrapStatus = status.bootstrap?.status || "Undeployed";
+  let s2Status = recordedBootstrapStatus;
+  let s2Variant = recordedBootstrapStatus === "OK" ? "success" : "neutral";
+  let s2Text = recordedBootstrapStatus === "OK" ? "OK" : "Undeployed";
+
+  if (status.aws.isLive && bootstrapPlan) {
+    if (bootstrapPlan.isBlocked) {
+      s2Status = "Blocked";
+      s2Variant = "danger";
+      s2Text = "Blocked";
+    } else if (bootstrapPlan.isMutationRequired) {
+      s2Status = "Undeployed";
+      s2Variant = "warning";
+      s2Text = "Bootstrap Required";
+    } else {
+      s2Status = "OK";
+      s2Variant = "success";
+      s2Text = "OK";
+    }
+  } else {
+    // When offline, use recorded state from .lza/state.json
+    if (recordedBootstrapStatus === "OK") {
+      s2Status = "OK";
+      s2Variant = "success";
+      s2Text = "OK";
+    } else {
+      s2Status = "Undeployed";
+      s2Variant = "neutral";
+      s2Text = "Undeployed";
+    }
   }
 
   // Step 3: Installer Stack
@@ -261,6 +276,32 @@ function renderLifecycleStepper(status, bootstrapPlan) {
     s4Text = "Pipeline Running";
   }
 
+  // Overall Lifecycle Badge
+  let overallLifecycleStatus = "In sync";
+  let overallLifecycleVariant = "success";
+
+  if (!status.aws.isLive) {
+    overallLifecycleStatus = "Offline";
+    overallLifecycleVariant = "warning";
+  } else if (
+    s2Variant === "danger" ||
+    s3Variant === "danger" ||
+    s4Variant === "danger"
+  ) {
+    overallLifecycleStatus = "Attention required";
+    overallLifecycleVariant = "danger";
+  } else if (
+    s2Variant === "warning" ||
+    s3Variant === "warning" ||
+    s4Variant === "warning"
+  ) {
+    overallLifecycleStatus = "Action required";
+    overallLifecycleVariant = "warning";
+  } else {
+    overallLifecycleStatus = "In sync";
+    overallLifecycleVariant = "success";
+  }
+
   return `
     <article class="card card-full lifecycle-card">
       <div class="card-header">
@@ -270,7 +311,7 @@ function renderLifecycleStepper(status, bootstrapPlan) {
           </svg>
           <h2 class="card-title">LZA Environment Lifecycle</h2>
         </div>
-        <span class="badge badge-${s4Variant}">${escapeHtml(s4Status)}</span>
+        <span class="badge badge-${overallLifecycleVariant}">${escapeHtml(overallLifecycleStatus)}</span>
       </div>
       <div class="card-body">
         <div class="stepper-track">
@@ -367,9 +408,11 @@ export function renderOverview(container, status, bootstrapPlan = null) {
   let prerequisitesDisplay = "In sync";
   let hasPrerequisitesIndicator = true;
 
+  const recordedBootstrap = status.bootstrap?.status || "Undeployed";
+
   if (!status.aws.isLive) {
     workspaceBadge = "Offline";
-    prerequisitesDisplay = "Offline";
+    prerequisitesDisplay = recordedBootstrap === "OK" ? "Recorded: OK" : "Recorded: Undeployed";
   } else if (bootstrapPlan) {
     if (bootstrapPlan.isBlocked) {
       workspaceBadge = "Attention required";
@@ -379,11 +422,11 @@ export function renderOverview(container, status, bootstrapPlan = null) {
       prerequisitesDisplay = "Bootstrap required";
     } else {
       workspaceBadge = "In sync";
-      prerequisitesDisplay = "In sync";
+      prerequisitesDisplay = "OK";
     }
   } else if (status.health && status.health.workspace) {
     workspaceBadge = status.health.workspace;
-    prerequisitesDisplay = "In sync";
+    prerequisitesDisplay = recordedBootstrap === "OK" ? "OK" : "Undeployed";
   }
 
   function renderNextStepsCard() {

@@ -57,6 +57,15 @@ class ConfigurationRepoSummary:
 
 
 @dataclass(frozen=True)
+class BootstrapSummary:
+    """Concise operational summary of prerequisite bootstrap state."""
+
+    status: str = "Undeployed"
+    bootstrapped_at: str | None = None
+    is_live: bool = True
+
+
+@dataclass(frozen=True)
 class OverallHealthSummary:
     """Concise overall deployment health summary."""
 
@@ -83,9 +92,11 @@ class RootStatusResult:
     configuration_pipeline: PipelineSummary
     health: OverallHealthSummary
     assessment: WorkspaceAssessment | None = None
+    bootstrap: BootstrapSummary | None = None
 
 
 __all__ = [
+    "BootstrapSummary",
     "ConfigurationRepoSummary",
     "InstallerStackSummary",
     "OverallHealthSummary",

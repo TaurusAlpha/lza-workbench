@@ -109,6 +109,37 @@
         </div>
       </header>
 
+      <!-- Elegant Offline Notification Bar -->
+      <div id="offline-bar" class="offline-bar" hidden>
+        <div class="offline-bar-main">
+          <div class="offline-indicator">
+            <span class="status-dot status-warning-dot"></span>
+            <strong class="offline-title">Offline Mode</strong>
+          </div>
+          <span class="offline-sep">&middot;</span>
+          <span class="offline-text">Displaying cached state from local metadata.</span>
+        </div>
+        <div class="offline-bar-actions">
+          <button type="button" class="btn btn-sm btn-ghost btn-details" id="offline-details-btn">Details</button>
+          <button type="button" class="btn-dismiss" id="offline-dismiss-btn" title="Dismiss offline notice for this session">&times;</button>
+        </div>
+        <div class="offline-details-panel" id="offline-details-panel" hidden>
+          <div class="offline-cmd-section" id="offline-cmd-wrapper" hidden>
+            <span class="offline-cmd-label">Suggested authentication command:</span>
+            <div class="offline-cmd-box">
+              <code id="offline-cmd-text"></code>
+              <button type="button" class="btn-copy-inline" id="offline-cmd-copy" title="Copy authentication command">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <p class="offline-details-text" id="offline-details-text"></p>
+        </div>
+      </div>
+
       <section id="notice" class="notice" aria-live="polite" hidden></section>
       <section id="view-content" class="card-grid" aria-busy="true"></section>
     </main>
