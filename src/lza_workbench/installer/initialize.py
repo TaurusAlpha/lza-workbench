@@ -27,6 +27,15 @@ from lza_workbench.workspace.persistence import write_workspace_config, write_wo
 from lza_workbench.workspace.schema import WorkspaceConfig
 from lza_workbench.workspace.validation import WorkspaceCapability
 
+__all__ = [
+    "InstallerForm",
+    "InstallerFormField",
+    "InstallerSettingsRequest",
+    "InstallerSettingsResult",
+    "apply_installer_settings",
+    "get_installer_parameters_schema",
+]
+
 
 @dataclass(frozen=True)
 class InstallerFormField:
@@ -71,25 +80,6 @@ class InstallerSettingsResult:
     resolved_parameters: dict[str, str]
     dry_run: bool
     no_save: bool
-
-
-def _apply_values(config: WorkspaceConfig, values: dict[str, str]) -> None:
-    for parameter_name, value in values.items():
-        apply_installer_parameter(config, parameter_name, value)
-
-
-def _ensure_canonical_s3_bucket(config: WorkspaceConfig, management_account_id: str | None) -> None:
-    repository = config.configuration.repository
-    if repository.type != "s3" or repository.bucket:
-        return
-    account_id = config.aws.account_id or management_account_id
-    if account_id and config.aws.region:
-        repository.bucket = get_canonical_config_s3_bucket(account_id, config.aws.region)
-
-
-def _validate_candidate(config: WorkspaceConfig) -> WorkspaceConfig:
-    """Run schema validation after codec assignments that use mutable models."""
-    return WorkspaceConfig.model_validate(config.model_dump(mode="json"))
 
 
 def get_installer_parameters_schema(
@@ -190,11 +180,20 @@ def apply_installer_settings(request: InstallerSettingsRequest) -> InstallerSett
     )
 
 
-__all__ = [
-    "InstallerForm",
-    "InstallerFormField",
-    "InstallerSettingsRequest",
-    "InstallerSettingsResult",
-    "apply_installer_settings",
-    "get_installer_parameters_schema",
-]
+def _apply_values(config: WorkspaceConfig, values: dict[str, str]) -> None:
+    for parameter_name, value in values.items():
+        apply_installer_parameter(config, parameter_name, value)
+
+
+def _ensure_canonical_s3_bucket(config: WorkspaceConfig, management_account_id: str | None) -> None:
+    repository = config.configuration.repository
+    if repository.type != "s3" or repository.bucket:
+        return
+    account_id = config.aws.account_id or management_account_id
+    if account_id and config.aws.region:
+        repository.bucket = get_canonical_config_s3_bucket(account_id, config.aws.region)
+
+
+def _validate_candidate(config: WorkspaceConfig) -> WorkspaceConfig:
+    """Run schema validation after codec assignments that use mutable models."""
+    return WorkspaceConfig.model_validate(config.model_dump(mode="json"))

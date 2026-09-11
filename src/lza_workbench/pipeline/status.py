@@ -35,6 +35,14 @@ from lza_workbench.workspace.validation import WorkspaceCapability
 
 TERMINAL_STATUSES = {"Succeeded", "Failed", "Cancelled", "Stopped", "Superseded"}
 
+__all__ = [
+    "PipelineActionFailure",
+    "PipelineSnapshotResult",
+    "TERMINAL_STATUSES",
+    "get_pipeline_diagnostics_workflow",
+    "get_pipeline_snapshot_workflow",
+]
+
 
 @dataclass(frozen=True)
 class PipelineSnapshotResult:
@@ -59,89 +67,6 @@ class PipelineSnapshotResult:
     failed_action: str | None = None
     is_live: bool = True
     error: str | None = None
-
-
-def _build_offline_pipeline_snapshot(
-    *,
-    workspace_dir: Path,
-    customer_name: str,
-    pipeline_name: str,
-    pipeline_type: str,
-    pipeline_arn: str,
-    execution_id: str | None,
-    state: WorkspaceState,
-    aws_error: str | None,
-) -> PipelineSnapshotResult:
-    recorded_status = (
-        state.config_pipeline_status
-        if pipeline_type == "configuration"
-        else state.installer_pipeline_status
-    ) or "Unknown"
-    recorded_exec_id = execution_id or (
-        state.config_pipeline_execution_id
-        if pipeline_type == "configuration"
-        else state.installer_pipeline_execution_id
-    )
-    return PipelineSnapshotResult(
-        workspace_dir=workspace_dir,
-        customer_name=customer_name,
-        pipeline_name=pipeline_name,
-        pipeline_type=pipeline_type,
-        pipeline_arn=pipeline_arn,
-        execution_id=recorded_exec_id,
-        status=recorded_status,
-        status_summary="Offline - reflecting last recorded state",
-        is_terminal=True,
-        is_live=False,
-        error=aws_error,
-    )
-
-
-def _find_active_and_failed_actions(
-    stages: list[PipelineStageState],
-) -> tuple[str | None, str | None, str | None, str | None]:
-    current_stage: str | None = None
-    current_action: str | None = None
-    failed_stage: str | None = None
-    failed_action: str | None = None
-
-    for stage in stages:
-        if stage.status == "InProgress" and not current_stage:
-            current_stage = stage.stage_name
-            for action in stage.actions:
-                if action.status == "InProgress":
-                    current_action = action.action_name
-                    break
-        elif stage.status == "Failed" and not failed_stage:
-            failed_stage = stage.stage_name
-            for action in stage.actions:
-                if action.status == "Failed":
-                    failed_action = action.action_name
-                    break
-
-    return current_stage, current_action, failed_stage, failed_action
-
-
-def _resolve_pipeline_snapshot_data(
-    codepipeline_client: Any,
-    pipeline_name: str,
-    execution_id: str | None,
-) -> PipelineExecutionSnapshot:
-    target_exec_id = execution_id
-    if not target_exec_id:
-        target_exec_id = get_latest_pipeline_execution_id(
-            client=codepipeline_client, pipeline_name=pipeline_name
-        )
-
-    if target_exec_id:
-        return observe_pipeline_execution(
-            client=codepipeline_client,
-            pipeline_name=pipeline_name,
-            execution_id=target_exec_id,
-        )
-
-    state_result = get_pipeline_state(client=codepipeline_client, pipeline_name=pipeline_name)
-    return pipeline_state_to_snapshot(state_result)
 
 
 def get_pipeline_snapshot_workflow(
@@ -268,10 +193,84 @@ def get_pipeline_diagnostics_workflow(
     )
 
 
-__all__ = [
-    "PipelineActionFailure",
-    "PipelineSnapshotResult",
-    "TERMINAL_STATUSES",
-    "get_pipeline_diagnostics_workflow",
-    "get_pipeline_snapshot_workflow",
-]
+def _build_offline_pipeline_snapshot(
+    *,
+    workspace_dir: Path,
+    customer_name: str,
+    pipeline_name: str,
+    pipeline_type: str,
+    pipeline_arn: str,
+    execution_id: str | None,
+    state: WorkspaceState,
+    aws_error: str | None,
+) -> PipelineSnapshotResult:
+    recorded_status = (
+        state.config_pipeline_status
+        if pipeline_type == "configuration"
+        else state.installer_pipeline_status
+    ) or "Unknown"
+    recorded_exec_id = execution_id or (
+        state.config_pipeline_execution_id
+        if pipeline_type == "configuration"
+        else state.installer_pipeline_execution_id
+    )
+    return PipelineSnapshotResult(
+        workspace_dir=workspace_dir,
+        customer_name=customer_name,
+        pipeline_name=pipeline_name,
+        pipeline_type=pipeline_type,
+        pipeline_arn=pipeline_arn,
+        execution_id=recorded_exec_id,
+        status=recorded_status,
+        status_summary="Offline - reflecting last recorded state",
+        is_terminal=True,
+        is_live=False,
+        error=aws_error,
+    )
+
+
+def _find_active_and_failed_actions(
+    stages: list[PipelineStageState],
+) -> tuple[str | None, str | None, str | None, str | None]:
+    current_stage: str | None = None
+    current_action: str | None = None
+    failed_stage: str | None = None
+    failed_action: str | None = None
+
+    for stage in stages:
+        if stage.status == "InProgress" and not current_stage:
+            current_stage = stage.stage_name
+            for action in stage.actions:
+                if action.status == "InProgress":
+                    current_action = action.action_name
+                    break
+        elif stage.status == "Failed" and not failed_stage:
+            failed_stage = stage.stage_name
+            for action in stage.actions:
+                if action.status == "Failed":
+                    failed_action = action.action_name
+                    break
+
+    return current_stage, current_action, failed_stage, failed_action
+
+
+def _resolve_pipeline_snapshot_data(
+    codepipeline_client: Any,
+    pipeline_name: str,
+    execution_id: str | None,
+) -> PipelineExecutionSnapshot:
+    target_exec_id = execution_id
+    if not target_exec_id:
+        target_exec_id = get_latest_pipeline_execution_id(
+            client=codepipeline_client, pipeline_name=pipeline_name
+        )
+
+    if target_exec_id:
+        return observe_pipeline_execution(
+            client=codepipeline_client,
+            pipeline_name=pipeline_name,
+            execution_id=target_exec_id,
+        )
+
+    state_result = get_pipeline_state(client=codepipeline_client, pipeline_name=pipeline_name)
+    return pipeline_state_to_snapshot(state_result)

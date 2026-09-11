@@ -52,6 +52,85 @@ class ConfigInitResult:
     git_skip_reason: str | None = None
 
 
+def init_config_workflow(
+    *,
+    target_dir: Path | None = None,
+    template_name: str | None = None,
+    force: bool = False,
+    dry_run: bool = False,
+) -> ConfigInitResult:
+    """Execute configuration initialization and return structured result."""
+    context = load_workspace_context(
+        target_dir=target_dir,
+        required_capabilities=(WorkspaceCapability.METADATA_VALID,),
+    )
+    workspace_dir = context.workspace_dir
+    config = context.config
+    state = context.state
+
+    # Resolve template
+    template_to_resolve = (
+        template_name or config.configuration.template.name or DEFAULT_TEMPLATE_SOURCE
+    )
+    resolved_template = resolve_template_source(template_to_resolve)
+    validate_template(resolved_template.config_dir)
+
+    target_config_dir = context.config_dir
+
+    existing_result = _check_existing_config(
+        workspace_dir=workspace_dir,
+        target_config_dir=target_config_dir,
+        resolved_template=resolved_template,
+        config=config,
+        state=state,
+        force=force,
+        dry_run=dry_run,
+    )
+    if existing_result is not None:
+        return existing_result
+
+    if not dry_run and force and target_config_dir.exists():
+        _clean_target_config_dir(target_config_dir)
+
+    written_paths, unresolved = render_and_copy_template(
+        template_config_dir=resolved_template.config_dir,
+        target_config_dir=target_config_dir,
+        config=config,
+        dry_run=dry_run,
+    )
+
+    repo_type = config.configuration.repository.type
+    git_initialized, git_committed, git_skipped, git_skip_reason = _setup_config_git(
+        target_config_dir, repo_type, dry_run
+    )
+
+    if not dry_run:
+        _persist_config_init_provenance(
+            workspace_dir=workspace_dir,
+            target_config_dir=target_config_dir,
+            resolved_template=resolved_template,
+            config=config,
+            state=state,
+            written_paths=written_paths,
+            repo_type=repo_type,
+        )
+
+    return ConfigInitResult(
+        workspace_dir=workspace_dir,
+        config_dir=target_config_dir,
+        template_source=resolved_template,
+        written_paths=written_paths,
+        unresolved_placeholders=unresolved,
+        dry_run=dry_run,
+        config=config,
+        skipped=False,
+        git_initialized=git_initialized,
+        git_committed=git_committed,
+        git_skipped=git_skipped,
+        git_skip_reason=git_skip_reason,
+    )
+
+
 def _check_existing_config(
     *,
     workspace_dir: Path,
@@ -179,82 +258,3 @@ def _persist_config_init_provenance(
         state.config_init_digest = compute_config_directory_digest(target_config_dir)
         state.config_files_count = len(written_paths)
         write_workspace_state(workspace_dir, state)
-
-
-def init_config_workflow(
-    *,
-    target_dir: Path | None = None,
-    template_name: str | None = None,
-    force: bool = False,
-    dry_run: bool = False,
-) -> ConfigInitResult:
-    """Execute configuration initialization and return structured result."""
-    context = load_workspace_context(
-        target_dir=target_dir,
-        required_capabilities=(WorkspaceCapability.METADATA_VALID,),
-    )
-    workspace_dir = context.workspace_dir
-    config = context.config
-    state = context.state
-
-    # Resolve template
-    template_to_resolve = (
-        template_name or config.configuration.template.name or DEFAULT_TEMPLATE_SOURCE
-    )
-    resolved_template = resolve_template_source(template_to_resolve)
-    validate_template(resolved_template.config_dir)
-
-    target_config_dir = context.config_dir
-
-    existing_result = _check_existing_config(
-        workspace_dir=workspace_dir,
-        target_config_dir=target_config_dir,
-        resolved_template=resolved_template,
-        config=config,
-        state=state,
-        force=force,
-        dry_run=dry_run,
-    )
-    if existing_result is not None:
-        return existing_result
-
-    if not dry_run and force and target_config_dir.exists():
-        _clean_target_config_dir(target_config_dir)
-
-    written_paths, unresolved = render_and_copy_template(
-        template_config_dir=resolved_template.config_dir,
-        target_config_dir=target_config_dir,
-        config=config,
-        dry_run=dry_run,
-    )
-
-    repo_type = config.configuration.repository.type
-    git_initialized, git_committed, git_skipped, git_skip_reason = _setup_config_git(
-        target_config_dir, repo_type, dry_run
-    )
-
-    if not dry_run:
-        _persist_config_init_provenance(
-            workspace_dir=workspace_dir,
-            target_config_dir=target_config_dir,
-            resolved_template=resolved_template,
-            config=config,
-            state=state,
-            written_paths=written_paths,
-            repo_type=repo_type,
-        )
-
-    return ConfigInitResult(
-        workspace_dir=workspace_dir,
-        config_dir=target_config_dir,
-        template_source=resolved_template,
-        written_paths=written_paths,
-        unresolved_placeholders=unresolved,
-        dry_run=dry_run,
-        config=config,
-        skipped=False,
-        git_initialized=git_initialized,
-        git_committed=git_committed,
-        git_skipped=git_skipped,
-        git_skip_reason=git_skip_reason,
-    )

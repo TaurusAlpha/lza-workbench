@@ -12,6 +12,25 @@ from lza_workbench.configuration.inspection.models import (
     S3ConfigurationRepositoryStatus,
 )
 
+__all__ = [
+    "compile_configuration_warnings",
+]
+
+
+def compile_configuration_warnings(
+    *,
+    workspace: ConfigurationWorkspaceStatus,
+    local_git: LocalGitStatus,
+    repository: ConfigurationRepositoryStatus,
+    pipeline: ConfigurationPipelineStatus,
+) -> tuple[str, ...]:
+    """Interpret configuration observations into actionable warnings."""
+    warnings = _compile_workspace_warnings(workspace)
+    warnings.extend(_compile_local_git_warnings(local_git))
+    warnings.extend(_compile_repository_warnings(repository))
+    warnings.extend(_compile_pipeline_warnings(pipeline))
+    return tuple(warnings)
+
 
 def _compile_workspace_warnings(workspace: ConfigurationWorkspaceStatus) -> list[str]:
     """Compile warnings from local workspace observations."""
@@ -118,23 +137,3 @@ def _compile_pipeline_warnings(pipeline: ConfigurationPipelineStatus) -> list[st
     if pipeline.status == "Cancelled":
         return [f"Latest execution of configuration pipeline '{pipeline.name}' was cancelled."]
     return []
-
-
-def compile_configuration_warnings(
-    *,
-    workspace: ConfigurationWorkspaceStatus,
-    local_git: LocalGitStatus,
-    repository: ConfigurationRepositoryStatus,
-    pipeline: ConfigurationPipelineStatus,
-) -> tuple[str, ...]:
-    """Interpret configuration observations into actionable warnings."""
-    warnings = _compile_workspace_warnings(workspace)
-    warnings.extend(_compile_local_git_warnings(local_git))
-    warnings.extend(_compile_repository_warnings(repository))
-    warnings.extend(_compile_pipeline_warnings(pipeline))
-    return tuple(warnings)
-
-
-__all__ = [
-    "compile_configuration_warnings",
-]
