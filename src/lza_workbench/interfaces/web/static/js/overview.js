@@ -207,7 +207,7 @@ function renderLifecycleStepper(status, bootstrapPlan) {
   const recordedBootstrapStatus = status.bootstrap?.status || "Undeployed";
   let s2Status = recordedBootstrapStatus;
   let s2Variant = recordedBootstrapStatus === "OK" ? "success" : "neutral";
-  let s2Text = recordedBootstrapStatus === "OK" ? "OK" : "Undeployed";
+  let s2Text = recordedBootstrapStatus === "OK" ? "OK" : "Optional";
 
   if (status.aws.isLive && bootstrapPlan) {
     if (bootstrapPlan.isBlocked) {
@@ -230,9 +230,9 @@ function renderLifecycleStepper(status, bootstrapPlan) {
       s2Variant = "success";
       s2Text = "OK";
     } else {
-      s2Status = "Undeployed";
+      s2Status = "Optional";
       s2Variant = "neutral";
-      s2Text = "Undeployed";
+      s2Text = "Optional";
     }
   }
 
@@ -398,36 +398,11 @@ export function renderOverview(container, status, bootstrapPlan = null) {
     : `${status.configuration.localGitUncommitted} uncommitted`;
 
   const remoteSyncSummary =
-    status.configuration.remoteSync?.summary || status.configuration.gitSync?.summary;
+    status.configuration.remoteSync?.summary || status.configuration.gitSync?.summary || "—";
 
   const installerStatusDisplay = !status.aws.isLive && status.installer.status && status.installer.status !== "—"
     ? `Recorded: ${status.installer.status}`
-    : status.installer.status;
-
-  let workspaceBadge = "In sync";
-  let prerequisitesDisplay = "In sync";
-  let hasPrerequisitesIndicator = true;
-
-  const recordedBootstrap = status.bootstrap?.status || "Undeployed";
-
-  if (!status.aws.isLive) {
-    workspaceBadge = "Offline";
-    prerequisitesDisplay = recordedBootstrap === "OK" ? "Recorded: OK" : "Recorded: Undeployed";
-  } else if (bootstrapPlan) {
-    if (bootstrapPlan.isBlocked) {
-      workspaceBadge = "Attention required";
-      prerequisitesDisplay = "Missing resources";
-    } else if (bootstrapPlan.isMutationRequired) {
-      workspaceBadge = "Action required";
-      prerequisitesDisplay = "Bootstrap required";
-    } else {
-      workspaceBadge = "In sync";
-      prerequisitesDisplay = "OK";
-    }
-  } else if (status.health && status.health.workspace) {
-    workspaceBadge = status.health.workspace;
-    prerequisitesDisplay = recordedBootstrap === "OK" ? "OK" : "Undeployed";
-  }
+    : status.installer.status || "—";
 
   function renderNextStepsCard() {
     const steps = [];
@@ -489,35 +464,242 @@ export function renderOverview(container, status, bootstrapPlan = null) {
   const lifecycleStepperHtml = renderLifecycleStepper(status, bootstrapPlan);
   const nextStepsHtml = renderNextStepsCard();
 
+  // 1. Tier 1: Workspace & AWS Context Bar
+  const customerName = escapeHtml(status.workspace.customerName || "Default Workspace");
+  const lzaVersion = escapeHtml(status.workspace.lzaVersion || "Unknown");
+  const directory = status.workspace.directory || "";
+  const profile = status.aws.profile || "—";
+  const region = status.aws.region || "—";
+
+  let bootstrapIndicator;
+  if (status.bootstrap?.status === "OK") {
+    const text = status.aws.isLive ? "OK" : "Recorded: OK";
+    bootstrapIndicator = `<span class="status-indicator status-success"><span class="status-dot"></span><span class="status-val">${text}</span></span>`;
+  } else if (status.aws.isLive && bootstrapPlan?.isMutationRequired) {
+    bootstrapIndicator = `<span class="status-indicator status-warning"><span class="status-dot"></span><span class="status-val">Bootstrap Required</span></span>`;
+  } else {
+    bootstrapIndicator = `<span class="status-indicator status-neutral"><span class="status-dot"></span><span class="status-val">Optional</span></span>`;
+  }
+
+  const awsLiveBadgeClass = status.aws.isLive ? "badge-success" : "badge-warning";
+  const awsLiveText = status.aws.isLive ? "Live" : "Offline";
+
+  const contextBarHtml = `
+    <article class="card card-full workspace-context-bar">
+      <div class="context-bar-header">
+        <div class="context-bar-title-group">
+          <div class="context-bar-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
+          <div>
+            <span class="context-bar-eyebrow">Environment &amp; AWS Context</span>
+            <h2 class="context-bar-title">${customerName}</h2>
+          </div>
+        </div>
+        <div class="context-bar-badges">
+          <span class="badge ${awsLiveBadgeClass}"><span class="badge-dot" aria-hidden="true"></span>${awsLiveText}</span>
+          <span class="badge badge-neutral mono-val">${lzaVersion}</span>
+          <a href="#/welcome" class="btn btn-sm btn-outline" title="Switch or open another workspace">
+            Switch Workspace &rarr;
+          </a>
+        </div>
+      </div>
+      <div class="context-bar-details">
+        <div class="context-item">
+          <span class="context-label">Directory</span>
+          <div class="context-val">
+            ${formatFieldValue(directory, { mono: true, truncate: true, copy: Boolean(directory) })}
+          </div>
+        </div>
+        <div class="context-item">
+          <span class="context-label">AWS Profile</span>
+          <div class="context-val">
+            ${formatFieldValue(profile, { mono: true, copy: Boolean(status.aws.profile) })}
+          </div>
+        </div>
+        <div class="context-item">
+          <span class="context-label">AWS Region</span>
+          <div class="context-val">
+            ${formatFieldValue(region, { mono: true })}
+          </div>
+        </div>
+        <div class="context-item">
+          <span class="context-label">Bootstrap</span>
+          <div class="context-val">
+            ${bootstrapIndicator}
+          </div>
+        </div>
+      </div>
+    </article>
+  `;
+
+  // 2. Tier 2: Workload Cards (Installer & Configuration)
+  // Installer Card
+  const installerBadgeText = status.health?.installer || installerStatusDisplay;
+  const installerConfigStatus = status.assessment?.installerConfigured ? "Configured" : "Incomplete";
+  const installerDeployedVer = formatFieldValue(status.installer.deployedVersion, { mono: true });
+  const installerName = formatFieldValue(status.installer.name, { mono: true, truncate: true, copy: Boolean(status.installer.name) });
+  const stackStatusDisplay = formatFieldValue(installerStatusDisplay, { statusIndicator: Boolean(status.installer.status) });
+  const installerPipelineName = formatFieldValue(status.installerPipeline?.name, { mono: true, truncate: true, copy: Boolean(status.installerPipeline?.name) });
+
+  const isInstallerPipelineRecorded = !status.installerPipeline?.isLive && status.installerPipeline?.status && status.installerPipeline?.status !== "—";
+  const installerPipelineStatusRaw = isInstallerPipelineRecorded ? `Recorded: ${status.installerPipeline.status}` : status.installerPipeline?.status || "—";
+  const installerPipelineStatusDisplay = formatFieldValue(installerPipelineStatusRaw, { statusIndicator: Boolean(status.installerPipeline?.status) });
+
+  const installerFailureHtml = status.installerPipeline?.failureSummary
+    ? `<div class="workload-error-box">
+        <div class="error-box-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <strong>Pipeline Execution Failed</strong>
+        </div>
+        <p class="error-box-msg">${escapeHtml(status.installerPipeline.failureSummary)}</p>
+      </div>`
+    : "";
+
+  const installerCardHtml = `
+    <article class="card workload-card card-interactive" data-href="#/installer">
+      <div class="card-header">
+        <h2 class="card-title">
+          <a href="#/installer" class="card-title-link">Installer</a>
+        </h2>
+        ${renderBadge(installerBadgeText)}
+      </div>
+      <div class="card-body">
+        <div class="card-sub-section">
+          <div class="section-divider-label">Setup &amp; Specification</div>
+          <dl class="section-kv-list">
+            <div class="kv-row">
+              <dt class="kv-label">Configuration</dt>
+              <dd class="kv-value">${formatFieldValue(installerConfigStatus, { statusIndicator: true })}</dd>
+            </div>
+            <div class="kv-row">
+              <dt class="kv-label">Deployed Version</dt>
+              <dd class="kv-value">${installerDeployedVer}</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="card-sub-section">
+          <div class="section-divider-label">Workload &amp; Deployment</div>
+          <dl class="section-kv-list">
+            <div class="kv-row">
+              <dt class="kv-label">CloudFormation</dt>
+              <dd class="kv-value">${installerName}</dd>
+            </div>
+            <div class="kv-row">
+              <dt class="kv-label">Stack Status</dt>
+              <dd class="kv-value">${stackStatusDisplay}</dd>
+            </div>
+            <div class="kv-row">
+              <dt class="kv-label">Pipeline</dt>
+              <dd class="kv-value">${installerPipelineName}</dd>
+            </div>
+            <div class="kv-row">
+              <dt class="kv-label">Pipeline Run</dt>
+              <dd class="kv-value">${installerPipelineStatusDisplay}</dd>
+            </div>
+          </dl>
+          ${installerFailureHtml}
+        </div>
+      </div>
+      <div class="card-footer">
+        <a href="#/installer" class="btn btn-sm btn-outline">Configure Installer &rarr;</a>
+        <a href="#/pipeline/installer" class="btn btn-sm btn-ghost">View Pipeline Run &rarr;</a>
+      </div>
+    </article>
+  `;
+
+  // Configuration Card
+  const configSyncBadge = configurationSyncStatus(status.configuration, status.aws.isLive);
+  const repoDisplay = formatFieldValue(repoTarget, { mono: true, truncate: true });
+  const branchDisplay = formatFieldValue(status.configuration.localGitBranch, { mono: true });
+  const uncommittedDisplay = formatFieldValue(uncommittedValue, { statusIndicator: !status.configuration.localGitClean });
+  const remoteSyncDisplay = formatFieldValue(remoteSyncSummary, { statusIndicator: true, truncate: true });
+  const configPipelineName = formatFieldValue(status.configurationPipeline?.name, { mono: true, truncate: true, copy: Boolean(status.configurationPipeline?.name) });
+
+  const isConfigPipelineRecorded = !status.configurationPipeline?.isLive && status.configurationPipeline?.status && status.configurationPipeline?.status !== "—";
+  const configPipelineStatusRaw = isConfigPipelineRecorded ? `Recorded: ${status.configurationPipeline.status}` : status.configurationPipeline?.status || "—";
+  const configPipelineStatusDisplay = formatFieldValue(configPipelineStatusRaw, { statusIndicator: Boolean(status.configurationPipeline?.status) });
+
+  const configFailureHtml = status.configurationPipeline?.failureSummary
+    ? `<div class="workload-error-box">
+        <div class="error-box-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <strong>Pipeline Execution Failed</strong>
+        </div>
+        <p class="error-box-msg">${escapeHtml(status.configurationPipeline.failureSummary)}</p>
+      </div>`
+    : "";
+
+  const configurationCardHtml = `
+    <article class="card workload-card card-interactive" data-href="#/configuration">
+      <div class="card-header">
+        <h2 class="card-title">
+          <a href="#/configuration" class="card-title-link">Configuration</a>
+        </h2>
+        ${renderBadge(configSyncBadge)}
+      </div>
+      <div class="card-body">
+        <div class="card-sub-section">
+          <div class="section-divider-label">Repository &amp; Git State</div>
+          <dl class="section-kv-list">
+            <div class="kv-row">
+              <dt class="kv-label">Repository</dt>
+              <dd class="kv-value">${repoDisplay}</dd>
+            </div>
+            <div class="kv-row">
+              <dt class="kv-label">Local Branch</dt>
+              <dd class="kv-value">${branchDisplay}</dd>
+            </div>
+            <div class="kv-row">
+              <dt class="kv-label">Uncommitted</dt>
+              <dd class="kv-value">${uncommittedDisplay}</dd>
+            </div>
+            <div class="kv-row">
+              <dt class="kv-label">Remote Sync</dt>
+              <dd class="kv-value">${remoteSyncDisplay}</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="card-sub-section">
+          <div class="section-divider-label">Pipeline Workload</div>
+          <dl class="section-kv-list">
+            <div class="kv-row">
+              <dt class="kv-label">Pipeline</dt>
+              <dd class="kv-value">${configPipelineName}</dd>
+            </div>
+            <div class="kv-row">
+              <dt class="kv-label">Pipeline Run</dt>
+              <dd class="kv-value">${configPipelineStatusDisplay}</dd>
+            </div>
+          </dl>
+          ${configFailureHtml}
+        </div>
+      </div>
+      <div class="card-footer">
+        <a href="#/configuration" class="btn btn-sm btn-outline">Edit Configuration &rarr;</a>
+        <a href="#/pipeline/configuration" class="btn btn-sm btn-ghost">View Pipeline Run &rarr;</a>
+      </div>
+    </article>
+  `;
+
+  const workloadGridHtml = `
+    <div class="workload-grid card-full">
+      ${installerCardHtml}
+      ${configurationCardHtml}
+    </div>
+  `;
+
   container.innerHTML = [
     lifecycleStepperHtml,
     nextStepsHtml,
-    card("Workspace", [
-      ["Customer", status.workspace.customerName],
-      ["LZA version", status.workspace.lzaVersion, { mono: true }],
-      ["Directory", status.workspace.directory, { mono: true, truncate: true, copy: true }],
-      ["Prerequisites", prerequisitesDisplay, { statusIndicator: hasPrerequisitesIndicator }],
-      ["Switch", '<a href="#/welcome" class="card-link-inline">Switch or open workspace &rarr;</a>', { raw: true }],
-    ], workspaceBadge, { href: "#/bootstrap" }),
-    card("AWS context", [
-      ["Profile", status.aws.profile, { mono: true, copy: Boolean(status.aws.profile) }],
-      ["Region", status.aws.region, { mono: true }],
-      ["Account", status.aws.identity?.account, { mono: true, copy: Boolean(status.aws.identity?.account) }],
-      ["Identity", status.aws.identity?.arn, { mono: true, truncate: true, copy: Boolean(status.aws.identity?.arn) }],
-    ], status.aws.isLive ? "Live" : "Offline"),
-    card("Installer", [
-      ["Stack", status.installer.name, { mono: true, truncate: true, copy: Boolean(status.installer.name) }],
-      ["Stack status", installerStatusDisplay, { statusIndicator: Boolean(status.installer.status) }],
-      ["Deployed version", status.installer.deployedVersion, { mono: true }],
-    ], status.health.installer, { href: "#/installer" }),
-    card("Configuration", [
-      ["Repository", repoTarget, { mono: true, truncate: true }],
-      ["Local Git", status.configuration.localGitBranch, { mono: true }],
-      ["Uncommitted", uncommittedValue, { statusIndicator: !status.configuration.localGitClean }],
-      ["Remote sync", remoteSyncSummary, { truncate: true }],
-    ], configurationSyncStatus(status.configuration, status.aws.isLive), { href: "#/configuration" }),
-    card("Installer pipeline", pipelineFields(status.installerPipeline), pipelineBadge(status.installerPipeline), { href: "#/pipeline/installer" }),
-    card("Configuration pipeline", pipelineFields(status.configurationPipeline), pipelineBadge(status.configurationPipeline), { href: "#/pipeline/configuration" }),
+    contextBarHtml,
+    workloadGridHtml,
   ].filter(Boolean).join("");
 
   // Bind interactive cards
