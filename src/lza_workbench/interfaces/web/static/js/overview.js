@@ -302,18 +302,28 @@ function renderLifecycleStepper(status, bootstrapPlan) {
     overallLifecycleVariant = "success";
   }
 
+  const isCollapsed = localStorage.getItem("lza_lifecycle_collapsed") === "true";
+
   return `
-    <article class="card card-full lifecycle-card">
-      <div class="card-header">
+    <article class="card card-full lifecycle-card${isCollapsed ? " is-collapsed" : ""}" id="lifecycle-card">
+      <div class="card-header lifecycle-header">
         <div class="lifecycle-header-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
           </svg>
           <h2 class="card-title">LZA Environment Lifecycle</h2>
         </div>
-        <span class="badge badge-${overallLifecycleVariant}">${escapeHtml(overallLifecycleStatus)}</span>
+        <div class="lifecycle-header-actions">
+          <span class="badge badge-${overallLifecycleVariant}">${escapeHtml(overallLifecycleStatus)}</span>
+          <button type="button" class="btn btn-sm btn-ghost btn-toggle-lifecycle" id="btn-toggle-lifecycle" title="${isCollapsed ? "Expand lifecycle stepper" : "Collapse lifecycle stepper"}">
+            <span class="lifecycle-toggle-text">${isCollapsed ? "Expand" : "Collapse"}</span>
+            <svg class="lifecycle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform: ${isCollapsed ? "rotate(180deg)" : "rotate(0deg)"}; transition: transform 200ms ease;">
+              <polyline points="18 15 12 9 6 15"/>
+            </svg>
+          </button>
+        </div>
       </div>
-      <div class="card-body">
+      <div class="card-body lifecycle-body" id="lifecycle-body"${isCollapsed ? ' style="display: none;"' : ""}>
         <div class="stepper-track">
           <!-- Step 1 -->
           <a href="#/setup" class="stepper-step complete" title="Workspace Initialized">
@@ -494,8 +504,8 @@ export function renderOverview(container, status, bootstrapPlan = null) {
             </svg>
           </div>
           <div>
-            <span class="context-bar-eyebrow">Environment &amp; AWS Context</span>
-            <h2 class="context-bar-title">${customerName}</h2>
+            <span class="context-bar-eyebrow">Environment Context</span>
+            <h3 class="context-bar-title">AWS &amp; Runtime Configuration</h3>
           </div>
         </div>
         <div class="context-bar-badges">
@@ -696,11 +706,39 @@ export function renderOverview(container, status, bootstrapPlan = null) {
   `;
 
   container.innerHTML = [
+    contextBarHtml,
     lifecycleStepperHtml,
     nextStepsHtml,
-    contextBarHtml,
     workloadGridHtml,
   ].filter(Boolean).join("");
+
+  // Bind lifecycle stepper collapse toggle
+  const toggleLifecycleBtn = container.querySelector("#btn-toggle-lifecycle");
+  if (toggleLifecycleBtn) {
+    toggleLifecycleBtn.addEventListener("click", () => {
+      const card = container.querySelector("#lifecycle-card");
+      const body = container.querySelector("#lifecycle-body");
+      const chevron = toggleLifecycleBtn.querySelector(".lifecycle-chevron");
+      const text = toggleLifecycleBtn.querySelector(".lifecycle-toggle-text");
+      if (!body) return;
+      const currentlyCollapsed = body.style.display === "none";
+      if (currentlyCollapsed) {
+        body.style.display = "";
+        if (card) card.classList.remove("is-collapsed");
+        if (text) text.textContent = "Collapse";
+        if (chevron) chevron.style.transform = "rotate(0deg)";
+        toggleLifecycleBtn.title = "Collapse lifecycle stepper";
+        localStorage.removeItem("lza_lifecycle_collapsed");
+      } else {
+        body.style.display = "none";
+        if (card) card.classList.add("is-collapsed");
+        if (text) text.textContent = "Expand";
+        if (chevron) chevron.style.transform = "rotate(180deg)";
+        toggleLifecycleBtn.title = "Expand lifecycle stepper";
+        localStorage.setItem("lza_lifecycle_collapsed", "true");
+      }
+    });
+  }
 
   // Bind interactive cards
   container.querySelectorAll(".card-interactive").forEach((interactiveCard) => {

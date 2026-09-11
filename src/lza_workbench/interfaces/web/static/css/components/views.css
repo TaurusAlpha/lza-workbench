@@ -4,6 +4,11 @@
 
 .lifecycle-card {
   border-left: 4px solid var(--brand-primary);
+  transition: all 200ms ease;
+}
+
+.lifecycle-card.is-collapsed {
+  padding-bottom: 0.75rem;
 }
 
 .lifecycle-header-title {
@@ -11,6 +16,33 @@
   align-items: center;
   gap: 0.5rem;
   color: var(--brand-primary);
+}
+
+.lifecycle-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.btn-toggle-lifecycle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.2rem 0.5rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-card);
+  background-color: var(--bg-card-muted);
+  transition: all 150ms ease;
+}
+
+.btn-toggle-lifecycle:hover {
+  color: var(--text-primary);
+  border-color: var(--brand-primary);
+  background-color: var(--bg-card-hover);
 }
 
 .stepper-track {

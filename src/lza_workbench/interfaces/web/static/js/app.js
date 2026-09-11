@@ -238,8 +238,8 @@ function updateOfflineStatus(aws) {
     return;
   }
 
-  // If dismissed during this session, keep banner closed
-  const isDismissed = sessionStorage.getItem("lza_offline_dismissed") === "true";
+  // If dismissed, keep banner closed across refreshes/navigations
+  const isDismissed = localStorage.getItem("lza_offline_dismissed") === "true";
   if (isDismissed) {
     offlineBar.hidden = true;
     return;
@@ -265,7 +265,7 @@ function updateOfflineStatus(aws) {
 if (offlineDismissBtn) {
   offlineDismissBtn.addEventListener("click", () => {
     if (offlineBar) offlineBar.hidden = true;
-    sessionStorage.setItem("lza_offline_dismissed", "true");
+    localStorage.setItem("lza_offline_dismissed", "true");
     showToast("Working in offline mode. Details remain accessible via the top status pill.", "info", 3500);
   });
 }
@@ -300,8 +300,10 @@ if (awsStatusChip) {
     if (currentAwsState && !currentAwsState.isLive) {
       const isNowHidden = !offlineBar.hidden;
       offlineBar.hidden = isNowHidden;
-      if (!isNowHidden) {
-        sessionStorage.removeItem("lza_offline_dismissed");
+      if (isNowHidden) {
+        localStorage.setItem("lza_offline_dismissed", "true");
+      } else {
+        localStorage.removeItem("lza_offline_dismissed");
       }
     }
   });
@@ -429,8 +431,6 @@ async function loadOverview() {
   viewContent.setAttribute("aria-busy", "true");
   clearNotice();
   refresh.disabled = true;
-  if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench";
-  if (pageTitle) pageTitle.textContent = "Workspace Overview";
   if (breadcrumb) breadcrumb.hidden = true;
 
   try {
@@ -439,8 +439,12 @@ async function loadOverview() {
       getBootstrapPlan().catch(() => null),
     ]);
 
-    workspacePath.textContent = status.workspace.directory;
-    workspacePath.title = status.workspace.directory;
+    if (pageEyebrow) pageEyebrow.textContent = "Workspace Overview";
+    if (pageTitle) pageTitle.textContent = status.workspace.customerName || "Default Workspace";
+    if (workspacePath) {
+      workspacePath.textContent = "";
+      workspacePath.hidden = true;
+    }
 
     // Record recents and update switcher
     recordRecentWorkspace({
@@ -490,8 +494,11 @@ async function loadConfiguration() {
 
   try {
     const status = await getConfigurationStatus();
-    workspacePath.textContent = status.workspace.directory;
-    workspacePath.title = status.workspace.directory;
+    if (workspacePath) {
+      workspacePath.hidden = false;
+      workspacePath.textContent = status.workspace.directory;
+      workspacePath.title = status.workspace.directory;
+    }
     renderConfigurationDetails(viewContent, status, loadConfiguration);
     updateOfflineStatus({ isLive: status.workspace.isLive, error: status.workspace.error });
     clearNotice();
