@@ -1,1 +1,4 @@
-"""Pipeline management and execution state models."""
+"""Pipeline feature package.
+
+Import workflows, models, and runtime state from their focused modules.
+"""

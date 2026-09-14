@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LZA Workbench</title>
+    <link rel="stylesheet" href="/css/app.css">
+  </head>
+  <body>
+    <!-- Top Global App Navigation Bar -->
+    <header class="app-navbar">
+      <div class="navbar-left">
+        <a href="#/welcome" class="nav-brand" title="LZA Workbench Home">
+          <svg class="brand-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+            <polyline points="2 17 12 22 22 17"/>
+            <polyline points="2 12 12 17 22 12"/>
+          </svg>
+          <span class="brand-title">LZA Workbench</span>
+        </a>
+
+        <!-- Workspace Dropdown / Switcher -->
+        <div class="ws-switcher" id="ws-switcher">
+          <button type="button" class="ws-switcher-btn" id="ws-switcher-btn" aria-haspopup="true" aria-expanded="false" title="Switch or Manage Workspace">
+            <span class="ws-switcher-dot" id="ws-switcher-dot"></span>
+            <span class="ws-switcher-name" id="ws-switcher-name">No Active Workspace</span>
+            <svg class="ws-switcher-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="ws-switcher-menu" id="ws-switcher-menu" hidden>
+            <div class="ws-menu-header">
+              <span class="ws-menu-title">Recent Workspaces</span>
+            </div>
+            <div class="ws-menu-recents" id="ws-menu-recents"></div>
+            <div class="ws-menu-footer">
+              <a href="#/welcome" class="ws-menu-action">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                <span>Welcome &amp; Overview</span>
+              </a>
+              <a href="#/setup" class="ws-menu-action">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>New / Import Workspace</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center Primary Navigation Links -->
+      <nav class="nav-links" id="main-nav" aria-label="Main Navigation">
+        <a href="#/welcome" class="nav-link" data-route="welcome">Welcome</a>
+        <a href="#/overview" class="nav-link" data-route="overview">Overview</a>
+        <a href="#/installer" class="nav-link" data-route="installer">Installer</a>
+        <a href="#/configuration" class="nav-link" data-route="configuration">Configuration</a>
+        <a href="#/pipeline/configuration" class="nav-link" data-route="pipeline">Pipelines</a>
+      </nav>
+
+      <!-- Right Utility Actions -->
+      <div class="navbar-right">
+        <!-- AWS Status Chip -->
+        <div id="aws-status-chip" class="aws-status-pill offline" title="AWS Execution Context">
+          <span class="status-dot"></span>
+          <span id="aws-status-label">AWS Offline</span>
+        </div>
+
+        <!-- Refresh Button -->
+        <button id="refresh" class="btn btn-sm btn-ghost nav-tool-btn" type="button" title="Refresh Status">
+          <svg class="btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+          <span class="btn-text">Refresh</span>
+        </button>
+
+        <!-- Theme Toggle Button -->
+        <button id="theme-toggle" class="btn btn-sm btn-ghost nav-tool-btn" type="button" title="Toggle Dark/Light Mode">
+          <svg class="theme-icon theme-icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+          <svg class="theme-icon theme-icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden>
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="shell">
+      <header class="page-header" id="page-header">
+        <div class="header-content">
+          <nav id="breadcrumb" class="breadcrumb-bar" aria-label="Breadcrumb" hidden>
+            <a href="#/overview" class="breadcrumb-back-link">
+              <svg class="breadcrumb-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+              <span>Back to Overview</span>
+            </a>
+          </nav>
+          <p id="page-eyebrow" class="eyebrow">LZA Workbench</p>
+          <h1 id="page-title" class="page-title">Workspace Overview</h1>
+          <p id="workspace-path" class="workspace-path" title="Loading workspace status…">Loading workspace status…</p>
+        </div>
+      </header>
+
+      <!-- Elegant Offline Notification Bar -->
+      <div id="offline-bar" class="offline-bar" hidden>
+        <div class="offline-bar-main">
+          <div class="offline-indicator">
+            <span class="status-dot status-warning-dot"></span>
+            <strong class="offline-title">Offline Mode</strong>
+          </div>
+          <span class="offline-sep">&middot;</span>
+          <span class="offline-text">Displaying cached state from local metadata.</span>
+        </div>
+        <div class="offline-bar-actions">
+          <button type="button" class="btn btn-sm btn-ghost btn-details" id="offline-details-btn">Details</button>
+          <button type="button" class="btn-dismiss" id="offline-dismiss-btn" title="Dismiss offline notice for this session">&times;</button>
+        </div>
+        <div class="offline-details-panel" id="offline-details-panel" hidden>
+          <div class="offline-cmd-section" id="offline-cmd-wrapper" hidden>
+            <span class="offline-cmd-label">Suggested authentication command:</span>
+            <div class="offline-cmd-box">
+              <code id="offline-cmd-text"></code>
+              <button type="button" class="btn-copy-inline" id="offline-cmd-copy" title="Copy authentication command">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <p class="offline-details-text" id="offline-details-text"></p>
+        </div>
+      </div>
+
+      <section id="notice" class="notice" aria-live="polite" hidden></section>
+      <section id="view-content" class="card-grid" aria-busy="true"></section>
+    </main>
+
+    <!-- Toast Container for lightweight feedback -->
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>

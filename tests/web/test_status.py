@@ -8,13 +8,11 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from lza_workbench.aws.cloudformation import (
-    CfnDeploymentPlanResult,
-    CfnStackStatusResult,
-)
-from lza_workbench.aws.codepipeline import PipelineStateResult
 from lza_workbench.configuration.archive import ConfigDiffResult
+from lza_workbench.configuration.deploy import ConfigDeployResult
 from lza_workbench.configuration.git import GitRemoteSyncStatus, GitWorkingTreeStatus
+from lza_workbench.configuration.pull import ConfigPullPreparation, ConfigPullResult
+from lza_workbench.configuration.push import ConfigPushPreparation, ConfigPushResult
 from lza_workbench.configuration.status import (
     ConfigurationPipelineStatus,
     ConfigurationStatusResult,
@@ -25,37 +23,33 @@ from lza_workbench.configuration.status import (
 )
 from lza_workbench.configuration.sync import RemoteSyncStatus
 from lza_workbench.errors import LzaError
-from lza_workbench.installer.planning import InstallerPlanResult
-from lza_workbench.installer.source import CodeCommitPlanResult
-from lza_workbench.installer.status import StateAlignment
-from lza_workbench.pipeline.failures import FailureCategory, FailureDiagnostic
-from lza_workbench.pipeline.models import PipelineActionState, PipelineStageState
-from lza_workbench.web.app import create_app
-from lza_workbench.workflows.config_deploy import ConfigDeployResult
-from lza_workbench.workflows.config_pull import ConfigPullPreparation, ConfigPullResult
-from lza_workbench.workflows.config_push import ConfigPushPreparation, ConfigPushResult
-from lza_workbench.workflows.installer_init import (
+from lza_workbench.infrastructure.aws.cloudformation import (
+    CfnDeploymentPlanResult,
+    CfnStackStatusResult,
+)
+from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult
+from lza_workbench.installer.initialize import (
     InstallerForm,
     InstallerFormField,
     InstallerSettingsResult,
 )
-from lza_workbench.workflows.pipeline_snapshot import (
+from lza_workbench.installer.plan import InstallerPlanResult
+from lza_workbench.installer.source import CodeCommitPlanResult
+from lza_workbench.installer.status import InstallerStatusResult, StateAlignment
+from lza_workbench.interfaces.web.app import create_app
+from lza_workbench.pipeline.failures import FailureCategory, FailureDiagnostic
+from lza_workbench.pipeline.model import PipelineActionState, PipelineStageState
+from lza_workbench.pipeline.start import PipelineStartResult
+from lza_workbench.pipeline.status import (
     PipelineActionFailure,
     PipelineSnapshotResult,
 )
-from lza_workbench.workflows.pipeline_start import PipelineStartResult
-from lza_workbench.workflows.status_installer import InstallerStatusResult
-from lza_workbench.workflows.status_root import (
+from lza_workbench.status.observer import (
     ConfigurationRepoSummary,
     InstallerStackSummary,
     OverallHealthSummary,
     PipelineSummary,
     RootStatusResult,
-)
-from lza_workbench.workflows.workspace_bootstrap import (
-    BootstrapAction,
-    BootstrapPlanResult,
-    WorkspaceBootstrapResult,
 )
 from lza_workbench.workspace.schema import AwsConfig, CustomerConfig, WorkspaceConfig
 
@@ -177,7 +171,10 @@ def _status_result() -> RootStatusResult:
 
 def test_status_api_serializes_root_status() -> None:
     app = create_app(workspace_dir=Path("/workspaces/acme"))
-    with patch("lza_workbench.web.status.get_root_status_workflow", return_value=_status_result()):
+    with patch(
+        "lza_workbench.interfaces.web.status.get_root_status_workflow",
+        return_value=_status_result(),
+    ):
         response = TestClient(app).get("/api/status")
 
     assert response.status_code == 200
@@ -196,11 +193,10 @@ def test_status_api_serializes_root_status() -> None:
     }
 
 
-
 def test_status_api_translates_expected_workspace_error() -> None:
     app = create_app(workspace_dir=Path("/missing"))
     with patch(
-        "lza_workbench.web.status.get_root_status_workflow",
+        "lza_workbench.interfaces.web.status.get_root_status_workflow",
         side_effect=LzaError("Workspace metadata is missing."),
     ):
         response = TestClient(app).get("/api/status")
@@ -221,7 +217,7 @@ def test_root_serves_static_overview() -> None:
 def test_status_api_serializes_config_status() -> None:
     app = create_app(workspace_dir=Path("/workspaces/acme"))
     with patch(
-        "lza_workbench.web.status.get_config_status_workflow",
+        "lza_workbench.interfaces.web.status.get_config_status_workflow",
         return_value=_config_status_result(),
     ):
         response = TestClient(app).get("/api/status/config")
@@ -247,7 +243,7 @@ def test_status_api_serializes_config_status() -> None:
 def test_config_status_api_translates_expected_workspace_error() -> None:
     app = create_app(workspace_dir=Path("/missing"))
     with patch(
-        "lza_workbench.web.status.get_config_status_workflow",
+        "lza_workbench.interfaces.web.status.get_config_status_workflow",
         side_effect=LzaError("Configuration directory missing."),
     ):
         response = TestClient(app).get("/api/status/config")
@@ -259,27 +255,29 @@ def test_config_status_api_translates_expected_workspace_error() -> None:
 
 
 def _workspace_config() -> WorkspaceConfig:
-    return WorkspaceConfig.model_validate({
-        "schema_version": 2,
-        "customer": {"name": "Acme", "slug": "acme"},
-        "lza": {"version": "1.11.0", "accelerator_prefix": "AWSAccelerator"},
-        "aws": {"profile": "acme-admin", "region": "eu-west-1", "account_id": "123456789012"},
-        "installer": {
-            "stack_name": "AWSAccelerator-InstallerStack",
-            "source_code": {
-                "repository_type": "codecommit",
-                "repository_name": "aws-accelerator-codecommit",
-                "branch": "main",
+    return WorkspaceConfig.model_validate(
+        {
+            "schema_version": 2,
+            "customer": {"name": "Acme", "slug": "acme"},
+            "lza": {"version": "1.11.0", "accelerator_prefix": "AWSAccelerator"},
+            "aws": {"profile": "acme-admin", "region": "eu-west-1", "account_id": "123456789012"},
+            "installer": {
+                "stack_name": "AWSAccelerator-InstallerStack",
+                "source_code": {
+                    "repository_type": "codecommit",
+                    "repository_name": "aws-accelerator-codecommit",
+                    "branch": "main",
+                },
+                "options": {
+                    "management_account_email": "mgmt@acme.com",
+                    "log_archive_account_email": "log@acme.com",
+                    "audit_account_email": "audit@acme.com",
+                    "control_tower_enabled": True,
+                    "enable_approval_stage": False,
+                },
             },
-            "options": {
-                "management_account_email": "mgmt@acme.com",
-                "log_archive_account_email": "log@acme.com",
-                "audit_account_email": "audit@acme.com",
-                "control_tower_enabled": True,
-                "enable_approval_stage": False,
-            },
-        },
-    })
+        }
+    )
 
 
 def _installer_status_result() -> InstallerStatusResult:
@@ -379,11 +377,11 @@ def test_installer_status_api_serializes_status_and_form() -> None:
     app = create_app(workspace_dir=Path("/workspaces/acme"))
     with (
         patch(
-            "lza_workbench.web.status.get_installer_status_workflow",
+            "lza_workbench.interfaces.web.status.get_installer_status_workflow",
             return_value=_installer_status_result(),
         ),
         patch(
-            "lza_workbench.web.status.get_installer_parameters_schema",
+            "lza_workbench.interfaces.web.status.get_installer_parameters_schema",
             return_value=_installer_form(),
         ),
     ):
@@ -422,7 +420,7 @@ def test_save_installer_settings_api_success() -> None:
         no_save=False,
     )
     with patch(
-        "lza_workbench.web.status.apply_installer_settings",
+        "lza_workbench.interfaces.web.status.apply_installer_settings",
         return_value=mock_res,
     ):
         response = TestClient(app).post(
@@ -440,7 +438,7 @@ def test_save_installer_settings_api_success() -> None:
 def test_save_installer_settings_api_validation_error() -> None:
     app = create_app(workspace_dir=Path("/workspaces/acme"))
     with patch(
-        "lza_workbench.web.status.apply_installer_settings",
+        "lza_workbench.interfaces.web.status.apply_installer_settings",
         side_effect=LzaError("Missing required parameter: ManagementAccountEmail"),
     ):
         response = TestClient(app).post(
@@ -450,15 +448,14 @@ def test_save_installer_settings_api_validation_error() -> None:
 
     assert response.status_code == 422
     assert (
-        response.json()["error"]["message"]
-        == "Missing required parameter: ManagementAccountEmail"
+        response.json()["error"]["message"] == "Missing required parameter: ManagementAccountEmail"
     )
 
 
 def test_installer_plan_api_serializes_plan() -> None:
     app = create_app(workspace_dir=Path("/workspaces/acme"))
     with patch(
-        "lza_workbench.web.status.plan_installer_workflow",
+        "lza_workbench.interfaces.web.status.plan_installer_workflow",
         return_value=_installer_plan_result(),
     ):
         response = TestClient(app).post("/api/installer/plan")
@@ -491,7 +488,7 @@ def test_config_pull_prepare_api_requires_confirmation() -> None:
         ),
     )
     with patch(
-        "lza_workbench.web.status.prepare_config_pull",
+        "lza_workbench.interfaces.web.status.prepare_config_pull",
         return_value=prep,
     ):
         response = TestClient(app).post("/api/config/pull/prepare")
@@ -518,7 +515,7 @@ def test_config_pull_apply_api_success() -> None:
         diff_result=ConfigDiffResult(added=["new-file.yaml"], modified=[], removed=[]),
     )
     with patch(
-        "lza_workbench.web.status.apply_config_pull",
+        "lza_workbench.interfaces.web.status.apply_config_pull",
         return_value=pull_res,
     ):
         response = TestClient(app).post(
@@ -551,7 +548,7 @@ def test_config_push_prepare_api() -> None:
         confirmation_message=None,
     )
     with patch(
-        "lza_workbench.web.status.prepare_config_push",
+        "lza_workbench.interfaces.web.status.prepare_config_push",
         return_value=prep,
     ):
         response = TestClient(app).post("/api/config/push/prepare")
@@ -578,7 +575,7 @@ def test_config_push_apply_api_success() -> None:
         version_id="ver-789",
     )
     with patch(
-        "lza_workbench.web.status.apply_config_push",
+        "lza_workbench.interfaces.web.status.apply_config_push",
         return_value=push_res,
     ):
         response = TestClient(app).post(
@@ -629,7 +626,7 @@ def test_pipeline_snapshot_api_success() -> None:
         is_live=True,
     )
     with patch(
-        "lza_workbench.web.status.get_pipeline_snapshot_workflow",
+        "lza_workbench.interfaces.web.status.get_pipeline_snapshot_workflow",
         return_value=snapshot,
     ):
         response = TestClient(app).get("/api/pipeline/snapshot?type=configuration")
@@ -665,7 +662,7 @@ def test_pipeline_diagnostics_api_success() -> None:
         ),
     )
     with patch(
-        "lza_workbench.web.status.get_pipeline_diagnostics_workflow",
+        "lza_workbench.interfaces.web.status.get_pipeline_diagnostics_workflow",
         return_value=[failure],
     ):
         response = TestClient(app).get("/api/pipeline/diagnostics?type=configuration")
@@ -706,7 +703,7 @@ def test_config_deploy_api_success() -> None:
         dry_run=False,
     )
     with patch(
-        "lza_workbench.web.status.deploy_configuration_workflow",
+        "lza_workbench.interfaces.web.status.deploy_configuration_workflow",
         return_value=deploy_res,
     ):
         response = TestClient(app).post(
@@ -723,161 +720,8 @@ def test_config_deploy_api_success() -> None:
     assert data["pushResult"]["filesCount"] == 10
 
 
-def _sample_bootstrap_plan(
-    *,
-    imported: bool = False,
-    cc_planned_op: str = "NO_CHANGE",
-    is_live: bool = True,
-    error: str | None = None,
-) -> BootstrapPlanResult:
-    return BootstrapPlanResult(
-        workspace_dir=Path("/workspaces/acme"),
-        config=WorkspaceConfig(
-            customer=CustomerConfig(name="Acme", slug="acme"),
-            aws=AwsConfig(profile="acme-admin", region="eu-west-1"),
-        ),
-        aws_profile="acme-admin",
-        aws_region="eu-west-1",
-        account_id="123456789012",
-        bucket_name="lza-workbench-assets-123456789012-eu-west-1",
-        bucket_exists=True,
-        versioning_enabled=True,
-        encryption_enabled=True,
-        bucket_planned_operation="NO_CHANGE",
-        codecommit_repo_name="aws-accelerator-config",
-        codecommit_branch_name="main",
-        codecommit_repo_exists=True if cc_planned_op != "MISSING" else False,
-        codecommit_branch_exists=True if cc_planned_op != "MISSING" else False,
-        codecommit_repo_planned_operation=cc_planned_op,
-        github_secret_name=None,
-        github_secret_exists=False,
-        github_secret_accessible=False,
-        github_repo_owner=None,
-        github_repo_name=None,
-        github_repo_branch=None,
-        github_repo_accessible=False,
-        github_planned_operation="NO_CHANGE",
-        planned_operation=cc_planned_op if cc_planned_op != "NO_CHANGE" else "NO_CHANGE",
-        actions=[
-            BootstrapAction(
-                subject="S3 Bucket",
-                operation="NO_CHANGE",
-                message="Bucket exists and is configured.",
-            )
-        ],
-        warnings=[],
-        dry_run=True,
-        imported=imported,
-        is_live=is_live,
-        error=error,
-    )
-
-
-def test_bootstrap_plan_api_success() -> None:
-    app = create_app(workspace_dir=Path("/workspaces/acme"))
-    plan = _sample_bootstrap_plan()
-    with patch("lza_workbench.web.status.plan_bootstrap_workflow", return_value=plan):
-        response = TestClient(app).get("/api/bootstrap/plan")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["awsProfile"] == "acme-admin"
-    assert data["accountId"] == "123456789012"
-    assert data["plannedOperation"] == "NO_CHANGE"
-    assert data["isMutationRequired"] is False
-    assert data["imported"] is False
-    assert data["isLive"] is True
-    assert data["error"] is None
-    assert data["resources"]["bucket"]["name"] == "lza-workbench-assets-123456789012-eu-west-1"
-    assert len(data["actions"]) == 1
-    assert data["actions"][0]["operation"] == "NO_CHANGE"
-
-
-def test_bootstrap_plan_api_imported_missing() -> None:
-    app = create_app(workspace_dir=Path("/workspaces/acme"))
-    plan = _sample_bootstrap_plan(imported=True, cc_planned_op="MISSING")
-    with patch("lza_workbench.web.status.plan_bootstrap_workflow", return_value=plan):
-        response = TestClient(app).get("/api/bootstrap/plan")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["imported"] is True
-    assert data["isBlocked"] is True
-    assert data["resources"]["codecommit"]["plannedOperation"] == "MISSING"
-
-
-def test_bootstrap_plan_api_offline() -> None:
-    app = create_app(workspace_dir=Path("/workspaces/acme"))
-    plan = _sample_bootstrap_plan(
-        is_live=False,
-        error="SSO session expired",
-    )
-    with patch("lza_workbench.web.status.plan_bootstrap_workflow", return_value=plan):
-        response = TestClient(app).get("/api/bootstrap/plan")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["isLive"] is False
-    assert data["error"] == "SSO session expired"
-    assert data["isMutationRequired"] is False
-
-
-def test_bootstrap_apply_api_success() -> None:
-    app = create_app(workspace_dir=Path("/workspaces/acme"))
-    result = WorkspaceBootstrapResult(
-        workspace_dir=Path("/workspaces/acme"),
-        config=WorkspaceConfig(
-            customer=CustomerConfig(name="Acme", slug="acme"),
-            aws=AwsConfig(profile="acme-admin", region="eu-west-1"),
-        ),
-        aws_profile="acme-admin",
-        aws_region="eu-west-1",
-        account_id="123456789012",
-        bucket_name="lza-workbench-assets-123456789012-eu-west-1",
-        codecommit_repo_name="aws-accelerator-config",
-        codecommit_branch_name="main",
-        codecommit_repo_planned_operation="NO_CHANGE",
-        github_secret_name=None,
-        github_secret_created=False,
-        github_repo_owner=None,
-        github_repo_name=None,
-        github_repo_branch=None,
-        github_repo_accessible=False,
-        github_planned_operation="NO_CHANGE",
-        planned_operation="NO_CHANGE",
-        dry_run=False,
-        skipped=False,
-        actions_taken=["Verified S3 bucket"],
-        warnings=[],
-    )
-    with patch("lza_workbench.web.status.bootstrap_workspace_workflow", return_value=result):
-        response = TestClient(app).post(
-            "/api/bootstrap/apply",
-            json={"allow_missing_github_secret": False},
-        )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is True
-    assert data["actionsTaken"] == ["Verified S3 bucket"]
-
-
-def test_bootstrap_apply_api_error() -> None:
-    app = create_app(workspace_dir=Path("/workspaces/acme"))
-    with patch(
-        "lza_workbench.web.status.bootstrap_workspace_workflow",
-        side_effect=LzaError("Missing imported CodeCommit repository cannot be recreated."),
-    ):
-        response = TestClient(app).post("/api/bootstrap/apply", json={})
-
-    assert response.status_code == 422
-    data = response.json()
-    assert data["error"]["code"] == "workspace_unavailable"
-    assert "Missing imported CodeCommit repository" in data["error"]["message"]
-
-
 def test_workspace_active_api() -> None:
-    from lza_workbench.web.status import ActiveWorkspaceContext
+    from lza_workbench.interfaces.web.status import ActiveWorkspaceContext
     from lza_workbench.workspace.context import WorkspaceAssessment
 
     context = ActiveWorkspaceContext(Path("/workspaces/acme"))
@@ -907,7 +751,9 @@ def test_workspace_active_api() -> None:
         ),
     )
 
-    with patch("lza_workbench.web.status.get_root_status_workflow", return_value=dummy_root):
+    with patch(
+        "lza_workbench.interfaces.web.status.get_root_status_workflow", return_value=dummy_root
+    ):
         response = TestClient(app).get("/api/workspace/active")
 
     assert response.status_code == 200
@@ -920,7 +766,7 @@ def test_workspace_active_api() -> None:
 
 
 def test_workspace_open_api(tmp_path: Path) -> None:
-    from lza_workbench.web.status import ActiveWorkspaceContext
+    from lza_workbench.interfaces.web.status import ActiveWorkspaceContext
 
     context = ActiveWorkspaceContext(None)
     app = create_app(workspace_dir=context)
@@ -945,7 +791,9 @@ def test_workspace_open_api(tmp_path: Path) -> None:
         ),
     )
 
-    with patch("lza_workbench.web.status.get_root_status_workflow", return_value=dummy_root):
+    with patch(
+        "lza_workbench.interfaces.web.status.get_root_status_workflow", return_value=dummy_root
+    ):
         response = TestClient(app).post("/api/workspace/open", json={"directory": str(target_ws)})
 
     assert response.status_code == 200
@@ -956,11 +804,9 @@ def test_workspace_open_api(tmp_path: Path) -> None:
 
 
 def test_workspace_init_preview_and_apply(tmp_path: Path) -> None:
-    from lza_workbench.web.status import ActiveWorkspaceContext
-    from lza_workbench.workflows.workspace_init import WorkspaceInitResult
+    from lza_workbench.interfaces.web.status import ActiveWorkspaceContext
+    from lza_workbench.workspace.initialize import WorkspaceInitResult
     from lza_workbench.workspace.schema import (
-        AwsConfig,
-        CustomerConfig,
         LzaConfig,
         WorkspaceConfig,
         WorkspaceState,
@@ -996,7 +842,7 @@ def test_workspace_init_preview_and_apply(tmp_path: Path) -> None:
         dry_run=False,
     )
 
-    with patch("lza_workbench.web.status.init_workspace_workflow", return_value=preview_res):
+    with patch("lza_workbench.interfaces.web.status.init_workspace", return_value=preview_res):
         resp_preview = TestClient(app).post(
             "/api/workspace/init/preview",
             json={"customer_name": "New Customer"},
@@ -1006,7 +852,7 @@ def test_workspace_init_preview_and_apply(tmp_path: Path) -> None:
     assert preview_data["customerSlug"] == "new-customer"
     assert preview_data["dryRun"] is True
 
-    with patch("lza_workbench.web.status.init_workspace_workflow", return_value=apply_res):
+    with patch("lza_workbench.interfaces.web.status.init_workspace", return_value=apply_res):
         resp_apply = TestClient(app).post(
             "/api/workspace/init/apply",
             json={"customer_name": "New Customer"},
@@ -1019,15 +865,13 @@ def test_workspace_init_preview_and_apply(tmp_path: Path) -> None:
 
 
 def test_workspace_import_discover_prepare_apply(tmp_path: Path) -> None:
-    from lza_workbench.web.status import ActiveWorkspaceContext
-    from lza_workbench.workflows.workspace_import import (
+    from lza_workbench.interfaces.web.status import ActiveWorkspaceContext
+    from lza_workbench.workspace.import_workspace import (
         ImportWorkspaceDiscovery,
         ImportWorkspacePreparation,
         WorkspaceImportResult,
     )
     from lza_workbench.workspace.schema import (
-        AwsConfig,
-        CustomerConfig,
         LzaConfig,
         WorkspaceConfig,
         WorkspaceState,
@@ -1073,11 +917,12 @@ def test_workspace_import_discover_prepare_apply(tmp_path: Path) -> None:
         already_imported=False,
         dry_run=False,
         provenance=prov,
-        recommendations=["Run bootstrap next"],
     )
     prep = ImportWorkspacePreparation(result=import_res)
 
-    with patch("lza_workbench.web.status.discover_import_workspace", return_value=discovery):
+    with patch(
+        "lza_workbench.interfaces.web.status.discover_import_workspace", return_value=discovery
+    ):
         resp_disc = TestClient(app).post(
             "/api/workspace/import/discover",
             json={"workspace_dir": str(ws_dir)},
@@ -1085,7 +930,7 @@ def test_workspace_import_discover_prepare_apply(tmp_path: Path) -> None:
     assert resp_disc.status_code == 200
     assert resp_disc.json()["hasExistingMetadata"] is False
 
-    with patch("lza_workbench.web.status.prepare_workspace_import", return_value=prep):
+    with patch("lza_workbench.interfaces.web.status.prepare_workspace_import", return_value=prep):
         resp_prep = TestClient(app).post(
             "/api/workspace/import/prepare",
             json={"workspace_dir": str(ws_dir)},
@@ -1095,16 +940,12 @@ def test_workspace_import_discover_prepare_apply(tmp_path: Path) -> None:
     assert prep_data["customerSlug"] == "imported-customer"
     assert prep_data["provenance"]["repoName"] == "acme/lza-config"
     assert prep_data["provenance"]["filesCount"] == 12
-    assert prep_data["recommendations"] == ["Run bootstrap next"]
     assert context.prepared_import is not None
 
-    with patch("lza_workbench.web.status.apply_workspace_import", return_value=import_res):
+    with patch(
+        "lza_workbench.interfaces.web.status.apply_workspace_import", return_value=import_res
+    ):
         resp_apply = TestClient(app).post("/api/workspace/import/apply")
     assert resp_apply.status_code == 200
     assert resp_apply.json()["customerSlug"] == "imported-customer"
     assert context.workspace_dir == ws_dir.resolve()
-
-
-
-
-

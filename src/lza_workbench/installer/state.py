@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-from lza_workbench.workspace.schema import WorkspaceState
+if TYPE_CHECKING:
+    from lza_workbench.workspace.schema import WorkspaceState
 
 
 def record_installer_deployment(
@@ -21,14 +23,14 @@ def record_installer_deployment(
     now = datetime.now(UTC)
     state.management_account_id = aws_identity.get("account")
     state.caller_arn = aws_identity.get("arn")
-    state.installer_stack_id = stack_id
-    state.installer_stack_status = stack_status
-    state.installer_template_version = template_version
-    state.installer_template_digest = template_digest
+    state.installer.stack_id = stack_id
+    state.installer.stack_status = stack_status
+    state.installer.template_version = template_version
+    state.installer.template_digest = template_digest
     if downloaded_at:
-        state.installer_downloaded_at = downloaded_at
-    state.pending_installer_parameters = None
-    state.installer_stack_updated_at = now
+        state.installer.downloaded_at = downloaded_at
+    state.installer.pending_parameters = None
+    state.installer.stack_updated_at = now
     state.updated_at = now
 
 
@@ -44,9 +46,9 @@ def record_installer_deployment_failure(
     state.management_account_id = aws_identity.get("account")
     state.caller_arn = aws_identity.get("arn")
     if stack_id:
-        state.installer_stack_id = stack_id
-    state.installer_stack_status = stack_status
-    state.installer_stack_updated_at = now
+        state.installer.stack_id = stack_id
+    state.installer.stack_status = stack_status
+    state.installer.stack_updated_at = now
     state.updated_at = now
 
 

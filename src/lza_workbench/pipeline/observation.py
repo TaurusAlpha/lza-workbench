@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from lza_workbench.aws.codepipeline import (
+from lza_workbench.infrastructure.aws.codepipeline import (
     PipelineStateResult,
     StageStateResult,
     get_pipeline_execution,
     get_pipeline_state,
 )
-from lza_workbench.pipeline.models import (
+from lza_workbench.pipeline.model import (
     PipelineActionState,
     PipelineExecutionSnapshot,
     PipelineStageState,

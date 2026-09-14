@@ -6,13 +6,16 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from lza_workbench.configuration.runtime import ConfigurationRuntimeState
 from lza_workbench.configuration.schema import ConfigurationConfig
 from lza_workbench.errors import LzaError
+from lza_workbench.installer.runtime import InstallerRuntimeState
 from lza_workbench.installer.schema import LzaInstaller, PipelineInstaller
+from lza_workbench.pipeline.runtime import PipelinesRuntimeState
 
 
 class WorkspaceModel(BaseModel):
-    """Base model for forward-compatible workspace metadata."""
+    """Shared strict base model for workspace documents."""
 
     model_config = ConfigDict(extra="forbid", strict=False)
 
@@ -120,47 +123,13 @@ class WorkspaceState(WorkspaceModel):
 
     initialized_at: datetime | None = None
     updated_at: datetime | None = None
-    bootstrapped_at: datetime | None = None
     management_account_id: str | None = None
     caller_arn: str | None = None
-    installer_stack_id: str | None = None
-    installer_stack_status: str | None = None
-    installer_stack_updated_at: datetime | None = None
-    installer_pipeline_execution_id: str | None = None
-    installer_pipeline_name: str | None = None
-    installer_pipeline_status: str | None = None
-    installer_pipeline_failed_stage: str | None = None
-    installer_pipeline_failed_action: str | None = None
-    installer_pipeline_failed_build_url: str | None = None
-    installer_pipeline_error: str | None = None
-    config_pipeline_execution_id: str | None = None
-    config_pipeline_name: str | None = None
-    config_pipeline_status: str | None = None
-    config_pipeline_failed_stage: str | None = None
-    config_pipeline_failed_action: str | None = None
-    config_pipeline_failed_build_url: str | None = None
-    config_pipeline_error: str | None = None
-    config_initialized_at: datetime | None = None
-
-    config_template_name: str | None = None
-    config_template_source: str | None = None
-    config_init_values: dict[str, str] | None = None
-    config_init_digest: str | None = None
-    config_uploaded_at: datetime | None = None
-    config_downloaded_at: datetime | None = None
-    config_artifact_etag: str | None = None
-    config_artifact_version_id: str | None = None
-    config_artifact_sha256: str | None = None
-    config_sync_digest: str | None = None
-    config_files_count: int | None = None
-    config_last_diff_summary: dict[str, int] | None = None
-    installer_downloaded_at: datetime | None = None
-    installer_template_version: str | None = None
-    installer_template_digest: str | None = None
-    installer_deployed_parameters: dict[str, str] | None = None
-    pending_installer_parameters: dict[str, str] | None = None
     imported: bool | None = None
     imported_at: datetime | None = None
+    installer: InstallerRuntimeState = Field(default_factory=InstallerRuntimeState)
+    configuration: ConfigurationRuntimeState = Field(default_factory=ConfigurationRuntimeState)
+    pipelines: PipelinesRuntimeState = Field(default_factory=PipelinesRuntimeState)
 
     @classmethod
     def from_config(cls, config: WorkspaceConfig) -> WorkspaceState:

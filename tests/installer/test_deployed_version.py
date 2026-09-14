@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 from botocore.exceptions import ClientError
 
-from lza_workbench.installer.deployed_version import (
+from lza_workbench.installer.versions import (
     installer_version_parameter_name,
     resolve_deployed_installer_version,
 )

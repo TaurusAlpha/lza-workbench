@@ -29,15 +29,15 @@ def record_config_upload(
     """Record metadata after a successful configuration archive upload."""
     now = datetime.now(UTC)
     state.updated_at = now
-    state.config_uploaded_at = now
-    state.config_artifact_sha256 = _archive_sha256(zip_path)
-    state.config_artifact_etag = etag
-    state.config_artifact_version_id = version_id
-    state.config_files_count = len(manifest)
-    state.config_sync_digest = compute_config_directory_digest(
+    state.configuration.uploaded_at = now
+    state.configuration.artifact_sha256 = _archive_sha256(zip_path)
+    state.configuration.artifact_etag = etag
+    state.configuration.artifact_version_id = version_id
+    state.configuration.files_count = len(manifest)
+    state.configuration.sync_digest = compute_config_directory_digest(
         config_dir, exclude_dirs, exclude_files
     )
-    state.config_last_diff_summary = _diff_summary(diff_result)
+    state.configuration.last_diff_summary = _diff_summary(diff_result)
 
 
 def record_config_download(
@@ -55,21 +55,21 @@ def record_config_download(
     """Record metadata after a successful configuration archive download."""
     now = datetime.now(UTC)
     state.updated_at = now
-    state.config_downloaded_at = now
+    state.configuration.downloaded_at = now
     if zip_path.exists():
-        state.config_artifact_sha256 = _archive_sha256(zip_path)
+        state.configuration.artifact_sha256 = _archive_sha256(zip_path)
     if etag:
-        state.config_artifact_etag = etag
+        state.configuration.artifact_etag = etag
     if version_id:
-        state.config_artifact_version_id = version_id
+        state.configuration.artifact_version_id = version_id
     if extracted and config_dir.exists():
-        state.config_files_count = count_config_files(config_dir, exclude_dirs, exclude_files)
-        state.config_sync_digest = compute_config_directory_digest(
+        state.configuration.files_count = count_config_files(config_dir, exclude_dirs, exclude_files)
+        state.configuration.sync_digest = compute_config_directory_digest(
             config_dir, exclude_dirs, exclude_files
         )
     elif not extracted:
-        state.config_sync_digest = None
-    state.config_last_diff_summary = _diff_summary(diff_result)
+        state.configuration.sync_digest = None
+    state.configuration.last_diff_summary = _diff_summary(diff_result)
 
 
 def cache_verified_s3_sync(
@@ -82,9 +82,9 @@ def cache_verified_s3_sync(
     """Record verified S3 archive synchronization metadata."""
     now = datetime.now(UTC)
     state.updated_at = now
-    state.config_artifact_etag = etag
-    state.config_artifact_version_id = version_id
-    state.config_sync_digest = digest
+    state.configuration.artifact_etag = etag
+    state.configuration.artifact_version_id = version_id
+    state.configuration.sync_digest = digest
 
 
 def record_config_git_push(
@@ -96,10 +96,10 @@ def record_config_git_push(
     """Record metadata after a successful configuration Git push."""
     now = datetime.now(UTC)
     state.updated_at = now
-    state.config_uploaded_at = now
-    state.config_files_count = files_count
+    state.configuration.uploaded_at = now
+    state.configuration.files_count = files_count
     if commit_hash:
-        state.config_artifact_sha256 = commit_hash
+        state.configuration.artifact_sha256 = commit_hash
 
 
 def record_config_git_pull(
@@ -111,10 +111,10 @@ def record_config_git_pull(
     """Record metadata after a successful configuration Git pull."""
     now = datetime.now(UTC)
     state.updated_at = now
-    state.config_downloaded_at = now
-    state.config_files_count = files_count
+    state.configuration.downloaded_at = now
+    state.configuration.files_count = files_count
     if commit_hash:
-        state.config_artifact_sha256 = commit_hash
+        state.configuration.artifact_sha256 = commit_hash
 
 
 def _archive_sha256(zip_path: Path) -> str:

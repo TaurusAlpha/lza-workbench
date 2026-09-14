@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from lza_workbench.installer.config import validate_installer_configuration
 from lza_workbench.installer.parameters import (
     apply_installer_parameter,
     build_installer_cfn_parameters,
     is_installer_parameter_applicable,
 )
+from lza_workbench.installer.validation import validate_installer_configuration
 from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,

@@ -8,12 +8,12 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from lza_workbench.aws.codebuild import (
+from lza_workbench.infrastructure.aws.codebuild import (
     get_cloudwatch_log_events,
     get_codebuild_build_info,
 )
-from lza_workbench.aws.codepipeline import StageStateResult
-from lza_workbench.pipeline.models import PipelineStageState
+from lza_workbench.infrastructure.aws.codepipeline import StageStateResult
+from lza_workbench.pipeline.model import PipelineStageState
 
 
 class FailureCategory(StrEnum):

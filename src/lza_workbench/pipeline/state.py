@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from lza_workbench.pipeline.failures import PipelineActionFailure
-from lza_workbench.pipeline.models import PipelineStageState
+from lza_workbench.pipeline.model import PipelineStageState
 from lza_workbench.workspace.schema import WorkspaceState
 
 
@@ -21,21 +21,16 @@ def record_pipeline_execution(
     now = datetime.now(UTC)
     state.updated_at = now
     if pipeline_type == "installer":
-        state.installer_pipeline_execution_id = execution_id
-        state.installer_pipeline_name = pipeline_name
-        state.installer_pipeline_status = status
-        state.installer_pipeline_failed_stage = None
-        state.installer_pipeline_failed_action = None
-        state.installer_pipeline_failed_build_url = None
-        state.installer_pipeline_error = None
+        recorded = state.pipelines.installer
     else:
-        state.config_pipeline_execution_id = execution_id
-        state.config_pipeline_name = pipeline_name
-        state.config_pipeline_status = status
-        state.config_pipeline_failed_stage = None
-        state.config_pipeline_failed_action = None
-        state.config_pipeline_failed_build_url = None
-        state.config_pipeline_error = None
+        recorded = state.pipelines.configuration
+    recorded.execution_id = execution_id
+    recorded.name = pipeline_name
+    recorded.status = status
+    recorded.failed_stage = None
+    recorded.failed_action = None
+    recorded.failed_build_url = None
+    recorded.error = None
 
 
 def _find_stage_for_action(
@@ -113,21 +108,16 @@ def record_pipeline_watch_result(
     )
 
     if pipeline_type == "installer":
-        state.installer_pipeline_execution_id = execution_id
-        state.installer_pipeline_name = pipeline_name
-        state.installer_pipeline_status = status
-        state.installer_pipeline_failed_stage = failed_stage
-        state.installer_pipeline_failed_action = failed_action
-        state.installer_pipeline_failed_build_url = failed_build_url
-        state.installer_pipeline_error = resolved_error
+        recorded = state.pipelines.installer
     else:
-        state.config_pipeline_execution_id = execution_id
-        state.config_pipeline_name = pipeline_name
-        state.config_pipeline_status = status
-        state.config_pipeline_failed_stage = failed_stage
-        state.config_pipeline_failed_action = failed_action
-        state.config_pipeline_failed_build_url = failed_build_url
-        state.config_pipeline_error = resolved_error
+        recorded = state.pipelines.configuration
+    recorded.execution_id = execution_id
+    recorded.name = pipeline_name
+    recorded.status = status
+    recorded.failed_stage = failed_stage
+    recorded.failed_action = failed_action
+    recorded.failed_build_url = failed_build_url
+    recorded.error = resolved_error
 
 
 __all__ = [

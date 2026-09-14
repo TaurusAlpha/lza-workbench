@@ -1,5 +1,10 @@
 # Completed Work Log
 
+### Bootstrap removal and feature-owned prerequisites (2026-09-14)
+- Removed the standalone workspace bootstrap command and Web concept.
+- Installer deployment now owns its artifact-bucket prerequisite; configuration synchronization
+  remains validation-only for missing remote infrastructure.
+
 Concise historical record of completed features, major architecture decisions, and refactors in LZA Workbench.
 
 Work is moved here from `TODO.md` only after implementation, integration, code review, and validation/tests are complete.
@@ -183,4 +188,3 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 - **Normalized Command Renderers**: Standardized section titles, numbering, labels, and formatting across `status`, `status installer` (`installer status`), `status config` (`config status`), `status pipeline`, `pipeline watch`, and `config deploy`.
 - **Cleaned Storage Leaks & Unnecessary IDs**: Suppressed internal `.lza/state.json` file paths in section headings in favor of domain terms (`Synchronization History`, `Execution History`), and omitted full caller/stack ARNs from default views while retaining vital account/region/profile context.
 - **Multi-line Diagnostic Extraction & Custom Resource Error Resolution (`aws/codebuild.py`)**: Enhanced CloudWatch / CodeBuild diagnostic parsing with multi-line error block aggregation and lookahead. Accurately extracts root cause messages from CDK `DeploymentError: Resource updates failed:`, Custom Resource failures (`Received response status [FAILED] from custom resource. Message returned: ...`), and CloudFormation resource creation errors across multiple lines.
-

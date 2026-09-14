@@ -1,0 +1,964 @@
+"""Tests for status workflows and status synchronization."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+import lza_workbench.status.observer as status_root_mod
+from lza_workbench.configuration.git import GitRemoteSyncStatus
+from lza_workbench.configuration.status import (
+    CodeCommitConfigurationRepositoryStatus,
+    CodeConnectionConfigurationRepositoryStatus,
+    ConfigurationStatusResult,
+    S3ConfigurationRepositoryStatus,
+    get_config_status_workflow,
+)
+from lza_workbench.errors import LzaError
+from lza_workbench.infrastructure.aws.cloudformation import CfnStackStatusResult
+from lza_workbench.infrastructure.aws.codecommit import CodeCommitRepositoryStatus
+from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult
+from lza_workbench.installer.runtime import InstallerRuntimeState
+from lza_workbench.installer.status import (
+    InstallerStatusResult,
+    get_installer_status_workflow,
+    prepare_installer_status,
+)
+from lza_workbench.installer.sync import (
+    sync_installer_config,
+    sync_installer_state,
+)
+from lza_workbench.interfaces.cli.status import render_root_status
+from lza_workbench.pipeline.runtime import (
+    PipelineExecutionRuntimeState,
+    PipelinesRuntimeState,
+)
+from lza_workbench.status.observer import (
+    ConfigurationRepoSummary,
+    InstallerStackSummary,
+    PipelineSummary,
+    RootStatusResult,
+    _derive_overall_health,
+    get_root_status_workflow,
+)
+from lza_workbench.workspace.persistence import load_workspace_config, load_workspace_state
+from lza_workbench.workspace.schema import (
+    AwsConfig,
+    CustomerConfig,
+    WorkspaceConfig,
+    WorkspaceState,
+)
+
+
+def test_get_root_status_workflow(configured_workspace: Path) -> None:
+    with (
+        patch(
+            "lza_workbench.status.observer.resolve_aws_execution_context",
+            wraps=status_root_mod.resolve_aws_execution_context,
+        ) as mock_resolve_aws,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+        patch(
+            "lza_workbench.status.observer.get_pipeline_state",
+            wraps=status_root_mod.get_pipeline_state,
+        ) as mock_pipe_state,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = MagicMock()
+        result = get_root_status_workflow(target_dir=configured_workspace)
+        assert isinstance(result, RootStatusResult)
+        assert result.customer_name == "Acme Corp"
+        assert result.profile == "acme-root"
+        assert result.region == "eu-west-1"
+
+        # Verify exactly one AWS context resolution occurs for root status
+        mock_resolve_aws.assert_called_once()
+
+        # Verify exactly one pair of pipeline state observations occurs
+        assert mock_pipe_state.call_count == 2
+        pipe_names = [call.kwargs.get("pipeline_name") for call in mock_pipe_state.call_args_list]
+        assert pipe_names == ["AWSAccelerator-Installer", "AWSAccelerator-Pipeline"]
+
+        # Verify status_root does not import or expose detailed config workflow
+        assert not hasattr(status_root_mod, "get_config_status_workflow")
+        assert not hasattr(status_root_mod, "ConfigurationStatusResult")
+        assert not hasattr(result, "config_status")
+        for field in (
+            "stack_name",
+            "stack_status",
+            "stack_exists",
+            "repository_type",
+            "config_dir",
+            "config_dir_exists",
+            "installer_pipeline_name",
+            "config_pipeline_name",
+        ):
+            assert not hasattr(result, field)
+
+
+def test_get_config_status_workflow(configured_workspace: Path) -> None:
+    with (
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        s3_mock = MagicMock()
+        s3_mock.head_bucket.return_value = {}
+        s3_mock.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        s3_mock.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        s3_mock.head_object.return_value = {
+            "ETag": '"test-etag-123"',
+            "VersionId": "v1",
+            "ContentLength": 1024,
+            "LastModified": "2026-08-26T10:00:00Z",
+        }
+        pipe_mock = MagicMock()
+        pipe_mock.get_pipeline_state.return_value = {
+            "stageStates": [
+                {
+                    "stageName": "Source",
+                    "latestExecution": {
+                        "status": "Succeeded",
+                        "pipelineExecutionId": "exec-1",
+                    },
+                    "actionStates": [
+                        {
+                            "actionName": "SourceAction",
+                            "latestExecution": {"status": "Succeeded"},
+                        }
+                    ],
+                }
+            ]
+        }
+
+        def client_side_effect(service_name: str, **_kwargs):
+            if service_name == "s3":
+                return s3_mock
+            if service_name == "codepipeline":
+                return pipe_mock
+            return MagicMock()
+
+        mock_client.side_effect = client_side_effect
+
+        result = get_config_status_workflow(target_dir=configured_workspace)
+        assert isinstance(result, ConfigurationStatusResult)
+        assert result.workspace.customer_name == "Acme Corp"
+        assert result.workspace.config_dir_exists is True
+        assert isinstance(result.repository, S3ConfigurationRepositoryStatus)
+        assert result.repository.bucket == "aws-accelerator-config-123456789012-eu-west-1"
+        assert result.repository.bucket_exists is True
+        assert result.repository.bucket_versioning is True
+        assert result.repository.bucket_encryption is True
+        assert result.repository.object_exists is True
+        assert result.repository.object_etag == "test-etag-123"
+        assert result.pipeline.state is not None
+        assert result.pipeline.state.status == "Succeeded"
+
+
+def test_get_config_status_workflow_s3_derived_bucket(tmp_path: Path) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1", account_id="123456789012"),
+    )
+    config.configuration.repository.type = "s3"
+    config.configuration.repository.bucket = None
+
+    with (
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        s3_mock = MagicMock()
+        s3_mock.head_bucket.return_value = {}
+        s3_mock.get_bucket_versioning.return_value = {"Status": "Enabled"}
+        s3_mock.get_bucket_encryption.return_value = {
+            "ServerSideEncryptionConfiguration": {
+                "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "aws:kms"}}]
+            }
+        }
+        s3_mock.head_object.return_value = {
+            "ETag": '"test-etag-123"',
+            "VersionId": "v1",
+            "ContentLength": 1024,
+            "LastModified": "2026-08-26T10:00:00Z",
+        }
+        mock_client.return_value = s3_mock
+
+        result = get_config_status_workflow(
+            config=config,
+            state=WorkspaceState(),
+            workspace_dir=tmp_path,
+        )
+        assert isinstance(result.repository, S3ConfigurationRepositoryStatus)
+        assert result.repository.bucket == "aws-accelerator-config-123456789012-us-east-1"
+        assert result.repository.bucket_exists is True
+
+
+def test_get_config_status_workflow_codecommit(tmp_path: Path) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    config.configuration.repository.type = "codecommit"
+    config.configuration.repository.repository_name = "test-config-repo"
+    config.configuration.repository.branch = "main"
+
+    with (
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.configuration.inspection.repository.inspect_codecommit_repository") as mock_cc,
+        patch("lza_workbench.configuration.inspection.pipeline.get_pipeline_state") as mock_pipe,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = MagicMock()
+        mock_cc.return_value = CodeCommitRepositoryStatus(
+            repository_name="test-config-repo",
+            branch_name="main",
+            exists=True,
+            accessible=True,
+            branch_exists=True,
+        )
+        mock_pipe.return_value = MagicMock(
+            pipeline_name="AWSAccelerator-Pipeline", exists=True, status="Succeeded"
+        )
+
+        result = get_config_status_workflow(
+            config=config,
+            state=WorkspaceState(),
+            workspace_dir=tmp_path,
+        )
+        assert isinstance(result.repository, CodeCommitConfigurationRepositoryStatus)
+        assert result.repository.exists is True
+        assert result.repository.branch_exists is True
+        assert result.repository.accessible is True
+
+
+def test_get_config_status_workflow_codeconnection(tmp_path: Path) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    config.configuration.repository.type = "codeconnection"
+    config.configuration.repository.codeconnection_arn = (
+        "arn:aws:codeconnections:us-east-1:123456789012:connection/test-id"
+    )
+    config.configuration.repository.owner = "my-org"
+    config.configuration.repository.repository_name = "my-repo"
+
+    with (
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.configuration.inspection.repository.inspect_codeconnection") as mock_conn,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = MagicMock()
+        mock_conn.return_value = MagicMock(
+            arn="arn:aws:codeconnections:us-east-1:123456789012:connection/test-id",
+            status="AVAILABLE",
+            provider_type="GitHub",
+            owner_account_id="123456789012",
+            error=None,
+        )
+
+        result = get_config_status_workflow(
+            config=config,
+            state=WorkspaceState(),
+            workspace_dir=tmp_path,
+        )
+        assert isinstance(result.repository, CodeConnectionConfigurationRepositoryStatus)
+        assert result.repository.status == "AVAILABLE"
+        assert result.repository.provider == "GitHub"
+
+
+def test_git_working_tree_and_remote_sync_helpers(tmp_path: Path) -> None:
+    from lza_workbench.configuration.git import (
+        _run_git_command,
+        get_git_remote_sync_status,
+        get_git_working_tree_status,
+        init_git_repository,
+    )
+
+    # Empty directory
+    assert get_git_working_tree_status(tmp_path) is None
+
+    # Init git repo
+    init_git_repository(tmp_path)
+    status1 = get_git_working_tree_status(tmp_path)
+    assert status1 is not None
+    assert status1.is_git is True
+    assert status1.has_uncommitted is False
+
+    # Add file without commit
+    (tmp_path / "test.txt").write_text("hello")
+    status2 = get_git_working_tree_status(tmp_path)
+    assert status2 is not None
+    assert status2.has_uncommitted is True
+    assert status2.uncommitted_count == 1
+
+    # Commit file
+    _run_git_command(["add", "test.txt"], cwd=tmp_path)
+    _run_git_command(
+        [
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "Initial commit",
+        ],
+        cwd=tmp_path,
+    )
+
+    status3 = get_git_working_tree_status(tmp_path)
+    assert status3 is not None
+    assert status3.has_uncommitted is False
+    assert status3.commit_subject == "Initial commit"
+
+    # Remote sync status without remote
+    sync = get_git_remote_sync_status(tmp_path)
+    assert sync.status == "No Upstream"
+
+
+def test_get_root_status_workflow_live_healthy(configured_workspace: Path) -> None:
+    with (
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.status.observer.get_cloudformation_stack_status") as mock_cfn,
+        patch("lza_workbench.status.observer.get_pipeline_state") as mock_pipe_state,
+        patch("lza_workbench.status.observer.get_pipeline_execution") as mock_pipe_exec,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = MagicMock()
+        mock_cfn.return_value = CfnStackStatusResult(
+            stack_name="AWSAccelerator-InstallerStack",
+            exists=True,
+            stack_status="UPDATE_COMPLETE",
+            deployed_parameters={"RepositoryBranchName": "release/v1.16.0"},
+        )
+        mock_pipe_state.side_effect = [
+            PipelineStateResult(
+                "AWSAccelerator-Installer",
+                True,
+                status="Succeeded",
+                latest_execution_id="inst-exec-1",
+            ),
+            PipelineStateResult(
+                "AWSAccelerator-Pipeline",
+                True,
+                status="Succeeded",
+                latest_execution_id="cfg-exec-1",
+            ),
+        ]
+        mock_exec = MagicMock(start_time="2026-09-01T10:00:00Z", duration_seconds=125.0)
+        mock_pipe_exec.return_value = mock_exec
+
+        result = get_root_status_workflow(target_dir=configured_workspace)
+
+        assert result.installer.is_live is True
+        assert result.installer.exists is True
+        assert result.installer.status == "UPDATE_COMPLETE"
+        assert result.installer.deployed_version == "v1.16.0"
+
+        assert result.installer_pipeline.is_live is True
+        assert result.installer_pipeline.status == "Succeeded"
+        assert result.installer_pipeline.execution_id == "inst-exec-1"
+        assert result.installer_pipeline.duration_seconds == 125.0
+
+        assert result.configuration_pipeline.is_live is True
+        assert result.configuration_pipeline.status == "Succeeded"
+        assert result.configuration_pipeline.execution_id == "cfg-exec-1"
+
+        assert result.health.installer == "Healthy"
+        assert result.health.configuration == "Healthy"
+        assert result.health.workspace == "Healthy"
+        assert result.health.is_live is True
+
+
+def test_get_root_status_workflow_aws_unavailable_fallback_with_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Fallback Cust", slug="fallback-cust"),
+        aws=AwsConfig(profile="fail-profile", region="us-east-1"),
+    )
+    state = WorkspaceState(
+        installer=InstallerRuntimeState(
+            stack_status="UPDATE_COMPLETE", template_version="v1.16.0"
+        ),
+        pipelines=PipelinesRuntimeState(
+            installer=PipelineExecutionRuntimeState(
+                status="Succeeded", execution_id="inst-exec-rec"
+            ),
+            configuration=PipelineExecutionRuntimeState(
+                status="Failed",
+                execution_id="cfg-exec-rec",
+                failed_stage="BuildStage",
+                failed_action="SynthAction",
+                error="CFN Stack synthesis error",
+            ),
+        ),
+    )
+    mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=state)
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.load_workspace_context",
+        lambda *_args, **_kwargs: mock_ctx,
+    )
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity=None,
+            error="AWS authentication validation failed: SSO session expired",
+        ),
+    )
+
+    result = get_root_status_workflow(target_dir=tmp_path)
+
+    assert result.aws_error == "AWS authentication validation failed: SSO session expired"
+    assert result.installer.is_live is False
+    assert result.installer.status == "UPDATE_COMPLETE"
+    assert result.installer.deployed_version == "v1.16.0"
+
+    assert result.installer_pipeline.is_live is False
+    assert result.installer_pipeline.status == "Succeeded"
+    assert result.installer_pipeline.execution_id == "inst-exec-rec"
+
+    assert result.configuration_pipeline.is_live is False
+    assert result.configuration_pipeline.status == "Failed"
+    assert result.configuration_pipeline.execution_id == "cfg-exec-rec"
+    assert result.configuration_pipeline.failed_stage == "BuildStage"
+    assert result.configuration_pipeline.failure_summary == "CFN Stack synthesis error"
+
+    assert result.health.is_live is False
+    assert result.health.workspace == "AWS Unavailable - Showing Last Known State"
+    assert result.health.workspace != "Healthy"
+    assert "Recorded: Succeeded" in result.health.installer
+    assert "Recorded: Failed" in result.health.configuration
+
+
+def test_get_root_status_workflow_aws_unavailable_fallback_no_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="No State Cust", slug="no-state-cust"),
+        aws=AwsConfig(profile="fail-profile", region="us-east-1"),
+    )
+    mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=None)
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.load_workspace_context",
+        lambda *_args, **_kwargs: mock_ctx,
+    )
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity=None,
+            error="No AWS credentials found",
+        ),
+    )
+
+    result = get_root_status_workflow(target_dir=tmp_path)
+
+    assert result.health.is_live is False
+    assert result.health.workspace == "AWS Unavailable - No Recorded State"
+    assert result.health.workspace != "Healthy"
+
+
+def test_derive_overall_health_diverged_and_summary_independence() -> None:
+    live_installer_stack = InstallerStackSummary(
+        name="Stack", status="CREATE_COMPLETE", exists=True
+    )
+    live_installer_pipe = PipelineSummary(name="InstPipe", exists=True, status="Succeeded")
+    live_config_pipe = PipelineSummary(name="CfgPipe", exists=True, status="Succeeded")
+
+    # Diverged git status yields Attention Required
+    repo_diverged = ConfigurationRepoSummary(
+        repository_type="codecommit",
+        local_git_clean=True,
+        git_sync_status=GitRemoteSyncStatus(
+            status="Diverged", ahead=2, behind=1, summary="Completely custom message"
+        ),
+    )
+    health_diverged = _derive_overall_health(
+        is_live=True,
+        installer_stack=live_installer_stack,
+        installer_pipe=live_installer_pipe,
+        config_repo=repo_diverged,
+        config_pipe=live_config_pipe,
+    )
+    assert health_diverged.configuration == "Attention Required"
+    assert health_diverged.workspace == "Attention Required"
+
+    # Health does not depend on text in summary: text contains Diverged but status is Synchronized
+    repo_synced = ConfigurationRepoSummary(
+        repository_type="codecommit",
+        local_git_clean=True,
+        git_sync_status=GitRemoteSyncStatus(
+            status="Synchronized", ahead=0, behind=0, summary="Arbitrary string containing Diverged"
+        ),
+    )
+    health_synced = _derive_overall_health(
+        is_live=True,
+        installer_stack=live_installer_stack,
+        installer_pipe=live_installer_pipe,
+        config_repo=repo_synced,
+        config_pipe=live_config_pipe,
+    )
+    assert health_synced.configuration == "Healthy"
+    assert health_synced.workspace == "Healthy"
+
+
+def test_get_root_status_evaluates_git_sync_when_aws_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Git Offline Cust", slug="git-offline-cust"),
+        aws=AwsConfig(profile="fail-profile", region="us-east-1"),
+    )
+    config_dir = tmp_path / config.configuration.local_path
+    config_dir.mkdir(parents=True)
+
+    mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=None)
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.load_workspace_context",
+        lambda *_args, **_kwargs: mock_ctx,
+    )
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity=None,
+            error="No AWS credentials found",
+        ),
+    )
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.get_git_working_tree_status",
+        lambda _dir: MagicMock(branch="main", has_uncommitted=False, uncommitted_count=0),
+    )
+    sync_status = GitRemoteSyncStatus(
+        status="Synchronized",
+        ahead=0,
+        behind=0,
+        summary="In Sync",
+    )
+    mock_get_sync = MagicMock(return_value=sync_status)
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.get_git_remote_sync_status",
+        mock_get_sync,
+    )
+
+    result = get_root_status_workflow(target_dir=tmp_path)
+
+    mock_get_sync.assert_called_once_with(config_dir, branch=config.configuration.repository.branch)
+    assert result.configuration_repo.git_sync_status is not None
+    assert result.configuration_repo.git_sync_status == sync_status
+    assert result.configuration_repo.git_sync_status.status == "Synchronized"
+    assert result.configuration_repo.git_sync_status.summary == "In Sync"
+
+
+def test_root_status_non_git_directory_renders_remote_sync_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Non Git Cust", slug="non-git-cust"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    config_dir = tmp_path / config.configuration.local_path
+    config_dir.mkdir(parents=True)
+    (config_dir / "dummy.txt").write_text("not a git repo")
+
+    mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=None)
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.load_workspace_context",
+        lambda *_args, **_kwargs: mock_ctx,
+    )
+
+    # 1. AWS Live -> Remote Sync displays Not Git
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity={"account": "123456789012", "arn": "arn:aws:iam::123:user/test"},
+            error=None,
+        ),
+    )
+    result_live = get_root_status_workflow(target_dir=tmp_path)
+    assert result_live.configuration_repo.git_sync_status is None
+    render_root_status(result_live)
+    captured_live = capsys.readouterr().out
+    assert "Remote Sync: Not Git" in captured_live
+
+    # 2. AWS Unavailable -> Remote Sync displays Not Checked (AWS Unavailable)
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity=None,
+            error="No AWS credentials found",
+        ),
+    )
+    result_offline = get_root_status_workflow(target_dir=tmp_path)
+    assert result_offline.configuration_repo.git_sync_status is None
+    render_root_status(result_offline)
+    captured_offline = capsys.readouterr().out
+    assert "Remote Sync: Not Checked (AWS Unavailable)" in captured_offline
+
+
+def test_root_status_missing_directory_renders_remote_sync_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Missing Dir Cust", slug="missing-dir-cust"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+
+    mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=None)
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.load_workspace_context",
+        lambda *_args, **_kwargs: mock_ctx,
+    )
+
+    # 1. AWS Live -> Remote Sync displays Not Git
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity={"account": "123456789012", "arn": "arn:aws:iam::123:user/test"},
+            error=None,
+        ),
+    )
+    result_live = get_root_status_workflow(target_dir=tmp_path)
+    assert result_live.configuration_repo.git_sync_status is None
+    render_root_status(result_live)
+    captured_live = capsys.readouterr().out
+    assert "Remote Sync: Not Git" in captured_live
+
+    # 2. AWS Unavailable -> Remote Sync displays Not Checked (AWS Unavailable)
+    monkeypatch.setattr(
+        "lza_workbench.status.observer.resolve_aws_execution_context",
+        lambda **_kwargs: MagicMock(
+            factory=MagicMock(),
+            region="us-east-1",
+            identity=None,
+            error="No AWS credentials found",
+        ),
+    )
+    result_offline = get_root_status_workflow(target_dir=tmp_path)
+    assert result_offline.configuration_repo.git_sync_status is None
+    render_root_status(result_offline)
+    captured_offline = capsys.readouterr().out
+    assert "Remote Sync: Not Checked (AWS Unavailable)" in captured_offline
+
+
+def test_get_installer_status_workflow(configured_workspace: Path) -> None:
+    with (
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+        patch(
+            "lza_workbench.installer.status.get_cloudformation_stack_status"
+        ) as mock_st,
+        patch("lza_workbench.installer.status.get_pipeline_state") as mock_pipe,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = MagicMock()
+        mock_st.return_value = CfnStackStatusResult(
+            stack_name="AWSAccelerator-InstallerStack",
+            exists=True,
+            stack_status="CREATE_COMPLETE",
+            stack_id="arn:aws:cloudformation:stack/123",
+            deployed_parameters={"RepositoryBranchName": "release/v1.16.0"},
+            outputs={"OutputKey": "OutputVal"},
+        )
+        mock_pipe.return_value = MagicMock(
+            pipeline_name="AWSAccelerator-Installer", exists=True, status="Succeeded"
+        )
+        result = get_installer_status_workflow(target_dir=configured_workspace)
+        assert isinstance(result, InstallerStatusResult)
+        assert result.cfn_status.exists is True
+        assert result.deployed_version == "v1.16.0"
+        assert result.pipeline_state is not None
+        assert result.pipeline_state.status == "Succeeded"
+
+
+def test_sync_installer_state_raises_when_not_exists(tmp_path: Path) -> None:
+    state = WorkspaceState()
+    cfn_status = CfnStackStatusResult(stack_name="AWSAccelerator-InstallerStack", exists=False)
+    with pytest.raises(LzaError, match="Cannot synchronize state"):
+        sync_installer_state(
+            workspace_dir=tmp_path,
+            state=state,
+            cfn_status=cfn_status,
+            deployed_version="v1.15.5",
+        )
+
+
+def test_sync_installer_state_success(tmp_path: Path) -> None:
+    state = WorkspaceState()
+    cfn_status = CfnStackStatusResult(
+        stack_name="AWSAccelerator-InstallerStack",
+        exists=True,
+        stack_id="arn:aws:cloudformation:us-east-1:123:stack/test/123",
+        stack_status="CREATE_COMPLETE",
+    )
+    new_state = sync_installer_state(
+        workspace_dir=tmp_path,
+        state=state,
+        cfn_status=cfn_status,
+        deployed_version="v1.15.5",
+    )
+    assert new_state.installer.stack_id == cfn_status.stack_id
+    assert new_state.installer.stack_status == "CREATE_COMPLETE"
+    assert new_state.installer.template_version == "v1.15.5"
+
+    loaded_state = load_workspace_state(tmp_path)
+    assert loaded_state.installer.stack_id == cfn_status.stack_id
+
+
+def test_sync_installer_config_success(tmp_path: Path) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    cfn_status = CfnStackStatusResult(
+        stack_name="AWSAccelerator-InstallerStack",
+        exists=True,
+        deployed_parameters={
+            "RepositorySource": "codecommit",
+            "RepositoryOwner": "aws",
+            "RepositoryName": "aws-accelerator",
+            "RepositoryBranchName": "release/v1.15.5",
+            "ManagementAccountEmail": "mgmt@example.com",
+            "EnableApprovalStage": "Yes",
+            "CustomTemplateParameter": "deployed-value",
+        },
+    )
+    new_config = sync_installer_config(
+        workspace_dir=tmp_path,
+        config=config,
+        cfn_status=cfn_status,
+        deployed_version="v1.15.5",
+    )
+    assert new_config.installer.source_code.repository_type == "codecommit"
+    assert new_config.installer.options.management_account_email == "mgmt@example.com"
+    assert new_config.installer.options.enable_approval_stage is True
+    assert new_config.installer.extra_parameters["CustomTemplateParameter"] == "deployed-value"
+
+    loaded_config = load_workspace_config(tmp_path)
+    assert loaded_config.installer.options.management_account_email == "mgmt@example.com"
+
+
+def test_sync_installer_config_accepts_codeconnection_repository(tmp_path: Path) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    cfn_status = CfnStackStatusResult(
+        stack_name="AWSAccelerator-InstallerStack",
+        exists=True,
+        deployed_parameters={"ConfigurationRepositoryLocation": "codeconnection"},
+    )
+
+    new_config = sync_installer_config(
+        workspace_dir=tmp_path,
+        config=config,
+        cfn_status=cfn_status,
+        deployed_version=None,
+    )
+
+    assert new_config.configuration.repository.type == "codeconnection"
+
+
+def test_prepare_installer_status_separates_comparisons_from_rendering(tmp_path: Path) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    state = WorkspaceState(
+        installer=InstallerRuntimeState(
+            stack_status="CREATE_COMPLETE", template_version="v1.15.5"
+        )
+    )
+    cfn_status = CfnStackStatusResult(
+        stack_name="AWSAccelerator-InstallerStack",
+        exists=True,
+        stack_status="CREATE_COMPLETE",
+        deployed_parameters={"RepositoryBranchName": "release/v1.15.5"},
+    )
+
+    result = prepare_installer_status(
+        workspace_dir=tmp_path,
+        config=config,
+        state=state,
+        profile="test-profile",
+        region="us-east-1",
+        aws_identity=None,
+        aws_error="No credentials",
+        cfn_status=cfn_status,
+        deployed_version="v1.15.5",
+    )
+
+    assert result.deployed_version == "v1.15.5"
+    assert result.state_alignment is not None
+    assert result.state_alignment.in_sync is True
+
+
+def test_get_config_status_prefers_observed_pipeline_state_over_recorded_state(
+    tmp_path: Path,
+) -> None:
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    state = WorkspaceState(
+        pipelines=PipelinesRuntimeState(
+            configuration=PipelineExecutionRuntimeState(
+                execution_id="exec-456",
+                status="Failed",
+                failed_stage="Build",
+                failed_action="SynthesizeStack",
+                error="CodeBuild build failed with exit code 1",
+            )
+        )
+    )
+
+    with (
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.configuration.inspection.pipeline.get_pipeline_state") as mock_pipeline_state,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_pipeline_state.return_value = MagicMock(
+            exists=True,
+            status="Succeeded",
+            latest_execution_id="live-exec-789",
+            stages=[],
+        )
+        result = get_config_status_workflow(
+            config=config,
+            state=state,
+            workspace_dir=tmp_path,
+        )
+        assert result.pipeline.status == "Succeeded"
+        assert result.pipeline.execution_id == "live-exec-789"
+        assert result.synchronization.recorded_pipeline_execution_id == "exec-456"
+        assert not any("SynthesizeStack" in w for w in result.warnings)
+        assert any(call_args[0][0] == "codepipeline" for call_args in mock_client.call_args_list)
+
+
+def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: Path) -> None:
+    from lza_workbench.infrastructure.aws.codepipeline import ActionStateResult, StageStateResult
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Test Customer", slug="test-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1"),
+    )
+    state = WorkspaceState()
+
+    pipe_state = MagicMock(
+        exists=True,
+        status="Failed",
+        latest_execution_id="exec-789",
+        stages=[
+            StageStateResult(
+                stage_name="Build",
+                status="Failed",
+                actions=[
+                    ActionStateResult(
+                        action_name="Synth",
+                        status="Failed",
+                        summary="Action failed",
+                        external_execution_id="build-id-123",
+                        external_execution_url="https://console.aws.amazon.com/codebuild/...",
+                    )
+                ],
+            )
+        ],
+    )
+
+    with (
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+        patch("lza_workbench.configuration.inspection.pipeline.get_pipeline_state") as mock_get_pipe,
+        patch("lza_workbench.configuration.inspection.pipeline.fetch_codebuild_diagnostics") as mock_diag,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = MagicMock()
+        mock_get_pipe.return_value = pipe_state
+        diag_msg = "❌ Stack AWSAccelerator-Network-Phase2 failed to deploy: ValidationError"
+        mock_diag.return_value = [diag_msg]
+
+        result = get_config_status_workflow(
+            config=config,
+            state=state,
+            workspace_dir=tmp_path,
+        )
+        assert result.pipeline.status == "Failed"
+        assert result.pipeline.failed_stage == "Build"
+        assert result.pipeline.failed_action == "Synth"
+        assert result.pipeline.error is not None
+        assert "Stack AWSAccelerator-Network-Phase2 failed to deploy: ValidationError" in (
+            result.pipeline.error
+        )
+        assert "❌" not in result.pipeline.error
+        assert result.pipeline.failed_build_url == "https://console.aws.amazon.com/codebuild/..."
+
+
+def test_get_config_status_workflow_s3_remote_sync(tmp_path: Path) -> None:
+    from lza_workbench.configuration.archive import compute_config_directory_digest
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="S3 Sync Customer", slug="s3-sync-customer"),
+        aws=AwsConfig(profile="test-profile", region="us-east-1", account_id="123456789012"),
+    )
+    config.configuration.repository.type = "s3"
+    config.configuration.repository.bucket = "aws-accelerator-config-123456789012-us-east-1"
+
+    config_dir = tmp_path / config.configuration.local_path
+    config_dir.mkdir(parents=True)
+    (config_dir / "global-config.yaml").write_text("homeRegion: us-east-1\n", encoding="utf-8")
+
+    digest = compute_config_directory_digest(config_dir, set(), set())
+    state = WorkspaceState()
+    state.configuration.sync_digest = digest
+    state.configuration.artifact_etag = "s3-etag-123"
+
+    mock_s3 = MagicMock()
+    mock_s3.head_bucket.return_value = {}
+    mock_s3.get_bucket_versioning.return_value = {"Status": "Enabled"}
+    mock_s3.get_bucket_encryption.return_value = {}
+    mock_s3.head_object.return_value = {
+        "ETag": '"s3-etag-123"',
+        "VersionId": "v1",
+        "ContentLength": 1024,
+        "Metadata": {"lza-content-digest": digest},
+    }
+
+    with (
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
+    ):
+        mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
+        mock_client.return_value = mock_s3
+
+        result = get_config_status_workflow(
+            config=config,
+            state=state,
+            workspace_dir=tmp_path,
+        )
+        assert result.synchronization.remote_sync is not None
+        assert result.synchronization.remote_sync.status == "Synchronized"
+        assert result.synchronization.remote_sync.is_synced is True
+        assert "s3-etag-123" in result.synchronization.remote_sync.summary

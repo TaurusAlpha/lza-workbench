@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from lza_workbench.workspace.layout import (
+    create_workspace,
+    planned_write_paths,
+)
 from lza_workbench.workspace.schema import (
     WorkspaceConfig,
     WorkspaceState,
-)
-from lza_workbench.workspace.setup import (
-    create_workspace,
-    planned_write_paths,
 )
 
 

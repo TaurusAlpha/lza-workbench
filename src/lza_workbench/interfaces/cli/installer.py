@@ -1,0 +1,465 @@
+"""CLI commands and presentation for installer lifecycle."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import typer
+from rich.panel import Panel
+from rich.table import Table
+
+from lza_workbench.installer.deploy import (
+    CfnDeploymentPlanResult,
+    CfnStackStatusResult,
+    InstallerConfigValidationError,
+    InstallerConfigValidationResult,
+    InstallerDeploymentPreparation,
+    InstallerDeployResult,
+    apply_installer_deployment,
+    prepare_installer_deployment,
+)
+from lza_workbench.installer.import_deployed import (
+    InstallerImportResult,
+    import_installer_workflow,
+)
+from lza_workbench.installer.initialize import (
+    InstallerSettingsRequest,
+    InstallerSettingsResult,
+    apply_installer_settings,
+    get_installer_parameters_schema,
+)
+from lza_workbench.installer.plan import (
+    InstallerPlanResult,
+    plan_installer_workflow,
+)
+from lza_workbench.interfaces.cli import params
+from lza_workbench.interfaces.cli.input import value_or_prompt
+from lza_workbench.interfaces.cli.output import (
+    console,
+    format_status,
+    print_dry_run_header,
+    print_info,
+    print_kv,
+    print_notice,
+    print_section,
+    print_success,
+    print_warning,
+    render_workspace_header,
+)
+
+
+def render_installer_init_report(result: InstallerSettingsResult) -> None:
+    """Render the local initialization result without inspecting AWS resources."""
+    title = f"[bold cyan]LZA Installer Initialization - {result.config.customer.name}[/bold cyan]"
+    if result.dry_run:
+        title += " [yellow](Dry Run)[/yellow]"
+    console.print(Panel(title, expand=False))
+    print_kv("Workspace", result.workspace_dir, bold_value=True)
+    print_kv("Template", result.template_path)
+    print_kv("Resolved Parameters", len(result.resolved_parameters))
+    if result.dry_run:
+        print_notice("Dry run: installer configuration was not saved.")
+    elif result.no_save:
+        print_notice("Installer configuration was not saved.")
+    else:
+        print_notice(
+            "Installer configuration saved. Run `lza installer plan` to inspect AWS actions."
+        )
+
+
+def installer_init_command(
+    management_account_email: str | None = None,
+    log_archive_account_email: str | None = None,
+    audit_account_email: str | None = None,
+    accelerator_prefix: str | None = None,
+    dry_run: params.DryRun = False,
+    no_save: bool = False,
+    target_dir: Path | None = None,
+    interactive: bool = True,
+) -> None:
+    """Collect and persist installer configuration from the selected template."""
+    values = {
+        name: value.strip()
+        for name, value in {
+            "ManagementAccountEmail": management_account_email,
+            "LogArchiveAccountEmail": log_archive_account_email,
+            "AuditAccountEmail": audit_account_email,
+            "AcceleratorPrefix": accelerator_prefix,
+        }.items()
+        if value and value.strip()
+    }
+    if interactive:
+        while True:
+            form = get_installer_parameters_schema(
+                target_dir=target_dir, values=values, dry_run=dry_run
+            )
+            next_field = next((field for field in form.fields if field.name not in values), None)
+            if next_field is None:
+                break
+            values[next_field.name] = value_or_prompt(
+                label=next_field.label,
+                value=None,
+                default=next_field.default,
+                interactive=True,
+            )
+
+    result = apply_installer_settings(
+        InstallerSettingsRequest(
+            target_dir=target_dir,
+            values=values,
+            dry_run=dry_run,
+            no_save=no_save,
+        )
+    )
+    render_installer_init_report(result)
+
+
+__all__ = [
+    "installer_init_command",
+    "render_installer_init_report",
+]
+
+
+def render_installer_plan_report(plan: InstallerPlanResult) -> None:
+    """Render structured rich summary plan output for the user."""
+    workspace_dir = plan.workspace_dir
+    config = plan.config
+    profile = plan.profile
+    region = plan.region
+    aws_identity = plan.aws_identity
+    aws_error = plan.aws_error
+    codecommit_plan = plan.codecommit_plan
+    cfn_plan = plan.cloudformation_plan
+    dry_run = plan.dry_run
+    title = f"[bold cyan]LZA Installer Plan - {config.customer.name}[/bold cyan]"
+    if dry_run:
+        title += " [yellow](Dry Run)[/yellow]"
+
+    console.print(Panel(title, expand=False))
+
+    # General info
+    print_kv("Workspace", workspace_dir, bold_value=True)
+    print_kv("LZA Version", config.lza.version, bold_value=True)
+    print_kv("AWS Profile", profile or "Not specified", bold_value=True)
+    print_kv("AWS Region", region, bold_value=True)
+
+    if aws_identity:
+        print_kv("AWS Account ID", aws_identity["account"], style="green")
+        print_kv("Caller Identity", aws_identity["arn"], style="dim")
+    elif aws_error:
+        print_notice(f"AWS Access Notice: {aws_error}")
+
+    console.print()
+
+    # CodeCommit Section
+    print_section(1, "Source Code Repository Planning")
+    print_kv("Source Type", config.installer.source_code.repository_type, bold_value=True)
+    print_kv("Repository Name", codecommit_plan.repository_name)
+    print_kv("Target Branch", codecommit_plan.branch_name)
+    print_kv("Repository Status", codecommit_plan.status, bold_value=True)
+    console.print("Planned Repository Actions:")
+    for action in codecommit_plan.actions:
+        console.print(f"  • {action}")
+
+    if plan.github_secret_warning:
+        print_warning(plan.github_secret_warning)
+
+    console.print()
+
+    print_section(2, "Installer Artifact Bucket")
+    print_kv("Bucket", plan.artifact_bucket or "Not resolved")
+    print_kv("Planned Action", plan.artifact_bucket_operation, bold_value=True)
+
+    # CloudFormation Section
+    print_section(3, "CloudFormation Deployment Planning")
+    print_kv("Stack Name", cfn_plan.stack_name, bold_value=True)
+    op_color = (
+        "green"
+        if cfn_plan.operation == "CREATE"
+        else ("yellow" if cfn_plan.operation == "UPDATE" else "blue")
+    )
+    console.print(
+        f"Planned Stack Operation: [{op_color}][bold]{cfn_plan.operation}[/bold][/{op_color}]"
+    )
+    if cfn_plan.stack_status:
+        print_kv("Current Stack Status", cfn_plan.stack_status)
+
+    console.print()
+    table = Table(title="Resolved CloudFormation Parameters", show_header=True)
+    table.add_column("Parameter Key", style="cyan")
+    table.add_column("Resolved Value", style="white")
+
+    for k, v in sorted(cfn_plan.resolved_parameters.items()):
+        table.add_row(k, str(v))
+
+    console.print(table)
+
+    if cfn_plan.parameter_diffs:
+        diff_table = Table(title="Parameter Changes (Update Plan)", show_header=True)
+        diff_table.add_column("Parameter Key", style="cyan")
+        diff_table.add_column("Current Deployed Value", style="red")
+        diff_table.add_column("Planned New Value", style="green")
+
+        for k, (old_v, new_v) in sorted(cfn_plan.parameter_diffs.items()):
+            diff_table.add_row(k, str(old_v), str(new_v))
+
+        console.print(diff_table)
+
+    console.print()
+    print_warning("Plan Complete. Guarantee: No AWS resources were modified or deployed.")
+
+
+def installer_plan_command(
+    dry_run: params.DryRun = False,
+    target_dir: Path | None = None,
+) -> None:
+    """Show a non-mutating AWS plan for persisted installer configuration."""
+    plan_result = plan_installer_workflow(target_dir=target_dir, dry_run=dry_run)
+    render_installer_plan_report(plan_result)
+
+
+__all__ = [
+    "installer_plan_command",
+    "render_installer_plan_report",
+]
+
+
+def _render_deployment_plan(
+    *,
+    stack_name: str,
+    profile: str,
+    region: str,
+    account_id: str,
+    plan: CfnDeploymentPlanResult,
+    operation: str,
+) -> None:
+    print_section(1, "Deployment Target")
+    print_kv("Target AWS Profile", profile or "default")
+    print_kv("Target Region", region)
+    print_kv("Target Account", account_id or "RESOLVED")
+    print_kv("CloudFormation Stack", stack_name)
+    print_kv("Current Stack Status", plan.stack_status or "DOES NOT EXIST")
+    print_kv("Planned Action", operation, bold_value=True)
+
+    if plan.parameter_diffs:
+        console.print()
+        print_section(2, "Parameter Changes")
+        table = Table(title="Parameter Changes", show_header=True)
+        table.add_column("Parameter Key", style="cyan")
+        table.add_column("Current Deployed", style="red")
+        table.add_column("New Value", style="green")
+        for key, (current_val, new_val) in sorted(plan.parameter_diffs.items()):
+            table.add_row(key, current_val, new_val)
+        console.print(table)
+
+
+def _confirm_deployment(*, operation: str, stack_name: str, dry_run: bool, force: bool) -> bool:
+    if dry_run or force:
+        return True
+    prompt = f"Proceed with CloudFormation stack {operation.lower()} for '{stack_name}'?"
+    if not typer.confirm(prompt, default=True):
+        console.print("[dim]Deployment aborted by user.[/dim]")
+        return False
+    return True
+
+
+def _render_dry_run(*, operation: str, stack_name: str) -> None:
+    print_dry_run_header("lza installer deploy")
+    console.print(
+        f"[bold yellow]Dry run:[/bold yellow] would execute "
+        f"[bold green]{operation}[/bold green] on stack '{stack_name}'."
+    )
+
+
+def _render_stack_event(event: dict[str, Any]) -> None:
+    resource_type = event.get("ResourceType", "")
+    logical_id = event.get("LogicalResourceId", "")
+    status = event.get("ResourceStatus", "")
+    reason = event.get("ResourceStatusReason", "")
+
+    color = "green" if "COMPLETE" in status else "red" if "FAILED" in status else "yellow"
+    msg = f"  [{color}]{status:<25}[/{color}] {resource_type:<35} {logical_id}"
+    if reason and "FAILED" in status:
+        msg += f" ({reason})"
+    console.print(msg)
+
+
+def _render_missing_configuration(validation: InstallerConfigValidationResult) -> None:
+    console.print(
+        "[bold red]Configuration error: missing required installer settings in "
+        "lza-workspace.yaml:[/bold red]"
+    )
+    for spec in validation.missing_fields:
+        console.print(f"  - [bold]{spec.label}[/bold] ({spec.section}.{spec.attribute})")
+
+
+def installer_deploy_command(
+    dry_run: params.DryRun = False,
+    force: params.Force = False,
+    target_dir: Path | None = None,
+) -> None:
+    """Deploy the LZA installer CloudFormation stack for the current workspace."""
+    try:
+        preparation = prepare_installer_deployment(target_dir=target_dir, dry_run=dry_run)
+    except InstallerConfigValidationError as exc:
+        _render_missing_configuration(exc.validation)
+        raise
+
+    _render_deployment_plan(
+        stack_name=preparation.stack_name,
+        profile=preparation.profile,
+        region=preparation.aws_context.region,
+        account_id=preparation.account_id,
+        plan=preparation.cfn_plan,
+        operation=preparation.operation,
+    )
+    print_kv("Installer artifact bucket", preparation.artifact_bucket)
+    print_kv("Artifact bucket action", preparation.artifact_bucket_operation)
+
+    operation = preparation.operation
+    force_no_change = False
+    if operation == "NO_CHANGE" and not force:
+        if not typer.confirm("Force re-deployment of stack?", default=False):
+            console.print("[dim]Deployment skipped as stack has no parameter changes.[/dim]")
+            return
+        force_no_change = True
+        operation = "UPDATE"
+
+    if not _confirm_deployment(
+        operation=operation, stack_name=preparation.stack_name, dry_run=dry_run, force=force
+    ):
+        return
+
+    if dry_run:
+        _render_dry_run(operation=operation, stack_name=preparation.stack_name)
+        return
+
+    print_info(f"Initiating CloudFormation stack {operation}...", dim=True)
+    result = apply_installer_deployment(
+        preparation=preparation,
+        dry_run=False,
+        force=force,
+        force_no_change=force_no_change,
+        on_event=_render_stack_event,
+    )
+
+    if result.final_status:
+        if result.skipped:
+            print_notice(
+                f"CloudFormation stack '{preparation.stack_name}' required no update "
+                f"({result.final_status.stack_status})."
+            )
+        else:
+            print_notice(
+                f"CloudFormation stack '{preparation.stack_name}' deployed successfully "
+                f"({result.final_status.stack_status})."
+            )
+        print_info("Updated operational state in .lza/state.json", dim=True)
+        if result.final_status.outputs:
+            table = Table(title="Stack Outputs", show_header=True)
+            table.add_column("Key", style="bold cyan")
+            table.add_column("Value", style="bold green")
+            for k, v in sorted(result.final_status.outputs.items()):
+                table.add_row(k, v)
+            console.print(table)
+
+
+__all__ = [
+    "CfnDeploymentPlanResult",
+    "CfnStackStatusResult",
+    "InstallerConfigValidationError",
+    "InstallerConfigValidationResult",
+    "InstallerDeploymentPreparation",
+    "InstallerDeployResult",
+    "apply_installer_deployment",
+    "_confirm_deployment",
+    "_render_deployment_plan",
+    "_render_dry_run",
+    "_render_missing_configuration",
+    "_render_stack_event",
+    "installer_deploy_command",
+    "prepare_installer_deployment",
+]
+
+
+def render_installer_import_result(result: InstallerImportResult) -> None:
+    """Render the results of an installer import workflow."""
+    if result.dry_run:
+        print_dry_run_header("lza installer import")
+        render_workspace_header(
+            "LZA Installer Import (Dry Run)",
+            customer_name=result.config.customer.name,
+            workspace_dir=result.workspace_dir,
+            lza_version=result.config.lza.version,
+            profile=result.config.aws.profile,
+            region=result.config.aws.region,
+            aws_identity=result.aws_identity,
+            aws_error=result.aws_error,
+        )
+        print_section(1, "Target Installer Stack")
+        print_kv("Stack Name", result.stack_name, bold_value=True)
+        print_kv("Stack Status", format_status(result.cfn_status.stack_status or "UNKNOWN"))
+        print_kv("Deployed LZA Version", result.deployed_version or "N/A")
+        if result.applied_parameters:
+            table = Table(title="Discovered CloudFormation Parameters", show_header=True)
+            table.add_column("Parameter Key", style="cyan")
+            table.add_column("Parameter Value", style="green")
+            for key, val in sorted(result.applied_parameters.items()):
+                table.add_row(key, str(val))
+            console.print(table)
+        return
+
+    print_success("Successfully imported live AWS installer deployment")
+    render_workspace_header(
+        "LZA Installer Import",
+        customer_name=result.config.customer.name,
+        workspace_dir=result.workspace_dir,
+        lza_version=result.config.lza.version,
+        profile=result.config.aws.profile,
+        region=result.config.aws.region,
+        aws_identity=result.aws_identity,
+        aws_error=result.aws_error,
+    )
+    print_section(1, "Imported Stack & Parameters")
+    print_kv("Installer Stack Name", result.stack_name, bold_value=True)
+    print_kv("Stack Status", format_status(result.cfn_status.stack_status or "UNKNOWN"))
+    print_kv("Deployed Version", result.deployed_version or "N/A", bold_value=True)
+    print_kv(
+        "Repository Source",
+        result.config.installer.source_code.repository_type,
+    )
+    print_kv(
+        "Config Location",
+        result.config.configuration.repository.type,
+    )
+    if result.config.configuration.repository.bucket:
+        print_kv("S3 Config Bucket", result.config.configuration.repository.bucket)
+    if result.config.configuration.repository.repository_name:
+        print_kv("Config Repo Name", result.config.configuration.repository.repository_name)
+
+    console.print()
+    console.print("[bold]Next steps:[/bold]")
+    console.print("  - Run 'lza status installer' to inspect detailed installer status.")
+    console.print("  - Run 'lza installer plan' to plan changes or updates.")
+
+
+def installer_import_command(
+    installer_stack_name: params.InstallerStackName = None,
+    dry_run: params.DryRun = False,
+    target_dir: Path | None = None,
+) -> InstallerImportResult:
+    """Import deployed CloudFormation installer stack parameters into local workspace."""
+    result = import_installer_workflow(
+        target_dir=target_dir,
+        stack_name=installer_stack_name,
+        dry_run=dry_run,
+    )
+    render_installer_import_result(result)
+    return result
+
+
+__all__ = [
+    "installer_import_command",
+    "render_installer_import_result",
+]
