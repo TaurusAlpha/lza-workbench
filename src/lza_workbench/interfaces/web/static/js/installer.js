@@ -1,4 +1,4 @@
-import { getInstallerPlan, saveInstallerSettings } from "./api.js";
+import { getInstallerPlan, resetInstallerSettings, saveInstallerSettings } from "./api.js";
 import { card, escapeHtml, formatFieldValue, renderBadge } from "./overview.js";
 
 const FORM_SECTIONS = [
@@ -168,10 +168,16 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
       `;
     }
 
+    const driftDiff = (alignment.configurationDrift || {})[field.name];
+    const driftBadge = driftDiff
+      ? `<span class="param-pending-badge" title="Deployed: ${escapeHtml(driftDiff.deployed ?? "—")} &rarr; Configured: ${escapeHtml(driftDiff.target ?? "—")}">Pending Deploy</span>`
+      : "";
+    const pendingClass = driftDiff ? " has-pending-change" : "";
+
     fieldHtmlMap[field.name] = `
-      <div class="form-group" data-field-name="${escapeHtml(field.name)}">
+      <div class="form-group${pendingClass}" data-field-name="${escapeHtml(field.name)}">
         <label for="${fieldId}" class="form-label">
-          ${escapeHtml(field.label || field.name)} ${requiredMark}
+          ${escapeHtml(field.label || field.name)} ${requiredMark} ${driftBadge}
         </label>
         ${inputControlHtml}
         ${helpText}
@@ -471,68 +477,178 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     }
   });
 
-  // Handle Reset Modal: Revert form fields to written configuration in lza-workspace.yaml
+  function closeAllModals() {
+    planContainer.hidden = true;
+    planContainer.innerHTML = "";
+    resetModalContainer.hidden = true;
+    resetModalContainer.innerHTML = "";
+  }
+
+  // Handle Escape key to dismiss modals
+  const onKeyDown = (e) => {
+    if (e.key === "Escape") {
+      closeAllModals();
+    }
+  };
+  document.addEventListener("keydown", onKeyDown);
+
+  // Handle Reset Modal: Revert form fields or reset to deployed configuration
   function showResetModal() {
+    closeAllModals();
+
+    const driftCount = Object.keys(alignment.configurationDrift || {}).length;
+
+    let bodyHtml = "";
+    let footerHtml = "";
+
+    if (driftCount > 0) {
+      const driftItems = Object.entries(alignment.configurationDrift)
+        .map(([param, diff]) => `
+          <div class="drift-item">
+            <span class="drift-param mono-val">${escapeHtml(param)}</span>:
+            <span class="drift-target">Target: <code>${escapeHtml(diff.target)}</code></span> &rarr;
+            <span class="drift-deployed">Deployed: <code>${escapeHtml(diff.deployed)}</code></span>
+          </div>
+        `)
+        .join("");
+
+      bodyHtml = `
+        <p style="margin-bottom: 0.75rem; line-height: 1.5;">
+          The local configuration in <code>lza-workspace.yaml</code> has <strong>${driftCount} parameter${driftCount === 1 ? "" : "s"}</strong> that differ from the deployed CloudFormation stack:
+        </p>
+        <div class="drift-list" style="margin-bottom: 1rem; max-height: 12rem; overflow-y: auto;">
+          ${driftItems}
+        </div>
+        <div class="notice warning" style="margin-bottom: 0.75rem;">
+          <strong>Reset to Deployed Settings</strong> will rewrite <code>lza-workspace.yaml</code> back to match the live deployed stack parameters and clear all pending deployment changes.
+        </div>
+      `;
+
+      footerHtml = `
+        <button type="button" class="btn btn-close-reset">Cancel</button>
+        <button type="button" id="btn-revert-form-only" class="btn btn-secondary">Discard Unsaved Form Edits</button>
+        <button type="button" id="btn-confirm-revert-deployed" class="btn btn-primary">Reset to Deployed Settings</button>
+      `;
+    } else {
+      bodyHtml = `
+        <p style="margin-bottom: 0.75rem; line-height: 1.5;">
+          Are you sure you want to discard your unsaved form edits?
+        </p>
+        <div class="notice info" style="margin-bottom: 0.75rem;">
+          Form inputs will be reloaded from the current configuration in <code>lza-workspace.yaml</code>.
+        </div>
+      `;
+
+      footerHtml = `
+        <button type="button" class="btn btn-close-reset">Cancel</button>
+        <button type="button" id="btn-revert-form-only" class="btn btn-primary">Discard Unsaved Edits</button>
+      `;
+    }
+
     resetModalContainer.hidden = false;
     resetModalContainer.innerHTML = `
       <div class="plan-modal-overlay">
-        <div class="plan-modal-card" style="max-width: 32rem;">
+        <div class="plan-modal-card" style="max-width: 34rem;">
           <div class="plan-modal-header">
-            <h3 class="plan-modal-title">Reset Installer Form</h3>
-            <button type="button" class="btn btn-sm btn-close-reset" title="Cancel">✕</button>
+            <h3 class="plan-modal-title">Reset Installer Settings</h3>
+            <button type="button" class="btn btn-close-reset" title="Cancel">✕</button>
           </div>
           <div class="plan-modal-body">
-            <p style="margin-bottom: 0.75rem; line-height: 1.5;">
-              Are you sure you want to reset all form settings?
-            </p>
-            <div class="notice info" style="margin-bottom: 0.75rem;">
-              Form inputs will be reverted to the written configuration from <code>lza-workspace.yaml</code>. All unsaved changes will be discarded.
-            </div>
+            <div id="reset-modal-alert"></div>
+            ${bodyHtml}
           </div>
-          <div class="plan-modal-footer" style="gap: 0.75rem;">
-            <button type="button" class="btn btn-close-reset">Cancel</button>
-            <button type="button" id="btn-confirm-revert" class="btn btn-primary">Reset to Written Settings</button>
+          <div class="plan-modal-footer">
+            ${footerHtml}
           </div>
         </div>
       </div>
     `;
 
+    const overlay = resetModalContainer.querySelector(".plan-modal-overlay");
+    overlay?.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        closeAllModals();
+      }
+    });
+
     const closeButtons = resetModalContainer.querySelectorAll(".btn-close-reset");
     closeButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        resetModalContainer.hidden = true;
-        resetModalContainer.innerHTML = "";
-      });
+      btn.addEventListener("click", closeAllModals);
     });
 
-    const confirmBtn = resetModalContainer.querySelector("#btn-confirm-revert");
+    const revertFormBtn = resetModalContainer.querySelector("#btn-revert-form-only");
+    if (revertFormBtn) {
+      revertFormBtn.addEventListener("click", () => {
+        closeAllModals();
+        clearErrors();
 
-    confirmBtn.addEventListener("click", () => {
-      resetModalContainer.hidden = true;
-      resetModalContainer.innerHTML = "";
-      clearErrors();
+        form.fields.forEach((field) => {
+          const fieldId = `installer-field-${field.name}`;
+          const input = container.querySelector(`#${fieldId}`);
+          if (input) {
+            input.value = currentParams[field.name] ?? "";
+          }
+        });
 
-      // Revert each input to written configuration parameter from lza-workspace.yaml
-      form.fields.forEach((field) => {
-        const fieldId = `installer-field-${field.name}`;
-        const input = container.querySelector(`#${fieldId}`);
-        if (input) {
-          input.value = currentParams[field.name] ?? "";
+        updateFieldVisibility();
+
+        formAlert.innerHTML = `
+          <div class="notice info">
+            Form inputs reverted to saved configuration from <code>lza-workspace.yaml</code>.
+          </div>
+        `;
+        setTimeout(() => {
+          if (formAlert.querySelector(".info")) formAlert.innerHTML = "";
+        }, 2500);
+      });
+    }
+
+    const confirmDeployedBtn = resetModalContainer.querySelector("#btn-confirm-revert-deployed");
+    if (confirmDeployedBtn) {
+      confirmDeployedBtn.addEventListener("click", async () => {
+        const modalAlert = resetModalContainer.querySelector("#reset-modal-alert");
+        confirmDeployedBtn.disabled = true;
+        if (revertFormBtn) revertFormBtn.disabled = true;
+        modalAlert.innerHTML = `
+          <div class="notice info" style="margin-bottom: 0.75rem;">
+            Resetting configuration to deployed stack parameters&hellip;
+          </div>
+        `;
+
+        try {
+          const resetRes = await resetInstallerSettings();
+          if (resetRes && resetRes.resolvedParameters) {
+            Object.assign(currentParams, resetRes.resolvedParameters);
+            form.fields.forEach((field) => {
+              const fieldId = `installer-field-${field.name}`;
+              const input = container.querySelector(`#${fieldId}`);
+              if (input) {
+                input.value = currentParams[field.name] ?? "";
+              }
+            });
+            updateFieldVisibility();
+          }
+
+          closeAllModals();
+          formAlert.innerHTML = `
+            <div class="notice success">
+              Installer settings successfully reset to deployed CloudFormation stack parameters.
+            </div>
+          `;
+          if (typeof onRefresh === "function") {
+            setTimeout(() => onRefresh(), 600);
+          }
+        } catch (err) {
+          confirmDeployedBtn.disabled = false;
+          if (revertFormBtn) revertFormBtn.disabled = false;
+          modalAlert.innerHTML = `
+            <div class="notice error" style="margin-bottom: 0.75rem;">
+              ${escapeHtml(err.message)}
+            </div>
+          `;
         }
       });
-
-      // Reactively update conditional fields visibility
-      updateFieldVisibility();
-
-      formAlert.innerHTML = `
-        <div class="notice info">
-          Form values reset to written configuration from <code>lza-workspace.yaml</code>.
-        </div>
-      `;
-      setTimeout(() => {
-        if (formAlert.querySelector(".info")) formAlert.innerHTML = "";
-      }, 2500);
-    });
+    }
   }
 
   btnReset.addEventListener("click", () => {
@@ -541,6 +657,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
 
   // Handle Preview Deployment Plan
   btnPreview.addEventListener("click", async () => {
+    closeAllModals();
     btnPreview.disabled = true;
     planContainer.hidden = false;
     planContainer.innerHTML = `
@@ -548,6 +665,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
         <div class="plan-modal-card">
           <div class="plan-modal-header">
             <h3 class="plan-modal-title">Generating Deployment Plan&hellip;</h3>
+            <button type="button" class="btn btn-close-plan" title="Cancel">✕</button>
           </div>
           <div class="plan-modal-body">
             <p class="plan-loading-text">Inspecting AWS CloudFormation stack and CodeCommit source repository&hellip;</p>
@@ -556,26 +674,43 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
       </div>
     `;
 
+    planContainer.querySelector(".btn-close-plan")?.addEventListener("click", closeAllModals);
+
+    const overlay = planContainer.querySelector(".plan-modal-overlay");
+    overlay?.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        closeAllModals();
+      }
+    });
+
     try {
       const planResult = await getInstallerPlan();
-      renderPlanPreview(planContainer, planResult);
+      renderPlanPreview(planContainer, planResult, closeAllModals);
     } catch (err) {
       planContainer.innerHTML = `
         <div class="plan-modal-overlay">
           <div class="plan-modal-card">
             <div class="plan-modal-header">
               <h3 class="plan-modal-title">Deployment Plan Error</h3>
-              <button type="button" class="btn btn-sm btn-close-plan">Close</button>
+              <button type="button" class="btn btn-close-plan" title="Close">✕</button>
             </div>
             <div class="plan-modal-body">
               <div class="notice error">${escapeHtml(err.message)}</div>
             </div>
+            <div class="plan-modal-footer">
+              <button type="button" class="btn btn-close-plan">Close</button>
+            </div>
           </div>
         </div>
       `;
-      planContainer.querySelector(".btn-close-plan")?.addEventListener("click", () => {
-        planContainer.hidden = true;
-        planContainer.innerHTML = "";
+      planContainer.querySelectorAll(".btn-close-plan").forEach((btn) => {
+        btn.addEventListener("click", closeAllModals);
+      });
+      const errOverlay = planContainer.querySelector(".plan-modal-overlay");
+      errOverlay?.addEventListener("click", (e) => {
+        if (e.target === errOverlay) {
+          closeAllModals();
+        }
       });
     } finally {
       btnPreview.disabled = false;
@@ -583,7 +718,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
   });
 }
 
-function renderPlanPreview(container, plan) {
+function renderPlanPreview(container, plan, onClose) {
   const cfn = plan.cloudformation;
   const cc = plan.codecommit;
   const diffs = cfn.parameterDiffs || {};
@@ -636,9 +771,9 @@ function renderPlanPreview(container, plan) {
               <h3 class="plan-modal-title">Installer Deployment Plan</h3>
               <span class="badge badge-${cfn.operation === "NO_CHANGE" ? "success" : "warning"}">${escapeHtml(cfn.operation)}</span>
             </div>
-            <p class="section-subtitle">Read-only preview of CloudFormation and repository actions.</p>
+            <p class="section-subtitle" style="margin-top: 0.25rem;">Read-only preview of CloudFormation and repository actions.</p>
           </div>
-          <button type="button" class="btn btn-sm btn-close-plan" title="Close Preview">✕</button>
+          <button type="button" class="btn btn-close-plan" title="Close Preview">✕</button>
         </div>
         <div class="plan-modal-body">
           <div class="plan-summary-grid">
@@ -673,10 +808,19 @@ function renderPlanPreview(container, plan) {
     </div>
   `;
 
+  const closeHandler = typeof onClose === "function" ? onClose : () => {
+    container.hidden = true;
+    container.innerHTML = "";
+  };
+
+  const overlay = container.querySelector(".plan-modal-overlay");
+  overlay?.addEventListener("click", (e) => {
+    if (e.target === overlay) {
+      closeHandler();
+    }
+  });
+
   container.querySelectorAll(".btn-close-plan").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      container.hidden = true;
-      container.innerHTML = "";
-    });
+    btn.addEventListener("click", closeHandler);
   });
 }

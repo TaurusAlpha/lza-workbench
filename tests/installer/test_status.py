@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from lza_workbench.installer.runtime import InstallerRuntimeState
 from lza_workbench.installer.status import (
     calculate_configuration_drift,
     calculate_state_alignment,
 )
-from lza_workbench.installer.runtime import InstallerRuntimeState
 from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,

@@ -59,10 +59,12 @@ type = "layers"
 layers = [
   "lza_workbench.interfaces.cli | lza_workbench.interfaces.web",
   "lza_workbench.status",
-  "lza_workbench.workspace | lza_workbench.configuration | lza_workbench.installer | lza_workbench.pipeline",
+  "lza_workbench.workspace : lza_workbench.configuration : lza_workbench.installer : lza_workbench.pipeline",
   "lza_workbench.infrastructure.aws | lza_workbench.infrastructure.github",
 ]
-ignore_imports = ["lza_workbench.interfaces.cli.main -> lza_workbench.interfaces.web.main"]
+ignore_imports = [
+  "lza_workbench.interfaces.cli.main -> lza_workbench.interfaces.web.main",
+]
 
 [tool.pytest.ini_options]
 addopts = "-q"

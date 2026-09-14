@@ -65,6 +65,21 @@ export async function getInstallerPlan() {
   return body;
 }
 
+export async function resetInstallerSettings() {
+  const response = await fetch("/api/installer/reset", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to reset installer settings.");
+  }
+  return body;
+}
+
 export async function prepareConfigPull() {
   const response = await fetch("/api/config/pull/prepare", {
     method: "POST",

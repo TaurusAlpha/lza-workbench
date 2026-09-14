@@ -468,6 +468,30 @@ def test_installer_plan_api_serializes_plan() -> None:
         "deployed": "AWSAccelerator-Old",
         "target": "AWSAccelerator",
     }
+
+
+def test_reset_installer_settings_api_success() -> None:
+    app = create_app(workspace_dir=Path("/workspaces/acme"))
+    cfg = _workspace_config()
+    mock_res = InstallerSettingsResult(
+        workspace_dir=Path("/workspaces/acme"),
+        config=cfg,
+        template_path=Path("/workspaces/acme/.lza/template.yaml"),
+        resolved_parameters={"EnableApprovalStage": "No"},
+        dry_run=False,
+        no_save=False,
+    )
+    with patch(
+        "lza_workbench.interfaces.web.status.reset_installer_settings",
+        return_value=mock_res,
+    ):
+        response = TestClient(app).post("/api/installer/reset")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["message"] == "Installer settings reset to deployed configuration."
+    assert data["resolvedParameters"] == {"EnableApprovalStage": "No"}
     assert data["codecommit"]["repositoryName"] == "aws-accelerator-codecommit"
     assert data["codecommit"]["status"] == "EXISTS"
 

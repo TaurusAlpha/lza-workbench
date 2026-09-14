@@ -1,0 +1,203 @@
+/* ==========================================================================
+   Modal Dialogs & Plan Previews
+   ========================================================================== */
+
+/* Fullscreen Modal Backdrop Overlay */
+.plan-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  overflow-y: auto;
+  animation: modalFadeIn 150ms ease-out;
+}
+
+/* Modal Card Dialog */
+.plan-modal-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-dropdown), 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  width: 100%;
+  max-width: 44rem;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalSlideUp 150ms ease-out;
+  margin: auto;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalSlideUp {
+  from {
+    transform: translateY(12px) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.plan-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-card);
+  background-color: var(--bg-card);
+}
+
+.plan-modal-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.plan-modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.plan-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-card);
+  background-color: var(--bg-card-muted);
+}
+
+/* Close Icon Button */
+.plan-modal-header .btn-close-plan,
+.plan-modal-header .btn-close-reset,
+.plan-modal-header .btn-close-modal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border-radius: 0.375rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  transition: all 120ms ease;
+}
+
+.plan-modal-header .btn-close-plan:hover,
+.plan-modal-header .btn-close-reset:hover,
+.plan-modal-header .btn-close-modal:hover {
+  background-color: var(--bg-card-hover);
+  border-color: var(--border-card);
+  color: var(--text-primary);
+}
+
+/* Summary Grid in Plan Modal */
+.plan-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.plan-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-card-muted);
+  border: 1px solid var(--border-card);
+  border-radius: 0.375rem;
+}
+
+.plan-summary-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+/* Plan Diff Table */
+.plan-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  margin-top: 0.5rem;
+}
+
+.plan-diff-table th {
+  text-align: left;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background-color: var(--bg-card-muted);
+  border-bottom: 1px solid var(--border-card);
+}
+
+.plan-diff-table td {
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--border-card);
+  vertical-align: middle;
+}
+
+.plan-diff-table tr:last-child td {
+  border-bottom: none;
+}
+
+.plan-diff-table tr:hover td {
+  background-color: var(--bg-card-hover);
+}
+
+.font-accent {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+/* Pending change badge in forms */
+.param-pending-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #f59e0b;
+  background-color: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius-pill);
+  padding: 0.1rem 0.45rem;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+.has-pending-change .form-input,
+.has-pending-change .form-select {
+  border-color: rgba(245, 158, 11, 0.5);
+}

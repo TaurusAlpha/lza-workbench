@@ -42,6 +42,7 @@ from lza_workbench.installer.plan import (
     InstallerPlanResult,
     plan_installer_workflow,
 )
+from lza_workbench.installer.reset import reset_installer_settings
 from lza_workbench.installer.status import (
     InstallerStatusResult,
     get_installer_status_workflow,
@@ -284,6 +285,15 @@ def _register_installer_routes(router: APIRouter, context: ActiveWorkspaceContex
         return serialize_installer_plan(
             plan_installer_workflow(target_dir=context.get_target_dir(), dry_run=True)
         )
+
+    @router.post("/api/installer/reset")
+    def reset_installer_settings_endpoint() -> dict[str, Any]:
+        result = reset_installer_settings(target_dir=context.get_target_dir())
+        return {
+            "success": True,
+            "message": "Installer settings reset to deployed configuration.",
+            "resolvedParameters": result.resolved_parameters,
+        }
 
 
 def _register_config_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
