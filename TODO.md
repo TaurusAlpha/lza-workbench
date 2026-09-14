@@ -12,9 +12,6 @@ are registered in the current CLI; unchecked commands are planned.
 
 - `lza init`
 - `lza import`
-- `lza validate`
-- `lza diff`
-- `lza doctor`
 - `lza uninstall`
 
 ### Installer
@@ -117,74 +114,6 @@ The future implementation should preserve the following behavior:
   - When importing an existing deployment, validate the discovered bucket and access.
   - Revisit exact configuration deployment behavior when S3 configuration deployment support is implemented.
 
-### `lza validate`
-
-Validate the current workspace and LZA configuration without modifying local files or AWS resources.
-
-By default, validate all applicable workspace components.
-
-Possible scoped usage:
-
-```text
-lza validate
-lza validate workspace
-lza validate config
-lza validate installer
-```
-
-Implementation checklist:
-
-- [ ] Validate `lza-workspace.yaml` schema and required workspace metadata.
-- [ ] Validate workspace directory structure and configured paths.
-- [ ] Validate LZA configuration YAML syntax.
-- [ ] Validate the expected LZA configuration file structure.
-- [ ] Reuse the existing official/version-aware LZA schema validation used by import and
-  configuration synchronization workflows.
-- [ ] Validate installer configuration and required parameters.
-- [ ] Validate the configured upload target.
-- [ ] Validate configuration replacement-variable consistency across configuration files and
-  `replacements-config.yaml`.
-- [ ] Detect inconsistent settings between workspace, installer, and configuration metadata.
-- [ ] Detect common LZA configuration mistakes.
-- [ ] Produce concise pass, warning, and failure results.
-- [ ] Return a typed validation summary for the Web Overview workspace card; do not use deployment
-  health as a substitute for workspace/configuration validation.
-- [ ] Return a non-zero exit code when validation fails.
-- [ ] Keep validation read-only.
-- [ ] Reuse validation logic from other workflows rather than duplicating checks.
-
-### `lza diff`
-
-Show meaningful differences between the current local desired state and the corresponding remote or deployed LZA state without modifying anything.
-
-Initial implementation should focus on configuration differences.
-
-Possible usage:
-
-```text
-lza diff
-lza diff config
-```
-
-Implementation checklist:
-
-- [ ] Compare local `aws-accelerator-config` with the configured remote configuration source.
-- [ ] Reuse provider-specific configuration source access from `lza config pull` without modifying the local workspace.
-- [ ] Support Amazon S3, AWS CodeCommit, AWS CodeConnections, and Git configuration sources.
-- [ ] Show added, removed, and modified configuration files.
-- [ ] Show content differences for modified text/YAML files.
-- [ ] Clearly identify the local and remote revisions or object metadata being compared when available.
-- [ ] Avoid changing the Git working tree or local configuration directory.
-- [ ] Support a concise summary and detailed diff output.
-- [ ] Return successfully when no differences exist.
-- [ ] Keep the design extensible for future installer/deployed-state diff support without implementing those scopes yet.
-
-Future enhancements:
-
-- [ ] `lza diff installer` for configured versus deployed installer state.
-- [ ] Structured LZA-aware YAML differences rather than only textual differences.
-- [ ] Export configuration diff reports.
-
 ### `lza config init`
 
 Initialize local LZA configuration in the current workspace from a packaged configuration template.
@@ -240,25 +169,9 @@ Future design decision:
 
 ### `lza uninstall`
 
-Uninstall the LZA solution rather than deleting only the installer stack.
-
-Implementation checklist:
-
-- [ ] Inventory the Installer and Core pipeline stacks and additional LZA stacks across managed accounts and Regions.
-- [ ] Detect and explain termination protection before deletion.
-- [ ] Show the resources that would be removed and those retained by AWS deletion policies.
-- [ ] Offer explicit preservation modes for customer data and other retained resources.
-- [ ] Require confirmation unless `--force` is specified.
-- [ ] Delete stacks in dependency-safe reverse deployment order.
-- [ ] Optionally remove retained S3 buckets and other explicitly selected resources.
-- [ ] Preserve source repositories and customer configuration by default.
-- [ ] Record progress so an interrupted uninstall can be inspected or resumed safely.
-- [ ] Remove deployment metadata from `.lza/state.json` only after the corresponding resources are removed.
-- [ ] Support `--dry-run`.
+Uninstall the LZA solution rather than deleting only the installer stack across managed accounts and regions.
 
 Implementation notes:
-
-- Treat this as a destructive, solution-wide workflow, not a renamed installer stack deletion.
 - AWS retains some data-bearing resources to avoid accidental data loss, so preservation and cleanup choices must be explicit.
 - Reference: <https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/uninstall-the-solution.html>.
 
@@ -300,32 +213,10 @@ configuration synchronization.
 
 Show detailed configuration repository status, remote source existence/accessibility, local Git working-tree status and remote revision comparison, configuration pipeline status, and operational metadata.
 
-### `lza doctor`
-
-Run advisory local and AWS checks for the current workspace. The command reports problems and suggested remediation without modifying local files or AWS resources.
-
-Implementation checklist:
-
-- [ ] Run the shared local checks defined for [`lza validate`](#lza-validate).
-- [ ] Validate AWS profile access.
-- [ ] Validate expected AWS account.
-- [ ] Produce a concise pass, warning, and failure summary.
-- [ ] Suggest a remediation plan for failed or incomplete checks.
-
-Future design decision:
-
-- [ ] Decide whether to add an explicit `--fix` mode. Do not implement mutation as part of the current diagnostic command.
-- [ ] Move legacy installer-settings normalization out of workspace loading: remove
-  `_normalize_legacy_installer_settings()` and have `lza doctor` diagnose legacy fields and,
-  when an explicit fix mode exists, migrate them to the canonical schema.
-
 ## Web Interface
 
 The local Web GUI
 
-- [x] Add detailed read-only configuration details view (accessible from Configuration card).
-- [x] Add configuration pipeline details view (accessible from Configuration pipeline card).
-- [x] Add installer settings and deployment preview view (accessible from Installer card).
 - [ ] Add installer deployment mutation flow.
 - [ ] Keep multi-user/server operation out of the current scope.
 - [ ] Split `interfaces/web/status.py` by interface responsibility: active workspace context,
@@ -334,17 +225,6 @@ The local Web GUI
 
 ## Workspace
 
-- [x] Define and enforce a small public `workspace` API for other feature packages:
-  `WorkspaceConfig`, `WorkspaceState`, `WorkspaceContext`, `WorkspaceCapability`, context loading,
-  and explicit config/state load/write operations. Keep lifecycle actions and layout/path internals
-  imported from their dedicated modules rather than re-exporting the entire package surface.
-- [x] Replace flat feature-prefixed fields in `WorkspaceState` with composed, feature-owned runtime
-  state models for installer, configuration, and pipelines. `workspace` remains responsible for
-  validating and persisting the enclosing state document; each feature owns its state transition
-  rules and may not mutate unrelated feature state.
-- [x] Migrate all production callers and fixtures to the nested runtime-state contract. Preserve
-  existing desired-state versus runtime-state semantics; existing persisted state must conform to
-  the current nested schema.
 - [ ] Support workspace schema migration.
 - [ ] Generate JSON Schema for editor support.
 - [ ] Resolve the account ID from authenticated AWS identity, including profile-based
@@ -352,8 +232,6 @@ The local Web GUI
 
 ## Package Boundaries
 
-- [x] Reduce broad feature-package `__init__.py` re-export barrels to deliberate stable public
-  APIs. Avoid eager importing actions and adapters merely to support package-root imports.
 - [ ] Keep one-file support modules as modules unless a subpackage has multiple cohesive internal
   modules or establishes a real boundary. Reassess new directories against this rule during future
   refactors.
@@ -378,9 +256,6 @@ The local Web GUI
 
 ## Testing & Quality Assurance
 
-- [x] Remove test-only parameters and shims from production code (e.g. removed `sleeper` and `time_provider` parameters from pipeline and deploy workflows).
-- [x] Purge mock-heavy AWS unit tests (deleted `tests/aws/` and consolidated boto3 factory centralization check into `tests/test_package.py`).
-- [x] Purge mock-heavy CLI tests (deleted 11 mock-heavy test files in `tests/cli/`, reducing test execution time to ~6 seconds).
 - [ ] Add unified End-to-End Workspace Lifecycle integration test (`tests/cli/test_lifecycle_e2e.py`) covering sequential execution: `lza init` -> `lza installer init` -> `lza config init` -> `lza installer plan` -> `lza installer deploy` -> `lza config push` -> `lza status`.
 - [ ] Add error resilience tests for corrupted/partial `.lza/state.json` and malformed `lza-workspace.yaml` files to verify clean recovery guidance.
 - [ ] Add error reporting tests for Git merge conflicts and remote authentication failures during `lza config pull`.

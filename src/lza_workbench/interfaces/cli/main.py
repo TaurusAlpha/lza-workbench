@@ -52,6 +52,9 @@ from lza_workbench.interfaces.cli.status import (
 from lza_workbench.interfaces.cli.status import (
     status_root_command as run_cli_status_root,
 )
+from lza_workbench.interfaces.cli.uninstall import (
+    uninstall_command as run_cli_uninstall,
+)
 from lza_workbench.interfaces.cli.workspace import (
     workspace_import_command as run_cli_workspace_import,
 )
@@ -273,7 +276,41 @@ def import_command(
     )
 
 
+@app.command("uninstall")
+def uninstall_command(
+    workspace_dir: params.WorkspaceDir = None,
+    regions: params.UninstallRegions = None,
+    all_regions: params.UninstallAllRegions = False,
+    accounts: params.UninstallAccounts = None,
+    assume_role_name: params.AssumeRoleName = "AWSAccelerator-PipelineRole",
+    profiles_file: params.ProfilesFile = None,
+    delete_s3_buckets: params.DeleteS3Buckets = False,
+    delete_retained_resources: params.DeleteRetainedResources = False,
+    skip_installer: params.SkipInstaller = False,
+    skip_pipeline: params.SkipPipeline = False,
+    dry_run: params.DryRun = False,
+    force: params.Force = False,
+) -> None:
+    """Uninstall the LZA solution across managed accounts and regions."""
+    run_cli_uninstall(
+        workspace_dir=workspace_dir,
+        regions=regions,
+        all_regions=all_regions,
+        accounts=accounts,
+        assume_role_name=assume_role_name,
+        profiles_file=profiles_file,
+        delete_s3_buckets=delete_s3_buckets,
+        delete_retained_resources=delete_retained_resources,
+        skip_installer=skip_installer,
+        skip_pipeline=skip_pipeline,
+        dry_run=dry_run,
+        force=force,
+        interactive=_is_interactive(),
+    )
+
+
 @app.command("ui")
+
 def ui_command(
     workspace_dir: params.UiWorkspaceDir = None,
     host: params.UiHost = "127.0.0.1",

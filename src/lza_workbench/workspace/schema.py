@@ -12,6 +12,7 @@ from lza_workbench.errors import LzaError
 from lza_workbench.installer.runtime import InstallerRuntimeState
 from lza_workbench.installer.schema import LzaInstaller, PipelineInstaller
 from lza_workbench.pipeline.runtime import PipelinesRuntimeState
+from lza_workbench.workspace.uninstall.state import UninstallRuntimeState
 
 
 class WorkspaceModel(BaseModel):
@@ -130,6 +131,7 @@ class WorkspaceState(WorkspaceModel):
     installer: InstallerRuntimeState = Field(default_factory=InstallerRuntimeState)
     configuration: ConfigurationRuntimeState = Field(default_factory=ConfigurationRuntimeState)
     pipelines: PipelinesRuntimeState = Field(default_factory=PipelinesRuntimeState)
+    uninstall: UninstallRuntimeState = Field(default_factory=UninstallRuntimeState)
 
     @classmethod
     def from_config(cls, config: WorkspaceConfig) -> WorkspaceState:

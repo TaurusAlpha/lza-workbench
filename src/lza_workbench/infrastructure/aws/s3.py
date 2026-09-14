@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -355,17 +356,105 @@ def inspect_s3_object_safe(
         return S3ObjectObservation(exists=False, error=f"{prefix}{info.message}")
 
 
+def list_buckets_by_prefix(
+    *,
+    client: Any,
+    prefix: str = "aws-accelerator",
+    account_id: str | None = None,
+    region: str | None = None,
+) -> list[str]:
+    """List S3 bucket names matching accelerator prefix, optionally filtered by account and region."""
+    clean_prefix = (prefix or "").strip().lower()
+    try:
+        response = client.list_buckets()
+    except (ClientError, BotoCoreError) as exc:
+        raise LzaError(f"Failed to list S3 buckets: {exc}") from exc
+
+    pattern: re.Pattern[str] | None = None
+    if account_id and region:
+        pattern = re.compile(
+            rf"^{re.escape(clean_prefix)}-.*?-{re.escape(account_id)}-{re.escape(region)}$",
+            re.IGNORECASE,
+        )
+
+    matching_buckets: list[str] = []
+    for bucket in response.get("Buckets", []):
+        bucket_name = bucket.get("Name", "")
+        if pattern is not None:
+            if pattern.match(bucket_name):
+                matching_buckets.append(bucket_name)
+        elif bucket_name.lower().startswith(clean_prefix):
+            matching_buckets.append(bucket_name)
+
+    return matching_buckets
+
+
+def empty_and_delete_s3_bucket(
+    *,
+    client: Any,
+    bucket_name: str,
+    dry_run: bool = False,
+) -> bool:
+    """Empty all objects, versions, delete markers, and delete the S3 bucket."""
+    clean_bucket = (bucket_name or "").strip()
+    if not clean_bucket:
+        return False
+
+    if dry_run:
+        return False
+
+    try:
+        # Delete object versions and delete markers
+        paginator = client.get_paginator("list_object_versions")
+        for page in paginator.paginate(Bucket=clean_bucket):
+            to_delete: list[dict[str, str]] = []
+            for version in page.get("Versions", []):
+                to_delete.append(
+                    {"Key": version["Key"], "VersionId": version["VersionId"]}
+                )
+            for marker in page.get("DeleteMarkers", []):
+                to_delete.append(
+                    {"Key": marker["Key"], "VersionId": marker["VersionId"]}
+                )
+
+            if to_delete:
+                for i in range(0, len(to_delete), 1000):
+                    batch = to_delete[i : i + 1000]
+                    client.delete_objects(
+                        Bucket=clean_bucket, Delete={"Objects": batch}
+                    )
+
+        # Delete remaining objects (unversioned fallback)
+        obj_paginator = client.get_paginator("list_objects_v2")
+        for page in obj_paginator.paginate(Bucket=clean_bucket):
+            to_delete = [{"Key": obj["Key"]} for obj in page.get("Contents", [])]
+            if to_delete:
+                for i in range(0, len(to_delete), 1000):
+                    batch = to_delete[i : i + 1000]
+                    client.delete_objects(
+                        Bucket=clean_bucket, Delete={"Objects": batch}
+                    )
+
+        client.delete_bucket(Bucket=clean_bucket)
+        return True
+    except (ClientError, BotoCoreError) as exc:
+        raise LzaError(f"Failed to empty and delete S3 bucket '{clean_bucket}': {exc}") from exc
+
+
 __all__ = [
     "S3BucketObservation",
     "S3ObjectObservation",
     "create_s3_bucket",
     "download_s3_file",
+    "empty_and_delete_s3_bucket",
     "get_s3_https_url",
     "get_s3_uri",
     "inspect_s3_bucket",
     "inspect_s3_object",
     "inspect_s3_object_safe",
+    "list_buckets_by_prefix",
     "put_s3_bucket_encryption",
     "put_s3_bucket_versioning",
     "upload_s3_file",
 ]
+

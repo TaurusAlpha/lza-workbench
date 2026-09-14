@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -379,11 +380,142 @@ def delete_cloudformation_stack(
         waiter = client.get_waiter("stack_delete_complete")
         client.delete_stack(StackName=clean_stack_name)
         waiter.wait(StackName=clean_stack_name)
-    except ClientError as exc:
-        if not _is_stack_not_found(exc):
-            raise LzaError(
-                f"Failed to delete CloudFormation stack '{clean_stack_name}': {exc}"
-            ) from exc
+    except (ClientError, BotoCoreError) as exc:
+        if isinstance(exc, ClientError) and _is_stack_not_found(exc):
+            return
+        raise LzaError(
+            f"Failed to delete CloudFormation stack '{clean_stack_name}': {exc}"
+        ) from exc
+
+
+def disable_stack_termination_protection(
+    *,
+    client: Any,
+    stack_name: str,
+) -> None:
+    """Disable CloudFormation termination protection for a stack."""
+    clean_stack_name = (stack_name or "").strip()
+    if not clean_stack_name:
+        raise LzaError("Stack name must not be empty")
+
+    try:
+        client.update_termination_protection(
+            EnableTerminationProtection=False,
+            StackName=clean_stack_name,
+        )
+    except (ClientError, BotoCoreError) as exc:
+        raise LzaError(
+            f"Failed to disable termination protection for stack '{clean_stack_name}': {exc}"
+        ) from exc
+
+
+def get_retained_logical_ids(
+    *,
+    client: Any,
+    stack_name: str,
+) -> set[str]:
+    """Identify logical resource IDs configured with DeletionPolicy: Retain."""
+    clean_stack_name = (stack_name or "").strip()
+    if not clean_stack_name:
+        return set()
+
+    retained_ids: set[str] = set()
+    try:
+        resp = client.get_template(StackName=clean_stack_name)
+        template_body = resp.get("TemplateBody")
+        template_data = None
+
+        if isinstance(template_body, str):
+            try:
+                template_data = json.loads(template_body)
+            except Exception:
+                template_data = None
+        elif isinstance(template_body, Mapping):
+            template_data = template_body
+
+        if isinstance(template_data, Mapping):
+            resources = template_data.get("Resources", {})
+            if isinstance(resources, Mapping):
+                for logical_id, resource_def in resources.items():
+                    if isinstance(resource_def, Mapping):
+                        policy = resource_def.get("DeletionPolicy")
+                        if policy in ("Retain", "RetainExceptOnCreate"):
+                            retained_ids.add(str(logical_id))
+        elif isinstance(template_body, str):
+            pattern = re.compile(
+                r"(\w+):\s*\n(?:[ \t]+[^\n]+\n)*?[ \t]+DeletionPolicy:\s*['\"]?Retain"
+            )
+            for match in pattern.finditer(template_body):
+                retained_ids.add(match.group(1))
+    except (ClientError, BotoCoreError):
+        pass
+
+    return retained_ids
+
+
+def get_stack_resources(
+    *,
+    client: Any,
+    stack_name: str,
+) -> list[dict[str, Any]]:
+    """Retrieve physical resources associated with a stack, tagging retained resources."""
+    clean_stack_name = (stack_name or "").strip()
+    if not clean_stack_name:
+        return []
+
+    retained_ids = get_retained_logical_ids(client=client, stack_name=clean_stack_name)
+    resources: list[dict[str, Any]] = []
+
+    try:
+        paginator = client.get_paginator("list_stack_resources")
+        for page in paginator.paginate(StackName=clean_stack_name):
+            for res in page.get("StackResourceSummaries", []):
+                logical_id = str(res.get("LogicalResourceId", ""))
+                is_retained = logical_id in retained_ids
+                resources.append(
+                    {
+                        "LogicalResourceId": logical_id,
+                        "PhysicalResourceId": res.get("PhysicalResourceId"),
+                        "ResourceType": res.get("ResourceType"),
+                        "ResourceStatus": res.get("ResourceStatus"),
+                        "DeletionPolicy": "Retain" if is_retained else "Delete",
+                        "IsRetained": is_retained,
+                    }
+                )
+    except (ClientError, BotoCoreError):
+        pass
+
+    return resources
+
+
+def list_matching_stacks(
+    *,
+    client: Any,
+    prefix: str,
+    account_id: str | None = None,
+    region: str | None = None,
+) -> list[dict[str, Any]]:
+    """List deployed CloudFormation stacks matching accelerator prefix."""
+    clean_prefix = (prefix or "").strip()
+    if not clean_prefix:
+        return []
+
+    prefix_with_hyphen = f"{clean_prefix}-" if not clean_prefix.endswith("-") else clean_prefix
+
+    all_stacks: list[dict[str, Any]] = []
+    try:
+        paginator = client.get_paginator("describe_stacks")
+        for page in paginator.paginate():
+            for s in page.get("Stacks", []):
+                name = s.get("StackName", "")
+                if s.get("StackStatus") == "DELETE_COMPLETE":
+                    continue
+                if name.startswith(prefix_with_hyphen) or name == clean_prefix:
+                    all_stacks.append(s)
+    except (ClientError, BotoCoreError) as exc:
+        raise LzaError(f"Failed to list CloudFormation stacks: {exc}") from exc
+
+    return all_stacks
 
 
 __all__ = [
@@ -391,8 +523,13 @@ __all__ = [
     "CfnStackStatusResult",
     "delete_cloudformation_stack",
     "deploy_cloudformation_stack",
+    "disable_stack_termination_protection",
     "get_cloudformation_stack_status",
     "get_cloudformation_stack_template",
+    "get_retained_logical_ids",
+    "get_stack_resources",
     "inspect_cloudformation_stack",
+    "list_matching_stacks",
     "stream_cloudformation_stack_events",
 ]
+

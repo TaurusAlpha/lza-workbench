@@ -11,6 +11,13 @@ Work is moved here from `TODO.md` only after implementation, integration, code r
 
 ## 2026-09
 
+### LZA Solution Uninstall & Resource Cleanup (v0.39.0)
+- **Safe Multi-Account Solution Teardown (`lza uninstall`)**: Implemented full teardown workflow deleting LZA CloudFormation stacks across member and management accounts in reverse-deployment dependency order (workload stacks -> stage stacks -> `AWSAccelerator-PipelineStack` -> `AWSAccelerator-InstallerStack`).
+- **Pre-Deletion Discovery & Confirmation**: Automatically inventories stacks across accounts (via AWS Organizations or external AWS profiles file) and regions, identifies termination-protected stacks, detects retained deletion-policy resources, and calculates bucket footprints. Enforces customer slug confirmation unless `--force` is specified.
+- **Retained Resource State Tracking & Post-Stack Cleanup**: Records `DeletionPolicy: Retain` resources into `.lza/state.json` under `state.uninstall.retained_resources`. Offers interactive selection and deletion of retained resources across CloudWatch logs, KMS keys, ECR repositories, DynamoDB tables, and S3 buckets through dedicated, single-service AWS adapters.
+- **Architectural Layering**: Decoupled feature domain logic (`workspace/uninstall/`) from thin AWS service adapters (`aws/cloudformation.py`, `aws/s3.py`, `aws/logs.py`, `aws/kms.py`, `aws/ecr.py`, `aws/dynamodb.py`, `aws/organizations.py`, `aws/iam.py`) using centralized `AwsClientFactory` without leaky abstractions or direct boto3 calls.
+- **Dry-Run & Failure Resilience**: Supports `--dry-run` to preview all actions without making mutating AWS calls. Persists incremental progress to enable safe resumption or inspection after interruptions.
+
 ### WorkspaceContext Derived Path Properties (v0.38.2)
 - **Derived Path Properties (Phase 3.3)**: Added immutable, read-only path properties (`.config_dir`, `.installer_dir`, `.state_dir`, `.config_file`, `.state_file`) to `WorkspaceContext`.
 - **Workflow Adoption**: Refactored `workflows/config_push.py`, `workflows/config_pull.py`, `workflows/status_root.py`, `workflows/status_config.py`, and `workflows/config_init.py` to use `ctx.config_dir` instead of repeated manual path concatenations.

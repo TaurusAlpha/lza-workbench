@@ -104,7 +104,6 @@ def initialized_workspace(tmp_path: Path) -> Path:
         aws_profile="acme-root",
         aws_region="eu-west-1",
         lza_version=PACKAGED_INSTALLER_VERSION,
-        skip_aws_check=True,
         dry_run=False,
         force=False,
     )

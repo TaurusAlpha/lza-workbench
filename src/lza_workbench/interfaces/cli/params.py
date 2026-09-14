@@ -292,3 +292,76 @@ Verbose = Annotated[
         help="Show detailed execution breakdown and diagnostic output.",
     ),
 ]
+
+UninstallRegions = Annotated[
+    str | None,
+    typer.Option(
+        "--regions",
+        help="Comma-separated list of target AWS regions (default: enabledRegions from global-config.yaml).",
+    ),
+]
+
+UninstallAllRegions = Annotated[
+    bool,
+    typer.Option(
+        "--all-regions",
+        help="Target all active AWS regions.",
+    ),
+]
+
+UninstallAccounts = Annotated[
+    str | None,
+    typer.Option(
+        "--accounts",
+        help="Comma-separated list of target AWS account IDs or names to filter.",
+    ),
+]
+
+AssumeRoleName = Annotated[
+    str,
+    typer.Option(
+        "--assume-role-name",
+        help="IAM role name to assume in member accounts.",
+    ),
+]
+
+ProfilesFile = Annotated[
+    str | None,
+    typer.Option(
+        "--profiles-file",
+        help="Path to JSON/YAML file mapping profiles and accounts.",
+    ),
+]
+
+DeleteS3Buckets = Annotated[
+    bool,
+    typer.Option(
+        "--delete-s3-buckets",
+        help="Empty and delete all LZA-managed Amazon S3 buckets.",
+    ),
+]
+
+DeleteRetainedResources = Annotated[
+    bool,
+    typer.Option(
+        "--delete-retained-resources",
+        help="Force-delete resources configured with CloudFormation DeletionPolicy: Retain.",
+    ),
+]
+
+SkipInstaller = Annotated[
+    bool,
+    typer.Option(
+        "--skip-installer",
+        help="Skip deletion of AWSAccelerator-InstallerStack.",
+    ),
+]
+
+SkipPipeline = Annotated[
+    bool,
+    typer.Option(
+        "--skip-pipeline",
+        help="Skip deletion of AWSAccelerator-PipelineStack.",
+    ),
+]
+
