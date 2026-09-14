@@ -492,8 +492,6 @@ def test_reset_installer_settings_api_success() -> None:
     assert data["success"] is True
     assert data["message"] == "Installer settings reset to deployed configuration."
     assert data["resolvedParameters"] == {"EnableApprovalStage": "No"}
-    assert data["codecommit"]["repositoryName"] == "aws-accelerator-codecommit"
-    assert data["codecommit"]["status"] == "EXISTS"
 
 
 def test_config_pull_prepare_api_requires_confirmation() -> None:

@@ -456,7 +456,68 @@
    ========================================================================== */
 
 .view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
   margin-top: 1.5rem;
+}
+
+.config-details-layout,
+.installer-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.config-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.config-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Form Sections */
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--border-card);
+}
+
+.form-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.form-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.form-section-title {
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.form-section-desc {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  margin: 0;
+}
+
+.form-section-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: 1.25rem;
 }
 
 .setup-tabs-bar {

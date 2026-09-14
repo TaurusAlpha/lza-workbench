@@ -118,7 +118,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
       .join("");
 
     driftBannerHtml = `
-      <section class="diagnostic-panel diagnostic-panel-warning" style="margin-bottom: 1.5rem;">
+      <section class="diagnostic-panel diagnostic-panel-warning">
         <div class="diagnostic-header">
           <span class="badge badge-warning"><span class="badge-dot" aria-hidden="true"></span>Drift Detected</span>
           <h2 class="diagnostic-title">Configuration Drift (${driftCount})</h2>
@@ -236,7 +236,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
   container.innerHTML = `
     <div class="installer-view">
       <!-- Summary Cards -->
-      <section class="card-grid" style="margin-bottom: 1.5rem;">
+      <section class="card-grid">
         ${card("Deployed Stack", deployedFields, deployed.exists ? "Deployed" : "Not Deployed")}
         ${card("Current Settings", canonicalFields, canonicalSettings.lzaVersion)}
         ${card("Installer Pipeline", pipelineFields, pipeline.status)}
@@ -502,55 +502,86 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     let footerHtml = "";
 
     if (driftCount > 0) {
-      const driftItems = Object.entries(alignment.configurationDrift)
-        .map(([param, diff]) => `
-          <div class="drift-item">
-            <span class="drift-param mono-val">${escapeHtml(param)}</span>:
-            <span class="drift-target">Target: <code>${escapeHtml(diff.target)}</code></span> &rarr;
-            <span class="drift-deployed">Deployed: <code>${escapeHtml(diff.deployed)}</code></span>
-          </div>
-        `)
+      const driftRows = Object.entries(alignment.configurationDrift)
+        .map(([param, diff]) => {
+          const targetVal = diff.target ? escapeHtml(diff.target) : '<span style="color: var(--text-muted); font-style: italic;">(not set)</span>';
+          const deployedVal = diff.deployed ? escapeHtml(diff.deployed) : '<span style="color: var(--text-muted); font-style: italic;">(not set)</span>';
+          return `
+            <tr>
+              <td class="mono-val" style="font-weight: 600; font-size: 0.8125rem;">${escapeHtml(param)}</td>
+              <td><code style="color: #f59e0b; background: rgba(245, 158, 11, 0.12); padding: 0.15rem 0.45rem; border-radius: 0.25rem; font-size: 0.8125rem;">${targetVal}</code></td>
+              <td><code style="color: #10b981; background: rgba(16, 185, 129, 0.12); padding: 0.15rem 0.45rem; border-radius: 0.25rem; font-size: 0.8125rem;">${deployedVal}</code></td>
+            </tr>
+          `;
+        })
         .join("");
 
       bodyHtml = `
-        <p style="margin-bottom: 0.75rem; line-height: 1.5;">
+        <p style="margin-bottom: 0.75rem; line-height: 1.5; color: var(--text-secondary);">
           The local configuration in <code>lza-workspace.yaml</code> has <strong>${driftCount} parameter${driftCount === 1 ? "" : "s"}</strong> that differ from the deployed CloudFormation stack:
         </p>
-        <div class="drift-list" style="margin-bottom: 1rem; max-height: 12rem; overflow-y: auto;">
-          ${driftItems}
+        <div class="table-container" style="margin: 0.75rem 0 1.25rem 0; border: 1px solid var(--border-card); border-radius: 0.5rem; overflow: hidden;">
+          <table class="plan-diff-table" style="margin-top: 0;">
+            <thead>
+              <tr>
+                <th style="width: 38%;">Parameter</th>
+                <th style="width: 31%;">Local Target (Discard)</th>
+                <th style="width: 31%;">Deployed Value (Restore)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${driftRows}
+            </tbody>
+          </table>
         </div>
-        <div class="notice warning" style="margin-bottom: 0.75rem;">
-          <strong>Reset to Deployed Settings</strong> will rewrite <code>lza-workspace.yaml</code> back to match the live deployed stack parameters and clear all pending deployment changes.
+        <div class="notice warning" style="margin-bottom: 0.25rem;">
+          <strong>Reset to Deployed Settings</strong> will rewrite <code>lza-workspace.yaml</code> back to the deployed values shown above and clear all pending deployment changes.
         </div>
       `;
 
       footerHtml = `
-        <button type="button" class="btn btn-close-reset">Cancel</button>
-        <button type="button" id="btn-revert-form-only" class="btn btn-secondary">Discard Unsaved Form Edits</button>
-        <button type="button" id="btn-confirm-revert-deployed" class="btn btn-primary">Reset to Deployed Settings</button>
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 0.75rem;">
+          <div>
+            <button type="button" class="btn btn-ghost btn-close-reset">Cancel</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <button type="button" id="btn-revert-form-only" class="btn btn-secondary">Discard Form Edits</button>
+            <button type="button" id="btn-confirm-revert-deployed" class="btn btn-primary">Reset to Deployed Settings</button>
+          </div>
+        </div>
       `;
     } else {
       bodyHtml = `
-        <p style="margin-bottom: 0.75rem; line-height: 1.5;">
+        <p style="margin-bottom: 0.75rem; line-height: 1.5; color: var(--text-secondary);">
           Are you sure you want to discard your unsaved form edits?
         </p>
-        <div class="notice info" style="margin-bottom: 0.75rem;">
+        <div class="notice info" style="margin-bottom: 0.25rem;">
           Form inputs will be reloaded from the current configuration in <code>lza-workspace.yaml</code>.
         </div>
       `;
 
       footerHtml = `
-        <button type="button" class="btn btn-close-reset">Cancel</button>
-        <button type="button" id="btn-revert-form-only" class="btn btn-primary">Discard Unsaved Edits</button>
+        <div style="display: flex; justify-content: flex-end; align-items: center; width: 100%; gap: 0.75rem;">
+          <button type="button" class="btn btn-ghost btn-close-reset">Cancel</button>
+          <button type="button" id="btn-revert-form-only" class="btn btn-primary">Discard Unsaved Edits</button>
+        </div>
       `;
     }
 
     resetModalContainer.hidden = false;
     resetModalContainer.innerHTML = `
       <div class="plan-modal-overlay">
-        <div class="plan-modal-card" style="max-width: 34rem;">
+        <div class="plan-modal-card" style="max-width: 42rem;">
           <div class="plan-modal-header">
-            <h3 class="plan-modal-title">Reset Installer Settings</h3>
+            <div>
+              <div style="display: flex; align-items: center; gap: 0.625rem;">
+                <h3 class="plan-modal-title">${driftCount > 0 ? "Reset Installer Settings" : "Reset Form Settings"}</h3>
+                ${driftCount > 0 ? `<span class="badge badge-warning">${driftCount} drifted parameter${driftCount === 1 ? "" : "s"}</span>` : ""}
+              </div>
+              <p class="section-subtitle" style="margin-top: 0.25rem;">
+                ${driftCount > 0 ? "Reconcile configuration with the active CloudFormation stack." : "Discard in-browser edits and reload saved configuration."}
+              </p>
+            </div>
             <button type="button" class="btn btn-close-reset" title="Cancel">✕</button>
           </div>
           <div class="plan-modal-body">

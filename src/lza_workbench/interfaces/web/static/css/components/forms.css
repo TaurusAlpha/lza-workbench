@@ -67,13 +67,14 @@
 }
 
 .btn-secondary {
-  background-color: #ffffff;
-  border-color: #cbd5e1;
-  color: #0f172a;
+  background-color: var(--bg-card-muted);
+  border-color: var(--border-card);
+  color: var(--text-primary);
 }
 
 .btn-secondary:hover {
-  background-color: #f1f5f9;
+  background-color: var(--bg-card-hover);
+  border-color: var(--border-input);
 }
 
 .btn-outline {

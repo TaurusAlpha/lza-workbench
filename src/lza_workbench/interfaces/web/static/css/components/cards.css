@@ -56,7 +56,8 @@
    Cards & Layout Grid
    ========================================================================== */
 
-.card-grid {
+.card-grid,
+.details-grid {
   align-items: start;
   display: grid;
   gap: 1.25rem;
