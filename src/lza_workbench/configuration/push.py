@@ -207,7 +207,7 @@ def _handle_s3_push(
         region=config.aws.region,
     )
     safety_warning = None
-    if state.imported and state.config_sync_digest is None:
+    if state.imported and state.configuration.sync_digest is None:
         safety_warning = (
             "Remote S3 configuration has not been verified for this imported workspace. "
             "Local configuration may overwrite unknown remote state. "

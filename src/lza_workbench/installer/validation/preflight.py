@@ -29,12 +29,6 @@ def validate_deployment_preflight(config: WorkspaceConfig) -> None:
     validation = validate_installer_configuration(config)
     if not validation.is_complete:
         raise InstallerConfigValidationError(validation)
-    if not (config.assets_bucket or "").strip():
-        raise LzaError(
-            "Workbench assets bucket is not configured in lza-workspace.yaml. "
-            "Run 'lza bootstrap' to create and configure the required assets bucket "
-            "before deploying the installer."
-        )
 
 
 def validate_cloudformation_plan(plan: CfnDeploymentPlanResult) -> str:

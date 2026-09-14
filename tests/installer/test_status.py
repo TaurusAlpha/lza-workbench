@@ -6,6 +6,7 @@ from lza_workbench.installer.status import (
     calculate_configuration_drift,
     calculate_state_alignment,
 )
+from lza_workbench.installer.runtime import InstallerRuntimeState
 from lza_workbench.workspace.schema import (
     AwsConfig,
     CustomerConfig,
@@ -37,9 +38,11 @@ def test_calculate_configuration_drift_returns_only_changed_parameters() -> None
 
 def test_calculate_state_alignment_compares_stack_and_version_metadata() -> None:
     state = WorkspaceState(
-        installer_stack_id="stack-id",
-        installer_stack_status="CREATE_COMPLETE",
-        installer_template_version="v1.15.5",
+        installer=InstallerRuntimeState(
+            stack_id="stack-id",
+            stack_status="CREATE_COMPLETE",
+            template_version="v1.15.5",
+        )
     )
 
     aligned = calculate_state_alignment(

@@ -180,35 +180,6 @@ export async function applyConfigDeploy({ overwriteConfirmed = false, force = fa
   return body;
 }
 
-export async function getBootstrapPlan() {
-  const response = await fetch("/api/bootstrap/plan");
-  const body = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to load bootstrap plan.");
-  }
-  return body;
-}
-
-export async function applyBootstrap({ githubToken = null, allowMissingGithubSecret = false } = {}) {
-  const response = await fetch("/api/bootstrap/apply", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      github_token: githubToken,
-      allow_missing_github_secret: allowMissingGithubSecret,
-    }),
-  });
-  const body = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to apply bootstrap.");
-  }
-  return body;
-}
-
 export async function getActiveWorkspace() {
   const response = await fetch("/api/workspace/active");
   const body = await response.json().catch(() => null);
@@ -306,5 +277,3 @@ export async function applyWorkspaceImport() {
   }
   return body;
 }
-
-

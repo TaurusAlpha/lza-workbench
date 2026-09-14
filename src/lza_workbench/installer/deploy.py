@@ -19,8 +19,12 @@ from lza_workbench.infrastructure.aws.cloudformation import (
     stream_cloudformation_stack_events,
 )
 from lza_workbench.infrastructure.aws.s3 import (
+    S3BucketObservation,
+    create_s3_bucket,
     get_s3_https_url,
     inspect_s3_bucket,
+    put_s3_bucket_tags,
+    put_s3_bucket_versioning,
     upload_s3_file,
 )
 from lza_workbench.infrastructure.aws.session import (
@@ -48,7 +52,11 @@ from lza_workbench.installer.validation import (
     validate_deployment_preflight,
 )
 from lza_workbench.workspace.context import load_workspace_context
-from lza_workbench.workspace.persistence import load_workspace_state, write_workspace_state
+from lza_workbench.workspace.persistence import (
+    load_workspace_state,
+    write_workspace_config,
+    write_workspace_state,
+)
 from lza_workbench.workspace.schema import WorkspaceConfig
 from lza_workbench.workspace.validation import WorkspaceCapability
 
@@ -85,6 +93,9 @@ class InstallerDeploymentPreparation:
     cfn_plan: CfnDeploymentPlanResult
     profile: str
     account_id: str
+    artifact_bucket: str = ""
+    artifact_bucket_observation: S3BucketObservation | None = None
+    artifact_bucket_operation: str = "CREATE"
 
 
 def prepare_installer_deployment(
@@ -123,6 +134,28 @@ def prepare_installer_deployment(
     assert aws_context.identity is not None
     account_id = aws_context.identity["account"]
 
+    artifact_bucket = (config.assets_bucket or "").strip() or (
+        f"s3-lza-workbench-assets-{account_id}-{aws_context.region}"
+    )
+    artifact_bucket_observation = inspect_s3_bucket(
+        client=aws_context.factory.get_client("s3"), bucket_name=artifact_bucket
+    )
+    if artifact_bucket_observation.exists:
+        managed_by = artifact_bucket_observation.tags.get("ManagedBy")
+        workspace_slug = artifact_bucket_observation.tags.get("Workspace")
+        if managed_by and (managed_by != "lza-workbench" or workspace_slug != config.customer.slug):
+            raise LzaError(
+                f"S3 bucket '{artifact_bucket}' is tagged for another Workbench workspace "
+                "or owner; refusing to adopt it."
+            )
+    artifact_bucket_operation = (
+        "CREATE"
+        if not artifact_bucket_observation.exists
+        else "UPDATE"
+        if not artifact_bucket_observation.versioning_enabled
+        else "NO_CHANGE"
+    )
+
     template_path, resolved_parameters = prepare_installer_template(
         workspace_dir=workspace_dir, config=config, dry_run=dry_run
     )
@@ -139,7 +172,7 @@ def prepare_installer_deployment(
     cfn_plan = include_template_digest_change(
         cfn_plan,
         template_digest=template_digest,
-        deployed_template_digest=state.installer_template_digest,
+        deployed_template_digest=state.installer.template_digest,
     )
     operation = validate_cloudformation_plan(cfn_plan)
 
@@ -155,6 +188,9 @@ def prepare_installer_deployment(
         cfn_plan=cfn_plan,
         profile=profile,
         account_id=account_id,
+        artifact_bucket=artifact_bucket,
+        artifact_bucket_observation=artifact_bucket_observation,
+        artifact_bucket_operation=artifact_bucket_operation,
     )
 
 
@@ -192,7 +228,12 @@ def apply_installer_deployment(
     operation = preparation.operation
     assert aws_context.identity is not None
 
-    if operation == "NO_CHANGE" and not force and not force_no_change:
+    if (
+        operation == "NO_CHANGE"
+        and preparation.artifact_bucket_operation == "NO_CHANGE"
+        and not force
+        and not force_no_change
+    ):
         return InstallerDeployResult(
             workspace_dir=workspace_dir,
             stack_name=preparation.stack_name,
@@ -231,13 +272,28 @@ def apply_installer_deployment(
         )
 
     s3_client = aws_context.factory.get_client("s3")
-    bucket_name = (config.assets_bucket or "").strip()
-    insp = inspect_s3_bucket(client=s3_client, bucket_name=bucket_name)
+    bucket_name = preparation.artifact_bucket
+    insp = preparation.artifact_bucket_observation or inspect_s3_bucket(
+        client=s3_client, bucket_name=bucket_name
+    )
+    actions_taken: list[str] = []
     if not insp.exists:
-        raise LzaError(
-            f"Configured assets bucket '{bucket_name}' does not exist in AWS. "
-            "Run 'lza bootstrap' to create and configure the required AWS resources."
+        create_s3_bucket(client=s3_client, bucket_name=bucket_name, region=aws_context.region)
+        put_s3_bucket_tags(
+            client=s3_client,
+            bucket_name=bucket_name,
+            tags={
+                "ManagedBy": "lza-workbench",
+                "Workspace": config.customer.slug,
+                "Purpose": "installer-artifacts",
+            },
         )
+        actions_taken.append(f"Created installer artifact bucket '{bucket_name}'")
+    if not insp.versioning_enabled:
+        put_s3_bucket_versioning(client=s3_client, bucket_name=bucket_name, enabled=True)
+        actions_taken.append(f"Enabled versioning on installer artifact bucket '{bucket_name}'")
+    if insp.exists and not actions_taken:
+        actions_taken.append(f"Reused installer artifact bucket '{bucket_name}'")
 
     s3_key = f"installer-templates/{config.lza.version}/AWSAccelerator-InstallerStack.template"
     upload_s3_file(
@@ -246,6 +302,9 @@ def apply_installer_deployment(
         bucket_name=bucket_name,
         object_key=s3_key,
     )
+    if not config.assets_bucket:
+        config.assets_bucket = bucket_name
+        write_workspace_config(workspace_dir, config)
     template_url = get_s3_https_url(
         bucket_name=bucket_name, object_key=s3_key, region=aws_context.region
     )

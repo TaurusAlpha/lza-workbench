@@ -77,7 +77,6 @@ installer:
     log_archive_account_email: null
     control_tower_enabled: true
 
-
 configuration:
   local_path: aws-accelerator-config
 
@@ -115,7 +114,7 @@ configuration:
     # branch: main
     # The local configuration repository must already have its Git origin configured.
 
-    s3_packaging:
+    packaging:
       exclude:
         directories:
           - .git

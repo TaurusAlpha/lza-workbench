@@ -156,18 +156,18 @@ def apply_installer_settings(request: InstallerSettingsRequest) -> InstallerSett
 
     if not request.no_save and not request.dry_run:
         write_workspace_config(ctx.workspace_dir, candidate)
-        ctx.state.installer_template_version = candidate.lza.version
+        ctx.state.installer.template_version = candidate.lza.version
         if template_path.exists():
-            ctx.state.installer_downloaded_at = datetime.fromtimestamp(
+            ctx.state.installer.downloaded_at = datetime.fromtimestamp(
                 template_path.stat().st_mtime, tz=UTC
             )
-        deployed = ctx.state.installer_deployed_parameters or {}
+        deployed = ctx.state.installer.deployed_parameters or {}
         changed = {
             k: v
             for k, v in resolved_parameters.items()
             if k not in deployed or deployed.get(k) != v
         }
-        ctx.state.pending_installer_parameters = changed if changed else None
+        ctx.state.installer.pending_parameters = changed if changed else None
         write_workspace_state(ctx.workspace_dir, ctx.state)
 
     return InstallerSettingsResult(

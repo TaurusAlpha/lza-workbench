@@ -36,10 +36,10 @@ def calculate_state_alignment(
     deployed_version: str,
 ) -> StateAlignment:
     """Compare recorded deployment metadata with the current stack metadata."""
-    stack_id_matches = state.installer_stack_id is None or state.installer_stack_id == stack_id
-    stack_status_matches = state.installer_stack_status == stack_status
+    stack_id_matches = state.installer.stack_id is None or state.installer.stack_id == stack_id
+    stack_status_matches = state.installer.stack_status == stack_status
     version_matches = normalize_lza_version(
-        state.installer_template_version
+        state.installer.template_version
     ) == normalize_lza_version(deployed_version)
     return StateAlignment(
         in_sync=stack_id_matches and stack_status_matches and version_matches,

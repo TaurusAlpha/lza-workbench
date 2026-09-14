@@ -56,7 +56,7 @@ def evaluate_workspace_assessment(
         and bool((config.aws.region or "").strip()),
         configuration_present=config_dir.is_dir(),
         installer_configured=validate_installer_configuration(config).is_complete,
-        installer_recorded_deployed=bool((state.installer_stack_id or "").strip()),
+        installer_recorded_deployed=bool((state.installer.stack_id or "").strip()),
         imported=state.imported is True,
     )
 

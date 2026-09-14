@@ -129,8 +129,8 @@ def test_import_installer_workflow_success(tmp_path: Path) -> None:
     template_path = ws_dir / persisted_config.installer.stack_template.path
     assert template_path.read_text(encoding="utf-8") == template_body
     persisted_state = load_workspace_state(ws_dir)
-    assert persisted_state.installer_stack_id == stack_id
-    assert persisted_state.installer_template_digest is not None
+    assert persisted_state.installer.stack_id == stack_id
+    assert persisted_state.installer.template_digest is not None
 
 
 def test_import_installer_workflow_dry_run(tmp_path: Path) -> None:

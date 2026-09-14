@@ -20,6 +20,7 @@ class S3BucketObservation:
     versioning_enabled: bool = False
     encryption_enabled: bool = False
     kms_encrypted: bool = False
+    tags: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -104,12 +105,21 @@ def inspect_s3_bucket(
                 f"Failed to check encryption on S3 bucket '{clean_bucket}': {exc}"
             ) from exc
 
+    tags: dict[str, str] = field(default_factory=dict)
+    try:
+        tag_resp = client.get_bucket_tagging(Bucket=clean_bucket)
+        tags = {item["Key"]: item["Value"] for item in tag_resp.get("TagSet", [])}
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") not in {"NoSuchTagSet", "404", "NotFound"}:
+            raise LzaError(f"Failed to check tags on S3 bucket '{clean_bucket}': {exc}") from exc
+
     return S3BucketObservation(
         exists=True,
         accessible=True,
         versioning_enabled=versioning_enabled,
         encryption_enabled=encryption_enabled,
         kms_encrypted=kms_encrypted,
+        tags=tags,
     )
 
 
@@ -164,6 +174,17 @@ def put_s3_bucket_versioning(
         raise LzaError(
             f"Failed to configure versioning on S3 bucket '{clean_bucket}': {exc}"
         ) from exc
+
+
+def put_s3_bucket_tags(*, client: Any, bucket_name: str, tags: dict[str, str]) -> None:
+    """Set the small ownership metadata set used by feature-owned buckets."""
+    try:
+        client.put_bucket_tagging(
+            Bucket=bucket_name.strip(),
+            Tagging={"TagSet": [{"Key": key, "Value": value} for key, value in tags.items()]},
+        )
+    except (ClientError, BotoCoreError) as exc:
+        raise LzaError(f"Failed to tag S3 bucket '{bucket_name}': {exc}") from exc
 
 
 def put_s3_bucket_encryption(

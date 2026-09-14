@@ -205,14 +205,14 @@ def _build_offline_pipeline_snapshot(
     aws_error: str | None,
 ) -> PipelineSnapshotResult:
     recorded_status = (
-        state.config_pipeline_status
+        state.pipelines.configuration.status
         if pipeline_type == "configuration"
-        else state.installer_pipeline_status
+        else state.pipelines.installer.status
     ) or "Unknown"
     recorded_exec_id = execution_id or (
-        state.config_pipeline_execution_id
+        state.pipelines.configuration.execution_id
         if pipeline_type == "configuration"
-        else state.installer_pipeline_execution_id
+        else state.pipelines.installer.execution_id
     )
     return PipelineSnapshotResult(
         workspace_dir=workspace_dir,

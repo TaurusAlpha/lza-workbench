@@ -167,8 +167,12 @@ def render_installer_plan_report(plan: InstallerPlanResult) -> None:
 
     console.print()
 
+    print_section(2, "Installer Artifact Bucket")
+    print_kv("Bucket", plan.artifact_bucket or "Not resolved")
+    print_kv("Planned Action", plan.artifact_bucket_operation, bold_value=True)
+
     # CloudFormation Section
-    print_section(2, "CloudFormation Deployment Planning")
+    print_section(3, "CloudFormation Deployment Planning")
     print_kv("Stack Name", cfn_plan.stack_name, bold_value=True)
     op_color = (
         "green"
@@ -310,6 +314,8 @@ def installer_deploy_command(
         plan=preparation.cfn_plan,
         operation=preparation.operation,
     )
+    print_kv("Installer artifact bucket", preparation.artifact_bucket)
+    print_kv("Artifact bucket action", preparation.artifact_bucket_operation)
 
     operation = preparation.operation
     force_no_change = False

@@ -26,8 +26,8 @@ def _mock_sleep():
 
 def test_watch_pipeline_success(configured_workspace: Path) -> None:
     state = load_workspace_state(configured_workspace)
-    state.config_pipeline_execution_id = "exec-test-123"
-    state.config_pipeline_name = "AWSAccelerator-Pipeline"
+    state.pipelines.configuration.execution_id = "exec-test-123"
+    state.pipelines.configuration.name = "AWSAccelerator-Pipeline"
     write_workspace_state(configured_workspace, state)
 
     mock_client = MagicMock()
@@ -78,8 +78,8 @@ def test_watch_pipeline_ignores_execution_for_a_different_recorded_pipeline(
     configured_workspace: Path,
 ) -> None:
     state = load_workspace_state(configured_workspace)
-    state.config_pipeline_execution_id = "exec-other-pipeline"
-    state.config_pipeline_name = "Other-Pipeline"
+    state.pipelines.configuration.execution_id = "exec-other-pipeline"
+    state.pipelines.configuration.name = "Other-Pipeline"
     write_workspace_state(configured_workspace, state)
 
     mock_client = MagicMock()

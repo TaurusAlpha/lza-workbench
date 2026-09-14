@@ -74,7 +74,7 @@ def require_capabilities(
     ):
         raise LzaError(
             "Installer CloudFormation stack has not been deployed for this workspace "
-            "(missing installer_stack_id in .lza/state.json). Run 'lza installer deploy' first."
+            "(missing installer.stack_id in .lza/state.json). Run 'lza installer deploy' first."
         )
 
 

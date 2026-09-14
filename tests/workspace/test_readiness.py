@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from lza_workbench.errors import LzaError
+from lza_workbench.installer.runtime import InstallerRuntimeState
 from lza_workbench.workspace.context import (
     WorkspaceCapability,
     evaluate_workspace_assessment,
@@ -50,7 +51,9 @@ def create_minimal_workspace(
         config.installer.options.log_archive_account_email = "log@example.com"
         config.installer.options.audit_account_email = "audit@example.com"
 
-    state = WorkspaceState(installer_stack_id=installer_stack_id, imported=imported)
+    state = WorkspaceState(
+        installer=InstallerRuntimeState(stack_id=installer_stack_id), imported=imported
+    )
 
     if has_config_dir:
         (ws_dir / config.configuration.local_path).mkdir(parents=True, exist_ok=True)
@@ -109,7 +112,9 @@ def test_evaluate_workspace_assessment(
         config.installer.options.log_archive_account_email = "log@example.com"
         config.installer.options.audit_account_email = "audit@example.com"
 
-    state = WorkspaceState(installer_stack_id=installer_stack_id, imported=imported)
+    state = WorkspaceState(
+        installer=InstallerRuntimeState(stack_id=installer_stack_id), imported=imported
+    )
 
     assessment = evaluate_workspace_assessment(ws_dir, config, state)
     assert (

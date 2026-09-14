@@ -94,11 +94,11 @@ def _resolve_watch_execution_id(
     recorded_pipeline_name = None
     if state is not None:
         if pipeline_type == "installer":
-            recorded_execution_id = state.installer_pipeline_execution_id
-            recorded_pipeline_name = state.installer_pipeline_name
+            recorded_execution_id = state.pipelines.installer.execution_id
+            recorded_pipeline_name = state.pipelines.installer.name
         else:
-            recorded_execution_id = state.config_pipeline_execution_id
-            recorded_pipeline_name = state.config_pipeline_name
+            recorded_execution_id = state.pipelines.configuration.execution_id
+            recorded_pipeline_name = state.pipelines.configuration.name
 
     if recorded_execution_id and recorded_pipeline_name == pipeline_name:
         return recorded_execution_id

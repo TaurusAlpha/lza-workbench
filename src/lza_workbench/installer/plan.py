@@ -14,6 +14,7 @@ from lza_workbench.infrastructure.aws.codecommit import (
     CodeCommitRepositoryStatus,
     inspect_codecommit_repository,
 )
+from lza_workbench.infrastructure.aws.s3 import inspect_s3_bucket
 from lza_workbench.infrastructure.aws.secrets_manager import inspect_secret_exists
 from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
 from lza_workbench.installer.parameters import build_installer_cfn_parameters
@@ -51,6 +52,8 @@ class InstallerPlanResult:
     cloudformation_plan: CfnDeploymentPlanResult
     dry_run: bool
     github_secret_warning: str | None = None
+    artifact_bucket: str | None = None
+    artifact_bucket_operation: str = "CREATE"
 
 
 def prepare_installer_plan_result(
@@ -64,6 +67,8 @@ def prepare_installer_plan_result(
     cloudformation_plan: CfnDeploymentPlanResult,
     dry_run: bool,
     github_secret_warning: str | None = None,
+    artifact_bucket: str | None = None,
+    artifact_bucket_operation: str = "CREATE",
 ) -> InstallerPlanResult:
     """Collect command results into the presentation-independent plan result."""
     return InstallerPlanResult(
@@ -77,6 +82,8 @@ def prepare_installer_plan_result(
         cloudformation_plan=cloudformation_plan,
         dry_run=dry_run,
         github_secret_warning=github_secret_warning,
+        artifact_bucket=artifact_bucket,
+        artifact_bucket_operation=artifact_bucket_operation,
     )
 
 
@@ -123,6 +130,20 @@ def plan_installer_workflow(
     region = aws_context.region
     aws_identity = aws_context.identity
     aws_error = aws_context.error
+
+    artifact_bucket = (config.assets_bucket or "").strip() or (
+        f"s3-lza-workbench-assets-{aws_identity['account']}-{region}"
+    ) if aws_identity else (config.assets_bucket or "")
+    if aws_identity:
+        artifact_observation = inspect_s3_bucket(
+            client=factory.get_client("s3"), bucket_name=artifact_bucket
+        )
+        artifact_bucket_operation = (
+            "CREATE" if not artifact_observation.exists else
+            "UPDATE" if not artifact_observation.versioning_enabled else "NO_CHANGE"
+        )
+    else:
+        artifact_bucket_operation = "UNKNOWN"
 
     # CodeCommit Source Planning
     codecommit_client = factory.get_client("codecommit") if aws_identity else None
@@ -186,7 +207,7 @@ def plan_installer_workflow(
     cfn_plan = include_template_digest_change(
         cfn_plan,
         template_digest=template_digest,
-        deployed_template_digest=ctx.state.installer_template_digest,
+        deployed_template_digest=ctx.state.installer.template_digest,
     )
 
     # Return Structured Plan Result
@@ -200,6 +221,8 @@ def plan_installer_workflow(
         cloudformation_plan=cfn_plan,
         dry_run=dry_run,
         github_secret_warning=github_secret_warning,
+        artifact_bucket=artifact_bucket or None,
+        artifact_bucket_operation=artifact_bucket_operation,
     )
 
 

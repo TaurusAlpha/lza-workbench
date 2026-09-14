@@ -31,7 +31,7 @@ export function renderWelcome(container, activeWorkspace = null, onWorkspaceSele
           <h1 class="welcome-hero-title">LZA Workbench</h1>
           <p class="welcome-hero-desc">
             Local engineering control center for AWS Landing Zone Accelerator workspaces.
-            Streamline customer bootstrapping, installer deployments, configuration synchronization, and pipeline monitoring.
+            Streamline installer deployments, configuration synchronization, and pipeline monitoring.
           </p>
           ${
             hasActive
@@ -177,7 +177,6 @@ export function renderWelcome(container, activeWorkspace = null, onWorkspaceSele
               <div class="step-badge">Phase 2</div>
               <h3 class="step-title">AWS Prerequisites</h3>
               <p class="step-desc">Ensures pre-requisite S3 staging buckets, KMS keys, and source code repositories exist in AWS.</p>
-              <div class="step-cli-tag"><code>lza workspace bootstrap</code></div>
             </div>
 
             <div class="lifecycle-step-card card">

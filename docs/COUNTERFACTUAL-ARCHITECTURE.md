@@ -11,7 +11,7 @@ src/lza_workbench/
 │   ├── # Actions (CLI / Web operations)
 │   ├── initialize.py                # Action: initialize new customer workspace ('lza init')
 │   ├── import_workspace.py          # Action: adopt and import existing LZA deployment ('lza import')
-│   ├── bootstrap.py                 # Action: validate/provision AWS prerequisite resources ('lza bootstrap')
+│   ├── installer/                   # Installer-owned prerequisite and deployment actions
 │   │
 │   ├── # Support Subdirectories
 │   ├── layout/                      # Filesystem layout, directory scaffolding, and managed paths
@@ -38,16 +38,14 @@ src/lza_workbench/
 │   ├── validation/                  # Configuration completeness, preflight checks, and CFN plan safety
 │   │   ├── config.py
 │   │   └── preflight.py
-│   ├── drift/                       # Configuration drift and state alignment calculations
-│   │   └── alignment.py
+│   ├── drift.py                     # Configuration drift and state alignment calculations
 │   ├── templates/                   # CloudFormation template retrieval, caching, schemas, and hashing
 │   │   ├── retrieval.py
 │   │   └── digest.py
 │   ├── source/                      # Source prerequisite validation and planning (CodeCommit, S3, GitHub)
 │   │   ├── inspection.py
 │   │   └── planning.py
-│   ├── parameters/                  # CloudFormation parameter codecs, resolution, and overrides
-│   │   └── codec.py
+│   ├── parameters.py                # CloudFormation parameter codecs, resolution, and overrides
 │   ├── versions/                    # LZA version constants, normalization, and deployed version detection
 │   │   ├── constants.py
 │   │   └── detection.py
@@ -67,18 +65,14 @@ src/lza_workbench/
 │   ├── status.py                    # Action: query configuration and remote sync status ('lza config status')
 │   │
 │   ├── # Support Subdirectories
-│   ├── warnings/                    # Actionable warning compilers for workspace, git, repo, and pipeline
-│   │   └── compiler.py
+│   ├── warnings.py                  # Actionable warning compilers for workspace, git, repo, and pipeline
 │   ├── inspection/                  # Remote repository (S3, CodeCommit, CodeConnection) and pipeline inspection
 │   │   ├── models.py
 │   │   ├── pipeline.py
 │   │   └── repository.py
-│   ├── validation/                  # Local configuration directory structure and YAML syntax validation
-│   │   └── structure.py
-│   ├── archive/                     # Zip packaging, checksum hashing, and archive diffing
-│   │   └── packaging.py
-│   ├── git/                         # Local Git subprocess operations (commit, push, pull, branch status)
-│   │   └── operations.py
+│   ├── validation.py                # Local configuration directory structure and YAML syntax validation
+│   ├── archive.py                   # Zip packaging, checksum hashing, and archive diffing
+│   ├── git.py                       # Local Git subprocess operations (commit, push, pull, branch status)
 │   ├── templates/                   # Starter configuration template extractors and loaders
 │   │   ├── discovery.py
 │   │   └── rendering.py
@@ -96,10 +90,8 @@ src/lza_workbench/
 │   ├── status.py                    # Action: fetch execution snapshot and diagnostics ('lza pipeline status')
 │   │
 │   ├── # Support Subdirectories
-│   ├── failures/                    # CodeBuild log analyzers, failure classification, and diagnostics
-│   │   └── diagnostics.py
-│   ├── observation/                 # CodePipeline polling and stage state extraction
-│   │   └── polling.py
+│   ├── failures.py                  # CodeBuild log analyzers, failure classification, and diagnostics
+│   ├── observation.py               # CodePipeline polling and stage state extraction
 │   │
 │   ├── # Package Support Modules
 │   ├── resolution.py                # Pipeline name resolution from workspace configuration
@@ -132,7 +124,7 @@ src/lza_workbench/
 │   │   ├── params.py                # Shared CLI option definitions (workspace-dir, profile, dry-run)
 │   │   ├── input.py                 # Interactive terminal prompts, confirmations, and value fallbacks
 │   │   ├── output.py                # Rich formatting, tables, panels, and status tag renderers
-│   │   ├── workspace.py             # CLI command handlers for `workspace init`, `import`, and `bootstrap`
+│   │   ├── workspace.py             # CLI command handlers for `init` and `import`
 │   │   ├── installer.py             # CLI command handlers for `installer init`, `plan`, `deploy`, and `import`
 │   │   ├── configuration.py         # CLI command handlers for `config init`, `push`, `pull`, and `deploy`
 │   │   ├── pipeline.py              # CLI command handlers for `pipeline start` and `pipeline watch`
@@ -140,6 +132,7 @@ src/lza_workbench/
 │   └── web/
 │       ├── app.py                   # FastAPI web application factory, route configuration, and CORS setup
 │       ├── main.py                  # Web server runner (Uvicorn launcher for `lza ui`)
+│       ├── context.py               # Active workspace and in-flight Web operation state
 │       ├── status.py                # REST API endpoints serving workspace snapshots and component status
 │       └── static/                  # HTML, CSS, and frontend JavaScript assets for the read-only UI
 │
@@ -163,11 +156,11 @@ WorkspaceConfig (lza-workspace.yaml)
 
 WorkspaceState (.lza/state.json)
 ├── imported
-├── installer
-├── configuration
+├── installer        # InstallerRuntimeState
+├── configuration    # ConfigurationRuntimeState
 └── pipelines
-    ├── installer
-    └── configuration
+    ├── installer    # PipelineExecutionRuntimeState
+    └── configuration # PipelineExecutionRuntimeState
 ```
 
 ### Unified Status Snapshot

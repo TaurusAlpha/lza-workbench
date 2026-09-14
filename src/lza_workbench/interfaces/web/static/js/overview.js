@@ -45,7 +45,6 @@ export function getStatusVariant(status) {
     norm.includes("drift") ||
     norm.includes("local changes") ||
     norm.includes("aws unavailable") ||
-    norm.includes("bootstrap required") ||
     norm.includes("action required")
   ) {
     return "warning";
@@ -198,67 +197,37 @@ function configurationSyncStatus(configuration, isLive = true) {
   }
 }
 
-function renderLifecycleStepper(status, bootstrapPlan) {
+function renderLifecycleStepper(status) {
   // Step 1: Workspace
   const s1Status = "Complete";
   const s1Text = status.workspace.customerName || "Configured";
 
-  // Step 2: Bootstrap Prerequisites
-  const recordedBootstrapStatus = status.bootstrap?.status || "Undeployed";
-  let s2Status = recordedBootstrapStatus;
-  let s2Variant = recordedBootstrapStatus === "OK" ? "success" : "neutral";
-  let s2Text = recordedBootstrapStatus === "OK" ? "OK" : "Optional";
-
-  if (status.aws.isLive && bootstrapPlan) {
-    if (bootstrapPlan.isBlocked) {
-      s2Status = "Blocked";
-      s2Variant = "danger";
-      s2Text = "Blocked";
-    } else if (bootstrapPlan.isMutationRequired) {
-      s2Status = "Undeployed";
-      s2Variant = "warning";
-      s2Text = "Bootstrap Required";
-    } else {
-      s2Status = "OK";
-      s2Variant = "success";
-      s2Text = "OK";
-    }
-  } else {
-    // When offline, use recorded state from .lza/state.json
-    if (recordedBootstrapStatus === "OK") {
-      s2Status = "OK";
-      s2Variant = "success";
-      s2Text = "OK";
-    } else {
-      s2Status = "Optional";
-      s2Variant = "neutral";
-      s2Text = "Optional";
-    }
-  }
-
-  // Step 3: Installer Stack
+  // Step 2: Installer Stack
+  let s2Status = "Pending";
+  let s2Variant = "neutral";
+  let s2Text = "Not Deployed";
   let s3Status = "Pending";
   let s3Variant = "neutral";
   let s3Text = "Not Deployed";
   const instStatus = status.installer.status || "";
   if (instStatus.includes("COMPLETE")) {
-    s3Status = "Complete";
-    s3Variant = "success";
-    s3Text = instStatus;
+    s2Status = "Complete";
+    s2Variant = "success";
+    s2Text = instStatus;
   } else if (instStatus.includes("IN_PROGRESS")) {
-    s3Status = "In Progress";
-    s3Variant = "warning";
-    s3Text = instStatus;
+    s2Status = "In Progress";
+    s2Variant = "warning";
+    s2Text = instStatus;
   } else if (instStatus.includes("FAILED") || instStatus.includes("ROLLBACK")) {
-    s3Status = "Failed";
-    s3Variant = "danger";
-    s3Text = instStatus;
+    s2Status = "Failed";
+    s2Variant = "danger";
+    s2Text = instStatus;
   } else if (instStatus) {
-    s3Status = instStatus;
-    s3Text = instStatus;
+    s2Status = instStatus;
+    s2Text = instStatus;
   }
 
-  // Step 4: Configuration & Pipeline
+  // Step 3: Configuration & Pipeline
   let s4Status = "In sync";
   let s4Variant = "success";
   let s4Text = "Synced & Ready";
@@ -342,7 +311,7 @@ function renderLifecycleStepper(status, bootstrapPlan) {
           <div class="stepper-divider ${s2Variant === "success" ? "active" : ""}"></div>
 
           <!-- Step 2 -->
-          <a href="#/bootstrap" class="stepper-step ${s2Variant}" title="AWS Bootstrap Prerequisites">
+          <a href="#/installer" class="stepper-step ${s2Variant}" title="Installer Deployment">
             <div class="step-indicator">
               ${
                 s2Variant === "success"
@@ -352,18 +321,18 @@ function renderLifecycleStepper(status, bootstrapPlan) {
             </div>
             <div class="step-content">
               <span class="step-phase">Phase 2</span>
-              <strong class="step-label">Prerequisites</strong>
+              <strong class="step-label">Installer</strong>
               <span class="step-state">${escapeHtml(s2Text)}</span>
             </div>
           </a>
 
-          <div class="stepper-divider ${s3Variant === "success" ? "active" : ""}"></div>
+          <div class="stepper-divider ${s2Variant === "success" ? "active" : ""}"></div>
 
           <!-- Step 3 -->
-          <a href="#/installer" class="stepper-step ${s3Variant}" title="Installer Pipeline Stack">
+          <a href="#/installer" class="stepper-step ${s2Variant}" title="Installer Pipeline Stack">
             <div class="step-indicator">
               ${
-                s3Variant === "success"
+                s2Variant === "success"
                   ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
                   : `<span>3</span>`
               }
@@ -371,7 +340,7 @@ function renderLifecycleStepper(status, bootstrapPlan) {
             <div class="step-content">
               <span class="step-phase">Phase 3</span>
               <strong class="step-label">Installer Stack</strong>
-              <span class="step-state">${escapeHtml(s3Text)}</span>
+              <span class="step-state">${escapeHtml(s2Text)}</span>
             </div>
           </a>
 
@@ -398,7 +367,7 @@ function renderLifecycleStepper(status, bootstrapPlan) {
   `;
 }
 
-export function renderOverview(container, status, bootstrapPlan = null) {
+export function renderOverview(container, status) {
   const repoTarget = status.configuration.target
     ? `${status.configuration.repositoryType} / ${status.configuration.target}`
     : status.configuration.repositoryType;
@@ -432,14 +401,6 @@ export function renderOverview(container, status, bootstrapPlan = null) {
         actionText: "Go to Configuration",
       });
     }
-    if (bootstrapPlan && bootstrapPlan.isMutationRequired) {
-      steps.push({
-        title: "Bootstrap AWS Prerequisites",
-        description: "Prerequisite S3 buckets, encryption keys, or secrets require creation or update.",
-        action: "#/bootstrap",
-        actionText: "Review Bootstrap",
-      });
-    }
 
     if (steps.length === 0) return "";
 
@@ -471,7 +432,7 @@ export function renderOverview(container, status, bootstrapPlan = null) {
     `;
   }
 
-  const lifecycleStepperHtml = renderLifecycleStepper(status, bootstrapPlan);
+  const lifecycleStepperHtml = renderLifecycleStepper(status);
   const nextStepsHtml = renderNextStepsCard();
 
   // 1. Tier 1: Workspace & AWS Context Bar
@@ -481,15 +442,6 @@ export function renderOverview(container, status, bootstrapPlan = null) {
   const profile = status.aws.profile || "—";
   const region = status.aws.region || "—";
 
-  let bootstrapIndicator;
-  if (status.bootstrap?.status === "OK") {
-    const text = status.aws.isLive ? "OK" : "Recorded: OK";
-    bootstrapIndicator = `<span class="status-indicator status-success"><span class="status-dot"></span><span class="status-val">${text}</span></span>`;
-  } else if (status.aws.isLive && bootstrapPlan?.isMutationRequired) {
-    bootstrapIndicator = `<span class="status-indicator status-warning"><span class="status-dot"></span><span class="status-val">Bootstrap Required</span></span>`;
-  } else {
-    bootstrapIndicator = `<span class="status-indicator status-neutral"><span class="status-dot"></span><span class="status-val">Optional</span></span>`;
-  }
 
   const awsLiveBadgeClass = status.aws.isLive ? "badge-success" : "badge-warning";
   const awsLiveText = status.aws.isLive ? "Live" : "Offline";
@@ -536,10 +488,6 @@ export function renderOverview(container, status, bootstrapPlan = null) {
           </div>
         </div>
         <div class="context-item">
-          <span class="context-label">Bootstrap</span>
-          <div class="context-val">
-            ${bootstrapIndicator}
-          </div>
         </div>
       </div>
     </article>

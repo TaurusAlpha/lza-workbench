@@ -88,7 +88,7 @@ def test_plan_installer_workflow_marks_changed_template_for_update(
     configured_workspace: Path,
 ) -> None:
     state = WorkspaceState.from_config(load_workspace_config(configured_workspace))
-    state.installer_template_digest = "outdated"
+    state.installer.template_digest = "outdated"
     write_workspace_state(configured_workspace, state)
 
     with (
@@ -410,7 +410,7 @@ def test_apply_installer_settings_tracks_pending_parameters(tmp_path: Path) -> N
     write_workspace_config(ws_dir, config)
 
     state = WorkspaceState.from_config(config)
-    state.installer_deployed_parameters = {
+    state.installer.deployed_parameters = {
         "EnableApprovalStage": "No",
         "AcceleratorPrefix": "AWSAccelerator",
     }
@@ -427,6 +427,5 @@ def test_apply_installer_settings_tracks_pending_parameters(tmp_path: Path) -> N
     )
 
     saved_state = load_workspace_state(ws_dir)
-    assert saved_state.pending_installer_parameters is not None
-    assert saved_state.pending_installer_parameters.get("EnableApprovalStage") == "Yes"
-
+    assert saved_state.installer.pending_parameters is not None
+    assert saved_state.installer.pending_parameters.get("EnableApprovalStage") == "Yes"

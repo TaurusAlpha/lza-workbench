@@ -102,10 +102,12 @@ def _evaluate_offline_sync(
     local_digest: str,
     state: WorkspaceState | None,
 ) -> RemoteSyncStatus:
-    if state and state.config_sync_digest:
-        if local_digest == state.config_sync_digest:
+    if state and state.configuration.sync_digest:
+        if local_digest == state.configuration.sync_digest:
             etag_label = (
-                f" (ETag: {state.config_artifact_etag})" if state.config_artifact_etag else ""
+                f" (ETag: {state.configuration.artifact_etag})"
+                if state.configuration.artifact_etag
+                else ""
             )
             return RemoteSyncStatus(
                 status="Synchronized",
@@ -150,8 +152,11 @@ def _check_remote_matches_local(
                     "matched_by": "s3_metadata",
                 },
             )
-    elif state and state.config_artifact_etag:
-        if remote_etag == state.config_artifact_etag and state.config_sync_digest == local_digest:
+    elif state and state.configuration.artifact_etag:
+        if (
+            remote_etag == state.configuration.artifact_etag
+            and state.configuration.sync_digest == local_digest
+        ):
             return RemoteSyncStatus(
                 status="Synchronized",
                 summary=f"In Sync with S3 (ETag: {remote_etag})",
@@ -182,11 +187,14 @@ def _evaluate_live_drift(
         return matched
 
     # Determine drift direction if state is recorded
-    if state and state.config_sync_digest:
-        local_changed = local_digest != state.config_sync_digest
+    if state and state.configuration.sync_digest:
+        local_changed = local_digest != state.configuration.sync_digest
         remote_changed = bool(
-            (remote_digest and state.config_sync_digest != remote_digest)
-            or (state.config_artifact_etag and remote_etag != state.config_artifact_etag)
+            (remote_digest and state.configuration.sync_digest != remote_digest)
+            or (
+                state.configuration.artifact_etag
+                and remote_etag != state.configuration.artifact_etag
+            )
         )
 
         if local_changed and remote_changed:

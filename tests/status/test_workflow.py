@@ -20,6 +20,7 @@ from lza_workbench.errors import LzaError
 from lza_workbench.infrastructure.aws.cloudformation import CfnStackStatusResult
 from lza_workbench.infrastructure.aws.codecommit import CodeCommitRepositoryStatus
 from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult
+from lza_workbench.installer.runtime import InstallerRuntimeState
 from lza_workbench.installer.status import (
     InstallerStatusResult,
     get_installer_status_workflow,
@@ -30,6 +31,10 @@ from lza_workbench.installer.sync import (
     sync_installer_state,
 )
 from lza_workbench.interfaces.cli.status import render_root_status
+from lza_workbench.pipeline.runtime import (
+    PipelineExecutionRuntimeState,
+    PipelinesRuntimeState,
+)
 from lza_workbench.status.observer import (
     ConfigurationRepoSummary,
     InstallerStackSummary,
@@ -384,15 +389,21 @@ def test_get_root_status_workflow_aws_unavailable_fallback_with_state(
         aws=AwsConfig(profile="fail-profile", region="us-east-1"),
     )
     state = WorkspaceState(
-        installer_stack_status="UPDATE_COMPLETE",
-        installer_template_version="v1.16.0",
-        installer_pipeline_status="Succeeded",
-        installer_pipeline_execution_id="inst-exec-rec",
-        config_pipeline_status="Failed",
-        config_pipeline_execution_id="cfg-exec-rec",
-        config_pipeline_failed_stage="BuildStage",
-        config_pipeline_failed_action="SynthAction",
-        config_pipeline_error="CFN Stack synthesis error",
+        installer=InstallerRuntimeState(
+            stack_status="UPDATE_COMPLETE", template_version="v1.16.0"
+        ),
+        pipelines=PipelinesRuntimeState(
+            installer=PipelineExecutionRuntimeState(
+                status="Succeeded", execution_id="inst-exec-rec"
+            ),
+            configuration=PipelineExecutionRuntimeState(
+                status="Failed",
+                execution_id="cfg-exec-rec",
+                failed_stage="BuildStage",
+                failed_action="SynthAction",
+                error="CFN Stack synthesis error",
+            ),
+        ),
     )
     mock_ctx = MagicMock(workspace_dir=tmp_path, config=config, state=state)
     monkeypatch.setattr(
@@ -708,12 +719,12 @@ def test_sync_installer_state_success(tmp_path: Path) -> None:
         cfn_status=cfn_status,
         deployed_version="v1.15.5",
     )
-    assert new_state.installer_stack_id == cfn_status.stack_id
-    assert new_state.installer_stack_status == "CREATE_COMPLETE"
-    assert new_state.installer_template_version == "v1.15.5"
+    assert new_state.installer.stack_id == cfn_status.stack_id
+    assert new_state.installer.stack_status == "CREATE_COMPLETE"
+    assert new_state.installer.template_version == "v1.15.5"
 
     loaded_state = load_workspace_state(tmp_path)
-    assert loaded_state.installer_stack_id == cfn_status.stack_id
+    assert loaded_state.installer.stack_id == cfn_status.stack_id
 
 
 def test_sync_installer_config_success(tmp_path: Path) -> None:
@@ -776,8 +787,9 @@ def test_prepare_installer_status_separates_comparisons_from_rendering(tmp_path:
         aws=AwsConfig(profile="test-profile", region="us-east-1"),
     )
     state = WorkspaceState(
-        installer_stack_status="CREATE_COMPLETE",
-        installer_template_version="v1.15.5",
+        installer=InstallerRuntimeState(
+            stack_status="CREATE_COMPLETE", template_version="v1.15.5"
+        )
     )
     cfn_status = CfnStackStatusResult(
         stack_name="AWSAccelerator-InstallerStack",
@@ -811,11 +823,15 @@ def test_get_config_status_prefers_observed_pipeline_state_over_recorded_state(
         aws=AwsConfig(profile="test-profile", region="us-east-1"),
     )
     state = WorkspaceState(
-        config_pipeline_execution_id="exec-456",
-        config_pipeline_status="Failed",
-        config_pipeline_failed_stage="Build",
-        config_pipeline_failed_action="SynthesizeStack",
-        config_pipeline_error="CodeBuild build failed with exit code 1",
+        pipelines=PipelinesRuntimeState(
+            configuration=PipelineExecutionRuntimeState(
+                execution_id="exec-456",
+                status="Failed",
+                failed_stage="Build",
+                failed_action="SynthesizeStack",
+                error="CodeBuild build failed with exit code 1",
+            )
+        )
     )
 
     with (
@@ -916,8 +932,8 @@ def test_get_config_status_workflow_s3_remote_sync(tmp_path: Path) -> None:
 
     digest = compute_config_directory_digest(config_dir, set(), set())
     state = WorkspaceState()
-    state.config_sync_digest = digest
-    state.config_artifact_etag = "s3-etag-123"
+    state.configuration.sync_digest = digest
+    state.configuration.artifact_etag = "s3-etag-123"
 
     mock_s3 = MagicMock()
     mock_s3.head_bucket.return_value = {}

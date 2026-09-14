@@ -47,7 +47,7 @@ def test_start_pipeline_success(configured_workspace: Path) -> None:
     assert result.pipeline_name == "AWSAccelerator-Pipeline"
 
     state = load_workspace_state(configured_workspace)
-    assert state.config_pipeline_execution_id == "exec-abc-123"
+    assert state.pipelines.configuration.execution_id == "exec-abc-123"
 
 
 def test_start_pipeline_installer_type(configured_workspace: Path) -> None:
@@ -71,8 +71,8 @@ def test_start_pipeline_installer_type(configured_workspace: Path) -> None:
     assert result.pipeline_name == "AWSAccelerator-Installer"
 
     state = load_workspace_state(configured_workspace)
-    assert state.installer_pipeline_execution_id == "exec-inst-456"
-    assert state.installer_pipeline_name == "AWSAccelerator-Installer"
+    assert state.pipelines.installer.execution_id == "exec-inst-456"
+    assert state.pipelines.installer.name == "AWSAccelerator-Installer"
 
 
 def test_start_pipeline_records_explicit_pipeline_name(configured_workspace: Path) -> None:
@@ -94,8 +94,8 @@ def test_start_pipeline_records_explicit_pipeline_name(configured_workspace: Pat
 
     assert result.pipeline_name == "Customer-Configuration-Pipeline"
     state = load_workspace_state(configured_workspace)
-    assert state.config_pipeline_execution_id == "exec-custom-456"
-    assert state.config_pipeline_name == "Customer-Configuration-Pipeline"
+    assert state.pipelines.configuration.execution_id == "exec-custom-456"
+    assert state.pipelines.configuration.name == "Customer-Configuration-Pipeline"
 
 
 def test_start_pipeline_blocks_concurrent_execution(configured_workspace: Path) -> None:

@@ -116,7 +116,7 @@ def test_git_push_updates_remote_and_state_for_configured_deployable_branch(
     ).stdout.strip()
     state = load_workspace_state(configured_workspace)
     assert remote_commit == result.git_commit
-    assert state.config_artifact_sha256 == remote_commit
+    assert state.configuration.artifact_sha256 == remote_commit
 
 
 @pytest.mark.parametrize("dry_run", [False, True])
@@ -178,5 +178,5 @@ def test_imported_s3_push_overrides(configured_workspace, mock_aws_execution_con
         mock_aws_execution_context.factory.get_client.assert_not_called()
     else:
         apply_config_push(request)
-        assert load_workspace_state(configured_workspace).config_sync_digest
+        assert load_workspace_state(configured_workspace).configuration.sync_digest
         mock_aws_execution_context.factory.get_client.return_value.upload_file.assert_called_once()

@@ -64,13 +64,14 @@ def inspect_configuration_pipeline(
                     pipeline_error = "\n".join(failure.diagnostic_details) or (
                         failure.error_message or failure.summary
                     )
-    elif resolved_state and resolved_state.config_pipeline_status:
-        pipeline_status = resolved_state.config_pipeline_status
-        pipeline_execution_id = resolved_state.config_pipeline_execution_id
-        pipeline_failed_stage = resolved_state.config_pipeline_failed_stage
-        pipeline_failed_action = resolved_state.config_pipeline_failed_action
-        pipeline_failed_build_url = resolved_state.config_pipeline_failed_build_url
-        pipeline_error = resolved_state.config_pipeline_error
+    elif resolved_state and resolved_state.pipelines.configuration.status:
+        recorded = resolved_state.pipelines.configuration
+        pipeline_status = recorded.status
+        pipeline_execution_id = recorded.execution_id
+        pipeline_failed_stage = recorded.failed_stage
+        pipeline_failed_action = recorded.failed_action
+        pipeline_failed_build_url = recorded.failed_build_url
+        pipeline_error = recorded.error
 
     return ConfigurationPipelineStatus(
         name=config_pipeline_name,

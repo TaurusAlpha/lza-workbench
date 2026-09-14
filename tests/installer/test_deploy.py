@@ -71,7 +71,7 @@ def test_prepare_installer_deployment_updates_for_changed_template(
         "AWSAccelerator-InstallerStack.template"
     )
     state = load_workspace_state(configured_workspace)
-    state.installer_template_digest = "outdated"
+    state.installer.template_digest = "outdated"
     write_workspace_state(configured_workspace, state)
 
     mock_factory = MagicMock()
@@ -149,5 +149,5 @@ def test_apply_installer_deployment_records_terminal_failure(
         apply_installer_deployment(preparation=preparation)
 
     state = load_workspace_state(configured_workspace)
-    assert state.installer_stack_id == "stack-id"
-    assert state.installer_stack_status == "UPDATE_ROLLBACK_COMPLETE"
+    assert state.installer.stack_id == "stack-id"
+    assert state.installer.stack_status == "UPDATE_ROLLBACK_COMPLETE"

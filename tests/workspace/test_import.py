@@ -88,8 +88,8 @@ def test_import_workspace_workflow_execution(tmp_path: Path) -> None:
     assert result.dry_run is False
     assert (ws_dir / "lza-workspace.yaml").is_file()
     assert (ws_dir / ".lza" / "state.json").is_file()
-    assert result.state.config_files_count is not None
-    assert result.state.config_files_count > 0
+    assert result.state.configuration.files_count is not None
+    assert result.state.configuration.files_count > 0
 
 
 def test_prepare_workspace_import_is_read_only_until_applied(tmp_path: Path) -> None:
@@ -261,9 +261,9 @@ def test_import_workspace_live_aws_discovery(tmp_path: Path) -> None:
     assert result.config.installer.options.enable_approval_stage is True
     assert result.config.installer.source_code.repository_type == "codecommit"
     assert result.config.configuration.repository.type == "codecommit"
-    assert result.state.installer_stack_id == stack_id
-    assert result.state.installer_stack_status == "UPDATE_COMPLETE"
-    assert result.state.installer_template_version == "v1.15.5"
+    assert result.state.installer.stack_id == stack_id
+    assert result.state.installer.stack_status == "UPDATE_COMPLETE"
+    assert result.state.installer.template_version == "v1.15.5"
     assert result.state.imported is True
     assert result.state.imported_at is not None
     assert len(result.recommendations) > 0
@@ -337,7 +337,7 @@ def test_import_workspace_live_aws_discovery_s3_repository(tmp_path: Path) -> No
 
     assert result.installer_discovered is True
     assert result.config.lza.version == "v1.15.5"
-    assert result.state.installer_template_version == "v1.15.5"
+    assert result.state.installer.template_version == "v1.15.5"
     assert result.config.installer.source_code.repository_type == "s3"
     assert result.config.installer.source_code.bucket == "s3-aws-accelerator-source-123456789012"
     assert result.config.installer.source_code.key == "lza-v1.15.5.zip"

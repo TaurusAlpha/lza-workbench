@@ -4,7 +4,7 @@
 
 LZA Workbench is a local, workspace-based application for AWS Landing Zone Accelerator engineers.
 
-It assists with creating and managing customer-specific LZA workspaces and automates common LZA bootstrap, configuration, deployment, validation, and troubleshooting workflows.
+It assists with creating and managing customer-specific LZA workspaces and automates common LZA configuration, deployment, validation, and troubleshooting workflows.
 
 The current implementation is CLI-based. The project is transitioning to a local Web GUI as its
 primary interactive interface, while retaining the CLI for automation, debugging, SSH, and
@@ -62,6 +62,8 @@ It contains configuration and user decisions required to reproduce or operate th
 ### Runtime State
 
 `.lza/state.json` stores operational information discovered or produced during command execution.
+Its installer, configuration, and pipeline sections are feature-owned runtime models; `workspace`
+validates and persists the enclosing document. Persisted documents must match the current schema.
 
 Runtime state must not duplicate declarative configuration already stored in `lza-workspace.yaml` unless specifically required for operational efficiency and state reconciliation.
 
@@ -73,44 +75,54 @@ AWS SDK initialization is centralized.
 AWS authentication is external to LZA Workbench. Workspaces must not persist AWS credentials or secrets; profiles, assumed roles, environment credentials, and workload identity are supplied by the execution environment.
 
 - `AwsClientFactory` is the single mechanism for creating boto3 sessions and service clients.
-- Each AWS-backed workflow invocation resolves and reuses one request-scoped AWS execution context.
-- Interface handlers pass user intent into workflows rather than constructing AWS clients.
+- Each AWS-backed action resolves and reuses one request-scoped AWS execution context.
+- Interface handlers pass user intent into feature-owned actions rather than constructing AWS clients.
 - AWS service modules receive clients rather than creating their own sessions.
 - Authentication resolution, retry configuration, and shared AWS client behavior belong in the centralized factory.
 
 ### Application Boundaries
 
-- Web and CLI handlers should coordinate workflows rather than contain substantial business logic.
+- Web and CLI handlers should coordinate feature-owned actions rather than contain substantial business logic.
 - Business logic should live in appropriate Python modules outside the CLI layer.
 - AWS-specific behavior should remain separated from workspace/configuration logic where practical.
 - Customer-owned LZA configuration is independent from installer source-code management.
 
 ### Package Responsibilities
 
-The application follows a feature-oriented structure with explicit interface and workflow
+The application follows feature-owned actions with explicit interface and infrastructure
 boundaries:
 
-- `web`, when introduced, owns HTTP routing, Web request/response translation, browser-facing
-  presentation, and session concerns. It must not own LZA business policy.
-- `cli` owns command registration, parameters, prompting, confirmation, terminal rendering, and
-  translation of application errors into process results.
-- `workflows` own reusable application use cases. They coordinate workspace loading, feature
-  rules, AWS adapters, mutation, and structured results without depending on Typer or Rich. Reusable workflows must not accept interface-specific control flow — including synchronous prompt or confirmation callbacks — or embed interface-specific presentation (such as terminal markup) in their results. Interfaces collect input and render output; workflows return structured data and, where a decision is required mid-operation, an explicit typed outcome describing what confirmation or input is needed.
-- `workspace` owns workspace schema composition, runtime state, persistence, paths, readiness,
-  and workspace lifecycle.
-- `installer`, `configuration`, and `pipeline` own their respective schemas and business rules.
-- `aws` contains thin service adapters that accept resolved inputs, call boto3, and return
-  structured results without deriving feature policy.
+- `interfaces.cli` owns command registration, parameters, prompting, confirmation, terminal
+  rendering, and translation of application errors into process results.
+- `interfaces.web` owns HTTP routing, request/response translation, browser-facing presentation,
+  and session concerns. It must not own LZA business policy.
+- `workspace` is the workspace document and lifecycle boundary. It owns workspace schema
+  composition, paths, readiness assessment, and persistence of `lza-workspace.yaml` and
+  `.lza/state.json`. Other features load a validated `WorkspaceContext` and explicitly read or
+  write those documents through its persistence API. Workspace owns local workspace lifecycle and
+  persistence. AWS resources belong to the feature whose explicit deployment action requires and
+  manages them.
+- `configuration`, `installer`, and `pipeline` own their respective schemas, business rules,
+  actions, and runtime-state transition rules. They must not delegate their policy to
+  `workspace`; `workspace` persists the resulting validated state document.
+- `status` owns unified operational observation and typed summaries shared by both interfaces.
+- `infrastructure.aws` and `infrastructure.github` contain thin external-service adapters that
+  accept resolved inputs, call external APIs, and return structured observations without deriving
+  feature policy.
 - `resources` contains packaged data only; customer-owned workspaces and configuration remain
   outside the package.
 
-Dependencies point from Web and CLI interfaces toward workflows and from workflows toward feature
-packages and AWS adapters. Feature and AWS packages must not import interface or workflow modules. AWS adapters
-must not import workspace or feature policy. Shared behavior belongs to the feature that owns the
-rule rather than generic `core`, `utils`, or `helpers` modules.
+Dependencies point from interfaces to feature packages, from feature packages to infrastructure,
+and from every feature to the workspace document boundary when it needs workspace data. Feature
+packages may collaborate directly where an action genuinely spans features, but interfaces must
+not duplicate that orchestration. Infrastructure adapters must not import workspace or feature
+policy. Shared behavior belongs to the feature that owns the rule rather than generic `core`,
+`utils`, or `helpers` modules.
 
-Web, CLI, worker, and MCP interfaces should reuse the same workflows instead of duplicating
-business logic. The dependency direction is `web/cli -> workflows -> features/AWS`.
+The package-level direction is `interfaces -> status/features -> infrastructure`, with
+`workspace`, `configuration`, `installer`, and `pipeline` forming the collaborating feature layer.
+CLI, Web, worker, and MCP interfaces should reuse the same feature-owned actions rather than
+duplicating business logic.
 
 ### Error Handling
 
@@ -136,12 +148,12 @@ AWS authentication validity and deployed-resource health are separate from works
 ## Interface Design Principles
 
 The Web GUI is the primary planned interactive interface. The CLI remains a supported interface
-for automation, debugging, SSH, and advanced use. Both should expose LZA workflows rather than
-low-level AWS resource operations directly.
+for automation, debugging, SSH, and advanced use. Both should expose meaningful LZA actions rather
+than low-level AWS resource operations directly.
 
 General principles:
 
-- Prefer interface actions that represent meaningful LZA workflows.
+- Prefer interface actions that represent meaningful LZA operations.
 - Keep Web routes and CLI command handlers thin; neither interface should duplicate orchestration.
 - Keep planning/read-only behavior separate from mutation where practical.
 - AWS-mutating operations must have clear command intent.

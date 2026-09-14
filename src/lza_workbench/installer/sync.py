@@ -27,12 +27,12 @@ def apply_installer_state_sync(
             "Cannot synchronize state: CloudFormation installer stack is not deployed "
             "or inaccessible."
         )
-    state.installer_stack_id = cfn_status.stack_id
-    state.installer_stack_status = cfn_status.stack_status
+    state.installer.stack_id = cfn_status.stack_id
+    state.installer.stack_status = cfn_status.stack_status
     if cfn_status.deployed_parameters:
-        state.installer_deployed_parameters = dict(cfn_status.deployed_parameters)
+        state.installer.deployed_parameters = dict(cfn_status.deployed_parameters)
     if deployed_version is not None:
-        state.installer_template_version = deployed_version
+        state.installer.template_version = deployed_version
     state.updated_at = datetime.now(UTC)
     return state
 
@@ -107,8 +107,8 @@ def prepare_installer_template_sync(
     config.installer.stack_template.path = str(template_path.relative_to(workspace_dir))
     config.installer.stack_template.repository = None
     config.installer.stack_template.ref = None
-    state.installer_template_digest = sha256(template_body.encode("utf-8")).hexdigest()
-    state.installer_downloaded_at = datetime.now(UTC)
+    state.installer.template_digest = sha256(template_body.encode("utf-8")).hexdigest()
+    state.installer.downloaded_at = datetime.now(UTC)
     return template_path
 
 

@@ -171,9 +171,9 @@ def _get_pull_confirmation(
             and config_dir.is_dir()
             and any(config_dir.iterdir())
             and (
-                context.state.config_sync_digest is None
+                context.state.configuration.sync_digest is None
                 or compute_config_directory_digest(config_dir, exclude_dirs, exclude_files)
-                != context.state.config_sync_digest
+                != context.state.configuration.sync_digest
             )
         ):
             return (
@@ -295,9 +295,9 @@ def _handle_s3_pull(
         and not force
         and not overwrite_confirmed
         and (
-            state.config_sync_digest is None
+            state.configuration.sync_digest is None
             or compute_config_directory_digest(config_dir, exclude_dirs, exclude_files)
-            != state.config_sync_digest
+            != state.configuration.sync_digest
         )
     ):
         if not overwrite_confirmed:

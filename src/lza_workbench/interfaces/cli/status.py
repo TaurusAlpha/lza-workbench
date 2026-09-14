@@ -316,14 +316,14 @@ def _render_state_alignment(result: InstallerStatusResult) -> None:
         return
     state = result.state
     rec_status = (
-        format_status(state.installer_stack_status) if state.installer_stack_status else None
+        format_status(state.installer.stack_status) if state.installer.stack_status else None
     )
     for label, value in (
-        ("Recorded Stack ID", state.installer_stack_id),
+        ("Recorded Stack ID", state.installer.stack_id),
         ("Recorded Stack Status", rec_status),
-        ("Recorded Stack Updated", format_timestamp(state.installer_stack_updated_at)),
-        ("Installer Downloaded", format_timestamp(state.installer_downloaded_at)),
-        ("Template Version", state.installer_template_version),
+        ("Recorded Stack Updated", format_timestamp(state.installer.stack_updated_at)),
+        ("Installer Downloaded", format_timestamp(state.installer.downloaded_at)),
+        ("Template Version", state.installer.template_version),
     ):
         if value:
             print_kv(label, value)

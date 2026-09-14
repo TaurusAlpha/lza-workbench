@@ -12,7 +12,6 @@ are registered in the current CLI; unchecked commands are planned.
 
 - `lza init`
 - `lza import`
-- `lza bootstrap`
 - `lza validate`
 - `lza diff`
 - `lza doctor`
@@ -59,13 +58,24 @@ Create a new customer-specific LZA workspace and its local Workbench metadata.
 
 Adopt an existing local LZA configuration without modifying customer-owned configuration files.
 
-### `lza bootstrap`
+### Workspace AWS ownership
 
-Create or validate AWS prerequisite resources required by LZA Workbench.
+Workspace owns local lifecycle and persistence. Feature deployment actions own the AWS resources
+they explicitly require. `lza installer deploy` owns installer prerequisites; configuration
+synchronization never provisions missing remotes.
 
-#### Future `lza bootstrap` enhancements
+#### Installer prerequisite ownership
 
-Bootstrap installer and configuration prerequisites based on the current installer configuration in `lza-workspace.yaml`.
+- [x] Standalone workspace bootstrap removed; installer prerequisites are owned by
+  `lza installer plan` and `lza installer deploy`.
+- [ ] If retained, define its contract as preparation of shared workspace operational substrate:
+  workspace-owned paths/metadata, the Workbench assets bucket, and cross-feature prerequisite
+  coordination. It must not become the owner of installer source policy or configuration
+  repository policy.
+
+#### Future installer prerequisite enhancements
+
+Installer prerequisites are reconciled from the current installer configuration in `lza-workspace.yaml`.
 
 The future implementation should preserve the following behavior:
 
@@ -87,7 +97,7 @@ The future implementation should preserve the following behavior:
   - On import:
     - Validate that the configured bucket exists and is accessible.
     - Do not recreate missing imported resources automatically.
-  - Keep installer source packaging, upload, and S3-specific installer template synthesis outside bootstrap.
+  - Keep installer source packaging, upload, and S3-specific installer template synthesis under installer deployment.
 
 #### Configuration repository
 
@@ -103,9 +113,9 @@ The future implementation should preserve the following behavior:
 
 - [ ] `ConfigurationRepositoryLocation=s3`
   - Treat as a separate LZA-specific configuration workflow.
-  - Do not create the LZA-managed `aws-accelerator-config-<account-id>-<region>` bucket during bootstrap.
+  - Do not create the LZA-managed `aws-accelerator-config-<account-id>-<region>` bucket during configuration synchronization.
   - When importing an existing deployment, validate the discovered bucket and access.
-  - Revisit exact bootstrap behavior when S3 configuration deployment support is implemented.
+  - Revisit exact configuration deployment behavior when S3 configuration deployment support is implemented.
 
 ### `lza validate`
 
@@ -318,21 +328,43 @@ The local Web GUI
 - [x] Add installer settings and deployment preview view (accessible from Installer card).
 - [ ] Add installer deployment mutation flow.
 - [ ] Keep multi-user/server operation out of the current scope.
+- [ ] Split `interfaces/web/status.py` by interface responsibility: active workspace context,
+  feature route registration, and response serialization. Keep API contracts and route behavior
+  unchanged; do not move feature policy into the Web layer.
 
 ## Workspace
 
+- [x] Define and enforce a small public `workspace` API for other feature packages:
+  `WorkspaceConfig`, `WorkspaceState`, `WorkspaceContext`, `WorkspaceCapability`, context loading,
+  and explicit config/state load/write operations. Keep lifecycle actions and layout/path internals
+  imported from their dedicated modules rather than re-exporting the entire package surface.
+- [x] Replace flat feature-prefixed fields in `WorkspaceState` with composed, feature-owned runtime
+  state models for installer, configuration, and pipelines. `workspace` remains responsible for
+  validating and persisting the enclosing state document; each feature owns its state transition
+  rules and may not mutate unrelated feature state.
+- [x] Migrate all production callers and fixtures to the nested runtime-state contract. Preserve
+  existing desired-state versus runtime-state semantics; existing persisted state must conform to
+  the current nested schema.
 - [ ] Support workspace schema migration.
 - [ ] Generate JSON Schema for editor support.
 - [ ] Resolve the account ID from authenticated AWS identity, including profile-based
   authentication, and persist the accepted value in `lza-workspace.yaml`.
+
+## Package Boundaries
+
+- [x] Reduce broad feature-package `__init__.py` re-export barrels to deliberate stable public
+  APIs. Avoid eager importing actions and adapters merely to support package-root imports.
+- [ ] Keep one-file support modules as modules unless a subpackage has multiple cohesive internal
+  modules or establishes a real boundary. Reassess new directories against this rule during future
+  refactors.
 
 ## Authentication
 
 - [ ] Reassess and likely remove application-managed source credential priming after selecting the
   preferred external AWS authentication approach. Keep priming opt-in in the meantime.
 - [ ] Add an AWS profile creation or authentication-onboarding helper.
-- [ ] Support AWS IAM Identity Center (SSO) profile bootstrap.
-- [ ] Support static-key profile bootstrap without storing credentials in workspace metadata.
+- [ ] Support AWS IAM Identity Center (SSO) profile discovery.
+- [ ] Support static-key profile discovery without storing credentials in workspace metadata.
 - [ ] Support AssumeRole profile configuration.
 - [ ] Document bastion and proxy setup where required.
 
@@ -349,7 +381,7 @@ The local Web GUI
 - [x] Remove test-only parameters and shims from production code (e.g. removed `sleeper` and `time_provider` parameters from pipeline and deploy workflows).
 - [x] Purge mock-heavy AWS unit tests (deleted `tests/aws/` and consolidated boto3 factory centralization check into `tests/test_package.py`).
 - [x] Purge mock-heavy CLI tests (deleted 11 mock-heavy test files in `tests/cli/`, reducing test execution time to ~6 seconds).
-- [ ] Add unified End-to-End Workspace Lifecycle integration test (`tests/cli/test_lifecycle_e2e.py`) covering sequential execution: `lza init` -> `lza config init` -> `lza bootstrap` -> `lza installer init` -> `lza installer plan` -> `lza installer deploy` -> `lza config push` -> `lza status`.
+- [ ] Add unified End-to-End Workspace Lifecycle integration test (`tests/cli/test_lifecycle_e2e.py`) covering sequential execution: `lza init` -> `lza installer init` -> `lza config init` -> `lza installer plan` -> `lza installer deploy` -> `lza config push` -> `lza status`.
 - [ ] Add error resilience tests for corrupted/partial `.lza/state.json` and malformed `lza-workspace.yaml` files to verify clean recovery guidance.
 - [ ] Add error reporting tests for Git merge conflicts and remote authentication failures during `lza config pull`.
 - [ ] Add CloudFormation template size limit boundary test verifying S3 `TemplateURL` is always used when templates exceed 51.2 KB.

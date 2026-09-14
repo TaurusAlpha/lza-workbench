@@ -462,18 +462,18 @@ def _initialize_import_state(
         state.imported_at = datetime.now(UTC)
 
     if provenance:
-        state.config_files_count = provenance.files_count
+        state.configuration.files_count = provenance.files_count
         if provenance.commit:
-            state.config_artifact_sha256 = provenance.commit
-        state.config_template_source = provenance.repo_type
+            state.configuration.artifact_sha256 = provenance.commit
+        state.configuration.template_source = provenance.repo_type
     else:
         exclude = PackagingExcludeConfig()
-        state.config_files_count = count_config_files(
+        state.configuration.files_count = count_config_files(
             resolved_config_dir,
             set(exclude.directories),
             set(exclude.files),
         )
-        state.config_template_source = "local"
+        state.configuration.template_source = "local"
 
     return state
 
@@ -650,7 +650,7 @@ def _build_import_recommendations(
     recommendations: list[str],
 ) -> None:
     if installer_discovered:
-        if config.configuration.repository.type == "s3" and state.config_downloaded_at is None:
+        if config.configuration.repository.type == "s3" and state.configuration.downloaded_at is None:
             recommendations.append(
                 "Run 'lza config download' to pull the latest remote S3 configuration archive."
             )

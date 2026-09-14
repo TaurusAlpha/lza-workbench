@@ -135,7 +135,7 @@ def _query_live_installer_status(
         and cfn_status.error.startswith("Connection failure")
         and resolved_state
     ):
-        recorded_status = resolved_state.installer_stack_status
+        recorded_status = resolved_state.installer.stack_status
         if recorded_status:
             cfn_status = CfnStackStatusResult(
                 stack_name=cfn_stack_name,
@@ -143,8 +143,8 @@ def _query_live_installer_status(
                 stack_status=recorded_status,
                 error=cfn_status.error,
             )
-        if not deployed_version and resolved_state.installer_template_version:
-            deployed_version = resolved_state.installer_template_version
+        if not deployed_version and resolved_state.installer.template_version:
+            deployed_version = resolved_state.installer.template_version
     if (
         isinstance(pipeline_state.error, str)
         and pipeline_state.error.startswith("Connection failure")
@@ -152,9 +152,9 @@ def _query_live_installer_status(
     ):
         pipeline_state = PipelineStateResult(
             pipeline_name=installer_pipeline_name,
-            exists=bool(resolved_state.installer_pipeline_status),
-            status=resolved_state.installer_pipeline_status or "NOT_CHECKED",
-            latest_execution_id=resolved_state.installer_pipeline_execution_id,
+            exists=bool(resolved_state.pipelines.installer.status),
+            status=resolved_state.pipelines.installer.status or "NOT_CHECKED",
+            latest_execution_id=resolved_state.pipelines.installer.execution_id,
             error=pipeline_state.error,
         )
     return cfn_status, deployed_version, pipeline_state
@@ -168,8 +168,8 @@ def _query_recorded_installer_status(
     resolved_config_version: str,
     resolved_state: WorkspaceState | None,
 ) -> tuple[CfnStackStatusResult, str, PipelineStateResult]:
-    recorded_status = resolved_state.installer_stack_status if resolved_state else None
-    recorded_version = resolved_state.installer_template_version if resolved_state else None
+    recorded_status = resolved_state.installer.stack_status if resolved_state else None
+    recorded_version = resolved_state.installer.template_version if resolved_state else None
     cfn_status = CfnStackStatusResult(
         stack_name=cfn_stack_name,
         exists=bool(recorded_status),
@@ -177,8 +177,8 @@ def _query_recorded_installer_status(
         error=aws_error,
     )
     deployed_version = recorded_version or resolved_config_version
-    recorded_pipe_status = resolved_state.installer_pipeline_status if resolved_state else None
-    recorded_exec_id = resolved_state.installer_pipeline_execution_id if resolved_state else None
+    recorded_pipe_status = resolved_state.pipelines.installer.status if resolved_state else None
+    recorded_exec_id = resolved_state.pipelines.installer.execution_id if resolved_state else None
     pipeline_state = PipelineStateResult(
         pipeline_name=installer_pipeline_name,
         exists=bool(recorded_pipe_status),

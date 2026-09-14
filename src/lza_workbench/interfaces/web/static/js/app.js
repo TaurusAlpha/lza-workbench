@@ -1,7 +1,6 @@
 import {
   applyConfigDeploy,
   getActiveWorkspace,
-  getBootstrapPlan,
   getConfigurationStatus,
   getInstallerStatus,
   getPipelineDiagnostics,
@@ -9,7 +8,6 @@ import {
   getStatus,
   openWorkspace,
 } from "./api.js";
-import { renderBootstrapDetails } from "./bootstrap.js";
 import { renderConfigurationDetails } from "./configuration.js";
 import { renderInstallerDetails } from "./installer.js";
 import { escapeHtml, renderOverview } from "./overview.js";
@@ -356,9 +354,6 @@ function parseRoute() {
   if (clean === "/configuration") {
     return { name: "configuration" };
   }
-  if (clean === "/bootstrap") {
-    return { name: "bootstrap" };
-  }
   if (clean === "/pipeline/installer") {
     return { name: "pipeline", pipelineType: "installer", executionId };
   }
@@ -434,10 +429,7 @@ async function loadOverview() {
   if (breadcrumb) breadcrumb.hidden = true;
 
   try {
-    const [status, bootstrapPlan] = await Promise.all([
-      getStatus(),
-      getBootstrapPlan().catch(() => null),
-    ]);
+    const status = await getStatus();
 
     if (pageEyebrow) pageEyebrow.textContent = "Workspace Overview";
     if (pageTitle) pageTitle.textContent = status.workspace.customerName || "Default Workspace";
@@ -459,7 +451,7 @@ async function loadOverview() {
     });
     updateOfflineStatus(status.aws);
 
-    renderOverview(viewContent, status, bootstrapPlan);
+    renderOverview(viewContent, status);
     clearNotice();
   } catch (error) {
     if (
@@ -656,32 +648,6 @@ async function loadInstaller() {
   }
 }
 
-async function loadBootstrap() {
-  stopPipelinePolling();
-  updateNavHighlight("bootstrap");
-  if (pageHeader) pageHeader.hidden = false;
-  viewContent.className = "view-container";
-  viewContent.setAttribute("aria-busy", "true");
-  clearNotice();
-  refresh.disabled = true;
-  if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench / Bootstrap";
-  if (pageTitle) pageTitle.textContent = "Workspace Bootstrap";
-  if (breadcrumb) breadcrumb.hidden = false;
-
-  try {
-    const plan = await getBootstrapPlan();
-    renderBootstrapDetails(viewContent, plan, loadBootstrap);
-    updateOfflineStatus({ isLive: plan.isLive, error: plan.error });
-    clearNotice();
-  } catch (error) {
-    viewContent.replaceChildren();
-    showNotice(error.message, "error");
-  } finally {
-    viewContent.setAttribute("aria-busy", "false");
-    refresh.disabled = false;
-  }
-}
-
 async function loadSetup() {
   stopPipelinePolling();
   updateNavHighlight("overview");
@@ -736,8 +702,6 @@ function handleRoute() {
     loadInstaller();
   } else if (route.name === "configuration") {
     loadConfiguration();
-  } else if (route.name === "bootstrap") {
-    loadBootstrap();
   } else if (route.name === "pipeline") {
     loadPipeline(route.pipelineType, route.executionId);
   } else {

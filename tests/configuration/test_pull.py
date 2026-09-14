@@ -95,9 +95,9 @@ def test_imported_s3_pull_then_push(
     client.head_object.return_value = {}
     pull_configuration_workflow(target_dir=configured_workspace, force=True, extract=extract)
     state = load_workspace_state(configured_workspace)
-    assert state.config_downloaded_at
+    assert state.configuration.downloaded_at
     if extract:
-        assert state.config_sync_digest
+        assert state.configuration.sync_digest
         push_configuration_workflow(
             target_dir=configured_workspace,
             aws_context=mock_aws_execution_context,
@@ -105,7 +105,7 @@ def test_imported_s3_pull_then_push(
         client.upload_file.assert_called_once()
     else:
         # Downloading an archive alone does not verify the local configuration.
-        assert state.config_sync_digest is None
+        assert state.configuration.sync_digest is None
         with pytest.raises(LzaError, match="has not been verified"):
             push_configuration_workflow(
                 target_dir=configured_workspace,

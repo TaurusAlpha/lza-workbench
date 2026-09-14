@@ -31,7 +31,6 @@ from lza_workbench.pipeline.failures import (
 )
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.status.summary import (
-    BootstrapSummary,
     ConfigurationRepoSummary,
     InstallerStackSummary,
     OverallHealthSummary,
@@ -88,17 +87,18 @@ def _resolve_recorded_pipeline_summary(
     pipeline_type: str, state: WorkspaceState | None, pipeline_name: str
 ) -> PipelineSummary:
     if pipeline_type == "installer" and state:
-        status = state.installer_pipeline_status
-        execution_id = state.installer_pipeline_execution_id
-        failed_stage = state.installer_pipeline_failed_stage
-        failed_action = state.installer_pipeline_failed_action
-        failure_summary = state.installer_pipeline_error
+        recorded = state.pipelines.installer
     elif pipeline_type == "configuration" and state:
-        status = state.config_pipeline_status
-        execution_id = state.config_pipeline_execution_id
-        failed_stage = state.config_pipeline_failed_stage
-        failed_action = state.config_pipeline_failed_action
-        failure_summary = state.config_pipeline_error
+        recorded = state.pipelines.configuration
+    else:
+        recorded = None
+
+    if recorded is not None:
+        status = recorded.status
+        execution_id = recorded.execution_id
+        failed_stage = recorded.failed_stage
+        failed_action = recorded.failed_action
+        failure_summary = recorded.error
     else:
         status, execution_id, failed_stage, failed_action, failure_summary = (
             None,
@@ -333,8 +333,8 @@ def _resolve_installer_stack_summary(
             is_live=True,
         )
 
-    recorded_status = state.installer_stack_status if state else None
-    recorded_version = state.installer_template_version if state else None
+    recorded_status = state.installer.stack_status if state else None
+    recorded_version = state.installer.template_version if state else None
     return InstallerStackSummary(
         name=cfn_stack_name,
         status=recorded_status,
@@ -521,21 +521,6 @@ def get_root_status_workflow(
         config_pipe=config_pipe_summary,
     )
 
-    recorded_bootstrap_status = state.bootstrap_status if state else None
-    if not recorded_bootstrap_status:
-        if state and (state.bootstrapped_at or state.installer_stack_status or config.assets_bucket):
-            recorded_bootstrap_status = "OK"
-        else:
-            recorded_bootstrap_status = "Undeployed"
-    bootstrapped_at_str = (
-        state.bootstrapped_at.isoformat() if (state and state.bootstrapped_at) else None
-    )
-    bootstrap_summary = BootstrapSummary(
-        status=recorded_bootstrap_status,
-        bootstrapped_at=bootstrapped_at_str,
-        is_live=is_live,
-    )
-
     return RootStatusResult(
         workspace_dir=workspace_dir,
         customer_name=config.customer.name,
@@ -550,12 +535,10 @@ def get_root_status_workflow(
         configuration_pipeline=config_pipe_summary,
         health=health,
         assessment=ctx.assessment,
-        bootstrap=bootstrap_summary,
     )
 
 
 __all__ = [
-    "BootstrapSummary",
     "ConfigurationRepoSummary",
     "InstallerStackSummary",
     "OverallHealthSummary",

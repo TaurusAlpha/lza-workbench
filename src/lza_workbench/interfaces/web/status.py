@@ -46,6 +46,7 @@ from lza_workbench.installer.status import (
     InstallerStatusResult,
     get_installer_status_workflow,
 )
+from lza_workbench.interfaces.web.context import ActiveWorkspaceContext
 from lza_workbench.pipeline.status import (
     PipelineActionFailure,
     PipelineSnapshotResult,
@@ -57,15 +58,8 @@ from lza_workbench.status.observer import (
     RootStatusResult,
     get_root_status_workflow,
 )
-from lza_workbench.workspace.bootstrap import (
-    BootstrapPlanResult,
-    WorkspaceBootstrapResult,
-    bootstrap_workspace_workflow,
-    plan_bootstrap_workflow,
-)
 from lza_workbench.workspace.import_workspace import (
     ImportWorkspaceDiscovery,
-    ImportWorkspacePreparation,
     ImportWorkspaceRequest,
     WorkspaceImportResult,
     apply_workspace_import,
@@ -76,23 +70,6 @@ from lza_workbench.workspace.initialize import (
     WorkspaceInitResult,
     init_workspace,
 )
-
-
-class ActiveWorkspaceContext:
-    """Manages active workspace directory and in-flight operations for the web server."""
-
-    def __init__(self, workspace_dir: Path | None = None) -> None:
-        self.workspace_dir: Path | None = workspace_dir.resolve() if workspace_dir else None
-        self.prepared_import: ImportWorkspacePreparation | None = None
-
-    def set_workspace_dir(self, workspace_dir: Path) -> None:
-        self.workspace_dir = workspace_dir.resolve()
-        self.prepared_import = None
-
-    def get_target_dir(self) -> Path:
-        if self.workspace_dir is None:
-            raise LzaError("No active workspace is open. Please open or create a workspace.")
-        return self.workspace_dir
 
 
 class WorkspaceOpenPayload(BaseModel):
@@ -141,11 +118,6 @@ class InstallerSettingsPayload(BaseModel):
 class ConfigActionApplyPayload(BaseModel):
     overwrite_confirmed: bool = False
     force: bool = False
-
-
-class BootstrapApplyPayload(BaseModel):
-    github_token: str | None = None
-    allow_missing_github_secret: bool = False
 
 
 def _register_workspace_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
@@ -402,24 +374,6 @@ def _register_pipeline_routes(router: APIRouter, context: ActiveWorkspaceContext
         return serialize_pipeline_diagnostics(failures)
 
 
-def _register_bootstrap_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
-    @router.get("/api/bootstrap/plan")
-    def get_bootstrap_plan() -> dict[str, Any]:
-        return serialize_bootstrap_plan(
-            plan_bootstrap_workflow(target_dir=context.get_target_dir(), dry_run=True)
-        )
-
-    @router.post("/api/bootstrap/apply")
-    def apply_bootstrap(payload: BootstrapApplyPayload | None = None) -> dict[str, Any]:
-        result = bootstrap_workspace_workflow(
-            target_dir=context.get_target_dir(),
-            dry_run=False,
-            github_token=payload.github_token if payload else None,
-            allow_missing_github_secret=payload.allow_missing_github_secret if payload else False,
-        )
-        return serialize_bootstrap_result(result)
-
-
 def create_status_router(
     *, workspace_dir: Path | ActiveWorkspaceContext | None = None
 ) -> APIRouter:
@@ -439,7 +393,6 @@ def create_status_router(
     _register_installer_routes(router, context)
     _register_config_routes(router, context)
     _register_pipeline_routes(router, context)
-    _register_bootstrap_routes(router, context)
 
     return router
 
@@ -499,11 +452,6 @@ def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
             "isLive": result.configuration_repo.is_live,
         },
         "configurationPipeline": _serialize_pipeline(result.configuration_pipeline),
-        "bootstrap": {
-            "status": result.bootstrap.status if result.bootstrap else "Undeployed",
-            "bootstrappedAt": result.bootstrap.bootstrapped_at if result.bootstrap else None,
-            "isLive": result.bootstrap.is_live if result.bootstrap else False,
-        },
         "health": {
             "installer": result.health.installer,
             "configuration": result.health.configuration,
@@ -1085,85 +1033,6 @@ def serialize_pipeline_diagnostics(
             }
         )
     return results
-
-
-def serialize_bootstrap_plan(plan: BootstrapPlanResult) -> dict[str, Any]:
-    """Translate bootstrap plan workflow result into the browser API contract."""
-    is_mutation_required = (
-        plan.bucket_planned_operation in {"CREATE", "UPDATE"}
-        or plan.codecommit_repo_planned_operation == "CREATE"
-        or plan.github_planned_operation == "CREATE"
-    )
-    is_blocked = (
-        plan.codecommit_repo_planned_operation == "MISSING"
-        or plan.github_planned_operation in {"MISSING", "INACCESSIBLE"}
-    )
-    return {
-        "awsProfile": plan.aws_profile,
-        "awsRegion": plan.aws_region,
-        "accountId": plan.account_id,
-        "plannedOperation": plan.planned_operation,
-        "isMutationRequired": is_mutation_required and plan.is_live,
-        "isBlocked": is_blocked,
-        "imported": plan.imported,
-        "isLive": plan.is_live,
-        "error": plan.error,
-        "resources": {
-            "bucket": {
-                "name": plan.bucket_name,
-                "exists": plan.bucket_exists,
-                "versioningEnabled": plan.versioning_enabled,
-                "encryptionEnabled": plan.encryption_enabled,
-                "plannedOperation": plan.bucket_planned_operation,
-            },
-            "codecommit": {
-                "name": plan.codecommit_repo_name,
-                "branch": plan.codecommit_branch_name,
-                "exists": plan.codecommit_repo_exists,
-                "branchExists": plan.codecommit_branch_exists,
-                "plannedOperation": plan.codecommit_repo_planned_operation,
-            }
-            if plan.codecommit_repo_name
-            else None,
-            "github": {
-                "secretName": plan.github_secret_name,
-                "secretExists": plan.github_secret_exists,
-                "secretAccessible": plan.github_secret_accessible,
-                "repoOwner": plan.github_repo_owner,
-                "repoName": plan.github_repo_name,
-                "repoBranch": plan.github_repo_branch,
-                "repoAccessible": plan.github_repo_accessible,
-                "plannedOperation": plan.github_planned_operation,
-            }
-            if (plan.github_secret_name or plan.github_repo_name)
-            else None,
-        },
-        "actions": [
-            {
-                "subject": a.subject,
-                "operation": a.operation,
-                "message": a.message,
-                "severity": a.severity,
-            }
-            for a in plan.actions
-        ],
-        "warnings": plan.warnings,
-    }
-
-
-def serialize_bootstrap_result(result: WorkspaceBootstrapResult) -> dict[str, Any]:
-    """Translate workspace bootstrap execution result into the browser API contract."""
-    return {
-        "success": True,
-        "plannedOperation": result.planned_operation,
-        "skipped": result.skipped,
-        "actionsTaken": result.actions_taken,
-        "warnings": result.warnings,
-        "bucketName": result.bucket_name,
-        "codecommitRepoName": result.codecommit_repo_name,
-        "githubSecretName": result.github_secret_name,
-        "githubSecretCreated": result.github_secret_created,
-    }
 
 
 def serialize_workspace_init_result(result: WorkspaceInitResult) -> dict[str, Any]:

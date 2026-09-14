@@ -79,18 +79,18 @@ def get_config_status_workflow(
     aws_error = aws_context.error
     account_id = aws_identity["account"] if aws_identity else "UNKNOWN_ACCOUNT"
 
-    initialized_at = resolved_state.config_initialized_at if resolved_state else None
-    template_name = resolved_state.config_template_name if resolved_state else None
-    template_source = resolved_state.config_template_source if resolved_state else None
+    initialized_at = resolved_state.configuration.initialized_at if resolved_state else None
+    template_name = resolved_state.configuration.template_name if resolved_state else None
+    template_source = resolved_state.configuration.template_source if resolved_state else None
     drifted_fields: tuple[str, ...] = ()
     has_init_state = bool(
         resolved_state
-        and resolved_state.config_initialized_at
-        and resolved_state.config_init_values
+        and resolved_state.configuration.initialized_at
+        and resolved_state.configuration.init_values
     )
-    if has_init_state and resolved_state and resolved_state.config_init_values:
+    if has_init_state and resolved_state and resolved_state.configuration.init_values:
         current_snapshot = capture_init_values_snapshot(resolved_config)
-        saved_snapshot = resolved_state.config_init_values
+        saved_snapshot = resolved_state.configuration.init_values
         drifted_fields = tuple(
             sorted(k for k, v in current_snapshot.items() if saved_snapshot.get(k) != v)
         )
@@ -140,15 +140,15 @@ def get_config_status_workflow(
     )
 
     recorded_pipeline_execution_id = (
-        resolved_state.config_pipeline_execution_id if resolved_state else None
+        resolved_state.pipelines.configuration.execution_id if resolved_state else None
     )
     synchronization = ConfigurationSynchronizationStatus(
         has_state=resolved_state is not None,
         recorded_pipeline_execution_id=recorded_pipeline_execution_id,
-        uploaded_at=resolved_state.config_uploaded_at if resolved_state else None,
-        downloaded_at=resolved_state.config_downloaded_at if resolved_state else None,
-        artifact_etag=resolved_state.config_artifact_etag if resolved_state else None,
-        artifact_version_id=resolved_state.config_artifact_version_id if resolved_state else None,
+        uploaded_at=resolved_state.configuration.uploaded_at if resolved_state else None,
+        downloaded_at=resolved_state.configuration.downloaded_at if resolved_state else None,
+        artifact_etag=resolved_state.configuration.artifact_etag if resolved_state else None,
+        artifact_version_id=resolved_state.configuration.artifact_version_id if resolved_state else None,
         remote_sync=remote_sync,
     )
 
