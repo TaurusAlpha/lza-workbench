@@ -292,3 +292,43 @@ export async function applyWorkspaceImport() {
   }
   return body;
 }
+
+export async function getUninstallPlan(payload = {}) {
+  const response = await fetch("/api/uninstall/plan", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to generate uninstallation plan.");
+  }
+  return body;
+}
+
+export async function applyUninstall(payload) {
+  const response = await fetch("/api/uninstall/apply", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to initiate uninstallation.");
+  }
+  return body;
+}
+
+export async function getUninstallProgress() {
+  const response = await fetch("/api/uninstall/progress");
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to fetch uninstallation progress.");
+  }
+  return body;
+}
+

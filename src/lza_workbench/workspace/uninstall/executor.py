@@ -206,12 +206,14 @@ def _process_retained_resources(
     plan: UninstallPlan,
     options: UninstallOptions,
     progress: UninstallProgress,
+    selected_retained_ids: list[str] | None = None,
     on_event: Callable[[str, str], None] | None = None,
 ) -> None:
     if options.delete_retained_resources:
         updated_records = delete_selected_retained_resources(
             context=context,
             execution_context=execution_context,
+            selected_physical_ids=selected_retained_ids,
             account_targets=plan.accounts,
             assume_role_name=options.assume_role_name,
             on_event=on_event,
@@ -277,6 +279,7 @@ def execute_uninstall(
     execution_context: AwsExecutionContext,
     plan: UninstallPlan,
     options: UninstallOptions,
+    selected_retained_ids: list[str] | None = None,
     on_event: Callable[[str, str], None] | None = None,
 ) -> UninstallProgress:
     """Execute the uninstallation plan step-by-step."""
@@ -313,7 +316,15 @@ def execute_uninstall(
         )
 
     # 4. Retained resources deletion or recording
-    _process_retained_resources(context, execution_context, plan, options, progress, on_event)
+    _process_retained_resources(
+        context,
+        execution_context,
+        plan,
+        options,
+        progress,
+        selected_retained_ids=selected_retained_ids,
+        on_event=on_event,
+    )
 
     # 5. Workspace state metadata cleanup
     _cleanup_workspace_state(context, progress)

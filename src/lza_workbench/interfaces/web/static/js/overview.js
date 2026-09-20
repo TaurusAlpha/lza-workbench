@@ -275,7 +275,7 @@ function renderLifecycleStepper(status) {
 
   return `
     <article class="card card-full lifecycle-card${isCollapsed ? " is-collapsed" : ""}" id="lifecycle-card">
-      <div class="card-header lifecycle-header">
+      <div class="card-header lifecycle-header" id="lifecycle-header" role="button" tabindex="0" aria-expanded="${!isCollapsed}" title="${isCollapsed ? "Click to expand lifecycle stepper" : "Click to collapse lifecycle stepper"}">
         <div class="lifecycle-header-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -284,12 +284,9 @@ function renderLifecycleStepper(status) {
         </div>
         <div class="lifecycle-header-actions">
           <span class="badge badge-${overallLifecycleVariant}">${escapeHtml(overallLifecycleStatus)}</span>
-          <button type="button" class="btn btn-sm btn-ghost btn-toggle-lifecycle" id="btn-toggle-lifecycle" title="${isCollapsed ? "Expand lifecycle stepper" : "Collapse lifecycle stepper"}">
-            <span class="lifecycle-toggle-text">${isCollapsed ? "Expand" : "Collapse"}</span>
-            <svg class="lifecycle-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform: ${isCollapsed ? "rotate(180deg)" : "rotate(0deg)"}; transition: transform 200ms ease;">
-              <polyline points="18 15 12 9 6 15"/>
-            </svg>
-          </button>
+          <svg class="lifecycle-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform: ${isCollapsed ? "rotate(180deg)" : "rotate(0deg)"}; transition: transform 200ms ease; color: var(--text-muted);">
+            <polyline points="18 15 12 9 6 15"/>
+          </svg>
         </div>
       </div>
       <div class="card-body lifecycle-body" id="lifecycle-body"${isCollapsed ? ' style="display: none;"' : ""}>
@@ -487,8 +484,6 @@ export function renderOverview(container, status) {
             ${formatFieldValue(region, { mono: true })}
           </div>
         </div>
-        <div class="context-item">
-        </div>
       </div>
     </article>
   `;
@@ -653,37 +648,86 @@ export function renderOverview(container, status) {
     </div>
   `;
 
+  const dangerZoneCardHtml = `
+    <article class="card card-full card-danger-zone" id="danger-zone-card">
+      <div class="card-header danger-zone-header">
+        <div class="danger-zone-title-group">
+          <div class="danger-zone-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+          <div>
+            <h2 class="card-title">Danger Zone</h2>
+            <span class="danger-zone-desc">Destructive operations and workspace lifecycle decommissioning</span>
+          </div>
+        </div>
+        <span class="badge badge-danger">Irreversible</span>
+      </div>
+      <div class="card-body danger-zone-body">
+        <div class="danger-action-row">
+          <div class="danger-action-info">
+            <strong class="danger-action-title">Uninstall Landing Zone Accelerator</strong>
+            <p class="danger-action-desc">
+              Discover and tear down accelerator-managed CloudFormation stacks in reverse deployment order,
+              clean up configuration S3 buckets, and selectively purge retained resources across target accounts.
+            </p>
+          </div>
+          <div class="danger-action-btn-wrapper">
+            <a href="#/uninstall" class="btn btn-sm btn-outline-danger" id="btn-uninstall-overview">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+              Uninstall Solution...
+            </a>
+          </div>
+        </div>
+      </div>
+    </article>
+  `;
+
   container.innerHTML = [
     contextBarHtml,
     lifecycleStepperHtml,
     nextStepsHtml,
     workloadGridHtml,
+    dangerZoneCardHtml,
   ].filter(Boolean).join("");
 
-  // Bind lifecycle stepper collapse toggle
-  const toggleLifecycleBtn = container.querySelector("#btn-toggle-lifecycle");
-  if (toggleLifecycleBtn) {
-    toggleLifecycleBtn.addEventListener("click", () => {
+  // Bind lifecycle card expand/collapse toggle
+  const lifecycleHeader = container.querySelector("#lifecycle-header");
+  if (lifecycleHeader) {
+    const toggleCollapse = () => {
       const card = container.querySelector("#lifecycle-card");
       const body = container.querySelector("#lifecycle-body");
-      const chevron = toggleLifecycleBtn.querySelector(".lifecycle-chevron");
-      const text = toggleLifecycleBtn.querySelector(".lifecycle-toggle-text");
+      const chevron = lifecycleHeader.querySelector(".lifecycle-chevron");
       if (!body) return;
       const currentlyCollapsed = body.style.display === "none";
       if (currentlyCollapsed) {
         body.style.display = "";
         if (card) card.classList.remove("is-collapsed");
-        if (text) text.textContent = "Collapse";
         if (chevron) chevron.style.transform = "rotate(0deg)";
-        toggleLifecycleBtn.title = "Collapse lifecycle stepper";
+        lifecycleHeader.setAttribute("aria-expanded", "true");
+        lifecycleHeader.title = "Click to collapse lifecycle stepper";
         localStorage.removeItem("lza_lifecycle_collapsed");
       } else {
         body.style.display = "none";
         if (card) card.classList.add("is-collapsed");
-        if (text) text.textContent = "Expand";
         if (chevron) chevron.style.transform = "rotate(180deg)";
-        toggleLifecycleBtn.title = "Expand lifecycle stepper";
+        lifecycleHeader.setAttribute("aria-expanded", "false");
+        lifecycleHeader.title = "Click to expand lifecycle stepper";
         localStorage.setItem("lza_lifecycle_collapsed", "true");
+      }
+    };
+
+    lifecycleHeader.addEventListener("click", toggleCollapse);
+    lifecycleHeader.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        toggleCollapse();
       }
     });
   }

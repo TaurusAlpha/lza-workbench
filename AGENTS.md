@@ -73,3 +73,15 @@ Optimize for code that is easy for a human to read, change, and debug.
 ## Documentation
 
 - Update documentation only when the requested change materially changes documented behavior or architecture.
+
+## Docstring Convention
+
+Every module and every public function/class must have a one-line docstring
+stating its purpose in a single sentence.
+
+- If you cannot summarize it in one line without using "and" to join unrelated
+  responsibilities, the function/module is doing too much — split it before
+  writing the docstring, not after.
+- The one-liner is the sole source of truth for purpose in generated indexes
+  (repo maps, manifests). Do not duplicate this description elsewhere in
+  comments.

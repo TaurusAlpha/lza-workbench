@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from lza_workbench.errors import LzaError
 from lza_workbench.interfaces.web.status import ActiveWorkspaceContext, create_status_router
+from lza_workbench.interfaces.web.uninstall import create_uninstall_router
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -45,5 +46,6 @@ def create_app(
     )
 
     app.include_router(create_status_router(workspace_dir=context))
+    app.include_router(create_uninstall_router(workspace_dir=context))
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app

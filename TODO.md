@@ -315,3 +315,5 @@ AI features remain advisory by default; execution must be a separate explicit ac
 ## Backlog
 
 - [ ] Multi-user/server mode.
+- [ ] Review how progress polling is performed across long-running operations (pipeline watch, uninstallation, etc.) requiring continuous status refresh.
+- [ ] Expand "Environment Context" into a dedicated workspace details page showing AWS Organization context (Control Tower, accounts, OUs) and workspace lifecycle actions.

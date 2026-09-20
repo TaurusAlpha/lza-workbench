@@ -14,6 +14,7 @@ import { escapeHtml, renderOverview } from "./overview.js";
 import { renderPipelineDetails } from "./pipeline.js";
 import { getRecentWorkspaces, recordRecentWorkspace } from "./recents.js";
 import { renderSetup } from "./setup.js";
+import { cleanupUninstallPolling, renderUninstall } from "./uninstall.js";
 import { renderWelcome } from "./welcome.js";
 
 const viewContent = document.querySelector("#view-content") || document.querySelector("#overview");
@@ -354,6 +355,9 @@ function parseRoute() {
   if (clean === "/configuration") {
     return { name: "configuration" };
   }
+  if (clean === "/uninstall") {
+    return { name: "uninstall" };
+  }
   if (clean === "/pipeline/installer") {
     return { name: "pipeline", pipelineType: "installer", executionId };
   }
@@ -691,8 +695,39 @@ async function loadSetup() {
   refresh.disabled = false;
 }
 
+async function loadUninstall() {
+  stopPipelinePolling();
+  cleanupUninstallPolling();
+  updateNavHighlight("overview");
+  if (pageHeader) pageHeader.hidden = false;
+  viewContent.className = "view-container";
+  viewContent.setAttribute("aria-busy", "true");
+  clearNotice();
+  refresh.disabled = true;
+
+  if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench / Decommission";
+  if (pageTitle) pageTitle.textContent = "Uninstall LZA Solution";
+  if (breadcrumb) breadcrumb.hidden = false;
+
+  try {
+    const activeWs = await getActiveWorkspace().catch(() => null);
+    if (activeWs && activeWs.hasWorkspace) {
+      workspacePath.textContent = activeWs.workspaceDir;
+      workspacePath.title = activeWs.workspaceDir;
+    }
+    await renderUninstall(viewContent);
+  } catch (error) {
+    workspacePath.textContent = "Uninstall plan unavailable";
+    showNotice(error.message, "error");
+  } finally {
+    viewContent.setAttribute("aria-busy", "false");
+    refresh.disabled = false;
+  }
+}
+
 function handleRoute() {
   stopPipelinePolling();
+  cleanupUninstallPolling();
   const route = parseRoute();
   if (route.name === "welcome") {
     loadWelcome();
@@ -704,6 +739,8 @@ function handleRoute() {
     loadConfiguration();
   } else if (route.name === "pipeline") {
     loadPipeline(route.pipelineType, route.executionId);
+  } else if (route.name === "uninstall") {
+    loadUninstall();
   } else {
     loadOverview();
   }
