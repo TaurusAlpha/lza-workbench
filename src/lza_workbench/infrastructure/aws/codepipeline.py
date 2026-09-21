@@ -14,8 +14,6 @@ from lza_workbench.infrastructure.aws.errors import classify_aws_error
 
 @dataclass(frozen=True)
 class ActionStateResult:
-    """Observed state of an action within a CodePipeline stage."""
-
     action_name: str
     stage_name: str | None = None
     status: str | None = None
@@ -29,8 +27,6 @@ class ActionStateResult:
 
 @dataclass(frozen=True)
 class StageStateResult:
-    """Observed state of a CodePipeline stage and its actions."""
-
     stage_name: str
     status: str | None = None
     actions: list[ActionStateResult] = field(default_factory=list)
@@ -39,8 +35,6 @@ class StageStateResult:
 
 @dataclass(frozen=True)
 class PipelineStateResult:
-    """Detailed status and stage execution state of an AWS CodePipeline."""
-
     pipeline_name: str
     exists: bool
     status: str | None = None
@@ -53,8 +47,6 @@ class PipelineStateResult:
 
 @dataclass(frozen=True)
 class PipelineExecutionResult:
-    """Status and metadata of an AWS CodePipeline execution."""
-
     pipeline_name: str
     exists: bool = False
     execution_id: str = ""
@@ -67,7 +59,6 @@ class PipelineExecutionResult:
 
 
 def _parse_stage_state(stage: dict[str, Any]) -> StageStateResult:
-    """Convert a CodePipeline stage-state response into an observation."""
     stage_name = stage.get("stageName", "")
     latest_execution = stage.get("latestExecution") or {}
     actions = [
@@ -83,7 +74,6 @@ def _parse_stage_state(stage: dict[str, Any]) -> StageStateResult:
 
 
 def _parse_action_state(action: dict[str, Any], *, stage_name: str) -> ActionStateResult:
-    """Convert a CodePipeline action-state response into an observation."""
     latest_execution = action.get("latestExecution") or {}
     last_status_change = latest_execution.get("lastStatusChange")
     error_details = latest_execution.get("errorDetails") or {}
@@ -101,7 +91,6 @@ def _parse_action_state(action: dict[str, Any], *, stage_name: str) -> ActionSta
 
 
 def _derive_pipeline_status(stages: list[StageStateResult]) -> str:
-    """Derive the pipeline status using CodePipeline stage-state precedence."""
     statuses = {stage.status for stage in stages if stage.status}
     if not statuses:
         return "Not Started"
@@ -123,7 +112,6 @@ def get_pipeline_state(
     client: Any,
     pipeline_name: str,
 ) -> PipelineStateResult:
-    """Get CodePipeline state and stage statuses without mutating AWS."""
     clean_pipeline_name = (pipeline_name or "").strip()
     if not clean_pipeline_name:
         return PipelineStateResult(
@@ -217,7 +205,6 @@ def get_pipeline_execution(
     pipeline_name: str,
     execution_id: str,
 ) -> PipelineExecutionResult:
-    """Fetch status and metadata for a specific CodePipeline execution."""
     clean_pipeline_name = (pipeline_name or "").strip()
     clean_execution_id = (execution_id or "").strip()
     if not clean_pipeline_name or not clean_execution_id:
@@ -289,7 +276,6 @@ def get_latest_pipeline_execution_id(
     client: Any,
     pipeline_name: str,
 ) -> str | None:
-    """Discover the most recent execution ID for a pipeline."""
     clean_pipeline_name = (pipeline_name or "").strip()
     if not clean_pipeline_name:
         return None

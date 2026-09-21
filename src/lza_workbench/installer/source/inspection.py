@@ -19,8 +19,9 @@ if TYPE_CHECKING:
     from lza_workbench.workspace.schema import WorkspaceConfig
 
 
-def github_secret_warning(secret_name: str, exists: bool, error: str | None = None) -> str | None:
-    """Interpret a generic secret observation using the installer prerequisite rule."""
+def build_github_secret_warning(
+    secret_name: str, exists: bool, error: str | None = None
+) -> str | None:
     if error:
         return f"Secrets Manager check for '{secret_name}' failed: {error}"
     if exists:
@@ -176,7 +177,7 @@ def inspect_installer_source(
             client=factory.get_client("secretsmanager"),
             secret_name=source.github_secret_name,
         )
-        warning = github_secret_warning(source.github_secret_name, exists, error)
+        warning = build_github_secret_warning(source.github_secret_name, exists, error)
         if warning:
             raise LzaError(warning)
         return None
@@ -184,7 +185,7 @@ def inspect_installer_source(
 
 
 __all__ = [
-    "github_secret_warning",
+    "build_github_secret_warning",
     "inspect_installer_source",
     "validate_github_repository_access",
 ]

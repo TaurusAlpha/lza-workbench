@@ -12,7 +12,6 @@ def get_parameter_value(
     client: Any,
     name: str,
 ) -> str | None:
-    """Return a plain SSM parameter value, or ``None`` when it cannot be read."""
     if not name.strip():
         return None
 

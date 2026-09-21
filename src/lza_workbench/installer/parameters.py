@@ -226,19 +226,19 @@ def _resolve_existing_config_repo_params(
 
 
 def _apply_schema_defaults(
-    params: dict[str, str],
-    schema: dict[str, dict[str, Any]] | None,
+    parameters: dict[str, str],
+    parameter_schemas: dict[str, dict[str, Any]] | None,
     extra_parameters: dict[str, str],
 ) -> None:
-    if not schema:
+    if not parameter_schemas:
         return
-    for key, info in schema.items():
-        if key in params:
+    for key, info in parameter_schemas.items():
+        if key in parameters:
             continue
         if key in extra_parameters:
-            params[key] = extra_parameters[key]
+            parameters[key] = extra_parameters[key]
         elif "Default" in info:
-            params[key] = str(info["Default"])
+            parameters[key] = str(info["Default"])
 
 
 def build_installer_cfn_parameters(

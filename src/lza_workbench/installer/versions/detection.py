@@ -11,7 +11,6 @@ from lza_workbench.installer.versions.constants import normalize_lza_version
 
 
 def installer_version_parameter_name(accelerator_prefix: str, stack_name: str) -> str:
-    """Return the installer-version SSM parameter name used by the LZA template."""
     prefix = accelerator_prefix.strip() or "AWSAccelerator"
     one_word_prefix = "accelerator" if prefix.lower() == "awsaccelerator" else prefix
     return f"/{one_word_prefix}/{stack_name.strip()}/version"

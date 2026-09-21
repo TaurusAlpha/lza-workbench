@@ -93,7 +93,6 @@ def configure_anonymous_data(content: str, enable: bool) -> str:
 
 
 def extract_template_version(content: str) -> str | None:
-    """Extract LZA version from template description if present."""
     match = re.search(r"Version\s+v?([0-9]+\.[0-9]+\.[0-9]+)", content)
     if match:
         return f"v{match.group(1)}"
@@ -180,7 +179,6 @@ def _apply_anonymous_data_setting(template_path: Path, enable_anon: bool) -> Non
 def resolve_installer_template(
     workspace_dir: Path, config: WorkspaceConfig, dry_run: bool = False
 ) -> Path:
-    """Resolve the configured installer template into a local usable template path."""
     template_config = config.installer.stack_template
     if template_config.source == "local":
         template_path = _resolve_local_installer_template(workspace_dir, template_config.path)
@@ -205,7 +203,6 @@ def resolve_installer_template(
 
 
 def inspect_template_parameters(template_path: Path) -> dict[str, dict[str, Any]]:
-    """Return parameter schema definitions from a JSON installer template."""
     if not template_path.is_file():
         raise LzaError(f"Installer template was not found: {template_path}")
 

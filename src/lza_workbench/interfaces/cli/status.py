@@ -180,7 +180,6 @@ def render_root_status(result: RootStatusResult) -> None:
 def status_root_command(
     target_dir: Path | None = None,
 ) -> None:
-    """Display overall summary status for the customer LZA workspace."""
     result = get_root_status_workflow(target_dir=target_dir)
     render_root_status(result)
 
@@ -375,7 +374,6 @@ def render_installer_status(result: InstallerStatusResult) -> None:
 def status_installer_command(
     target_dir: Path | None = None,
 ) -> None:
-    """Query AWS and render an installer status report."""
     result = get_installer_status_workflow(
         target_dir=target_dir,
     )
@@ -624,7 +622,6 @@ def render_config_status(result: ConfigurationStatusResult, *, has_state: bool) 
 def status_config_command(
     target_dir: Path | None = None,
 ) -> None:
-    """Query workspace configuration metadata and display configuration status."""
     result = get_config_status_workflow(target_dir=target_dir)
     render_config_status(result, has_state=result.synchronization.has_state)
 

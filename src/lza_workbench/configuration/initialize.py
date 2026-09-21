@@ -57,7 +57,6 @@ def init_config_workflow(
     force: bool = False,
     dry_run: bool = False,
 ) -> ConfigInitResult:
-    """Execute configuration initialization and return structured result."""
     context = load_workspace_context(
         target_dir=target_dir,
         required_capabilities=(WorkspaceCapability.METADATA_VALID,),

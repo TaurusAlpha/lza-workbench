@@ -204,7 +204,6 @@ def read_zip_manifest(path: Path) -> dict[str, tuple[int, int]]:
 def scan_directory_files(
     directory: Path, exclude_dirs: set[str], exclude_files: set[str] | None = None
 ) -> dict[str, str]:
-    """Return included relative paths mapped to their SHA-256 checksum."""
     files_map: dict[str, str] = {}
     if not directory.is_dir():
         return files_map
@@ -221,7 +220,6 @@ def scan_directory_files(
 def compute_config_directory_digest(
     directory: Path, exclude_dirs: set[str], exclude_files: set[str]
 ) -> str:
-    """Return a deterministic digest of included configuration files."""
     digest = hashlib.sha256()
     for relative_path, file_digest in sorted(
         scan_directory_files(directory, exclude_dirs, exclude_files).items()
@@ -253,14 +251,11 @@ def is_path_excluded(
 def count_config_files(
     config_dir: Path, exclude_dirs: set[str], exclude_files: set[str] | None = None
 ) -> int:
-    """Count included configuration files."""
     return len(scan_directory_files(config_dir, exclude_dirs, exclude_files))
 
 
 @dataclass(frozen=True)
 class PackagingIgnoreRule:
-    """One root ignore-file rule for S3 packaging."""
-
     pattern: str
     negated: bool
     directory_only: bool

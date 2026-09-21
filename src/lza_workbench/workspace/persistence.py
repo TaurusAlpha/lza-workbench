@@ -23,7 +23,6 @@ def get_state_path(workspace_dir: Path) -> Path:
 
 
 def load_workspace_config(workspace_dir: Path) -> WorkspaceConfig:
-    """Read and validate lza-workspace.yaml from a given workspace directory."""
     path = get_config_path(workspace_dir)
     yaml = YAML()
     try:
@@ -36,7 +35,6 @@ def load_workspace_config(workspace_dir: Path) -> WorkspaceConfig:
 
 
 def write_workspace_config(workspace_dir: Path, config: WorkspaceConfig) -> None:
-    """Write validated workspace configuration into the workspace directory as YAML."""
     path = get_config_path(workspace_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -47,7 +45,6 @@ def write_workspace_config(workspace_dir: Path, config: WorkspaceConfig) -> None
 
 
 def load_workspace_state(workspace_dir: Path) -> WorkspaceState:
-    """Read and validate mutable operational state from .lza/state.json."""
     path = get_state_path(workspace_dir)
     if not path.exists():
         return WorkspaceState()
@@ -59,7 +56,6 @@ def load_workspace_state(workspace_dir: Path) -> WorkspaceState:
 
 
 def write_workspace_state(workspace_dir: Path, state: WorkspaceState) -> None:
-    """Write operational state as JSON into .lza/state.json."""
     path = get_state_path(workspace_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(

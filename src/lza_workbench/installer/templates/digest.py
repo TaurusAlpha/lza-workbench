@@ -11,7 +11,6 @@ from lza_workbench.infrastructure.aws.cloudformation import CfnDeploymentPlanRes
 
 
 def get_installer_template_digest(template_path: Path) -> str:
-    """Return a stable digest for a resolved installer template."""
     try:
         return sha256(template_path.read_bytes()).hexdigest()
     except OSError as exc:

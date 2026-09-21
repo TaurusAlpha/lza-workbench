@@ -299,7 +299,6 @@ def installer_deploy_command(
     force: params.Force = False,
     target_dir: Path | None = None,
 ) -> None:
-    """Deploy the LZA installer CloudFormation stack for the current workspace."""
     try:
         preparation = prepare_installer_deployment(target_dir=target_dir, dry_run=dry_run)
     except InstallerConfigValidationError as exc:
@@ -448,7 +447,6 @@ def installer_import_command(
     dry_run: params.DryRun = False,
     target_dir: Path | None = None,
 ) -> InstallerImportResult:
-    """Import deployed CloudFormation installer stack parameters into local workspace."""
     result = import_installer_workflow(
         target_dir=target_dir,
         stack_name=installer_stack_name,

@@ -13,7 +13,6 @@ console = Console()
 
 
 def format_timestamp(ts: Any) -> str | None:
-    """Format any timestamp string or datetime object to standard 'YYYY-MM-DD HH:MM:SS UTC'."""
     if ts is None or ts == "" or ts == "None":
         return None
     if isinstance(ts, datetime):
@@ -36,7 +35,6 @@ def format_timestamp(ts: Any) -> str | None:
 
 
 def _humanize_status_text(status: str) -> str:
-    """Convert raw AWS enum status like 'UPDATE_COMPLETE' to human friendly 'Update Complete'."""
     cfn_map = {
         "CREATE_COMPLETE": "Create Complete",
         "CREATE_IN_PROGRESS": "Create In Progress",
@@ -64,7 +62,6 @@ def _humanize_status_text(status: str) -> str:
 
 
 def format_duration(seconds: float | None) -> str | None:
-    """Format duration in seconds into human readable string (e.g. 2m 31s or 45s)."""
     if seconds is None or seconds <= 0:
         return None
     total_secs = int(round(seconds))
@@ -78,7 +75,6 @@ def format_duration(seconds: float | None) -> str | None:
 
 
 def format_status(status: str | None) -> str:
-    """Format a status with humanized wording and consistent Rich color tags."""
     if not status:
         return "[dim]Unknown[/dim]"
 

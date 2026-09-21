@@ -18,7 +18,6 @@ from lza_workbench.pipeline.model import (
 
 
 def stage_state_to_pipeline_stage(stage: StageStateResult) -> PipelineStageState:
-    """Convert an AWS StageStateResult to a canonical PipelineStageState."""
     return PipelineStageState(
         stage_name=stage.stage_name,
         status=stage.status,
@@ -41,7 +40,6 @@ def stage_state_to_pipeline_stage(stage: StageStateResult) -> PipelineStageState
 
 
 def pipeline_state_to_snapshot(state_result: PipelineStateResult) -> PipelineExecutionSnapshot:
-    """Convert an AWS PipelineStateResult to a canonical PipelineExecutionSnapshot."""
     return PipelineExecutionSnapshot(
         pipeline_name=state_result.pipeline_name,
         exists=state_result.exists,

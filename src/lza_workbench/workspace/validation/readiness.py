@@ -17,11 +17,11 @@ if TYPE_CHECKING:
     from lza_workbench.workspace.schema import WorkspaceConfig
 
 
-def validate_workspace_structure(
+def validate_workspace_init_target(
     workspace_dir: Path,
     force: bool = False,
 ) -> bool:
-    """Validate an init target and return whether it already exists."""
+    """Validate an init target directory and return whether it already exists."""
     target = normalize_path(workspace_dir)
     if not target.exists():
         return False
@@ -80,5 +80,5 @@ def require_capabilities(
 
 __all__ = [
     "require_capabilities",
-    "validate_workspace_structure",
+    "validate_workspace_init_target",
 ]

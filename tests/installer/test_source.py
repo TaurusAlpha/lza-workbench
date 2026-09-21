@@ -6,16 +6,16 @@ import urllib.error
 from unittest.mock import MagicMock, patch
 
 from lza_workbench.installer.source import (
-    github_secret_warning,
+    build_github_secret_warning,
     validate_github_repository_access,
 )
 
 
-def test_github_secret_warning() -> None:
-    assert github_secret_warning("accelerator/github-token", exists=True) is None
-    warn = github_secret_warning("accelerator/github-token", exists=False)
+def test_build_github_secret_warning() -> None:
+    assert build_github_secret_warning("accelerator/github-token", exists=True) is None
+    warn = build_github_secret_warning("accelerator/github-token", exists=False)
     assert warn is not None and "was not found" in warn
-    warn_err = github_secret_warning(
+    warn_err = build_github_secret_warning(
         "accelerator/github-token", exists=False, error="access denied"
     )
     assert warn_err is not None and "failed: access denied" in warn_err

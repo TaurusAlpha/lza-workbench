@@ -11,8 +11,6 @@ from lza_workbench.errors import LzaError
 
 
 class AwsClientFactory:
-    """Factory for creating and managing authenticated AWS boto3 sessions and clients."""
-
     def __init__(
         self,
         profile: str | None = None,
@@ -87,7 +85,6 @@ class AwsClientFactory:
         return self.get_session().client(service_name)
 
     def for_region(self, region: str) -> AwsClientFactory:
-        """Derive a new factory for a different AWS region."""
         return AwsClientFactory(
             profile=self.profile,
             region=region,
@@ -96,7 +93,6 @@ class AwsClientFactory:
         )
 
     def for_profile(self, profile: str, region: str | None = None) -> AwsClientFactory:
-        """Derive a new factory for a specific AWS profile."""
         return AwsClientFactory(
             profile=profile,
             region=region or self.region,
@@ -109,7 +105,6 @@ class AwsClientFactory:
         role_name: str,
         region: str | None = None,
     ) -> AwsClientFactory:
-        """Derive a new factory targeting a member account by assuming a role."""
         target_role_arn = f"arn:aws:iam::{account_id}:role/{role_name}"
         return AwsClientFactory(
             profile=self.profile,
@@ -120,7 +115,6 @@ class AwsClientFactory:
 
 
     def validate_identity(self) -> dict[str, str]:
-        """Validate external AWS credentials and return caller identity."""
         auth_descr = self.role_arn or self.profile or "default"
         try:
             if not self.role_arn and self.prime_credentials:
@@ -142,8 +136,6 @@ class AwsClientFactory:
 
 @dataclass(frozen=True)
 class AwsExecutionContext:
-    """Resolved external AWS authentication for one command execution."""
-
     region: str
     factory: AwsClientFactory
     identity: dict[str, str] | None
@@ -151,7 +143,6 @@ class AwsExecutionContext:
 
     @property
     def is_live(self) -> bool:
-        """Return True if AWS identity was successfully validated."""
         return self.identity is not None
 
 

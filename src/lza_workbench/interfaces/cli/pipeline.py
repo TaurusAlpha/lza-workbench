@@ -58,7 +58,6 @@ def pipeline_start_command(
     allow_concurrent: params.AllowConcurrent = False,
     target_dir: Path | None = None,
 ) -> PipelineStartResult:
-    """Start an LZA CodePipeline execution."""
     result = start_pipeline_workflow(
         target_dir=target_dir,
         pipeline_name=pipeline_name,
@@ -110,8 +109,6 @@ def _format_action_table_detail(action: PipelineActionState) -> str:
 
 
 class PipelineWatchMonitor:
-    """Manages live updating status display during pipeline polling."""
-
     def __init__(self) -> None:
         self._status_ctx: Any | None = None
         self._live_status: Any | None = None
@@ -141,7 +138,6 @@ class PipelineWatchMonitor:
             self._live_status.update(msg)
 
     def stop(self) -> None:
-        """Clean up live status display."""
         if self._status_ctx is not None:
             try:
                 self._status_ctx.__exit__(None, None, None)
@@ -279,7 +275,6 @@ def pipeline_watch_command(
     verbose: params.Verbose = False,
     target_dir: Path | None = None,
 ) -> PipelineWatchResult:
-    """Monitor an existing LZA CodePipeline execution."""
     monitor = PipelineWatchMonitor()
     try:
         result = watch_pipeline_workflow(

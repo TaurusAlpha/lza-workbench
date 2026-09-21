@@ -81,8 +81,6 @@ class PackagingExcludeConfig(BaseModel):
 
 
 class PackagingConfig(BaseModel):
-    """Configuration archive packaging settings."""
-
     model_config = ConfigDict(extra="forbid", strict=False)
 
     exclude: PackagingExcludeConfig = Field(default_factory=PackagingExcludeConfig)

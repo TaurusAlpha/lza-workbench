@@ -10,8 +10,6 @@ from lza_workbench.infrastructure.aws.errors import classify_aws_error
 
 @dataclass(frozen=True)
 class SecretObservation:
-    """Typed observation of an AWS Secrets Manager secret."""
-
     name: str
     exists: bool
     accessible: bool = False
@@ -83,7 +81,6 @@ def create_or_update_secret(
     secret_value: str,
     description: str = "",
 ) -> None:
-    """Create or update a secret value in Secrets Manager."""
     exists, _ = inspect_secret_exists(client=client, secret_name=secret_name)
     if exists:
         client.put_secret_value(SecretId=secret_name, SecretString=secret_value)

@@ -13,16 +13,12 @@ CONFIG_S3_OBJECT_KEY = f"zipped/{CONFIG_ARCHIVE_FILENAME}"
 
 @dataclass(frozen=True)
 class S3ConfigurationDestination:
-    """The fixed S3 destination for an LZA configuration archive."""
-
     bucket: str
     object_key: str = CONFIG_S3_OBJECT_KEY
 
 
 @dataclass(frozen=True)
 class GitConfigurationDestination:
-    """The configured Git destination for an LZA configuration repository."""
-
     remote_url: str
     branch: str
 
@@ -33,7 +29,6 @@ def resolve_s3_configuration_destination(
     account_id: str | None,
     region: str | None,
 ) -> S3ConfigurationDestination:
-    """Resolve and validate the fixed LZA configuration S3 destination."""
     if not account_id or not region:
         raise LzaError(
             "Cannot resolve the LZA configuration S3 bucket without an AWS account ID and region."
@@ -56,7 +51,6 @@ def resolve_git_configuration_destination(
     branch: str | None,
     region: str | None,
 ) -> GitConfigurationDestination:
-    """Resolve the configured Git remote and deployable branch."""
     resolved_branch = branch or "main"
     if repository_type == "codecommit":
         if not region:

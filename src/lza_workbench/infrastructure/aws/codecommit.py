@@ -12,8 +12,6 @@ from lza_workbench.infrastructure.aws.errors import classify_aws_error
 
 @dataclass(frozen=True)
 class CodeCommitRepositoryStatus:
-    """Observed CodeCommit repository and branch availability."""
-
     repository_name: str
     branch_name: str
     exists: bool

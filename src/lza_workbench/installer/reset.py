@@ -30,7 +30,6 @@ from lza_workbench.workspace.validation import WorkspaceCapability
 
 
 def reset_installer_settings(*, target_dir: Path | None = None) -> InstallerSettingsResult:
-    """Revert workspace installer configuration to currently deployed stack parameters."""
     ctx = load_workspace_context(
         target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
     )

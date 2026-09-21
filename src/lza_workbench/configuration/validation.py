@@ -42,10 +42,9 @@ def _custom_tag_constructor(loader: Any, tag_suffix: str, node: Any) -> Any:
     return str(node)
 
 
-def _is_placeholder(val: Any) -> bool:
-    """Check if a value is an un-rendered replacement variable or template placeholder."""
-    if isinstance(val, str):
-        cleaned = val.strip()
+def _is_placeholder(value: Any) -> bool:
+    if isinstance(value, str):
+        cleaned = value.strip()
         return (cleaned.startswith("{{") and cleaned.endswith("}}")) or (
             cleaned.startswith("${") and cleaned.endswith("}")
         )

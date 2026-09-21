@@ -23,17 +23,13 @@ STANDARD_CONFIG_PATHS = (
 )
 
 
-def resolve_path_value(template_context: Any, path: str) -> str | None:
-    """Dynamically resolve a dot-separated attribute or key path from an object.
-
-    Supports paths starting with or without 'config.' prefix (e.g.
-    'customer.slug' or 'config.customer.slug').
-    """
-    if path.startswith("config."):
-        path = path[len("config.") :]
+def resolve_path_value(template_context: Any, key_path: str) -> str | None:
+    """Resolve a dot-separated attribute or key path, tolerating an optional 'config.' prefix."""
+    if key_path.startswith("config."):
+        key_path = key_path[len("config.") :]
 
     current: Any = template_context
-    for part in path.split("."):
+    for part in key_path.split("."):
         if current is None:
             return None
         if isinstance(current, dict):

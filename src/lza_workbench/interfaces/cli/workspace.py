@@ -84,7 +84,6 @@ def workspace_init_command(
     skip_aws_check: params.SkipAwsCheck = False,
     interactive: bool = False,
 ) -> None:
-    """Create a customer workspace using the configured packaged template."""
     customer_slug = normalize_customer_slug(customer_name)
     default_workspace_dir = resolve_init_workspace_dir(customer_slug)
 
@@ -222,7 +221,6 @@ def workspace_import_command(
     prime_credentials: params.PrimeCredentials = False,
     interactive: bool = False,
 ) -> None:
-    """Adopt an existing customer-owned LZA configuration."""
     discovery = discover_import_workspace(
         workspace_dir=workspace_dir,
         config_dir=config_dir,

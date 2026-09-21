@@ -25,7 +25,7 @@ from lza_workbench.workspace.schema import (
     WorkspaceConfig,
     WorkspaceState,
 )
-from lza_workbench.workspace.validation import validate_workspace_structure
+from lza_workbench.workspace.validation import validate_workspace_init_target
 
 
 @dataclass(frozen=True)
@@ -56,7 +56,7 @@ def init_workspace(
     customer_slug = normalize_customer_slug(customer_name)
     resolved_workspace_dir = resolve_init_workspace_dir(customer_slug, workspace_dir)
 
-    existing_directory = validate_workspace_structure(resolved_workspace_dir, force)
+    existing_directory = validate_workspace_init_target(resolved_workspace_dir, force)
 
     if aws_auth_type not in ("profile", "role_arn"):
         raise LzaError(f"Invalid AWS auth type: {aws_auth_type}")
@@ -136,5 +136,5 @@ __all__ = [
     "init_workspace",
     "overwrite_workspace_metadata",
     "planned_write_paths",
-    "validate_workspace_structure",
+    "validate_workspace_init_target",
 ]

@@ -22,7 +22,6 @@ def diff_configuration(
     *,
     workspace_dir: Path | None = None,
 ) -> ConfigDiffExecutionResult:
-    """Compare local configuration against remote or cached state."""
     ctx = load_workspace_context(
         target_dir=workspace_dir,
         required_capabilities=(

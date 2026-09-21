@@ -15,7 +15,6 @@ def schedule_key_deletion(
     key_id: str,
     pending_window_days: int = 7,
 ) -> None:
-    """Schedule deletion for a KMS customer-managed key."""
     clean_key = (key_id or "").strip()
     if not clean_key:
         raise LzaError("KMS Key ID must not be empty")

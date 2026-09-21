@@ -30,8 +30,6 @@ from lza_workbench.workspace.validation import WorkspaceCapability
 
 @dataclass(frozen=True)
 class InstallerStatusResult:
-    """All data required to render an installer status report."""
-
     workspace_dir: Path
     config: WorkspaceConfig
     state: WorkspaceState | None
@@ -195,7 +193,6 @@ def get_installer_status_workflow(
     state: WorkspaceState | None = None,
     workspace_dir: Path | None = None,
 ) -> InstallerStatusResult:
-    """Query AWS and return installer status data (read-only)."""
     if config is not None and workspace_dir is not None:
         resolved_workspace_dir = workspace_dir
         resolved_config = config

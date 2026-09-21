@@ -22,15 +22,11 @@ class WorkspaceModel(BaseModel):
 
 
 class CustomerConfig(WorkspaceModel):
-    """Customer identity stored in lza-workspace.yaml."""
-
     name: str
     slug: str
 
 
 class AwsConfig(WorkspaceModel):
-    """AWS defaults stored in lza-workspace.yaml."""
-
     account_id: str | None = None
     region: str = "us-east-1"
     profile: str | None = None
@@ -39,7 +35,6 @@ class AwsConfig(WorkspaceModel):
 
     @model_validator(mode="after")
     def require_profile(self) -> AwsConfig:
-        """Require either an AWS profile or role ARN."""
         has_profile = bool(self.profile and self.profile.strip())
         has_role_arn = bool(self.role_arn and self.role_arn.strip())
         if not has_profile and not has_role_arn:
@@ -48,8 +43,6 @@ class AwsConfig(WorkspaceModel):
 
 
 class LzaConfig(WorkspaceModel):
-    """Landing Zone Accelerator settings stored in lza-workspace.yaml."""
-
     version: str = "v1.15.5"
     accelerator_prefix: str = Field(
         default="AWSAccelerator",
@@ -77,16 +70,12 @@ class PipelinesConfig(WorkspaceModel):
 
 
 class CliConfig(WorkspaceModel):
-    """Default behavior for interactive and pipeline CLI operations."""
-
     debug: bool = False
     validate_aws_credentials: bool = False
     dry_run: bool = False
 
 
 class WorkspaceConfig(WorkspaceModel):
-    """Validated representation of lza-workspace.yaml."""
-
     schema_version: int = 2
     customer: CustomerConfig
     aws: AwsConfig
@@ -120,8 +109,6 @@ class WorkspaceConfig(WorkspaceModel):
 
 
 class WorkspaceState(WorkspaceModel):
-    """Mutable operational metadata stored in .lza/state.json."""
-
     initialized_at: datetime | None = None
     updated_at: datetime | None = None
     management_account_id: str | None = None

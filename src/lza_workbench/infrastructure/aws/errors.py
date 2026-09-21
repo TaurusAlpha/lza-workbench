@@ -9,8 +9,6 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 
 class AwsErrorCategory(StrEnum):
-    """Normalized category of an AWS client or API failure."""
-
     UNAVAILABLE = "UNAVAILABLE"
     ACCESS_DENIED = "ACCESS_DENIED"
     NOT_FOUND = "NOT_FOUND"
@@ -19,8 +17,6 @@ class AwsErrorCategory(StrEnum):
 
 @dataclass(frozen=True)
 class AwsErrorInfo:
-    """Classified AWS error with preserved original message and code."""
-
     category: AwsErrorCategory
     message: str
     code: str | None = None
@@ -28,17 +24,14 @@ class AwsErrorInfo:
 
     @property
     def is_unavailable(self) -> bool:
-        """Return True if the error indicates AWS is unreachable or unauthenticated."""
         return self.category == AwsErrorCategory.UNAVAILABLE
 
     @property
     def is_access_denied(self) -> bool:
-        """Return True if authenticated but lacking IAM authorization."""
         return self.category == AwsErrorCategory.ACCESS_DENIED
 
     @property
     def is_not_found(self) -> bool:
-        """Return True if the target resource does not exist."""
         return self.category == AwsErrorCategory.NOT_FOUND
 
 
@@ -97,7 +90,6 @@ _UNAVAILABLE_BOTOCORE_EXCEPTIONS = (
 
 
 def classify_aws_error(exc: Exception) -> AwsErrorInfo:
-    """Classify an exception raised during an AWS client operation."""
     if isinstance(exc, ClientError):
         error_dict = exc.response.get("Error", {})
         code = error_dict.get("Code", "")

@@ -20,10 +20,8 @@ from lza_workbench.infrastructure.aws.session import resolve_aws_execution_conte
 from lza_workbench.installer.parameters import build_installer_cfn_parameters
 from lza_workbench.installer.source import (
     CodeCommitPlanResult,
+    build_github_secret_warning,
     prepare_codecommit_source_plan,
-)
-from lza_workbench.installer.source import (
-    github_secret_warning as build_github_secret_warning,
 )
 from lza_workbench.installer.templates import (
     get_installer_template_digest,
@@ -40,8 +38,6 @@ from lza_workbench.workspace.validation import WorkspaceCapability
 
 @dataclass(frozen=True)
 class InstallerPlanResult:
-    """All data needed to render a read-only installer deployment plan."""
-
     workspace_dir: Path
     config: WorkspaceConfig
     profile: str
@@ -92,7 +88,6 @@ def plan_installer_workflow(
     target_dir: Path | None = None,
     dry_run: bool = False,
 ) -> InstallerPlanResult:
-    """Inspect AWS and return a plan for the persisted installer configuration."""
     ctx = load_workspace_context(
         target_dir,
         required_capabilities=(

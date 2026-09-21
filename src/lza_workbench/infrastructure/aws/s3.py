@@ -160,7 +160,6 @@ def put_s3_bucket_versioning(
     bucket_name: str,
     enabled: bool = True,
 ) -> None:
-    """Configure bucket versioning status."""
     clean_bucket = bucket_name.strip()
     status = "Enabled" if enabled else "Suspended"
     try:
@@ -191,7 +190,6 @@ def put_s3_bucket_encryption(
     bucket_name: str,
     kms_key_id: str | None = None,
 ) -> None:
-    """Configure default AWS KMS encryption on an S3 bucket."""
     clean_bucket = bucket_name.strip()
     rule_config: dict[str, Any] = {
         "SSEAlgorithm": "aws:kms",
@@ -257,7 +255,6 @@ def upload_s3_file(
     object_key: str,
     extra_args: dict[str, Any] | None = None,
 ) -> tuple[str | None, str | None]:
-    """Upload any local file to S3 bucket and return object (etag, version_id)."""
     clean_bucket = bucket_name.strip()
     clean_key = object_key.strip().lstrip("/")
     try:

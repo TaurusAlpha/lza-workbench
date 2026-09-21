@@ -12,7 +12,6 @@ WORKSPACE_STATE_FILE = Path(".lza") / "state.json"
 
 
 def normalize_customer_slug(customer_name: str) -> str:
-    """Normalize a customer name into a filesystem-safe slug."""
     slug = customer_name.strip().lower()
     slug = re.sub(r"[\s_]+", "-", slug)
     slug = re.sub(r"[^a-z0-9-]+", "", slug)
@@ -23,17 +22,14 @@ def normalize_customer_slug(customer_name: str) -> str:
 
 
 def normalize_path(path: Path) -> Path:
-    """Consistently expand user home directory and resolve path."""
     return path.expanduser().resolve()
 
 
 def is_workspace_dir(path: Path) -> bool:
-    """Return whether a directory declares itself as a workspace."""
     return (normalize_path(path) / WORKSPACE_CONFIG_FILE).is_file()
 
 
 def resolve_workspace_dir(target_dir: Path | None = None) -> Path:
-    """Find the workspace directory at or above a target path."""
     current = normalize_path(target_dir or Path.cwd())
     for directory in [current, *current.parents]:
         if is_workspace_dir(directory):
@@ -44,7 +40,6 @@ def resolve_workspace_dir(target_dir: Path | None = None) -> Path:
 
 
 def resolve_init_workspace_dir(customer_name: str, workspace_dir: Path | None = None) -> Path:
-    """Resolve an explicit init target or the default customer workspace path."""
     if workspace_dir is not None:
         return normalize_path(workspace_dir)
     return normalize_path(Path.cwd() / customer_name)

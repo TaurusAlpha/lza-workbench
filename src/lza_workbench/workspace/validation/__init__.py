@@ -7,7 +7,7 @@ from lza_workbench.workspace.validation.capabilities import (
 )
 from lza_workbench.workspace.validation.readiness import (
     require_capabilities,
-    validate_workspace_structure,
+    validate_workspace_init_target,
 )
 
 __all__ = [
@@ -15,5 +15,5 @@ __all__ = [
     "WorkspaceCapability",
     "evaluate_workspace_assessment",
     "require_capabilities",
-    "validate_workspace_structure",
+    "validate_workspace_init_target",
 ]

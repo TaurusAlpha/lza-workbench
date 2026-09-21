@@ -15,8 +15,6 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class PipelineSummary:
-    """Concise operational summary of a CodePipeline."""
-
     name: str
     exists: bool = False
     status: str | None = None
@@ -33,8 +31,6 @@ class PipelineSummary:
 
 @dataclass(frozen=True)
 class InstallerStackSummary:
-    """Concise operational summary of the CloudFormation installer stack."""
-
     name: str
     status: str | None = None
     exists: bool = False
@@ -44,8 +40,6 @@ class InstallerStackSummary:
 
 @dataclass(frozen=True)
 class ConfigurationRepoSummary:
-    """Concise operational summary of configuration repository and local git state."""
-
     repository_type: str
     target: str | None = None
     local_git_branch: str | None = None
@@ -58,8 +52,6 @@ class ConfigurationRepoSummary:
 
 @dataclass(frozen=True)
 class OverallHealthSummary:
-    """Concise overall deployment health summary."""
-
     installer: str
     configuration: str
     workspace: str
@@ -68,8 +60,6 @@ class OverallHealthSummary:
 
 @dataclass(frozen=True)
 class RootStatusResult:
-    """All data needed to render the root workspace status report."""
-
     workspace_dir: Path
     customer_name: str
     lza_version: str

@@ -8,8 +8,6 @@ from pydantic import BaseModel, ConfigDict
 
 
 class InstallerRuntimeState(BaseModel):
-    """Operational metadata recorded for the LZA installer stack."""
-
     model_config = ConfigDict(extra="forbid", strict=False)
 
     stack_id: str | None = None

@@ -113,7 +113,6 @@ def prepare_installer_template_sync(
 
 
 def write_installer_template(*, template_path: Path, template_body: str) -> None:
-    """Persist a prepared installer template at its resolved workspace path."""
     try:
         template_path.parent.mkdir(parents=True, exist_ok=True)
         template_path.write_text(template_body, encoding="utf-8")
@@ -130,7 +129,6 @@ def sync_installer_template(
     state: WorkspaceState,
     template_body: str,
 ) -> Path:
-    """Persist the live installer template used by an imported stack."""
     template_path = prepare_installer_template_sync(
         workspace_dir=workspace_dir,
         config=config,

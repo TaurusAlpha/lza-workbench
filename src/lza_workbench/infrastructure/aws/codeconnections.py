@@ -10,8 +10,6 @@ from lza_workbench.infrastructure.aws.errors import classify_aws_error
 
 @dataclass(frozen=True)
 class CodeConnectionStatusResult:
-    """Status and metadata of an AWS CodeConnection."""
-
     arn: str
     name: str | None = None
     status: str | None = None  # AVAILABLE, PENDING, ERROR, NOT_FOUND, INACCESSIBLE, UNCHECKED

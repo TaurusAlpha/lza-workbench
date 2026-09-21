@@ -27,13 +27,11 @@ def normalize_lza_version(version: str | None) -> str:
 
 
 def version_to_branch(version: str | None) -> str:
-    """Convert an LZA version into its official installer source branch."""
     normalized = normalize_lza_version(version)
     return "main" if normalized == "latest" else f"release/{normalized}"
 
 
 def branch_to_version(branch: str | None) -> str:
-    """Extract a canonical LZA version from an installer source branch."""
     cleaned = (branch or "").strip()
     if not cleaned:
         return "Unknown"

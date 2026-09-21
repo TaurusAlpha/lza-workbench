@@ -35,8 +35,6 @@ KNOWN_INSTALLER_PARAMETER_NAMES = frozenset(
 
 
 class InstallerStackTemplateConfig(BaseModel):
-    """Source of the CloudFormation template for the installer stack."""
-
     model_config = ConfigDict(extra="forbid", strict=False)
 
     source: Literal["amazon", "local", "git", "s3"] = "amazon"
@@ -46,7 +44,6 @@ class InstallerStackTemplateConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_source(self) -> InstallerStackTemplateConfig:
-        """Validate source and set default Amazon path if empty."""
         if self.source == "amazon" and not self.path:
             self.path = (
                 "https://s3.amazonaws.com/solutions-reference/"
@@ -57,8 +54,6 @@ class InstallerStackTemplateConfig(BaseModel):
 
 
 class InstallerSourceCodeConfig(BaseModel):
-    """Source code consumed by the installer pipeline."""
-
     model_config = ConfigDict(extra="forbid", strict=False)
 
     repository_type: Literal["github", "codecommit", "s3", "codeconnection"] = Field(
@@ -140,8 +135,6 @@ class InstallerOptionsConfig(BaseModel):
 
 
 class LzaInstaller(BaseModel):
-    """Installer defaults persisted for later commands."""
-
     model_config = ConfigDict(extra="forbid", strict=False)
 
     local_path: str = "aws-accelerator-installer"
@@ -166,8 +159,6 @@ class LzaInstaller(BaseModel):
 
 
 class PipelineInstaller(BaseModel):
-    """A named installer LZA pipeline."""
-
     model_config = ConfigDict(extra="forbid", strict=False)
 
     name: str = "AWSAccelerator-Installer"
