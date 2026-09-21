@@ -5,7 +5,7 @@
 - Read only the files needed for the task.
 - Read `PROJECT.md` when architecture or repository conventions are relevant.
 - Read `TODO.md` only when the task depends on planned or unresolved work recorded there.
-- Inspect broader repository context only when needed to understand ownership, dependencies, or existing patterns.
+- Use `.repomix/repo-map.md` as a compressed signature-level codebase index before searching individual source files. Search or inspect only the relevant sections; do not load the entire file unless necessary. If missing (it is gitignored), run `make repo-map` to generate it.- Inspect broader repository context only when needed to understand ownership, dependencies, or existing patterns.
 
 ## Rules
 

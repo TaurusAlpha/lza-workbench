@@ -222,3 +222,6 @@ __marimo__/
 
 # Complexipy
 .complexipy_cache/
+
+# Repomix: machine-facing LLM repository map generated on demand (gitignored to avoid commit churn)
+.repomix/
