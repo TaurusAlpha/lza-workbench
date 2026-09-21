@@ -12,8 +12,6 @@ from lza_workbench.workspace.validation import WorkspaceCapability
 
 @dataclass(frozen=True)
 class ConfigDiffExecutionResult:
-    """Result of configuration diff comparison."""
-
     workspace_dir: Path
     config_dir: Path
     diff_result: ConfigDiffResult | None = None

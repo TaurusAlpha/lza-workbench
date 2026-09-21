@@ -123,12 +123,11 @@ _is_uninstall_running = False
 
 
 def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
-    """Create FastAPI router for uninstallation routes."""
     router = APIRouter(tags=["uninstall"])
 
     @router.post("/api/uninstall/plan")
     def get_uninstall_plan_endpoint(payload: UninstallPlanRequest) -> dict[str, Any]:
-        target_dir = workspace_dir.get_target_dir()
+        target_dir = workspace_dir.require_workspace_dir()
         context = load_workspace_context(
             target_dir=target_dir,
             required_capabilities=(WorkspaceCapability.METADATA_VALID,),
@@ -170,7 +169,7 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
     def apply_uninstall_endpoint(payload: UninstallApplyRequest) -> dict[str, Any]:
         global _is_uninstall_running
 
-        target_dir = workspace_dir.get_target_dir()
+        target_dir = workspace_dir.require_workspace_dir()
         context = load_workspace_context(
             target_dir=target_dir,
             required_capabilities=(WorkspaceCapability.METADATA_VALID,),
@@ -251,7 +250,7 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
     @router.get("/api/uninstall/progress")
     def get_uninstall_progress_endpoint() -> dict[str, Any]:
         global _is_uninstall_running
-        target_dir = workspace_dir.get_target_dir()
+        target_dir = workspace_dir.require_workspace_dir()
         context = load_workspace_context(
             target_dir=target_dir,
             required_capabilities=(WorkspaceCapability.METADATA_VALID,),

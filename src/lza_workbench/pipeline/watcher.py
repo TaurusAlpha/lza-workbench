@@ -46,8 +46,6 @@ class PipelineWatchUpdate:
 
 @dataclass(frozen=True)
 class PipelineWatchResult:
-    """Final structured result of watching a pipeline execution."""
-
     workspace_dir: Path
     customer_name: str
     pipeline_name: str

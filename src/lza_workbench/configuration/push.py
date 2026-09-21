@@ -49,8 +49,6 @@ from lza_workbench.workspace.validation import WorkspaceCapability
 
 @dataclass(frozen=True)
 class ConfigPushResult:
-    """Structured result of configuration push / upload workflow."""
-
     workspace_dir: Path
     config_dir: Path
     repository_type: str

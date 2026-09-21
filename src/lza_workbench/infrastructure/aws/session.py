@@ -53,7 +53,6 @@ class AwsClientFactory:
         self._primed = True
 
     def get_session(self) -> boto3.Session:
-        """Get or create the authenticated boto3 session."""
         if self._session is None:
             source_session = self._get_source_session()
 
@@ -80,7 +79,6 @@ class AwsClientFactory:
         return self._session
 
     def get_client(self, service_name: str) -> Any:
-        """Create a service client using the authenticated session."""
         if service_name == "codeconnections":
             try:
                 return self.get_session().client("codeconnections")

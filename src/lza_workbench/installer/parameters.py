@@ -1,3 +1,5 @@
+"""CloudFormation parameter mapping, formatting, and template alignment for the LZA installer."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -46,7 +48,6 @@ UNSUPPORTED_INSTALLER_PARAMETERS: frozenset[str] = frozenset(
 def get_installer_parameter_label(
     parameter_name: str, definition: dict[str, Any] | None = None
 ) -> str:
-    """Return a concise prompt label for an installer template parameter."""
     if parameter_name in INSTALLER_PARAMETER_LABELS:
         return INSTALLER_PARAMETER_LABELS[parameter_name]
     if definition:
@@ -153,8 +154,9 @@ def _apply_config_repo_parameter(config: WorkspaceConfig, parameter_name: str, v
     return True
 
 
-def apply_installer_parameter(config: WorkspaceConfig, parameter_name: str, value: str) -> None:
-    """Persist an accepted template parameter in its owning workspace setting."""
+def apply_installer_parameter_to_config(
+    config: WorkspaceConfig, parameter_name: str, value: str
+) -> None:
     if _apply_source_code_parameter(config, parameter_name, value):
         return
     if _apply_options_parameter(config, parameter_name, value):
@@ -186,7 +188,7 @@ def apply_deployed_installer_parameters(
             config.aws.account_id = arn_parts[4]
 
     for parameter_name, value in parameters.items():
-        apply_installer_parameter(config, parameter_name, value)
+        apply_installer_parameter_to_config(config, parameter_name, value)
 
     repository = config.configuration.repository
     if (
@@ -296,7 +298,7 @@ __all__ = [
     "INSTALLER_PARAMETER_LABELS",
     "UNSUPPORTED_INSTALLER_PARAMETERS",
     "apply_deployed_installer_parameters",
-    "apply_installer_parameter",
+    "apply_installer_parameter_to_config",
     "build_installer_cfn_parameters",
     "get_installer_parameter_label",
     "is_installer_parameter_applicable",

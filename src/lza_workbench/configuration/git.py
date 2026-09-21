@@ -12,7 +12,6 @@ from lza_workbench.errors import LzaError
 def _run_git_command(
     args: list[str], cwd: Path, env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
-    """Execute a git command in the specified directory."""
     run_env = os.environ.copy()
     if env:
         run_env.update(env)
@@ -132,7 +131,6 @@ def get_git_commit(repo_dir: Path) -> str:
 
 
 def get_git_remote_url(repo_dir: Path, remote_name: str = "origin") -> str | None:
-    """Get the URL for the specified git remote."""
     proc = _run_git_command(["remote", "get-url", remote_name], cwd=repo_dir)
     if proc.returncode != 0:
         return None
@@ -140,7 +138,6 @@ def get_git_remote_url(repo_dir: Path, remote_name: str = "origin") -> str | Non
 
 
 def set_git_remote_url(repo_dir: Path, remote_name: str, remote_url: str) -> None:
-    """Set or add a git remote URL."""
     existing = get_git_remote_url(repo_dir, remote_name)
     if existing:
         proc = _run_git_command(["remote", "set-url", remote_name, remote_url], cwd=repo_dir)
@@ -195,14 +192,12 @@ def restore_git_stash(repo_dir: Path) -> None:
 
 
 def fetch_git_remote(repo_dir: Path, remote: str = "origin") -> None:
-    """Fetch branches/commits from specified git remote."""
     proc = _run_git_command(["fetch", remote], cwd=repo_dir)
     if proc.returncode != 0:
         raise LzaError(f"Failed to fetch from remote '{remote}': {proc.stderr.strip()}")
 
 
 def pull_git_branch(repo_dir: Path, remote: str, branch: str) -> None:
-    """Pull changes for the specified branch from remote repository."""
     proc = _run_git_command(["pull", remote, branch], cwd=repo_dir)
     if proc.returncode != 0:
         raise LzaError(
@@ -329,7 +324,6 @@ class GitRemoteSyncStatus:
 
 
 def get_git_working_tree_status(repo_dir: Path) -> GitWorkingTreeStatus | None:
-    """Get local Git repository and working tree status."""
     if not is_git_repository(repo_dir):
         return None
 

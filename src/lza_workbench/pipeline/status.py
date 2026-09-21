@@ -46,8 +46,6 @@ __all__ = [
 
 @dataclass(frozen=True)
 class PipelineSnapshotResult:
-    """Structured result of single-pass pipeline execution observation."""
-
     workspace_dir: Path
     customer_name: str
     pipeline_name: str

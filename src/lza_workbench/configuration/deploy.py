@@ -30,8 +30,6 @@ from lza_workbench.workspace.validation import WorkspaceCapability
 
 @dataclass(frozen=True)
 class ConfigDeployResult:
-    """Structured result of complete configuration deployment workflow."""
-
     push_result: ConfigPushResult | None
     start_result: PipelineStartResult | None
     watch_result: PipelineWatchResult | None = None

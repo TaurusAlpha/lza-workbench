@@ -51,8 +51,6 @@ from lza_workbench.workspace.validation import WorkspaceCapability
 
 @dataclass(frozen=True)
 class ConfigPullResult:
-    """Structured result of configuration pull / download workflow."""
-
     workspace_dir: Path
     config_dir: Path
     repository_type: str

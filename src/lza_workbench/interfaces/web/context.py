@@ -19,7 +19,7 @@ class ActiveWorkspaceContext:
         self.workspace_dir = workspace_dir.resolve()
         self.prepared_import = None
 
-    def get_target_dir(self) -> Path:
+    def require_workspace_dir(self) -> Path:
         if self.workspace_dir is None:
             raise LzaError("No active workspace is open. Please open or create a workspace.")
         return self.workspace_dir

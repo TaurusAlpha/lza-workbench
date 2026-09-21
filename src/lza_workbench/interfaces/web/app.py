@@ -22,8 +22,6 @@ def create_app(
     workspace_dir: Path | ActiveWorkspaceContext | None = None,
     open_browser_url: str | None = None,
 ) -> FastAPI:
-    """Create the local Web interface for workspaces."""
-
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         if open_browser_url:

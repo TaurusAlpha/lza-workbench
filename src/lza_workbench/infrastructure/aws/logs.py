@@ -10,7 +10,6 @@ from lza_workbench.errors import LzaError
 
 
 def delete_log_group(*, client: Any, log_group_name: str) -> None:
-    """Delete a CloudWatch Log Group."""
     clean_name = (log_group_name or "").strip()
     if not clean_name:
         raise LzaError("Log group name must not be empty")

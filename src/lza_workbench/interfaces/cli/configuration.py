@@ -52,7 +52,6 @@ from lza_workbench.interfaces.cli.pipeline import (
 
 
 def render_config_init_result(result: ConfigInitResult) -> None:
-    """Render the results of configuration initialization."""
     workspace_dir = result.workspace_dir
     config_dir = result.config_dir
     template_name = result.template_source.source
@@ -180,7 +179,6 @@ def config_init_command(
 
 
 def render_config_push_result(result: ConfigPushResult) -> None:
-    """Render the results of a configuration push workflow."""
     if result.dry_run:
         print_dry_run_header("lza config push")
         if result.safety_warning:
@@ -243,7 +241,6 @@ def config_push_command(
 
 
 def render_config_pull_result(result: ConfigPullResult) -> None:
-    """Render the results of a configuration pull workflow."""
     if result.dry_run:
         print_dry_run_header("lza config pull")
         print_kv("Workspace", result.workspace_dir)
@@ -320,7 +317,6 @@ def render_config_deploy_result(
     *,
     verbose: bool = False,
 ) -> None:
-    """Render the full results of configuration deployment."""
     if result.dry_run:
         print_dry_run_header("lza config deploy")
         console.print("[bold]Step 1: Configuration Push (Planned)[/bold]")
@@ -362,7 +358,7 @@ def config_deploy_command(
             target_dir=target_dir,
             dry_run=dry_run,
             watch=not no_watch,
-            on_watch_update=monitor.update,
+            on_watch_update=monitor.update_display,
         )
     except ConfigDeployError as exc:
         render_config_deploy_result(exc.result, verbose=verbose)

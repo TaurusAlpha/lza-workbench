@@ -125,7 +125,6 @@ def inspect_codecommit_repository_status(
     aws_identity: dict[str, Any] | None,
     factory: Any,
 ) -> CodeCommitConfigurationRepositoryStatus:
-    """Inspect remote CodeCommit configuration repository."""
     repo_name = repo.repository_name or "aws-accelerator-config"
     branch_name = repo.branch or "main"
     codecommit_exists = None
@@ -163,7 +162,6 @@ def inspect_codeconnection_repository_status(
     aws_identity: dict[str, Any] | None,
     factory: Any,
 ) -> CodeConnectionConfigurationRepositoryStatus:
-    """Inspect remote CodeConnection status."""
     codeconnection_status = None
     codeconnection_provider = None
     codeconnection_owner_account = None

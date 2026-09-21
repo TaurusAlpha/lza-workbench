@@ -6,9 +6,9 @@ LZA Workbench is a local, workspace-based application for AWS Landing Zone Accel
 
 It assists with creating and managing customer-specific LZA workspaces and automates common LZA configuration, deployment, validation, and troubleshooting workflows.
 
-The current implementation is CLI-based. The project is transitioning to a local Web GUI as its
-primary interactive interface, while retaining the CLI for automation, debugging, SSH, and
-advanced use.
+The current implementation provides both a CLI and a local Web GUI. The Web GUI is becoming the
+primary interactive interface, while the CLI remains supported for automation, debugging, SSH,
+and advanced use.
 
 The project is initially a personal engineering productivity tool, but its structure should remain suitable for wider use.
 
@@ -170,11 +170,11 @@ The project evolves rapidly.
 Documentation therefore has intentionally separate responsibilities:
 
 - `PROJECT.md` defines durable project identity and architectural invariants.
-- `TODO.md` contains active feature design, backlog, non-refactor technical debt, and unresolved
-  decisions.
-- `docs/DONE.md` logs completed features and refactoring milestones.
+- `TODO.md` maintains the command inventory, planned feature work, improvements, and unresolved
+  decisions. Completed items may remain checked until they are manually verified and removed.
 - `AGENTS.md` defines the current implementation and coding baseline for AI-assisted development.
 - `README.md` documents current user-facing and development usage.
+- `docs/REVIEW.md` is an optional review-specific instruction set used when explicitly requested.
 
 Detailed feature specifications should not be duplicated in `PROJECT.md`.
 
@@ -208,9 +208,11 @@ The current implementation uses:
 - Typer
 - Pydantic
 - boto3
+- FastAPI
 - ruamel.yaml
 - Rich
 - pytest
+- Uvicorn
 - uv
 
 These are implementation choices rather than permanent architectural requirements unless explicitly promoted to an architectural constraint.

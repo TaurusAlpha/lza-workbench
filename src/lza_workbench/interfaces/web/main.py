@@ -16,7 +16,6 @@ def run_web_server(
     port: int,
     open_browser: bool,
 ) -> None:
-    """Run the local Web server in the foreground."""
     url = f"http://{host}:{port}/"
     app = create_app(
         workspace_dir=workspace_dir,

@@ -1,18 +1,20 @@
 # LZA Workbench TODO
 
-Historical work is recorded in [`docs/DONE.md`](docs/DONE.md). This file tracks active features,
-unresolved design decisions, and technical debt.
+This file maintains the command inventory, planned features, improvements, unresolved design
+decisions, and technical debt. Completed items may remain checked until they are manually verified
+and removed.
 
 ## Command Inventory
 
-Keep this as the canonical inventory of implemented and planned command names. Checked commands
-are registered in the current CLI; unchecked commands are planned.
+Keep this as the canonical inventory of implemented and planned command names. Planned commands
+are identified explicitly in their reference sections.
 
 ### Workspace lifecycle
 
 - `lza init`
 - `lza import`
 - `lza uninstall`
+- `lza ui`
 
 ### Installer
 
@@ -54,6 +56,11 @@ Create a new customer-specific LZA workspace and its local Workbench metadata.
 ### `lza import`
 
 Adopt an existing local LZA configuration without modifying customer-owned configuration files.
+
+### `lza ui`
+
+Start the local Web interface for workspace setup, status, configuration synchronization, pipeline
+inspection, and supported deployment lifecycle operations.
 
 ### Workspace AWS ownership
 
@@ -167,6 +174,11 @@ Future design decision:
 - [ ] Prepare and synchronize installer source code across Amazon S3, AWS CodeCommit, and the official AWS GitHub repository when the configured LZA version or source settings require it.
 - [ ] Follow the AWS source-location requirements for S3 packaging and synthesized installer parameters: <https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/source-code-location.html>.
 
+### `lza installer import`
+
+Discover a deployed installer stack and reconcile its CloudFormation parameters and template data
+with the current workspace.
+
 ### `lza uninstall`
 
 Uninstall the LZA solution rather than deleting only the installer stack across managed accounts and regions.
@@ -215,7 +227,7 @@ Show detailed configuration repository status, remote source existence/accessibi
 
 ## Web Interface
 
-The local Web GUI
+The local Web GUI is the primary planned interactive interface.
 
 - [ ] Add installer deployment mutation flow.
 - [ ] Keep multi-user/server operation out of the current scope.
@@ -260,7 +272,8 @@ The local Web GUI
 - [ ] Add error resilience tests for corrupted/partial `.lza/state.json` and malformed `lza-workspace.yaml` files to verify clean recovery guidance.
 - [ ] Add error reporting tests for Git merge conflicts and remote authentication failures during `lza config pull`.
 - [ ] Add CloudFormation template size limit boundary test verifying S3 `TemplateURL` is always used when templates exceed 51.2 KB.
-- [ ] Configure Pytest markers (`unit`, `cli`, `e2e`, `arch`) in `pyproject.toml` for targeted test runs.
+- [ ] Add an `e2e` Pytest marker when the end-to-end lifecycle test is introduced; the current
+  `unit`, `workflow`, `cli`, `git`, and `arch` markers are configured in `pyproject.toml`.
 
 ## Reports
 

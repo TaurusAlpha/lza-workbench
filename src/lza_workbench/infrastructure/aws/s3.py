@@ -36,7 +36,6 @@ class S3ObjectObservation:
 
 
 def get_s3_https_url(bucket_name: str, object_key: str, region: str = "us-east-1") -> str:
-    """Return standard HTTPS URL for an S3 object."""
     clean_bucket = bucket_name.strip()
     clean_key = object_key.strip().lstrip("/")
     clean_region = region.strip()
@@ -46,7 +45,6 @@ def get_s3_https_url(bucket_name: str, object_key: str, region: str = "us-east-1
 
 
 def get_s3_uri(bucket_name: str, object_key: str) -> str:
-    """Return s3:// URI for an S3 object."""
     clean_bucket = bucket_name.strip()
     clean_key = object_key.strip().lstrip("/")
     return f"s3://{clean_bucket}/{clean_key}"
@@ -130,7 +128,6 @@ def create_s3_bucket(
     bucket_name: str,
     region: str,
 ) -> None:
-    """Create an S3 bucket in the specified region."""
     clean_bucket = bucket_name.strip()
     kwargs: dict[str, Any] = {"Bucket": clean_bucket}
     if region and region != "us-east-1":
@@ -226,7 +223,6 @@ def inspect_s3_object(
     bucket_name: str,
     object_key: str,
 ) -> S3ObjectObservation:
-    """Inspect S3 object existence and metadata."""
     clean_bucket = bucket_name.strip()
     clean_key = object_key.strip().lstrip("/")
     try:
@@ -308,7 +304,6 @@ def download_s3_file(
     object_key: str,
     file_path: Path,
 ) -> None:
-    """Download an S3 object to a local file."""
     clean_bucket = bucket_name.strip()
     clean_key = object_key.strip().lstrip("/")
     try:
@@ -363,7 +358,6 @@ def list_buckets_by_prefix(
     account_id: str | None = None,
     region: str | None = None,
 ) -> list[str]:
-    """List S3 bucket names matching accelerator prefix, optionally filtered by account and region."""
     clean_prefix = (prefix or "").strip().lower()
     try:
         response = client.list_buckets()

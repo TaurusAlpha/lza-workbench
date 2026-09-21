@@ -26,8 +26,6 @@ from lza_workbench.workspace.validation import WorkspaceCapability
 
 @dataclass(frozen=True)
 class InstallerImportResult:
-    """Structured result of installer import workflow."""
-
     workspace_dir: Path
     config: WorkspaceConfig
     state: WorkspaceState

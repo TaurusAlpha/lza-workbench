@@ -10,11 +10,7 @@ from lza_workbench.errors import LzaError
 
 
 def list_organization_accounts(*, client: Any) -> list[dict[str, str]]:
-    """List active AWS accounts in the AWS Organization.
-
-    Returns:
-        List of dicts with 'Id', 'Name', 'Email', 'Status'.
-    """
+    """List active AWS accounts in the AWS Organization."""
     accounts: list[dict[str, str]] = []
     try:
         paginator = client.get_paginator("list_accounts")

@@ -35,7 +35,6 @@ from lza_workbench.pipeline.watcher import (
 
 
 def render_pipeline_start_result(result: PipelineStartResult) -> None:
-    """Render the result of starting a pipeline execution."""
     if result.dry_run:
         print_dry_run_header("lza pipeline start")
         print_kv("Workspace", result.workspace_dir)
@@ -117,19 +116,18 @@ class PipelineWatchMonitor:
         self._status_ctx: Any | None = None
         self._live_status: Any | None = None
 
-    def update(self, update: PipelineWatchUpdate) -> None:
-        """Update live status display with current progress."""
+    def update_display(self, snapshot: PipelineWatchUpdate) -> None:
         if self._live_status is None:
             self._status_ctx = console.status(
                 "[bold blue]Monitoring pipeline execution...[/bold blue]"
             )
             self._live_status = self._status_ctx.__enter__()
 
-        elapsed_str = f"{int(update.elapsed_seconds)}s"
-        status_tag = format_status(update.status)
+        elapsed_str = f"{int(snapshot.elapsed_seconds)}s"
+        status_tag = format_status(snapshot.status)
 
         active_stage = None
-        for s in update.stages:
+        for s in snapshot.stages:
             if s.status in {"InProgress", "Building"}:
                 active_stage = s.stage_name
                 break
@@ -137,7 +135,7 @@ class PipelineWatchMonitor:
         stage_info = f" | Stage: [cyan]{active_stage}[/cyan]" if active_stage else ""
         if self._live_status:
             msg = (
-                f"Pipeline {status_tag} - Execution: {update.execution_id}"
+                f"Pipeline {status_tag} - Execution: {snapshot.execution_id}"
                 f"{stage_info} ({elapsed_str})"
             )
             self._live_status.update(msg)
@@ -189,7 +187,6 @@ def render_pipeline_watch_result(
     verbose: bool = False,
     start_section_number: int = 1,
 ) -> None:
-    """Render the final summary table and outcome of a pipeline watch."""
     console.print()
     section_title = (
         "Pipeline Execution Summary" if start_section_number == 1 else "Pipeline Monitoring"
@@ -291,7 +288,7 @@ def pipeline_watch_command(
             pipeline_type="configuration",
             execution_id=execution_id,
             poll_interval_seconds=poll_interval,
-            on_update=monitor.update,
+            on_update=monitor.update_display,
         )
     finally:
         monitor.stop()

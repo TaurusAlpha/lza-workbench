@@ -379,7 +379,7 @@ def _resolve_remote_sync_status(
     repo: Any,
     config: WorkspaceConfig,
     config_dir: Path,
-    target: str | None,
+    remote_target: str | None,
     git_sync_status: Any,
     factory: AwsClientFactory | None,
     state: WorkspaceState | None,
@@ -387,12 +387,12 @@ def _resolve_remote_sync_status(
 ) -> RemoteSyncStatus | None:
     if repo.type == "s3":
         s3_info: S3ObjectObservation | None = None
-        if is_live and target and target != "Not configured" and factory is not None:
+        if is_live and remote_target and remote_target != "Not configured" and factory is not None:
             try:
                 s3_client = factory.get_client("s3")
                 s3_info = inspect_s3_object_safe(
                     client=s3_client,
-                    bucket_name=target,
+                    bucket_name=remote_target,
                     object_key=CONFIG_S3_OBJECT_KEY,
                 )
             except Exception:
@@ -495,7 +495,7 @@ def get_root_status_workflow(
         repo=repo,
         config=config,
         config_dir=config_dir,
-        target=target,
+        remote_target=target,
         git_sync_status=git_sync_status,
         factory=factory,
         state=state,

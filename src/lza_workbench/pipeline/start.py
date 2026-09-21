@@ -26,8 +26,6 @@ from lza_workbench.workspace.validation import WorkspaceCapability
 
 @dataclass(frozen=True)
 class PipelineStartResult:
-    """Structured result of starting a pipeline execution."""
-
     workspace_dir: Path
     customer_name: str
     pipeline_name: str

@@ -41,7 +41,6 @@ class ResolvedTemplateSource:
 
 
 def list_packaged_templates() -> list[str]:
-    """List available packaged configuration template names."""
     templates_root = Path(str(files("lza_workbench.resources.configuration_templates")))
     if not templates_root.is_dir():
         return []
@@ -112,11 +111,7 @@ def render_and_copy_template(
     config: WorkspaceConfig,
     dry_run: bool = False,
 ) -> tuple[list[Path], list[str]]:
-    """Render template files with workspace values and copy to target directory.
-
-    Returns:
-        A tuple of (list_of_written_file_paths, list_of_unresolved_placeholders).
-    """
+    """Render template files with workspace values and copy to target directory."""
     written_paths: list[Path] = []
     all_unresolved: list[str] = []
 

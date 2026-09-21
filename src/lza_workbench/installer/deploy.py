@@ -63,8 +63,6 @@ from lza_workbench.workspace.validation import WorkspaceCapability
 
 @dataclass(frozen=True)
 class InstallerDeployResult:
-    """Structured result of installer deployment workflow."""
-
     workspace_dir: Path
     stack_name: str
     operation: str

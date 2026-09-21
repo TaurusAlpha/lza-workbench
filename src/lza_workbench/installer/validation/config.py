@@ -23,13 +23,10 @@ class MissingInstallerConfigField:
 
 @dataclass(frozen=True)
 class InstallerConfigValidationResult:
-    """The complete result of checking installer configuration requirements."""
-
     missing_fields: tuple[MissingInstallerConfigField, ...]
 
     @property
     def is_complete(self) -> bool:
-        """Return whether every required installer configuration field is present."""
         return not self.missing_fields
 
 

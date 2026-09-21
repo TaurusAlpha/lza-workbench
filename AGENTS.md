@@ -72,16 +72,18 @@ Optimize for code that is easy for a human to read, change, and debug.
 
 ## Documentation
 
-- Update documentation only when the requested change materially changes documented behavior or architecture.
+- Update project documentation only when the requested change materially changes documented behavior or architecture.
+- In-code docstrings follow the Code Clarity Convention below and should be maintained as part of normal source changes.
 
-## Docstring Convention
+## Code Clarity Convention
 
-Every module and every public function/class must have a one-line docstring
-stating its purpose in a single sentence.
-
-- If you cannot summarize it in one line without using "and" to join unrelated
-  responsibilities, the function/module is doing too much — split it before
-  writing the docstring, not after.
-- The one-liner is the sole source of truth for purpose in generated indexes
-  (repo maps, manifests). Do not duplicate this description elsewhere in
-  comments.
+- Every Python module must have a concise purpose docstring describing its responsibility. Prefer one line, but allow slightly more detail when strict brevity would remove information needed to distinguish the module's role.
+- For functions and classes, prefer clear names, signatures, and types over explanatory docstrings.
+- Use descriptive names and straightforward control flow.
+- When renaming for clarity, make the new name more specific to the symbol's actual responsibility in this project, not more generic or textbook-like. Replacing a precise project-specific name with a broader technical term is a regression, even if the new name appears cleaner.
+- Add a function or class docstring only when it communicates useful information that is not obvious from the name and signature, such as a non-obvious responsibility, side effect, precondition, invariant, or domain meaning.
+- Visibility does not determine whether a function or class needs a docstring; usefulness does.
+- Keep purpose docstrings brief. Do not document parameters, return values, or implementation details unless they add information needed to understand correct use.
+- Do not add docstrings that merely restate the symbol name.
+- If a concise purpose description exposes genuinely mixed or unrelated responsibilities, treat that as a code-structure concern rather than hiding it behind a longer docstring.
+- Treat module purpose docstrings as the canonical descriptions used for generated repository indexes and maps. Do not maintain duplicate purpose descriptions in nearby comments solely for indexing.

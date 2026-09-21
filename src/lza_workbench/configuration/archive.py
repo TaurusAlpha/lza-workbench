@@ -22,7 +22,6 @@ class ConfigDiffResult:
 
     @property
     def has_changes(self) -> bool:
-        """Return whether the comparison found at least one change."""
         return bool(self.added or self.modified or self.removed)
 
 

@@ -17,8 +17,6 @@ from lza_workbench.infrastructure.aws.errors import classify_aws_error
 
 @dataclass
 class CfnDeploymentPlanResult:
-    """Result of CloudFormation stack parameter inspection."""
-
     stack_name: str
     operation: str  # CREATE, UPDATE, NO_CHANGE, UNKNOWN
     stack_status: str | None
@@ -393,7 +391,6 @@ def disable_stack_termination_protection(
     client: Any,
     stack_name: str,
 ) -> None:
-    """Disable CloudFormation termination protection for a stack."""
     clean_stack_name = (stack_name or "").strip()
     if not clean_stack_name:
         raise LzaError("Stack name must not be empty")
@@ -495,7 +492,6 @@ def list_matching_stacks(
     account_id: str | None = None,
     region: str | None = None,
 ) -> list[dict[str, Any]]:
-    """List deployed CloudFormation stacks matching accelerator prefix."""
     clean_prefix = (prefix or "").strip()
     if not clean_prefix:
         return []

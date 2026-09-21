@@ -92,7 +92,6 @@ def _render_pipeline_summary(
 
 
 def render_root_status(result: RootStatusResult) -> None:
-    """Render a root status result without querying AWS or the filesystem."""
     render_workspace_header(
         "LZA Workspace Summary",
         customer_name=result.customer_name,
@@ -356,7 +355,6 @@ def _render_recommendations(result: InstallerStatusResult) -> None:
 
 
 def render_installer_status(result: InstallerStatusResult) -> None:
-    """Render prepared installer data without AWS calls or workspace writes."""
     render_workspace_header(
         "LZA Installer Status",
         customer_name=result.config.customer.name,
@@ -604,7 +602,6 @@ def _render_warnings(result: ConfigurationStatusResult) -> None:
 
 
 def render_config_status(result: ConfigurationStatusResult, *, has_state: bool) -> None:
-    """Render prepared configuration status without inspecting the workspace."""
     render_workspace_header(
         "LZA Configuration Status",
         customer_name=result.workspace.customer_name,

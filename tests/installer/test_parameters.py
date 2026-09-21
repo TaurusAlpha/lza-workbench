@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from lza_workbench.installer.parameters import (
-    apply_installer_parameter,
+    apply_installer_parameter_to_config,
     build_installer_cfn_parameters,
     is_installer_parameter_applicable,
 )
@@ -63,7 +63,7 @@ def test_collecting_repository_branch_persists_the_resolved_default() -> None:
     )
     config.lza.version = "1.16.0"
 
-    apply_installer_parameter(config, "RepositoryBranchName", "")
+    apply_installer_parameter_to_config(config, "RepositoryBranchName", "")
 
     assert config.installer.source_code.branch == "release/v1.16.0"
 
@@ -77,9 +77,9 @@ def test_collecting_s3_source_parameters_populates_plan_configuration() -> None:
     config.installer.options.log_archive_account_email = "log@example.com"
     config.installer.options.audit_account_email = "audit@example.com"
 
-    apply_installer_parameter(config, "RepositorySource", "s3")
-    apply_installer_parameter(config, "RepositoryBucketName", "installer-source")
-    apply_installer_parameter(config, "RepositoryBucketObject", "lza-v1.15.5.zip")
+    apply_installer_parameter_to_config(config, "RepositorySource", "s3")
+    apply_installer_parameter_to_config(config, "RepositoryBucketName", "installer-source")
+    apply_installer_parameter_to_config(config, "RepositoryBucketObject", "lza-v1.15.5.zip")
 
     assert config.installer.source_code.bucket == "installer-source"
     assert config.installer.source_code.key == "lza-v1.15.5.zip"

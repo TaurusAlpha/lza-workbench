@@ -31,7 +31,6 @@ def delete_alias(
     client: Any,
     alias_name: str,
 ) -> None:
-    """Delete a KMS alias."""
     clean_alias = (alias_name or "").strip()
     if not clean_alias:
         raise LzaError("KMS alias name must not be empty")

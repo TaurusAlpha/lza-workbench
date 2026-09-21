@@ -11,7 +11,7 @@ from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.errors import LzaError
 from lza_workbench.installer.parameters import (
     UNSUPPORTED_INSTALLER_PARAMETERS,
-    apply_installer_parameter,
+    apply_installer_parameter_to_config,
     build_installer_cfn_parameters,
     get_installer_parameter_label,
     is_installer_parameter_applicable,
@@ -182,7 +182,7 @@ def apply_installer_settings(request: InstallerSettingsRequest) -> InstallerSett
 
 def _apply_values(config: WorkspaceConfig, values: dict[str, str]) -> None:
     for parameter_name, value in values.items():
-        apply_installer_parameter(config, parameter_name, value)
+        apply_installer_parameter_to_config(config, parameter_name, value)
 
 
 def _ensure_canonical_s3_bucket(config: WorkspaceConfig, management_account_id: str | None) -> None:

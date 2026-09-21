@@ -253,16 +253,16 @@ def _register_workspace_import_routes(router: APIRouter, context: ActiveWorkspac
 def _register_status_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
     @router.get("/api/status")
     def get_status() -> dict[str, Any]:
-        return serialize_root_status(get_root_status_workflow(target_dir=context.get_target_dir()))
+        return serialize_root_status(get_root_status_workflow(target_dir=context.require_workspace_dir()))
 
     @router.get("/api/status/config")
     def get_config_status() -> dict[str, Any]:
-        status_res = get_config_status_workflow(target_dir=context.get_target_dir())
+        status_res = get_config_status_workflow(target_dir=context.require_workspace_dir())
         return serialize_configuration_status(status_res)
 
     @router.get("/api/status/installer")
     def get_installer_status() -> dict[str, Any]:
-        target = context.get_target_dir()
+        target = context.require_workspace_dir()
         status_res = get_installer_status_workflow(target_dir=target)
         form_res = get_installer_parameters_schema(target_dir=target, all_fields=True)
         return serialize_installer_status(status_res, form_res)
@@ -272,7 +272,7 @@ def _register_installer_routes(router: APIRouter, context: ActiveWorkspaceContex
     @router.post("/api/installer/settings")
     def save_installer_settings(payload: InstallerSettingsPayload) -> dict[str, Any]:
         result = apply_installer_settings(
-            InstallerSettingsRequest(target_dir=context.get_target_dir(), values=payload.values)
+            InstallerSettingsRequest(target_dir=context.require_workspace_dir(), values=payload.values)
         )
         return {
             "success": True,
@@ -283,12 +283,12 @@ def _register_installer_routes(router: APIRouter, context: ActiveWorkspaceContex
     @router.post("/api/installer/plan")
     def get_installer_plan() -> dict[str, Any]:
         return serialize_installer_plan(
-            plan_installer_workflow(target_dir=context.get_target_dir(), dry_run=True)
+            plan_installer_workflow(target_dir=context.require_workspace_dir(), dry_run=True)
         )
 
     @router.post("/api/installer/reset")
     def reset_installer_settings_endpoint() -> dict[str, Any]:
-        result = reset_installer_settings(target_dir=context.get_target_dir())
+        result = reset_installer_settings(target_dir=context.require_workspace_dir())
         return {
             "success": True,
             "message": "Installer settings reset to deployed configuration.",
@@ -299,13 +299,13 @@ def _register_installer_routes(router: APIRouter, context: ActiveWorkspaceContex
 def _register_config_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
     @router.post("/api/config/pull/prepare")
     def prepare_pull() -> dict[str, Any]:
-        prep = prepare_config_pull(ConfigPullRequest(target_dir=context.get_target_dir()))
+        prep = prepare_config_pull(ConfigPullRequest(target_dir=context.require_workspace_dir()))
         return serialize_config_pull_preparation(prep)
 
     @router.post("/api/config/pull/apply")
     def apply_pull(payload: ConfigActionApplyPayload | None = None) -> dict[str, Any]:
         req = ConfigPullRequest(
-            target_dir=context.get_target_dir(),
+            target_dir=context.require_workspace_dir(),
             overwrite_confirmed=payload.overwrite_confirmed if payload else False,
             force=payload.force if payload else False,
         )
@@ -314,13 +314,13 @@ def _register_config_routes(router: APIRouter, context: ActiveWorkspaceContext) 
 
     @router.post("/api/config/push/prepare")
     def prepare_push() -> dict[str, Any]:
-        prep = prepare_config_push(ConfigPushRequest(target_dir=context.get_target_dir()))
+        prep = prepare_config_push(ConfigPushRequest(target_dir=context.require_workspace_dir()))
         return serialize_config_push_preparation(prep)
 
     @router.post("/api/config/push/apply")
     def apply_push(payload: ConfigActionApplyPayload | None = None) -> dict[str, Any]:
         req = ConfigPushRequest(
-            target_dir=context.get_target_dir(),
+            target_dir=context.require_workspace_dir(),
             overwrite_confirmed=payload.overwrite_confirmed if payload else False,
             force=payload.force if payload else False,
         )
@@ -330,7 +330,7 @@ def _register_config_routes(router: APIRouter, context: ActiveWorkspaceContext) 
     @router.post("/api/config/deploy")
     def apply_deploy(payload: ConfigActionApplyPayload | None = None) -> dict[str, Any]:
         deploy_res = deploy_configuration_workflow(
-            target_dir=context.get_target_dir(),
+            target_dir=context.require_workspace_dir(),
             dry_run=False,
             force=payload.force if payload else False,
             overwrite_confirmed=payload.overwrite_confirmed if payload else False,
@@ -365,7 +365,7 @@ def _register_pipeline_routes(router: APIRouter, context: ActiveWorkspaceContext
         execution_id: str | None = None,
     ) -> dict[str, Any]:
         snapshot = get_pipeline_snapshot_workflow(
-            target_dir=context.get_target_dir(),
+            target_dir=context.require_workspace_dir(),
             pipeline_type=type,
             execution_id=execution_id,
         )
@@ -377,7 +377,7 @@ def _register_pipeline_routes(router: APIRouter, context: ActiveWorkspaceContext
         execution_id: str | None = None,
     ) -> list[dict[str, Any]]:
         failures = get_pipeline_diagnostics_workflow(
-            target_dir=context.get_target_dir(),
+            target_dir=context.require_workspace_dir(),
             pipeline_type=type,
             execution_id=execution_id,
         )
@@ -387,7 +387,6 @@ def _register_pipeline_routes(router: APIRouter, context: ActiveWorkspaceContext
 def create_status_router(
     *, workspace_dir: Path | ActiveWorkspaceContext | None = None
 ) -> APIRouter:
-    """Create status and workspace routes bound to an active workspace context."""
     if isinstance(workspace_dir, ActiveWorkspaceContext):
         context = workspace_dir
     elif workspace_dir is not None:
@@ -408,7 +407,6 @@ def create_status_router(
 
 
 def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
-    """Translate the root-status workflow result into the browser API contract."""
     sync = result.configuration_repo.git_sync_status
     rsync = result.configuration_repo.remote_sync
     return {
@@ -515,7 +513,6 @@ def _serialize_pipeline(pipeline: PipelineSummary) -> dict[str, Any]:
 
 
 def serialize_configuration_status(result: ConfigurationStatusResult) -> dict[str, Any]:
-    """Translate configuration status result into browser API contract."""
     ws = result.workspace
     lg = result.local_git
     repo = result.repository
@@ -685,7 +682,6 @@ def serialize_configuration_status(result: ConfigurationStatusResult) -> dict[st
 def serialize_installer_status(
     result: InstallerStatusResult, form: InstallerForm
 ) -> dict[str, Any]:
-    """Translate installer status and schema into browser API contract."""
     cfg = result.config
     cfn = result.cfn_status
     pipe = result.pipeline_state
@@ -800,7 +796,6 @@ def serialize_installer_status(
 
 
 def serialize_installer_plan(plan: InstallerPlanResult) -> dict[str, Any]:
-    """Translate installer deployment plan into browser API contract."""
     cfn = plan.cloudformation_plan
     cc = plan.codecommit_plan
 
@@ -969,7 +964,6 @@ def serialize_config_push_result(result: ConfigPushResult) -> dict[str, Any]:
 
 
 def serialize_pipeline_snapshot(snapshot: PipelineSnapshotResult) -> dict[str, Any]:
-    """Translate pipeline snapshot result into browser API contract."""
     stages_data: list[dict[str, Any]] = []
     for stage in snapshot.stages:
         actions_data: list[dict[str, Any]] = []
@@ -1018,7 +1012,6 @@ def serialize_pipeline_snapshot(snapshot: PipelineSnapshotResult) -> dict[str, A
 def serialize_pipeline_diagnostics(
     failures: list[PipelineActionFailure],
 ) -> list[dict[str, Any]]:
-    """Translate pipeline action failures into structured root cause diagnostic objects."""
     results: list[dict[str, Any]] = []
     for failure in failures:
         root_cause_data = None
@@ -1046,7 +1039,6 @@ def serialize_pipeline_diagnostics(
 
 
 def serialize_workspace_init_result(result: WorkspaceInitResult) -> dict[str, Any]:
-    """Translate workspace init workflow result into the browser API contract."""
     return {
         "workspaceDir": str(result.workspace_dir),
         "customerSlug": result.config.customer.slug,
@@ -1065,7 +1057,6 @@ def serialize_workspace_init_result(result: WorkspaceInitResult) -> dict[str, An
 
 
 def serialize_workspace_import_result(result: WorkspaceImportResult) -> dict[str, Any]:
-    """Translate workspace import workflow result into the browser API contract."""
     return {
         "workspaceDir": str(result.workspace_dir),
         "configDir": str(result.config_dir),
@@ -1101,7 +1092,6 @@ def serialize_workspace_import_result(result: WorkspaceImportResult) -> dict[str
 
 
 def serialize_import_discovery(discovery: ImportWorkspaceDiscovery) -> dict[str, Any]:
-    """Translate import discovery into the browser API contract."""
     existing = discovery.existing
     existing_config = existing.config if existing else None
     return {

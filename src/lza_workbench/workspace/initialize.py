@@ -30,8 +30,6 @@ from lza_workbench.workspace.validation import validate_workspace_structure
 
 @dataclass(frozen=True)
 class WorkspaceInitResult:
-    """Structured result of workspace initialization workflow."""
-
     workspace_dir: Path
     config: WorkspaceConfig
     state: WorkspaceState

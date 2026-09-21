@@ -14,7 +14,6 @@ def delete_table(
     client: Any,
     table_name: str,
 ) -> None:
-    """Delete a DynamoDB table."""
     clean_name = (table_name or "").strip()
     if not clean_name:
         raise LzaError("Table name must not be empty")

@@ -32,27 +32,22 @@ class WorkspaceContext:
 
     @property
     def config_dir(self) -> Path:
-        """Absolute path to the local LZA customer configuration directory."""
         return self.workspace_dir / self.config.configuration.local_path
 
     @property
     def installer_dir(self) -> Path:
-        """Absolute path to the local LZA installer template directory."""
         return self.workspace_dir / self.config.installer.local_path
 
     @property
     def state_dir(self) -> Path:
-        """Absolute path to the internal .lza runtime state directory."""
         return self.workspace_dir / ".lza"
 
     @property
     def config_file(self) -> Path:
-        """Absolute path to the declarative lza-workspace.yaml file."""
         return self.workspace_dir / WORKSPACE_CONFIG_FILE
 
     @property
     def state_file(self) -> Path:
-        """Absolute path to the operational .lza/state.json file."""
         return self.workspace_dir / WORKSPACE_STATE_FILE
 
 

@@ -1,3 +1,7 @@
+"""Terminal rendering, formatted key-value presentation, and timestamp helpers."""
+
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -148,7 +152,6 @@ def render_workspace_header(
     aws_identity: dict[str, str] | None = None,
     aws_error: str | None = None,
 ) -> None:
-    """Render the standard top-level workspace banner and context lines."""
     console.print(
         Panel(
             f"[bold cyan]{title} - {customer_name}[/bold cyan]",
@@ -174,7 +177,6 @@ def render_failure_section(
     *,
     verbose: bool = False,
 ) -> None:
-    """Render standard failure section with normalized root cause diagnostics."""
     console.print()
     print_section(section_number, "Failure")
     if failed_actions:
@@ -206,32 +208,26 @@ def render_failure_section(
 
 
 def print_success(message: str) -> None:
-    """Print a bold green success message."""
     console.print(f"[bold green]{message}[/bold green]")
 
 
 def print_dry_run_header(command_name: str) -> None:
-    """Print standard dry-run title header."""
     console.print(f"[bold]Dry run: {command_name}[/bold]")
 
 
 def print_warning(message: str) -> None:
-    """Print a bold yellow warning message."""
     console.print(f"[bold yellow]{message}[/bold yellow]")
 
 
 def print_notice(message: str) -> None:
-    """Print a yellow notice message."""
     console.print(f"[yellow]{message}[/yellow]")
 
 
 def print_error(message: str) -> None:
-    """Print a bold red error message."""
     console.print(f"[bold red]{message}[/bold red]")
 
 
 def print_info(message: str, dim: bool = False, style: str | None = None) -> None:
-    """Print an informational message, optionally dimmed or styled."""
     if dim:
         console.print(f"[dim]{message}[/dim]")
     elif style:
@@ -241,12 +237,10 @@ def print_info(message: str, dim: bool = False, style: str | None = None) -> Non
 
 
 def print_section(number: int, title: str) -> None:
-    """Print a numbered section heading."""
     console.print(f"[bold underline]{number}. {title}[/bold underline]")
 
 
 def print_kv(label: str, value: Any, bold_value: bool = False, style: str | None = None) -> None:
-    """Print a key-value pair line."""
     if bold_value:
         formatted_val = f"[bold]{value}[/bold]"
     elif style:
@@ -257,7 +251,6 @@ def print_kv(label: str, value: Any, bold_value: bool = False, style: str | None
 
 
 def print_diff_summary(added: list[str], modified: list[str], removed: list[str]) -> None:
-    """Print clean summary of added, modified, and removed files."""
     if not (added or modified or removed):
         console.print("[dim]No file changes detected (configuration up to date).[/dim]")
         return

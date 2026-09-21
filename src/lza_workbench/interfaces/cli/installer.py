@@ -384,7 +384,6 @@ __all__ = [
 
 
 def render_installer_import_result(result: InstallerImportResult) -> None:
-    """Render the results of an installer import workflow."""
     if result.dry_run:
         print_dry_run_header("lza installer import")
         render_workspace_header(

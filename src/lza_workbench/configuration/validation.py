@@ -83,11 +83,7 @@ def parse_yaml_file(file_path: Path) -> Any:
 
 
 def validate_yaml_syntax(config_dir: Path) -> dict[str, Any]:
-    """Parse and validate YAML syntax for core (required and optional) LZA configuration files.
-
-    Returns:
-        Dictionary mapping canonical file names to parsed data.
-    """
+    """Parse and validate YAML syntax for core (required and optional) LZA configuration files."""
     if not config_dir.is_dir():
         raise LzaError(f"Configuration directory does not exist: {config_dir}")
 
@@ -158,12 +154,12 @@ def validate_lza_configuration_schema(
     _validate_version_compatibility(normalized_version, parsed_files)
 
 
-def _validate_global_config(data: dict[str, Any]) -> None:
-    if "homeRegion" not in data or not str(data["homeRegion"]).strip():
+def _validate_global_config(config_data: dict[str, Any]) -> None:
+    if "homeRegion" not in config_data or not str(config_data["homeRegion"]).strip():
         raise LzaError("global-config.yaml is missing required field: 'homeRegion'")
-    if "enabledRegions" not in data:
+    if "enabledRegions" not in config_data:
         raise LzaError("global-config.yaml is missing required field: 'enabledRegions'")
-    regions = data["enabledRegions"]
+    regions = config_data["enabledRegions"]
     if not (isinstance(regions, list) or _is_placeholder(regions)):
         raise LzaError(
             "global-config.yaml must define 'enabledRegions' as a list or replacement variable"
@@ -172,23 +168,23 @@ def _validate_global_config(data: dict[str, Any]) -> None:
         raise LzaError("global-config.yaml 'enabledRegions' must contain at least one region")
 
 
-def _validate_organization_config(data: dict[str, Any]) -> None:
-    if "organizationalUnits" in data:
-        ous = data["organizationalUnits"]
+def _validate_organization_config(config_data: dict[str, Any]) -> None:
+    if "organizationalUnits" in config_data:
+        ous = config_data["organizationalUnits"]
         if not (isinstance(ous, list) or _is_placeholder(ous)):
             raise LzaError("organization-config.yaml 'organizationalUnits' must be a list")
 
 
-def _validate_accounts_config(data: dict[str, Any]) -> None:
-    if "mandatoryAccounts" not in data:
+def _validate_accounts_config(config_data: dict[str, Any]) -> None:
+    if "mandatoryAccounts" not in config_data:
         raise LzaError("accounts-config.yaml is missing required field: 'mandatoryAccounts'")
-    accounts = data["mandatoryAccounts"]
+    accounts = config_data["mandatoryAccounts"]
     if _is_placeholder(accounts):
         return
     if not isinstance(accounts, list):
         raise LzaError("accounts-config.yaml must define 'mandatoryAccounts' as a list")
 
-    accounts = data["mandatoryAccounts"]
+    accounts = config_data["mandatoryAccounts"]
     account_names: set[str] = set()
 
     for idx, account in enumerate(accounts):
@@ -213,7 +209,7 @@ def _validate_accounts_config(data: dict[str, Any]) -> None:
         )
 
 
-def _validate_network_config(data: dict[str, Any]) -> None:
+def _validate_network_config(config_data: dict[str, Any]) -> None:
     expected_keys = {
         "vpcs",
         "transitGateways",
@@ -223,12 +219,12 @@ def _validate_network_config(data: dict[str, Any]) -> None:
         "prefixes",
         "customerGateways",
     }
-    if not any(key in data for key in expected_keys):
+    if not any(key in config_data for key in expected_keys):
         keys_str = ", ".join(sorted(expected_keys))
         raise LzaError(f"network-config.yaml must define at least one network section ({keys_str})")
 
 
-def _validate_security_config(data: dict[str, Any]) -> None:
+def _validate_security_config(config_data: dict[str, Any]) -> None:
     expected_keys = {
         "centralSecurityServices",
         "iamPasswordPolicy",
@@ -241,14 +237,14 @@ def _validate_security_config(data: dict[str, Any]) -> None:
         "securityHub",
         "macie",
     }
-    if not any(key in data for key in expected_keys):
+    if not any(key in config_data for key in expected_keys):
         keys_str = ", ".join(sorted(expected_keys))
         raise LzaError(
             f"security-config.yaml must define at least one security section ({keys_str})"
         )
 
 
-def _validate_iam_config(data: dict[str, Any]) -> None:
+def _validate_iam_config(config_data: dict[str, Any]) -> None:
     expected_keys = {
         "providers",
         "policySets",
@@ -258,7 +254,7 @@ def _validate_iam_config(data: dict[str, Any]) -> None:
         "identityCenter",
         "samlProviders",
     }
-    if not any(key in data for key in expected_keys):
+    if not any(key in config_data for key in expected_keys):
         keys_str = ", ".join(sorted(expected_keys))
         raise LzaError(f"iam-config.yaml must define at least one IAM section ({keys_str})")
 

@@ -38,19 +38,7 @@ def download_installer_template_content(
     fallback_version: str | None = None,
     fallback_path: Path | None = LOCAL_PACKAGED_INSTALLER_TEMPLATE,
 ) -> str:
-    """Download the installer CloudFormation template from AWS with fallback.
-
-    Args:
-        url: The official AWS S3 URL for the installer template.
-        fallback_version: The LZA version requested for fallback (if None, fallback is disabled).
-        fallback_path: Path to the local packaged template fallback (representing v1.16.0).
-
-    Returns:
-        The downloaded or fallback CloudFormation template content as a string.
-
-    Raises:
-        LzaError: If the template cannot be downloaded and no fallback is available.
-    """
+    """Download the installer CloudFormation template from AWS, falling back to local packaged templates."""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "LZA-Workbench"})
         with urllib.request.urlopen(req, timeout=15) as response:
@@ -79,12 +67,6 @@ def download_installer_template_content(
 
 
 def download_installer_template(version: str, local_path: Path | None = None) -> Path:
-    """Download the installer CloudFormation template for a specific LZA version.
-
-    Args:
-        version: The LZA version to download the installer template for.
-        local_path: The local filesystem path to write the downloaded template to.
-    """
     normalized_version = normalize_lza_version(version)
     url = INSTALLER_TEMPLATE_URL_TEMPLATE.format(
         version=normalized_version, filename=INSTALLER_TEMPLATE_FILENAME

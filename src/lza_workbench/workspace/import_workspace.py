@@ -98,8 +98,6 @@ class ImportWorkspaceRequest:
 
 @dataclass(frozen=True)
 class WorkspaceImportResult:
-    """Structured result of workspace import workflow."""
-
     workspace_dir: Path
     config_dir: Path
     config: WorkspaceConfig

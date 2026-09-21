@@ -1,39 +1,161 @@
 # LZA Workbench
 
-A local CLI toolkit for initializing and managing AWS Landing Zone Accelerator (LZA) workspaces.
+LZA Workbench is a local Web and CLI application for initializing and operating customer-specific
+AWS Landing Zone Accelerator (LZA) workspaces.
 
-The repository contains the application source code, bundled LZA templates, and development assets. It does not contain customer workspaces or deployment artifacts.
+Customer workspaces and deployment artifacts live outside this repository. The repository contains
+the application, tests, bundled installer templates, starter LZA configuration, and workspace
+examples.
 
-## Repository Layout
+## Development Setup
 
-- `src/` — Application source code and all execution logic.
-- `tests/` — Automated tests.
-- `src/lza_workbench/resources/` — Bundled installer templates, starter customer configuration,
-  and workspace examples shipped with the CLI.
-- [`PROJECT.md`](PROJECT.md) — Durable project vision, architecture, and design principles.
-- [`TODO.md`](TODO.md) — Active feature backlog and unresolved design work.
-- [`docs/DONE.md`](docs/DONE.md) — Concise history of completed milestones.
-
-## Quick Start
-
-Clone the repository, install the development dependencies, and run the quality checks:
+Install the project and development dependencies:
 
 ```bash
 uv sync --group dev
-uv run ruff check .
-uv run pytest tests/test_package.py
 ```
 
-Create a customer workspace metadata structure:
+Run the CLI directly from the checkout:
 
 ```bash
-uv run lza init comm-it --skip-aws-check
+uv run lza --help
 ```
 
-The command prompts for missing customer/AWS values and writes:
+Install the current checkout as a local command for use from customer workspace directories:
+
+```bash
+uv tool install --reinstall .
+```
+
+If `lza` is not found, add the uv tool directory to the shell path:
+
+```bash
+uv tool update-shell
+```
+
+Reinstall the tool after source changes when testing the latest checkout.
+
+Useful development checks:
+
+```bash
+uv run ruff check .
+uv run pytest tests/test_package.py
+# uv run pytest  # Full suite when needed
+```
+
+## Start a New Workspace
+
+Create a workspace outside this repository:
+
+```bash
+lza init example \
+  --workspace-dir /path/to/customers/example \
+  --aws-profile example-root \
+  --aws-region eu-west-1
+```
+
+Use `--dry-run` to preview the generated files. Use `--skip-aws-check` only when the configured AWS
+identity cannot or should not be validated during initialization.
+
+Continue from the new workspace directory:
+
+```bash
+cd /path/to/customers/example
+lza installer init
+lza config init
+lza installer plan
+```
+
+When the plan is correct, deploy the installer and then synchronize and deploy the customer
+configuration:
+
+```bash
+lza installer deploy
+lza config deploy
+lza status
+```
+
+`lza installer plan` is non-mutating. Use `--dry-run` on mutating commands when available to inspect
+their planned actions.
+
+## Import an Existing Workspace
+
+Adopt an existing customer-owned LZA configuration:
+
+```bash
+lza import /path/to/customers/example
+```
+
+Use `.` for the current directory or `--lza-config-dir` when the configuration directory is not
+`aws-accelerator-config`:
+
+```bash
+cd /path/to/customers/example
+lza import . --lza-config-dir ./configuration
+```
+
+Import validates the existing configuration but does not modify files inside the customer-owned
+configuration directory. Use `--dry-run` to preview metadata changes and `--repair` when existing
+Workbench metadata is incomplete or corrupted.
+
+## Local Web Interface
+
+Start the Web interface for the current workspace:
+
+```bash
+lza ui
+```
+
+Or select a workspace explicitly:
+
+```bash
+lza ui --workspace-dir /path/to/customers/example
+lza ui --no-browser --port 8080
+```
+
+The server listens on `127.0.0.1:8000` by default and is intended for local, single-user operation.
+The Web interface supports workspace setup, operational status, installer settings and planning,
+configuration pull/push/deploy, pipeline inspection, and LZA uninstallation. Installer deployment
+itself remains a CLI operation.
+
+## CLI Command Reference
+
+The table lists the flags most useful to remember, not every available option. Run
+`lza <command> --help` for the authoritative argument and flag list.
+
+| Command | Purpose | Useful flags |
+| --- | --- | --- |
+| `lza init <customer-name>` | Create a new workspace and Workbench metadata. | `--workspace-dir`, `--aws-profile`, `--aws-role-arn`, `--aws-region`, `--lza-version`, `--dry-run`, `--force`, `--skip-aws-check` |
+| `lza import [workspace-dir]` | Adopt an existing LZA configuration and create or repair Workbench metadata. | `--lza-config-dir`, `--customer-name`, `--aws-profile`, `--aws-region`, `--lza-version`, `--installer-stack-name`, `--dry-run`, `--force`, `--repair` |
+| `lza ui` | Start the local Web interface. | `--workspace-dir`, `--host`, `--port`, `--no-browser` |
+| `lza status` | Show the overall workspace and deployment status. | — |
+| `lza status installer` | Show detailed installer status. Alias: `lza installer status`. | — |
+| `lza status config` | Show local/remote configuration and pipeline status. Alias: `lza config status`. | — |
+| `lza installer init` | Collect and save installer parameters. | `--management-account-email`, `--log-archive-account-email`, `--audit-account-email`, `--accelerator-prefix`, `--dry-run`, `--no-save` |
+| `lza installer plan` | Inspect the installer changes required in AWS. | `--dry-run` |
+| `lza installer deploy` | Create or update the installer CloudFormation stack. | `--dry-run`, `--force` |
+| `lza installer import` | Reconcile deployed installer parameters and template data into the workspace. | `--installer-stack-name`, `--dry-run` |
+| `lza config init` | Create local LZA configuration from a bundled template. | `--template`, `--dry-run`, `--force` |
+| `lza config pull` | Synchronize remote configuration into the local workspace. Alias: `download`. | `--dry-run`, `--force`, `--extract` / `--no-extract` |
+| `lza config push` | Synchronize local configuration to the configured remote repository. Alias: `upload`. | `--dry-run`, `--force` |
+| `lza config deploy` | Push configuration, start its pipeline, and optionally watch it. | `--dry-run`, `--no-watch`, `--verbose` |
+| `lza pipeline start` | Start a configured LZA pipeline without synchronizing configuration. | `--pipeline-name`, `--dry-run`, `--allow-concurrent` |
+| `lza pipeline watch` | Monitor an existing pipeline execution. | `--pipeline-name`, `--execution-id`, `--poll-interval`, `--verbose` |
+| `lza uninstall` | Plan or remove the LZA solution across accounts and regions. | `--regions`, `--all-regions`, `--accounts`, `--dry-run`, `--delete-s3-buckets`, `--delete-retained-resources`, `--skip-installer`, `--skip-pipeline` |
+
+## Workspace Files
+
+`lza-workspace.yaml` is the declarative source of truth for a customer workspace. It stores customer
+identity, AWS context, LZA version, installer settings, configuration-repository settings, and
+pipeline preferences.
+
+`.lza/state.json` stores operational information observed or produced while commands run. It is not
+a replacement for declarative workspace configuration.
+
+A typical initialized workspace starts with:
 
 ```text
-comm-it/
+example/
   lza-workspace.yaml
   aws-accelerator-installer/
   .lza/
@@ -41,224 +163,35 @@ comm-it/
     logs/
 ```
 
-Use `--dry-run` to preview the file operations without writing anything:
-
-```bash
-uv run lza init comm-it --dry-run --skip-aws-check
-```
-
-## Workspace Setup Flow
-
-Follow the recommended workflow sequence:
-
-1. **Initialize workspace metadata**:
-   ```bash
-   lza init <customer-name>
-   ```
-2. **Configure installer parameters**:
-   ```bash
-   lza installer init
-   ```
-   Prompts for parameters exposed by the selected CloudFormation installer template (including mandatory account emails) and saves accepted values to `lza-workspace.yaml`.
-3. **Initialize local LZA configuration**:
-   ```bash
-   lza config init
-   ```
-   Populates `aws-accelerator-config/` from the packaged configuration template, automatically rendering placeholders (customer slug, prefix, region, and account emails). Use `--force` to reinitialize or `--dry-run` to preview changes.
-
-Then inspect the non-mutating AWS deployment plan:
-
-```bash
-lza installer plan
-```
-
-Use `--dry-run` with either command to avoid local writes. `lza installer plan` never modifies AWS
-resources.
-
-## Local Web Interface
-
-Start the read-only local workspace overview from inside a workspace:
-
-```bash
-lza ui
-```
-
-The server listens on `http://127.0.0.1:8000` and opens the Overview page in a browser. Use an
-explicit workspace path when launching elsewhere, or disable automatic browser opening for an SSH
-or headless session:
-
-```bash
-lza ui --workspace-dir /path/to/customer-workspace
-lza ui --no-browser --port 8080
-```
-
-The initial Web interface shows workspace and deployment status only. It does not edit local
-configuration or perform AWS mutations.
-
-## Import an Existing Workspace
-
-Adopt an existing customer-owned LZA configuration by directory:
-
-```bash
-lza import /path/to/comm-it
-```
-
-From inside that directory, use `.`:
-
-```bash
-lza import .
-```
-
-Use `--lza-config-dir` when the configuration folder is not the default
-`aws-accelerator-config`. Import reads valid existing metadata as the prompt defaults;
-explicit options replace them:
-
-```bash
-lza import /path/to/comm-it \
-  --customer-name Comm-IT \
-  --aws-profile comm-it-root \
-  --aws-region eu-west-1 \
-  --lza-version v1.15.5
-```
-
-Import validates the existing configuration structure but never writes beneath
-`aws-accelerator-config/`. It creates or updates only `lza-workspace.yaml` and
-`.lza/state.json`. It validates the configured AWS profile unless `--skip-aws-check` is used.
-
-Preview metadata changes without writing:
-
-```bash
-lza import /path/to/comm-it --dry-run
-```
-
-When `lza init` finds an existing directory, it stops and directs you to use `lza import`.
-`lza init --force` overwrites generated metadata only and leaves the customer configuration
-directory unchanged.
+`lza config init` creates the customer `aws-accelerator-config/` directory from the selected bundled
+template.
 
 ## Configuration Synchronization
 
-`lza config push` (`upload`) packages local configuration for S3, including customer
-`backup/` files by default. ZIP exclusions come only from
-`configuration.packaging.exclude` in `lza-workspace.yaml` and the root `.gitignore`.
-Explicit packaging exclusions take precedence; later matching `.gitignore` rules win. Supported patterns include names, relative paths, wildcards, directory
-rules, comments, and negation. Nested ignore files and general backslash escaping
-are not supported. A child cannot be re-included while its parent remains ignored.
-These packaging rules do not change Git push behavior.
+Use `lza config pull` to bring the configured remote source into the workspace and `lza config push`
+to publish local configuration without starting the pipeline. `lza config deploy` performs the push
+and starts the configuration pipeline.
 
-Customer ignore files are never rewritten. `.prettierignore` does not affect ZIP
-contents. Remove an existing explicit `backup` packaging exclusion if you want to
-include your AWS Backup definitions.
+For S3-backed configuration, archive exclusions come from `configuration.packaging.exclude` in
+`lza-workspace.yaml` and the workspace root `.gitignore`. Use `--dry-run` to inspect synchronization
+before changing local or remote content.
 
-For an imported S3 workspace without a prior successful synchronization, push requires
-interactive confirmation or `--force`. Run `lza config download` first to synchronize
-remote configuration locally. Downloading with `--no-extract` alone does not clear this
-guard. `--dry-run` reports the warning and destination without changing files or S3.
+## AWS Authentication
 
-Both push and pull persist a missing standard S3 bucket name into
-`configuration.repository.bucket` in `lza-workspace.yaml`, using the configured account
-(or recorded management account) and region. Explicit buckets retain the existing
-standard-bucket validation. Dry runs show the derived bucket without saving it.
+LZA Workbench does not store AWS access keys or session tokens in `lza-workspace.yaml`. Use an AWS
+profile, IAM Identity Center configuration, environment or workload credentials, or an external
+credential source with `aws.role_arn`.
 
-## Workspace Configuration
+The optional `aws.account_id` acts as a safety guard: AWS-mutating operations stop when STS resolves
+a different account.
 
-`lza-workspace.yaml` is the declarative source of truth for a customer workspace. It is
-loaded with `ruamel.yaml` and validated by nested Pydantic models. The top-level YAML keys
-match `WorkspaceConfig`; nested sections match their corresponding model fields.
+## Uninstallation Safety
 
-```yaml
-customer:
-  name: Example Customer
-  slug: example-customer
-
-aws:
-  profile: example-root
-  region: eu-west-1
-
-lza:
-  version: v1.15.5
-
-configuration:
-  local_path: aws-accelerator-config
-
-pipelines:
-  installer:
-    name: AWSAccelerator-InstallerStack
-  configuration:
-    name: AWSAccelerator-Pipeline
-```
-
-Defaults are defined by `WorkspaceConfig` in `src/lza_workbench/workspace/schema.py`; YAML supplies
-explicit overrides. Unknown keys are rejected. See
-`src/lza_workbench/resources/workspace_examples/` for minimal, full, configuration-only, and
-installer-only examples.
-
-### AWS authentication
-
-LZA Workbench never stores AWS access keys or session tokens in `lza-workspace.yaml`.
-Authentication is external to the tool: use an AWS profile backed by IAM Identity Center (SSO)
-or shared credentials, or configure `aws.role_arn` to assume a role using external source
-credentials (such as environment or instance/container credentials). The optional
-`aws.account_id` is a safety guard: AWS-mutating commands stop if STS resolves a different
-account.
-
-Existing workspace YAML containing `access_key` or `secret_access_key` is rejected with a
-migration error. Remove the secret fields and configure authentication outside the workspace.
-
-## Development
-
-Install dependencies:
+Always run an uninstallation preview first:
 
 ```bash
-uv sync --group dev
+lza uninstall --dry-run
 ```
 
-Run checks:
-
-```bash
-uv run ruff check .
-uv run pytest tests/test_package.py   # Fast architectural boundary checks (<1s)
-# uv run pytest                       # Full regression test suite (optional/on-demand)
-```
-
-## Local CLI Installation
-
-Install the project as a local CLI so it can be executed from any directory during development.
-
-```bash
-uv tool install .
-```
-
-Ensure your shell PATH includes uv's tool bin directory:
-
-```bash
-uv tool update-shell
-```
-
-Show where uv installs tool binaries:
-
-```bash
-uv tool dir --bin
-```
-
-Test from any directory:
-
-```bash
-lza
-lza-workbench
-```
-
-Initialize a workspace after installing the CLI:
-
-```bash
-lza init comm-it --skip-aws-check
-```
-
-Reinstall after code changes to test latest local version:
-
-```bash
-uv tool install --reinstall .
-```
-
-## Current Status
-
-The project is in active development. Feature work is tracked in [`TODO.md`](TODO.md).
+Deleting S3 buckets or resources retained by CloudFormation requires explicit flags. Review the
+planned accounts, regions, stacks, buckets, and retained resources before applying the operation.

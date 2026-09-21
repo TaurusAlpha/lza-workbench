@@ -23,7 +23,7 @@ STANDARD_CONFIG_PATHS = (
 )
 
 
-def resolve_path_value(obj: Any, path: str) -> str | None:
+def resolve_path_value(template_context: Any, path: str) -> str | None:
     """Dynamically resolve a dot-separated attribute or key path from an object.
 
     Supports paths starting with or without 'config.' prefix (e.g.
@@ -32,7 +32,7 @@ def resolve_path_value(obj: Any, path: str) -> str | None:
     if path.startswith("config."):
         path = path[len("config.") :]
 
-    current: Any = obj
+    current: Any = template_context
     for part in path.split("."):
         if current is None:
             return None
@@ -81,15 +81,7 @@ def compute_config_directory_digest(config_dir: Path) -> str:
 
 
 def render_template_text(content: str, config: WorkspaceConfig) -> tuple[str, list[str]]:
-    """Render placeholders in template text using dynamic values from WorkspaceConfig.
-
-    Replaces `${path.to.field}` when a non-empty resolved value exists in `config`.
-    Preserves unresolved placeholders in the text and returns their names.
-    LZA-native double-curly syntax (e.g. `{{ HomeRegion }}`) is untouched.
-
-    Returns:
-        A tuple of (rendered_content, list_of_unresolved_placeholder_tokens).
-    """
+    """Render dynamic placeholders in template text from WorkspaceConfig, preserving LZA native syntax."""
     unresolved: list[str] = []
 
     def _replace_match(match: re.Match[str]) -> str:

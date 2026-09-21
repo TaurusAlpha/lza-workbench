@@ -317,7 +317,7 @@ def ui_command(
     port: params.UiPort = 8000,
     no_browser: params.NoBrowser = False,
 ) -> None:
-    """Start the local read-only LZA Workbench Web interface."""
+    """Start the local LZA Workbench Web interface."""
     from lza_workbench.interfaces.web.main import run_web_server
 
     run_web_server(

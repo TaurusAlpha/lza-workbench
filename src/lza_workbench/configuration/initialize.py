@@ -33,8 +33,6 @@ from lza_workbench.workspace.validation import WorkspaceCapability
 
 @dataclass(frozen=True)
 class ConfigInitResult:
-    """Structured result of configuration initialization workflow."""
-
     workspace_dir: Path
     config_dir: Path
     template_source: ResolvedTemplateSource

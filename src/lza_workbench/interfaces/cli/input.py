@@ -1,3 +1,7 @@
+"""Interactive terminal prompt, choice selection, and input validation helpers."""
+
+from __future__ import annotations
+
 import re
 from collections.abc import Callable
 
@@ -9,7 +13,6 @@ EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 def validate_email(value: str) -> str:
-    """Validate and strip an email address parameter."""
     cleaned = (value or "").strip()
     if not EMAIL_PATTERN.match(cleaned):
         raise ValueError("Must be a valid email address (e.g. user@example.com).")
@@ -23,7 +26,6 @@ def value_or_prompt(
     interactive: bool = True,
     validator: Callable[[str], str] | None = None,
 ) -> str:
-    """Use an explicit value, prompt with a default, or use that default."""
     if value and value.strip():
         cleaned = value.strip()
         if validator:

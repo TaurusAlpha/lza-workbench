@@ -26,7 +26,6 @@ def inspect_codeconnection(
     client: Any,
     connection_arn: str,
 ) -> CodeConnectionStatusResult:
-    """Inspect CodeConnection status without modifying AWS resources."""
     clean_arn = (connection_arn or "").strip()
     if not clean_arn:
         return CodeConnectionStatusResult(

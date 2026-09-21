@@ -31,7 +31,6 @@ from lza_workbench.workspace.schema import LzaConfig
 
 
 def render_workspace_init_result(result: WorkspaceInitResult) -> None:
-    """Render the results of workspace initialization."""
     workspace_dir = result.workspace_dir
     config = result.config
     identity = result.identity
@@ -182,7 +181,6 @@ def _render_import_details(
 
 
 def render_workspace_import_result(result: WorkspaceImportResult) -> None:
-    """Render the results of workspace import."""
     if result.dry_run:
         print_dry_run_header("lza import")
         _render_import_location(result)

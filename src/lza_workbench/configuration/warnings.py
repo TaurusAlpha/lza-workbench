@@ -33,7 +33,6 @@ def compile_configuration_warnings(
 
 
 def _compile_workspace_warnings(workspace: ConfigurationWorkspaceStatus) -> list[str]:
-    """Compile warnings from local workspace observations."""
     warnings: list[str] = []
     if not workspace.config_dir_exists:
         warnings.append(
@@ -50,7 +49,6 @@ def _compile_workspace_warnings(workspace: ConfigurationWorkspaceStatus) -> list
 
 
 def _compile_local_git_warnings(local_git: LocalGitStatus) -> list[str]:
-    """Compile warnings from local Git observations."""
     warnings: list[str] = []
     if local_git.working_tree and local_git.working_tree.has_uncommitted:
         warnings.append(
@@ -71,7 +69,6 @@ def _compile_local_git_warnings(local_git: LocalGitStatus) -> list[str]:
 
 
 def _compile_s3_repository_warnings(repository: S3ConfigurationRepositoryStatus) -> list[str]:
-    """Compile warnings from an S3 configuration repository."""
     label = f" '{repository.bucket}'" if repository.bucket else ""
     if repository.bucket_exists is False:
         return [f"Configured S3 bucket{label} does not exist."]
@@ -88,7 +85,6 @@ def _compile_s3_repository_warnings(repository: S3ConfigurationRepositoryStatus)
 def _compile_codecommit_repository_warnings(
     repository: CodeCommitConfigurationRepositoryStatus,
 ) -> list[str]:
-    """Compile warnings from a CodeCommit configuration repository."""
     if repository.exists is False:
         return ["Configured CodeCommit repository does not exist."]
     if repository.accessible is False:
@@ -104,7 +100,6 @@ def _compile_codecommit_repository_warnings(
 def _compile_codeconnection_repository_warnings(
     repository: CodeConnectionConfigurationRepositoryStatus,
 ) -> list[str]:
-    """Compile warnings from a CodeConnection configuration repository."""
     if repository.status == "PENDING":
         return ["CodeConnection is in PENDING status. Complete the handshake in the AWS Console."]
     if repository.status in {"ERROR", "NOT_FOUND", "INACCESSIBLE"}:
@@ -113,7 +108,6 @@ def _compile_codeconnection_repository_warnings(
 
 
 def _compile_repository_warnings(repository: ConfigurationRepositoryStatus) -> list[str]:
-    """Compile warnings from the configured remote repository."""
     if isinstance(repository, S3ConfigurationRepositoryStatus):
         return _compile_s3_repository_warnings(repository)
     if isinstance(repository, CodeCommitConfigurationRepositoryStatus):
@@ -124,7 +118,6 @@ def _compile_repository_warnings(repository: ConfigurationRepositoryStatus) -> l
 
 
 def _compile_pipeline_warnings(pipeline: ConfigurationPipelineStatus) -> list[str]:
-    """Compile warnings from the latest configuration pipeline execution."""
     if pipeline.status == "Failed":
         detail = (
             f" (Stage: '{pipeline.failed_stage}', Action: '{pipeline.failed_action}')"

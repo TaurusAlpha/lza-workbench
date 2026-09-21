@@ -15,12 +15,10 @@ from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
 
 def get_config_path(workspace_dir: Path) -> Path:
-    """Construct and normalize the absolute configuration file path from workspace root."""
     return workspace_dir.expanduser().resolve() / WORKSPACE_CONFIG_FILE
 
 
 def get_state_path(workspace_dir: Path) -> Path:
-    """Construct absolute operational state path from workspace root."""
     return workspace_dir.expanduser().resolve() / WORKSPACE_STATE_FILE
 
 
@@ -31,7 +29,7 @@ def load_workspace_config(workspace_dir: Path) -> WorkspaceConfig:
     try:
         with path.open("r", encoding="utf-8") as handle:
             data = yaml.load(handle)
-        _reject_persisted_aws_secrets(data)
+        _assert_no_persisted_aws_secrets(data)
         return WorkspaceConfig.model_validate(data)
     except (OSError, YAMLError, ValidationError, TypeError, ValueError) as exc:
         raise LzaError(f"Invalid workspace configuration {path}: {exc}") from exc
@@ -70,9 +68,9 @@ def write_workspace_state(workspace_dir: Path, state: WorkspaceState) -> None:
     )
 
 
-def _reject_persisted_aws_secrets(data: object) -> None:
+def _assert_no_persisted_aws_secrets(raw_config: object) -> None:
     """Reject workspace configuration that persists AWS secret keys."""
-    if not isinstance(data, dict) or not isinstance(aws := data.get("aws"), dict):
+    if not isinstance(raw_config, dict) or not isinstance(aws := raw_config.get("aws"), dict):
         return
     secret_fields = {
         "access_key",
