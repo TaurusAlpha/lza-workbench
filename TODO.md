@@ -2,7 +2,8 @@
 
 This file maintains the command inventory, planned features, improvements, unresolved design
 decisions, and technical debt. Completed items may remain checked until they are manually verified
-and removed.
+and removed. Broader product directions belong in `ROADMAP.md` and must be discussed before they
+become implementation work in this file.
 
 ## Command Inventory
 
@@ -228,77 +229,40 @@ Show detailed configuration repository status, remote source existence/accessibi
 
 The local Web GUI is the primary planned interactive interface.
 
-- [ ] Add installer deployment mutation flow.
-- [ ] Keep multi-user/server operation out of the current scope.
+Planned work:
 
-## Workspace
+- [ ] Add a Web action that shows the installer plan, obtains explicit confirmation, and then
+  deploys or updates the installer CloudFormation stack using the existing deployment workflow.
 
-- [ ] Support workspace schema migration.
+Future work:
 
-## Package Boundaries
+- [ ] Define a non-duplicative Environment Context view or section for AWS Organization and
+  Control Tower context. Decide what information is useful and where it belongs relative to the
+  Overview before implementation.
 
-- [ ] Keep one-file support modules as modules unless a subpackage has multiple cohesive internal
-  modules or establishes a real boundary. Reassess new directories against this rule during future
-  refactors.
+## Workspace Configuration
+
+Planned work:
+
+- [ ] Generate JSON Schema directly from `WorkspaceConfig` for YAML editor autocomplete and
+  validation. Keep the schema generated and reproducible; do not maintain a separate handwritten
+  schema.
 
 ## Authentication
 
-- [ ] Reassess and likely remove application-managed source credential priming after selecting the
-  preferred external AWS authentication approach. Keep priming opt-in in the meantime.
-- [ ] Support AWS IAM Identity Center (SSO) profile discovery.
-- [ ] Document bastion and proxy setup where required.
+Future work:
 
-## Configuration Templates
-
-- [ ] Validate template compatibility with selected LZA version.
-- [ ] Support Git template source.
-- [ ] Support template version/ref.
-- [ ] Support cached templates.
-
-## Reports
-
-- [ ] Decide whether reports use `lza report` with one subcommand per report type.
-- [ ] Generate `reports/aws-profile-check.md`.
-- [ ] Generate `reports/status.md`.
-- [ ] Generate pipeline execution reports.
-- [ ] Generate CodeBuild failure summaries.
+- [ ] Add read-only discovery and selection of existing local AWS profiles in Web workspace setup.
+  Never modify the user's AWS config or credentials files. Use the selected workspace profile as
+  the source identity for runtime AssumeRole access to member accounts instead of creating
+  per-account profiles.
 
 ## LZA Versions
 
-- [ ] Auto-discover latest LZA versions.
-- [ ] Support migration helper between LZA versions.
+Future work:
 
-## Configuration Generation
-
-- [ ] Organization/OU generator.
-- [ ] Account generator.
-- [ ] Enabled regions generator.
-- [ ] Basic naming replacement generator.
-- [ ] Basic network pattern generator.
-- [ ] SCP pack side-loading.
-- [ ] RCP pack side-loading.
-- [ ] Config rule pack side-loading.
-- [ ] Security service defaults.
-- [ ] Backup defaults.
-
-## AI & MCP
-
-- [ ] Use AI to suggest replacements.
-- [ ] Use AI to explain LZA config files.
-- [ ] Use AI to compare customer requirements with current config.
-- [ ] Use AI to summarize CodeBuild failures.
-- [ ] Use AI to troubleshoot failed CloudFormation stacks.
-- [ ] Evaluate AWS-provided LZA MCP server.
-- [ ] Add local MCP server exposing workspace files, templates, validation, and pipeline status.
-
-AI features remain advisory by default; execution must be a separate explicit action.
-
-## Distribution
-
-- [ ] Audit CLI defaults for safe, non-destructive behavior.
-- [ ] Standardize actionable error messages and remediation guidance.
-
-## Backlog
-
-- [ ] Expand "Environment Context" into a dedicated workspace details page showing AWS Organization context (Control Tower, accounts, OUs) and workspace lifecycle actions.
-- [ ] Generate JSON Schema for editor support.
+- [ ] Add on-demand discovery of official LZA releases in the Web interface. Keep CLI version input
+  manual.
+- [ ] When changing the configured LZA version, warn the user about relevant breaking or
+  configuration changes from the official release notes and require confirmation before
+  proceeding. Do not modify customer configuration automatically.

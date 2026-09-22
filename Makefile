@@ -1,4 +1,4 @@
-.PHONY: all repo-map architecture-diagram docs
+.PHONY: all repo-map file-architecture docs
 
 REPOMIX_VERSION ?= 1.18.0
 
@@ -8,11 +8,8 @@ all: docs
 repo-map:
 	npx --yes repomix@$(REPOMIX_VERSION)
 
-# Human-facing architecture diagram: tracked in git so architecture is visible without running tools
-architecture-diagram:
-	uv run pyreverse -o mmd -p LzaWorkbench -d docs src/lza_workbench
-	@test -f docs/packages_LzaWorkbench.mmd || (echo "ERROR: Expected pyreverse output 'docs/packages_LzaWorkbench.mmd' not found" >&2; exit 1)
-	mv docs/packages_LzaWorkbench.mmd docs/architecture.mmd
-	rm -f docs/classes_LzaWorkbench.mmd
+# Human-facing repository map: generated from the filesystem and module purpose docstrings
+file-architecture:
+	python3 scripts/generate_file_architecture.py
 
-docs: repo-map architecture-diagram
+docs: repo-map file-architecture

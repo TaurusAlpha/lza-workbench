@@ -30,7 +30,6 @@ dev = [
   "ruff>=0.12.0",
   "complexipy>=8.0.1",
   "import-linter>=2.15.0",
-  "pylint>=3.3.0",
 ]
 
 [tool.ruff]

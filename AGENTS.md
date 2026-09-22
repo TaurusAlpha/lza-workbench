@@ -54,6 +54,11 @@ Optimize for code that is easy for a human to read, change, and debug.
 - Avoid duplicated logic, large mixed-responsibility modules, deep nesting, clever expressions, and unnecessary indirection.
 - Introduce abstractions only when they remove meaningful duplication or establish a clear architectural boundary.
 - Use descriptive names and straightforward control flow.
+- Split a module when it contains distinct responsibilities or becomes difficult to navigate. Do
+  not create a separate module solely to isolate one small function.
+- Prefer a module over a single-implementation-file subpackage. Create the subpackage when it owns
+  multiple cohesive modules, establishes a real boundary, or an accepted near-term design requires
+  that structure; possible future growth alone is not sufficient.
 
 ### Architecture
 
@@ -74,6 +79,9 @@ Optimize for code that is easy for a human to read, change, and debug.
 ## Documentation
 
 - Update project documentation only when the requested change materially changes documented behavior or architecture.
+- Run `make file-architecture` after adding, removing, or moving an application module, or after
+  materially changing a module's responsibility and purpose docstring. Do not regenerate it for
+  unrelated implementation changes.
 - In-code docstrings follow the Code Clarity Convention below and should be maintained as part of normal source changes.
 
 ## Code Clarity Convention

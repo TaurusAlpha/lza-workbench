@@ -67,6 +67,10 @@ validates and persists the enclosing document. Persisted documents must match th
 
 Runtime state must not duplicate declarative configuration already stored in `lza-workspace.yaml` unless specifically required for operational efficiency and state reconciliation.
 
+During active development, backward compatibility across workspace schema changes is not
+guaranteed and automatic schema migration is not supported. Re-import the workspace when metadata
+must be regenerated for the current schema.
+
 ## Core Architecture
 
 ### AWS Client Management
@@ -134,6 +138,8 @@ Application errors must remain independent of presentation and execution interfa
 - Headless-service interfaces may translate the same errors into structured results, logs, or worker status.
 - Typer/Click usage exceptions should be reserved for invalid command-line arguments or invocation syntax.
 - Unexpected programming errors should remain distinguishable from expected application failures.
+- Expected user-facing errors should identify the failed operation and provide actionable
+  remediation when it is known.
 
 ### Workspace Readiness
 
@@ -157,6 +163,8 @@ General principles:
 - Keep Web routes and CLI command handlers thin; neither interface should duplicate orchestration.
 - Keep planning/read-only behavior separate from mutation where practical.
 - AWS-mutating operations must have clear command intent.
+- Destructive operations must require an explicit confirmation or override and should provide a
+  non-mutating preview when practical.
 - Prefer reconciliation semantics when initial deployment and later updates represent the same operation.
 - Avoid duplicate commands that provide overlapping workflow semantics.
 - Keep explicit control available for operations such as synchronization, execution, and monitoring.
@@ -172,6 +180,8 @@ Documentation therefore has intentionally separate responsibilities:
 - `PROJECT.md` defines durable project identity and architectural invariants.
 - `TODO.md` maintains the command inventory, planned feature work, improvements, and unresolved
   decisions. Completed items may remain checked until they are manually verified and removed.
+- `ROADMAP.md` records possible product directions that require discussion before becoming
+  implementation work in `TODO.md`.
 - `AGENTS.md` defines the current implementation and coding baseline for AI-assisted development.
 - `README.md` documents current user-facing and development usage.
 - `docs/REVIEW.md` is an optional review-specific instruction set used when explicitly requested.
@@ -228,8 +238,8 @@ Natural areas of future development include:
 - configuration generators;
 - security and policy pack integration;
 - optional LZA-focused MCP/AI assistance;
-- server-side or multi-user operation.
+- authenticated server-side and multi-user operation.
 
-Detailed planning and prioritization belong in `TODO.md`.
+Product directions belong in `ROADMAP.md`; concrete implementation work belongs in `TODO.md`.
 
 AI should assist with analysis, generation, validation, and troubleshooting. It should not become the primary autonomous execution mechanism for customer environments.
