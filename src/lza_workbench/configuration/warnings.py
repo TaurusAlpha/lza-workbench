@@ -11,6 +11,11 @@ from lza_workbench.configuration.inspection.models import (
     LocalGitStatus,
     S3ConfigurationRepositoryStatus,
 )
+from lza_workbench.installer.versions import (
+    PACKAGED_INSTALLER_VERSION,
+    is_unwanted_lza_version,
+    normalize_lza_version,
+)
 
 __all__ = [
     "compile_configuration_warnings",
@@ -34,6 +39,12 @@ def compile_configuration_warnings(
 
 def _compile_workspace_warnings(workspace: ConfigurationWorkspaceStatus) -> list[str]:
     warnings: list[str] = []
+    if is_unwanted_lza_version(workspace.lza_version):
+        norm = normalize_lza_version(workspace.lza_version)
+        warnings.append(
+            f"Configured LZA version '{norm}' is old and unwanted (<= v1.5.0). "
+            f"Consider upgrading to a supported version (e.g. {PACKAGED_INSTALLER_VERSION} or >= v1.5.1)."
+        )
     if not workspace.config_dir_exists:
         warnings.append(
             "Local configuration directory is missing. "

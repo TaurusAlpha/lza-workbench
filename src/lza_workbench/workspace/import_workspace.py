@@ -610,6 +610,8 @@ def _discover_live_aws(
         if identity:
             state.management_account_id = identity.get("account")
             state.caller_arn = identity.get("arn")
+            if not config.aws.account_id and identity.get("account"):
+                config.aws.account_id = identity.get("account")
             (
                 config,
                 state,

@@ -6,6 +6,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from lza_workbench.errors import LzaError
+from lza_workbench.installer.versions import (
+    PACKAGED_INSTALLER_VERSION,
+    is_unwanted_lza_version,
+    normalize_lza_version,
+)
 
 if TYPE_CHECKING:
     from lza_workbench.workspace.schema import WorkspaceConfig
@@ -22,6 +27,7 @@ class MissingInstallerConfigField:
 @dataclass(frozen=True)
 class InstallerConfigValidationResult:
     missing_fields: tuple[MissingInstallerConfigField, ...]
+    warnings: tuple[str, ...] = ()
 
     @property
     def is_complete(self) -> bool:
@@ -106,7 +112,18 @@ def validate_installer_configuration(config: WorkspaceConfig) -> InstallerConfig
     )
     require("Accelerator Prefix", "lza", "accelerator_prefix", config.lza.accelerator_prefix)
 
-    return InstallerConfigValidationResult(missing_fields=tuple(missing))
+    warnings: list[str] = []
+    if is_unwanted_lza_version(config.lza.version):
+        norm = normalize_lza_version(config.lza.version)
+        warnings.append(
+            f"Configured LZA version '{norm}' is old and unwanted (<= v1.5.0). "
+            f"Consider upgrading to a supported version (e.g. {PACKAGED_INSTALLER_VERSION} or >= v1.5.1)."
+        )
+
+    return InstallerConfigValidationResult(
+        missing_fields=tuple(missing),
+        warnings=tuple(warnings),
+    )
 
 
 __all__ = [

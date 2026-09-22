@@ -70,8 +70,6 @@ synchronization never provisions missing remotes.
 
 #### Installer prerequisite ownership
 
-- [x] Standalone workspace bootstrap removed; installer prerequisites are owned by
-  `lza installer plan` and `lza installer deploy`.
 - [ ] If retained, define its contract as preparation of shared workspace operational substrate:
   workspace-owned paths/metadata, the Workbench assets bucket, and cross-feature prerequisite
   coordination. It must not become the owner of installer source policy or configuration
@@ -184,6 +182,7 @@ with the current workspace.
 Uninstall the LZA solution rather than deleting only the installer stack across managed accounts and regions.
 
 Implementation notes:
+
 - AWS retains some data-bearing resources to avoid accidental data loss, so preservation and cleanup choices must be explicit.
 - Reference: <https://docs.aws.amazon.com/solutions/latest/landing-zone-accelerator-on-aws/uninstall-the-solution.html>.
 
@@ -231,16 +230,10 @@ The local Web GUI is the primary planned interactive interface.
 
 - [ ] Add installer deployment mutation flow.
 - [ ] Keep multi-user/server operation out of the current scope.
-- [ ] Split `interfaces/web/status.py` by interface responsibility: active workspace context,
-  feature route registration, and response serialization. Keep API contracts and route behavior
-  unchanged; do not move feature policy into the Web layer.
 
 ## Workspace
 
 - [ ] Support workspace schema migration.
-- [ ] Generate JSON Schema for editor support.
-- [ ] Resolve the account ID from authenticated AWS identity, including profile-based
-  authentication, and persist the accepted value in `lza-workspace.yaml`.
 
 ## Package Boundaries
 
@@ -252,28 +245,15 @@ The local Web GUI is the primary planned interactive interface.
 
 - [ ] Reassess and likely remove application-managed source credential priming after selecting the
   preferred external AWS authentication approach. Keep priming opt-in in the meantime.
-- [ ] Add an AWS profile creation or authentication-onboarding helper.
 - [ ] Support AWS IAM Identity Center (SSO) profile discovery.
-- [ ] Support static-key profile discovery without storing credentials in workspace metadata.
-- [ ] Support AssumeRole profile configuration.
 - [ ] Document bastion and proxy setup where required.
 
 ## Configuration Templates
 
 - [ ] Validate template compatibility with selected LZA version.
 - [ ] Support Git template source.
-- [ ] Support Bitbucket template source.
 - [ ] Support template version/ref.
 - [ ] Support cached templates.
-
-## Testing & Quality Assurance
-
-- [ ] Add unified End-to-End Workspace Lifecycle integration test (`tests/cli/test_lifecycle_e2e.py`) covering sequential execution: `lza init` -> `lza installer init` -> `lza config init` -> `lza installer plan` -> `lza installer deploy` -> `lza config push` -> `lza status`.
-- [ ] Add error resilience tests for corrupted/partial `.lza/state.json` and malformed `lza-workspace.yaml` files to verify clean recovery guidance.
-- [ ] Add error reporting tests for Git merge conflicts and remote authentication failures during `lza config pull`.
-- [ ] Add CloudFormation template size limit boundary test verifying S3 `TemplateURL` is always used when templates exceed 51.2 KB.
-- [ ] Add an `e2e` Pytest marker when the end-to-end lifecycle test is introduced; the current
-  `unit`, `workflow`, `cli`, `git`, and `arch` markers are configured in `pyproject.toml`.
 
 ## Reports
 
@@ -285,12 +265,8 @@ The local Web GUI is the primary planned interactive interface.
 
 ## LZA Versions
 
-- [ ] Support blocked/unsupported versions list.
 - [ ] Auto-discover latest LZA versions.
-- [ ] Cache installer templates.
-- [ ] Warn on unstable or very old versions.
 - [ ] Support migration helper between LZA versions.
-- [ ] Validate installer template compatibility with the selected LZA version.
 
 ## Configuration Generation
 
@@ -321,12 +297,8 @@ AI features remain advisory by default; execution must be a separate explicit ac
 
 - [ ] Audit CLI defaults for safe, non-destructive behavior.
 - [ ] Standardize actionable error messages and remediation guidance.
-- [ ] Add command examples.
-- [ ] Add contribution guidelines.
-- [ ] Remove personal/company-specific hardcoding.
 
 ## Backlog
 
-- [ ] Multi-user/server mode.
-- [ ] Review how progress polling is performed across long-running operations (pipeline watch, uninstallation, etc.) requiring continuous status refresh.
 - [ ] Expand "Environment Context" into a dedicated workspace details page showing AWS Organization context (Control Tower, accounts, OUs) and workspace lifecycle actions.
+- [ ] Generate JSON Schema for editor support.

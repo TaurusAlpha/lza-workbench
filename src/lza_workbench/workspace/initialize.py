@@ -93,9 +93,14 @@ def init_workspace(
             require_identity=True,
             prime_credentials=config.aws.prime_credentials,
         ).identity
+        if identity and identity.get("account") and not config.aws.account_id:
+            config.aws.account_id = identity["account"]
 
     state = WorkspaceState.from_config(config)
     state.initialized_at = datetime.datetime.now(datetime.UTC)
+    if identity:
+        state.management_account_id = identity.get("account")
+        state.caller_arn = identity.get("arn")
     planned_paths = planned_write_paths(resolved_workspace_dir, config)
 
     if dry_run:

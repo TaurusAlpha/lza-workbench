@@ -171,6 +171,8 @@ classDiagram
   }
   class main {
   }
+  class serializers {
+  }
   class status {
   }
   class uninstall {
@@ -329,6 +331,7 @@ classDiagram
   validation --> errors
   validation --> versions
   warnings --> models
+  warnings --> versions
   aws --> session
   cloudformation --> errors
   cloudformation --> errors
@@ -439,6 +442,7 @@ classDiagram
   validation --> config
   validation --> preflight
   config --> errors
+  config --> versions
   preflight --> errors
   preflight --> cloudformation
   preflight --> config
@@ -516,6 +520,16 @@ classDiagram
   context --> errors
   context --> import_workspace
   main --> app
+  serializers --> pull
+  serializers --> push
+  serializers --> status
+  serializers --> initialize
+  serializers --> plan
+  serializers --> status
+  serializers --> status
+  serializers --> observer
+  serializers --> import_workspace
+  serializers --> initialize
   status --> deploy
   status --> pull
   status --> push
@@ -526,6 +540,7 @@ classDiagram
   status --> reset
   status --> status
   status --> context
+  status --> serializers
   status --> status
   status --> observer
   status --> import_workspace
