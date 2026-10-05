@@ -330,6 +330,8 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     const reqIndicator = group.querySelector(".required-indicator");
 
     if (isVisible) {
+      group.hidden = false;
+      group.style.display = "";
       group.classList.remove("form-group-hidden");
       if (input) {
         input.disabled = false;
@@ -342,6 +344,8 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
         }
       }
     } else {
+      group.hidden = true;
+      group.style.display = "none";
       group.classList.add("form-group-hidden");
       if (input) {
         input.disabled = true;
@@ -357,7 +361,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
   }
 
   function updateFieldVisibility() {
-    // 1. Repository Source conditional visibility
+    // 1. Installer Engine Source (RepositorySource)
     const repoSourceEl = container.querySelector("#installer-field-RepositorySource");
     const repoSource = (repoSourceEl ? repoSourceEl.value : "codecommit").toLowerCase();
 
@@ -373,8 +377,14 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
       setFieldVisibility("RepositoryBranchName", false, false);
       setFieldVisibility("RepositoryBucketName", true, true);
       setFieldVisibility("RepositoryBucketObject", true, true);
+    } else if (repoSource === "codeconnection") {
+      setFieldVisibility("RepositoryOwner", true, true);
+      setFieldVisibility("RepositoryName", true, true);
+      setFieldVisibility("RepositoryBranchName", true, true);
+      setFieldVisibility("RepositoryBucketName", false, false);
+      setFieldVisibility("RepositoryBucketObject", false, false);
     } else {
-      // codecommit or codeconnection
+      // codecommit
       setFieldVisibility("RepositoryOwner", false, false);
       setFieldVisibility("RepositoryName", true, true);
       setFieldVisibility("RepositoryBranchName", true, true);
@@ -396,25 +406,25 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     const isUsingExisting = useExistingVal === "Yes";
 
     if (configLoc === "s3") {
+      // S3 -> all are not relevant
       setFieldVisibility("UseExistingConfigRepo", false, false);
       setFieldVisibility("ExistingConfigRepositoryName", false, false);
       setFieldVisibility("ExistingConfigRepositoryBranchName", false, false);
       setFieldVisibility("ExistingConfigRepositoryOwner", false, false);
       setFieldVisibility("ConfigCodeConnectionArn", false, false);
     } else if (configLoc === "codeconnection") {
-      setFieldVisibility("UseExistingConfigRepo", true, true);
-      if (useExistingEl && useExistingEl.value !== "Yes") {
-        useExistingEl.value = "Yes";
-      }
+      // CodeConnection -> ARN, Owner, Name, Branch are relevant
+      setFieldVisibility("UseExistingConfigRepo", false, false);
+      setFieldVisibility("ConfigCodeConnectionArn", true, true);
+      setFieldVisibility("ExistingConfigRepositoryOwner", true, true);
       setFieldVisibility("ExistingConfigRepositoryName", true, true);
       setFieldVisibility("ExistingConfigRepositoryBranchName", true, true);
-      setFieldVisibility("ExistingConfigRepositoryOwner", true, true);
-      setFieldVisibility("ConfigCodeConnectionArn", true, true);
     } else {
-      // codecommit
-      setFieldVisibility("UseExistingConfigRepo", true, true);
-      setFieldVisibility("ExistingConfigRepositoryOwner", false, false);
+      // CodeCommit -> CodeConnection ARN and Existing config repo owner are not relevant
       setFieldVisibility("ConfigCodeConnectionArn", false, false);
+      setFieldVisibility("ExistingConfigRepositoryOwner", false, false);
+      setFieldVisibility("UseExistingConfigRepo", true, true);
+
       if (isUsingExisting) {
         setFieldVisibility("ExistingConfigRepositoryName", true, true);
         setFieldVisibility("ExistingConfigRepositoryBranchName", true, true);
@@ -431,7 +441,8 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     let isDirty = false;
     form.fields.forEach((field) => {
       const group = container.querySelector(`.form-group[data-field-name="${field.name}"]`);
-      if (!group || group.classList.contains("form-group-hidden")) return;
+      const isHidden = !group || group.classList.contains("form-group-hidden") || group.hidden || group.style.display === "none";
+      if (isHidden) return;
       const input = container.querySelector(`#installer-field-${field.name}`);
       if (!input || input.disabled) return;
       const initialVal = String(currentParams[field.name] ?? field.default ?? "").trim();
@@ -452,11 +463,20 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
 
     form.fields.forEach((field) => {
       const group = container.querySelector(`.form-group[data-field-name="${field.name}"]`);
-      if (!group || group.classList.contains("form-group-hidden")) {
-        return; // skip hidden fields from validation
-      }
+      const isHidden = !group || group.classList.contains("form-group-hidden") || group.hidden || group.style.display === "none";
       const fieldId = `installer-field-${field.name}`;
       const input = container.querySelector(`#${fieldId}`);
+
+      if (isHidden) {
+        if (field.name === "UseExistingConfigRepo") {
+          const configLoc = (container.querySelector("#installer-field-ConfigurationRepositoryLocation")?.value || "").toLowerCase();
+          values[field.name] = configLoc === "codeconnection" ? "Yes" : "No";
+        } else {
+          values[field.name] = "";
+        }
+        return;
+      }
+
       if (!input || input.disabled) return;
 
       const val = input.value.trim();
@@ -712,6 +732,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
         });
 
         updateFieldVisibility();
+        checkDirtyState();
 
         formAlert.innerHTML = `
           <div class="notice info">
@@ -748,6 +769,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
               }
             });
             updateFieldVisibility();
+            checkDirtyState();
           }
 
           closeAllModals();

@@ -176,3 +176,10 @@
   background-color: rgba(239, 68, 68, 0.1);
   border-color: #ef4444;
 }
+
+/* Form Group Visibility */
+.form-group-hidden,
+.form-group[hidden] {
+  display: none !important;
+}
+
