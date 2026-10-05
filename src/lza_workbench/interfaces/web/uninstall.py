@@ -126,7 +126,9 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
     router = APIRouter(tags=["uninstall"])
 
     @router.post("/api/uninstall/plan")
-    def get_uninstall_plan_endpoint(payload: UninstallPlanRequest) -> dict[str, Any]:
+    def get_uninstall_plan_endpoint(
+        payload: UninstallPlanRequest = UninstallPlanRequest(),
+    ) -> dict[str, Any]:
         target_dir = workspace_dir.require_workspace_dir()
         context = load_workspace_context(
             target_dir=target_dir,
@@ -259,9 +261,13 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
         progress = load_or_init_progress(context)
         retained_records = read_retained_resources_from_state(context)
 
+        status = progress.status
+        if not _is_uninstall_running and status == "IN_PROGRESS":
+            status = "INTERRUPTED"
+
         return {
             "isRunning": _is_uninstall_running,
-            "status": progress.status,
+            "status": status,
             "customerSlug": progress.customer_slug,
             "startedAt": progress.started_at,
             "completedAt": progress.completed_at,
@@ -285,6 +291,21 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
             ],
             "error": progress.error,
         }
+
+    @router.post("/api/uninstall/reset")
+    def reset_uninstall_endpoint() -> dict[str, Any]:
+        global _is_uninstall_running
+        with _active_uninstall_lock:
+            if _is_uninstall_running:
+                raise LzaError("Cannot reset progress while uninstallation is actively executing.")
+            target_dir = workspace_dir.require_workspace_dir()
+            progress_file = target_dir / ".lza" / "uninstall-progress.json"
+            if progress_file.is_file():
+                try:
+                    progress_file.unlink()
+                except Exception:
+                    pass
+        return {"success": True, "message": "Uninstallation progress reset successfully."}
 
     return router
 

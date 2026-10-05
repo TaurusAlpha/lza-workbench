@@ -332,3 +332,16 @@ export async function getUninstallProgress() {
   return body;
 }
 
+export async function resetUninstallProgress() {
+  const response = await fetch("/api/uninstall/reset", {
+    method: "POST",
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(body?.error?.message ?? body?.detail ?? "Failed to reset uninstallation progress.");
+  }
+  return body;
+}
+
+
+

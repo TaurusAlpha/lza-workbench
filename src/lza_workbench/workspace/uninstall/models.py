@@ -111,7 +111,7 @@ class UninstallProgress:
     customer_slug: str
     started_at: str
     completed_at: str | None = None
-    status: str = "IN_PROGRESS"  # IN_PROGRESS, COMPLETED, FAILED
+    status: str = "NOT_STARTED"  # NOT_STARTED, IN_PROGRESS, COMPLETED, FAILED, INTERRUPTED
     deleted_stacks: list[str] = field(default_factory=list)
     failed_stacks: list[dict[str, str]] = field(default_factory=list)
     deleted_retained: list[dict[str, str]] = field(default_factory=list)

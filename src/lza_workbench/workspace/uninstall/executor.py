@@ -62,6 +62,7 @@ def load_or_init_progress(context: WorkspaceContext) -> UninstallProgress:
     return UninstallProgress(
         customer_slug=context.config.customer.slug,
         started_at=datetime.now(UTC).isoformat(),
+        status="NOT_STARTED",
     )
 
 
@@ -284,6 +285,9 @@ def execute_uninstall(
 ) -> UninstallProgress:
     """Execute the uninstallation plan step-by-step."""
     progress = load_or_init_progress(context)
+    if not options.dry_run:
+        progress.status = "IN_PROGRESS"
+        save_progress(context, progress)
 
     # 1. Record all retained resources from CF templates into .lza/state.json
     retained_records = [

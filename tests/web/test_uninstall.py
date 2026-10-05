@@ -173,39 +173,43 @@ def test_uninstall_apply_endpoint_success() -> None:
     mock_ctx = _mock_workspace_context(slug="acme")
     sample_plan = _sample_uninstall_plan()
 
-    with (
-        patch(
-            "lza_workbench.interfaces.web.uninstall.load_workspace_context", return_value=mock_ctx
-        ),
-        patch(
-            "lza_workbench.interfaces.web.uninstall.resolve_aws_execution_context"
-        ) as mock_resolve,
-        patch(
-            "lza_workbench.interfaces.web.uninstall.build_uninstall_plan", return_value=sample_plan
-        ),
-        patch("lza_workbench.interfaces.web.uninstall.execute_uninstall"),
-        patch("threading.Thread") as mock_thread_cls,
-    ):
-        mock_resolve.return_value = MagicMock()
-        mock_thread = MagicMock()
-        mock_thread_cls.return_value = mock_thread
+    try:
+        with (
+            patch(
+                "lza_workbench.interfaces.web.uninstall.load_workspace_context", return_value=mock_ctx
+            ),
+            patch(
+                "lza_workbench.interfaces.web.uninstall.resolve_aws_execution_context"
+            ) as mock_resolve,
+            patch(
+                "lza_workbench.interfaces.web.uninstall.build_uninstall_plan", return_value=sample_plan
+            ),
+            patch("lza_workbench.interfaces.web.uninstall.execute_uninstall"),
+            patch("threading.Thread") as mock_thread_cls,
+        ):
+            mock_resolve.return_value = MagicMock()
+            mock_thread = MagicMock()
+            mock_thread_cls.return_value = mock_thread
 
-        response = TestClient(app).post(
-            "/api/uninstall/apply",
-            json={
-                "customer_slug_confirmation": "acme",
-                "delete_s3_buckets": True,
-                "selected_bucket_names": ["aws-accelerator-config-111111111111-eu-west-1"],
-                "delete_retained_resources": True,
-                "selected_retained_ids": ["/aws/accelerator/log"],
-            },
-        )
+            response = TestClient(app).post(
+                "/api/uninstall/apply",
+                json={
+                    "customer_slug_confirmation": "acme",
+                    "delete_s3_buckets": True,
+                    "selected_bucket_names": ["aws-accelerator-config-111111111111-eu-west-1"],
+                    "delete_retained_resources": True,
+                    "selected_retained_ids": ["/aws/accelerator/log"],
+                },
+            )
 
-    assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is True
-    assert data["status"] == "IN_PROGRESS"
-    mock_thread.start.assert_called_once()
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["status"] == "IN_PROGRESS"
+        mock_thread.start.assert_called_once()
+    finally:
+        web_uninstall._is_uninstall_running = False
+
 
 
 def test_uninstall_progress_endpoint() -> None:
@@ -233,27 +237,56 @@ def test_uninstall_progress_endpoint() -> None:
         )
     ]
 
-    with (
-        patch(
-            "lza_workbench.interfaces.web.uninstall.load_workspace_context", return_value=mock_ctx
-        ),
-        patch(
-            "lza_workbench.interfaces.web.uninstall.load_or_init_progress", return_value=progress
-        ),
-        patch(
-            "lza_workbench.interfaces.web.uninstall.read_retained_resources_from_state",
-            return_value=retained_records,
-        ),
-    ):
-        response = TestClient(app).get("/api/uninstall/progress")
+    web_uninstall._is_uninstall_running = True
+    try:
+        with (
+            patch(
+                "lza_workbench.interfaces.web.uninstall.load_workspace_context", return_value=mock_ctx
+            ),
+            patch(
+                "lza_workbench.interfaces.web.uninstall.load_or_init_progress", return_value=progress
+            ),
+            patch(
+                "lza_workbench.interfaces.web.uninstall.read_retained_resources_from_state",
+                return_value=retained_records,
+            ),
+        ):
+            response = TestClient(app).get("/api/uninstall/progress")
 
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "IN_PROGRESS"
+        assert data["isRunning"] is True
+        assert data["customerSlug"] == "acme"
+        assert len(data["deletedStacks"]) == 3
+        assert len(data["deletedBuckets"]) == 1
+        assert len(data["deletedRetained"]) == 2
+        assert len(data["retainedInState"]) == 1
+        assert data["retainedInState"][0]["physicalId"] == "/aws/accelerator/log"
+        assert data["retainedInState"][0]["status"] == "deleted"
+    finally:
+        web_uninstall._is_uninstall_running = False
+
+
+
+def test_uninstall_reset_endpoint(tmp_path: Path) -> None:
+    from lza_workbench.workspace.persistence import write_workspace_config
+
+    config = WorkspaceConfig(
+        customer=CustomerConfig(name="Acme Corp", slug="acme"),
+        aws=AwsConfig(region="eu-west-1", profile="acme-mgmt", account_id="111111111111"),
+    )
+    write_workspace_config(tmp_path, config)
+
+    app = create_app(workspace_dir=tmp_path)
+    progress_file = tmp_path / ".lza" / "uninstall-progress.json"
+    progress_file.parent.mkdir(parents=True, exist_ok=True)
+    progress_file.write_text("{}", encoding="utf-8")
+
+    assert progress_file.is_file()
+    response = TestClient(app).post("/api/uninstall/reset")
     assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "IN_PROGRESS"
-    assert data["customerSlug"] == "acme"
-    assert len(data["deletedStacks"]) == 3
-    assert len(data["deletedBuckets"]) == 1
-    assert len(data["deletedRetained"]) == 2
-    assert len(data["retainedInState"]) == 1
-    assert data["retainedInState"][0]["physicalId"] == "/aws/accelerator/log"
-    assert data["retainedInState"][0]["status"] == "deleted"
+    assert response.json()["success"] is True
+    assert not progress_file.exists()
+
+

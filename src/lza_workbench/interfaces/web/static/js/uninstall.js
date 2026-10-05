@@ -2,6 +2,7 @@ import {
   applyUninstall,
   getUninstallPlan,
   getUninstallProgress,
+  resetUninstallProgress,
 } from "./api.js";
 import { escapeHtml, renderBadge } from "./overview.js";
 
@@ -10,6 +11,16 @@ import { escapeHtml, renderBadge } from "./overview.js";
 // ==========================================
 let currentPlan = null;
 let currentProgress = null;
+let currentOptions = {
+  assume_role_name: "AWSAccelerator-PipelineRole",
+  region_mode: "CONFIGURED",
+  custom_regions: "",
+  account_mode: "ALL",
+  custom_accounts: "",
+  profiles_file: "",
+  skip_installer: false,
+  skip_pipeline: false,
+};
 let pollingTimer = null;
 let pollingIntervalSeconds = 5; // Default 5 seconds per user request
 let selectedBuckets = new Set();
@@ -29,54 +40,280 @@ export function cleanupUninstallPolling() {
 // ==========================================
 export async function renderUninstall(container, options = {}) {
   cleanupUninstallPolling();
-  container.innerHTML = `
-    <div class="view-loading">
-      <div class="spinner"></div>
-      <p>Discovering LZA resources across accounts and regions...</p>
-    </div>
-  `;
 
   try {
     const progressResp = await getUninstallProgress().catch(() => null);
-    if (progressResp && (progressResp.isRunning || progressResp.status === "IN_PROGRESS")) {
+    // ONLY divert to live progress if a background uninstallation thread is ACTUALLY running!
+    if (progressResp && progressResp.isRunning) {
       renderLiveProgressView(container, progressResp);
       return;
     }
+  } catch (_) {}
 
-    const planResp = await getUninstallPlan(options);
-    currentPlan = planResp.plan;
-
-    // Reset selection defaults
-    selectedBuckets.clear();
-    // Default retained: all selected or none? User wants ability to select resources,
-    // so default to all selected so user can review and deselect, or vice-versa.
-    selectedRetainedIds = new Set(currentPlan.retainedResources.map((r) => r.physicalId));
-
+  // If a plan was already discovered and user didn't request options, show preview
+  if (currentPlan && !options.showOptions) {
     renderPlanPreview(container);
-  } catch (error) {
-    container.innerHTML = `
-      <div class="card card-full">
-        <div class="card-header">
-          <h2 class="card-title">Discovery Error</h2>
-        </div>
-        <div class="card-body">
-          <div class="alert alert-danger">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-            <span>${escapeHtml(error.message || "Failed to discover LZA resources.")}</span>
-          </div>
-          <div style="margin-top: 1rem;">
-            <button type="button" class="btn btn-primary" id="btn-retry-discovery">Retry Discovery</button>
-          </div>
+    return;
+  }
+
+  // Otherwise, present Phase 0: Scope & Options form
+  renderOptionsForm(container);
+}
+
+// ==========================================
+// Phase 0: Scope & Options Configuration View
+// ==========================================
+function renderOptionsForm(container) {
+  cleanupUninstallPolling();
+
+  container.innerHTML = `
+    <!-- Top Warning Banner -->
+    <div class="alert alert-warning uninstall-danger-banner">
+      <div class="alert-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+      <div class="alert-content">
+        <h3 class="alert-title">Destructive Solution Decommission</h3>
+        <p class="alert-desc">
+          Configure discovery scope and target parameters before querying AWS.
+          You will review all discovered CloudFormation stacks, S3 buckets, and retained resources before uninstallation can proceed.
+        </p>
+      </div>
+    </div>
+
+    <article class="card card-full" style="margin-bottom: 1.5rem;">
+      <div class="card-header">
+        <div class="card-title-group">
+          <h2 class="card-title">Discovery Scope &amp; Target Parameters</h2>
+          <span class="card-subtitle">Specify which AWS accounts, regions, and roles should be targeted for teardown</span>
         </div>
       </div>
+      <div class="card-body">
+        <form id="uninstall-options-form">
+          <!-- Role to assume -->
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label for="opt-assume-role" style="display: block; font-weight: 600; margin-bottom: 0.35rem;">Execution / Assumed Role Name</label>
+            <input
+              type="text"
+              id="opt-assume-role"
+              class="form-input"
+              value="${escapeHtml(currentOptions.assume_role_name || "AWSAccelerator-PipelineRole")}"
+              placeholder="AWSAccelerator-PipelineRole"
+            />
+            <span class="field-hint" style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
+              Role assumed in target member accounts to query and delete CloudFormation stacks and resources.
+            </span>
+          </div>
+
+          <!-- Regions Section -->
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label style="display: block; font-weight: 600; margin-bottom: 0.35rem;">Target AWS Regions</label>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.35rem;">
+              <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="radio" name="opt-region-mode" value="CONFIGURED" ${currentOptions.region_mode === "CONFIGURED" ? "checked" : ""}>
+                <span><strong>Configured Regions</strong> (default: discover from <code>global-config.yaml</code> or workspace default)</span>
+              </label>
+              <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="radio" name="opt-region-mode" value="ALL" ${currentOptions.region_mode === "ALL" ? "checked" : ""}>
+                <span><strong>All Enabled Regions</strong> (<code>--all-regions</code>: query all enabled EC2 regions)</span>
+              </label>
+              <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="radio" name="opt-region-mode" value="CUSTOM" ${currentOptions.region_mode === "CUSTOM" ? "checked" : ""}>
+                <span><strong>Specific Regions</strong> (comma-separated list)</span>
+              </label>
+            </div>
+            <div id="wrapper-custom-regions" style="margin-top: 0.5rem; margin-left: 1.5rem; ${currentOptions.region_mode === "CUSTOM" ? "" : "display: none;"}">
+              <input
+                type="text"
+                id="opt-custom-regions"
+                class="form-input"
+                placeholder="e.g. eu-west-1, us-east-1"
+                value="${escapeHtml(currentOptions.custom_regions || "")}"
+              />
+            </div>
+          </div>
+
+          <!-- Accounts Section -->
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label style="display: block; font-weight: 600; margin-bottom: 0.35rem;">Target AWS Accounts</label>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.35rem;">
+              <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="radio" name="opt-account-mode" value="ALL" ${currentOptions.account_mode === "ALL" ? "checked" : ""}>
+                <span><strong>All Organization Accounts</strong> (auto-discover active accounts via AWS Organizations)</span>
+              </label>
+              <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="radio" name="opt-account-mode" value="MANAGEMENT" ${currentOptions.account_mode === "MANAGEMENT" ? "checked" : ""}>
+                <span><strong>Management Account Only</strong> (scope teardown strictly to current management account)</span>
+              </label>
+              <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="radio" name="opt-account-mode" value="CUSTOM" ${currentOptions.account_mode === "CUSTOM" ? "checked" : ""}>
+                <span><strong>Specific Accounts</strong> (comma-separated Account IDs)</span>
+              </label>
+              <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="radio" name="opt-account-mode" value="PROFILES" ${currentOptions.account_mode === "PROFILES" ? "checked" : ""}>
+                <span><strong>Profiles Mapping File</strong> (load account/profile mappings from a YAML or JSON file)</span>
+              </label>
+            </div>
+            <div id="wrapper-custom-accounts" style="margin-top: 0.5rem; margin-left: 1.5rem; ${currentOptions.account_mode === "CUSTOM" ? "" : "display: none;"}">
+              <input
+                type="text"
+                id="opt-custom-accounts"
+                class="form-input"
+                placeholder="e.g. 111111111111, 222222222222"
+                value="${escapeHtml(currentOptions.custom_accounts || "")}"
+              />
+            </div>
+            <div id="wrapper-profiles-file" style="margin-top: 0.5rem; margin-left: 1.5rem; ${currentOptions.account_mode === "PROFILES" ? "" : "display: none;"}">
+              <input
+                type="text"
+                id="opt-profiles-file"
+                class="form-input"
+                placeholder="path/to/profiles.yaml"
+                value="${escapeHtml(currentOptions.profiles_file || "")}"
+              />
+            </div>
+          </div>
+
+          <!-- Foundation Stacks Section -->
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label style="display: block; font-weight: 600; margin-bottom: 0.35rem;">Foundation Stacks Protection</label>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.35rem;">
+              <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" id="opt-skip-installer" ${currentOptions.skip_installer ? "checked" : ""}>
+                <span><strong>Skip Installer Stack</strong> (preserve <code>AWSAccelerator-InstallerStack</code> and CDK toolkit)</span>
+              </label>
+              <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" id="opt-skip-pipeline" ${currentOptions.skip_pipeline ? "checked" : ""}>
+                <span><strong>Skip Pipeline Stack</strong> (preserve <code>AWSAccelerator-PipelineStack</code> and CodePipeline)</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-actions" style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-card);">
+            <a href="#/overview" class="btn btn-ghost">Cancel</a>
+            <button type="submit" class="btn btn-primary" id="btn-submit-scan">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              Scan Resources &amp; Preview Plan &rarr;
+            </button>
+          </div>
+        </form>
+      </div>
+    </article>
+  `;
+
+  // Bind dynamic visibility for radio options
+  const regionRadios = container.querySelectorAll("input[name='opt-region-mode']");
+  const wrapperCustomRegions = container.querySelector("#wrapper-custom-regions");
+  regionRadios.forEach((r) => {
+    r.addEventListener("change", () => {
+      if (wrapperCustomRegions) {
+        wrapperCustomRegions.style.display = r.value === "CUSTOM" && r.checked ? "" : "none";
+      }
+    });
+  });
+
+  const accountRadios = container.querySelectorAll("input[name='opt-account-mode']");
+  const wrapperCustomAccounts = container.querySelector("#wrapper-custom-accounts");
+  const wrapperProfilesFile = container.querySelector("#wrapper-profiles-file");
+  accountRadios.forEach((r) => {
+    r.addEventListener("change", () => {
+      if (wrapperCustomAccounts) {
+        wrapperCustomAccounts.style.display = r.value === "CUSTOM" && r.checked ? "" : "none";
+      }
+      if (wrapperProfilesFile) {
+        wrapperProfilesFile.style.display = r.value === "PROFILES" && r.checked ? "" : "none";
+      }
+    });
+  });
+
+  const form = container.querySelector("#uninstall-options-form");
+  if (!form) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const selRegionRadio = container.querySelector("input[name='opt-region-mode']:checked");
+    const selAccountRadio = container.querySelector("input[name='opt-account-mode']:checked");
+    const customRegionsVal = container.querySelector("#opt-custom-regions")?.value.trim() || "";
+    const customAccountsVal = container.querySelector("#opt-custom-accounts")?.value.trim() || "";
+    const profilesFileVal = container.querySelector("#opt-profiles-file")?.value.trim() || "";
+    const assumeRoleVal = container.querySelector("#opt-assume-role")?.value.trim() || "AWSAccelerator-PipelineRole";
+    const skipInstallerVal = container.querySelector("#opt-skip-installer")?.checked || false;
+    const skipPipelineVal = container.querySelector("#opt-skip-pipeline")?.checked || false;
+
+    currentOptions = {
+      assume_role_name: assumeRoleVal,
+      region_mode: selRegionRadio?.value || "CONFIGURED",
+      custom_regions: customRegionsVal,
+      account_mode: selAccountRadio?.value || "ALL",
+      custom_accounts: customAccountsVal,
+      profiles_file: profilesFileVal,
+      skip_installer: skipInstallerVal,
+      skip_pipeline: skipPipelineVal,
+    };
+
+    const planPayload = {
+      assume_role_name: currentOptions.assume_role_name,
+      skip_installer: currentOptions.skip_installer,
+      skip_pipeline: currentOptions.skip_pipeline,
+      all_regions: currentOptions.region_mode === "ALL",
+      regions: currentOptions.region_mode === "CUSTOM"
+        ? currentOptions.custom_regions.split(",").map((r) => r.trim()).filter(Boolean)
+        : [],
+      accounts: currentOptions.account_mode === "CUSTOM"
+        ? currentOptions.custom_accounts.split(",").map((a) => a.trim()).filter(Boolean)
+        : [],
+      profiles_file: currentOptions.account_mode === "PROFILES"
+        ? (currentOptions.profiles_file || null)
+        : null,
+    };
+
+    container.innerHTML = `
+      <div class="view-loading">
+        <div class="spinner"></div>
+        <p>Discovering LZA resources across accounts and regions...</p>
+        <span class="text-muted" style="font-size: 0.8125rem; margin-top: 0.5rem;">
+          Querying CloudFormation stacks, S3 buckets, and retained resources based on selected scope...
+        </span>
+      </div>
     `;
-    const retryBtn = container.querySelector("#btn-retry-discovery");
-    if (retryBtn) {
-      retryBtn.addEventListener("click", () => renderUninstall(container, options));
+
+    try {
+      const planResp = await getUninstallPlan(planPayload);
+      currentPlan = planResp.plan;
+      selectedBuckets.clear();
+      selectedRetainedIds = new Set(currentPlan.retainedResources.map((r) => r.physicalId));
+      renderPlanPreview(container);
+    } catch (error) {
+      container.innerHTML = `
+        <div class="card card-full">
+          <div class="card-header">
+            <h2 class="card-title">Discovery Error</h2>
+          </div>
+          <div class="card-body">
+            <div class="alert alert-danger">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>${escapeHtml(error.message || "Failed to discover LZA resources.")}</span>
+            </div>
+            <div style="margin-top: 1.25rem; display: flex; gap: 0.75rem;">
+              <button type="button" class="btn btn-outline" id="btn-err-back-options">&larr; Adjust Scope &amp; Options</button>
+              <button type="button" class="btn btn-primary" id="btn-err-retry">Retry Discovery</button>
+            </div>
+          </div>
+        </div>
+      `;
+      container.querySelector("#btn-err-back-options")?.addEventListener("click", () => renderOptionsForm(container));
+      container.querySelector("#btn-err-retry")?.addEventListener("click", () => {
+        form.dispatchEvent(new Event("submit"));
+      });
     }
-  }
+  });
 }
 
 // ==========================================
@@ -112,6 +349,20 @@ function renderPlanPreview(container) {
       : retainedResources.filter((r) => r.resourceType === retainedTypeFilter);
 
   container.innerHTML = `
+    <!-- Options Header / Breadcrumb Bar -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+      <button type="button" class="btn btn-outline" id="btn-back-to-options">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Adjust Scope &amp; Options
+      </button>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span class="text-muted" style="font-size: 0.8125rem;">Assumed Role:</span>
+        <span class="badge badge-neutral mono-val">${escapeHtml(currentOptions.assume_role_name || "AWSAccelerator-PipelineRole")}</span>
+      </div>
+    </div>
+
     <!-- Top Warning Banner -->
     <div class="alert alert-warning uninstall-danger-banner">
       <div class="alert-icon">
@@ -362,6 +613,14 @@ function renderPlanPreview(container) {
 }
 
 function setupPlanEvents(container) {
+  // Back to Scope & Options
+  const btnBackToOptions = container.querySelector("#btn-back-to-options");
+  if (btnBackToOptions) {
+    btnBackToOptions.addEventListener("click", () => {
+      renderOptionsForm(container);
+    });
+  }
+
   // S3 Buckets Select All / Header Checkbox
   const chkBucketsHeader = container.querySelector("#chk-buckets-header");
   const btnToggleAllBuckets = container.querySelector("#btn-toggle-all-buckets");
@@ -523,6 +782,19 @@ function openConfirmationModal(container) {
         selected_bucket_names: Array.from(selectedBuckets),
         delete_retained_resources: selectedRetainedIds.size > 0,
         selected_retained_ids: Array.from(selectedRetainedIds),
+        regions: currentOptions.region_mode === "CUSTOM"
+          ? currentOptions.custom_regions.split(",").map((r) => r.trim()).filter(Boolean)
+          : [],
+        all_regions: currentOptions.region_mode === "ALL",
+        accounts: currentOptions.account_mode === "CUSTOM"
+          ? currentOptions.custom_accounts.split(",").map((a) => a.trim()).filter(Boolean)
+          : [],
+        assume_role_name: currentOptions.assume_role_name || "AWSAccelerator-PipelineRole",
+        profiles_file: currentOptions.account_mode === "PROFILES"
+          ? (currentOptions.profiles_file || "").trim() || null
+          : null,
+        skip_installer: Boolean(currentOptions.skip_installer),
+        skip_pipeline: Boolean(currentOptions.skip_pipeline),
       };
 
       await applyUninstall(payload);
@@ -553,6 +825,9 @@ async function renderLiveProgressView(container, initialProgress = null) {
           <span class="card-subtitle" id="progress-card-subtitle">Monitoring active uninstallation progress...</span>
         </div>
         <div class="card-header-actions" style="display: flex; align-items: center; gap: 0.75rem;">
+          <button type="button" class="btn btn-sm btn-outline" id="btn-exit-progress" title="Return to Scope &amp; Options">
+            &larr; Scope &amp; Options
+          </button>
           <!-- Polling interval selector (User request: default 5s, adjustable) -->
           <label for="select-poll-interval" style="font-size: 0.75rem; color: var(--text-muted);">Refresh Interval:</label>
           <select class="input-select" id="select-poll-interval" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">
@@ -590,12 +865,21 @@ async function renderLiveProgressView(container, initialProgress = null) {
             <p style="margin: 0;" id="final-status-desc">All selected resources have been successfully removed.</p>
           </div>
           <div style="margin-top: 1rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button type="button" class="btn btn-outline" id="btn-back-to-options-terminal">&larr; Scope &amp; Options</button>
             <a href="#/overview" class="btn btn-primary">Return to Overview</a>
           </div>
         </div>
       </div>
     </article>
   `;
+
+  const exitToOptions = () => {
+    cleanupUninstallPolling();
+    currentPlan = null;
+    renderOptionsForm(container);
+  };
+  container.querySelector("#btn-exit-progress")?.addEventListener("click", exitToOptions);
+  container.querySelector("#btn-back-to-options-terminal")?.addEventListener("click", exitToOptions);
 
   const selectPoll = container.querySelector("#select-poll-interval");
   if (selectPoll) {
