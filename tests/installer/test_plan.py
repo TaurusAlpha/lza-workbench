@@ -315,6 +315,7 @@ def test_installer_init_skips_inapplicable_parameters(tmp_path: Path) -> None:
     assert [field.label for field in form.fields] == [
         "Source location",
         "Enable approval stage",
+        "Configuration repository location",
     ]
     saved_config = load_workspace_config(ws_dir)
     assert saved_config.lza.accelerator_prefix == "CustomPrefix"

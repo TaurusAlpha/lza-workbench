@@ -105,7 +105,7 @@ def test_is_installer_parameter_applicable_github_and_s3() -> None:
     assert is_installer_parameter_applicable(config, "EnableApprovalStage") is True
     assert is_installer_parameter_applicable(config, "ApprovalStageNotifyEmailList") is False
     assert is_installer_parameter_applicable(config, "ManagementAccountEmail") is True
-    assert is_installer_parameter_applicable(config, "ConfigurationRepositoryLocation") is False
+    assert is_installer_parameter_applicable(config, "ConfigurationRepositoryLocation") is True
     assert is_installer_parameter_applicable(config, "UseExistingConfigRepo") is False
     assert is_installer_parameter_applicable(config, "ConfigCodeConnectionArn") is False
     assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryOwner") is False
@@ -126,8 +126,9 @@ def test_is_installer_parameter_applicable_codecommit_and_codeconnection() -> No
     assert is_installer_parameter_applicable(config, "RepositoryOwner") is False
     assert is_installer_parameter_applicable(config, "RepositoryName") is True
     assert is_installer_parameter_applicable(config, "ApprovalStageNotifyEmailList") is True
-    assert is_installer_parameter_applicable(config, "UseExistingConfigRepo") is False
-    assert is_installer_parameter_applicable(config, "ConfigCodeConnectionArn") is False
-    assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryOwner") is False
-    assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryName") is False
-    assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryBranchName") is False
+    assert is_installer_parameter_applicable(config, "ConfigurationRepositoryLocation") is True
+    assert is_installer_parameter_applicable(config, "UseExistingConfigRepo") is True
+    assert is_installer_parameter_applicable(config, "ConfigCodeConnectionArn") is True
+    assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryOwner") is True
+    assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryName") is True
+    assert is_installer_parameter_applicable(config, "ExistingConfigRepositoryBranchName") is True

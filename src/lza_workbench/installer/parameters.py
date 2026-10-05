@@ -33,16 +33,7 @@ INSTALLER_PARAMETER_LABELS = {
     "EnableDiagnosticsPack": "Enable diagnostics pack",
 }
 
-UNSUPPORTED_INSTALLER_PARAMETERS: frozenset[str] = frozenset(
-    {
-        "ConfigurationRepositoryLocation",
-        "UseExistingConfigRepo",
-        "ConfigCodeConnectionArn",
-        "ExistingConfigRepositoryOwner",
-        "ExistingConfigRepositoryName",
-        "ExistingConfigRepositoryBranchName",
-    }
-)
+UNSUPPORTED_INSTALLER_PARAMETERS: frozenset[str] = frozenset()
 
 
 def get_installer_parameter_label(
@@ -89,6 +80,23 @@ def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: s
     if parameter_name == "ApprovalStageNotifyEmailList":
         return bool(approval_enabled)
 
+    config_repo = config.configuration.repository
+    if parameter_name == "ConfigurationRepositoryLocation":
+        return True
+
+    if parameter_name == "UseExistingConfigRepo":
+        return config_repo.type != "s3"
+
+    if parameter_name in {"ExistingConfigRepositoryName", "ExistingConfigRepositoryBranchName"}:
+        if config_repo.type == "s3":
+            return False
+        if config_repo.type == "codecommit":
+            return config.installer.options.use_existing_config_repo
+        return True
+
+    if parameter_name in {"ExistingConfigRepositoryOwner", "ConfigCodeConnectionArn"}:
+        return config_repo.type == "codeconnection"
+
     if parameter_name in UNSUPPORTED_INSTALLER_PARAMETERS:
         return False
 
@@ -132,6 +140,8 @@ def _apply_options_parameter(config: WorkspaceConfig, parameter_name: str, value
         options.control_tower_enabled = value == "Yes"
     elif parameter_name == "EnableDiagnosticsPack":
         options.enable_diagnostics_pack = value == "Yes"
+    elif parameter_name == "UseExistingConfigRepo":
+        options.use_existing_config_repo = value == "Yes"
     else:
         return False
     return True
@@ -149,6 +159,8 @@ def _apply_config_repo_parameter(config: WorkspaceConfig, parameter_name: str, v
         repo.repository_name = value or None
     elif parameter_name == "ExistingConfigRepositoryBranchName":
         repo.branch = value or None
+    elif parameter_name == "UseExistingConfigRepo":
+        config.installer.options.use_existing_config_repo = value == "Yes"
     else:
         return False
     return True
@@ -166,8 +178,6 @@ def apply_installer_parameter_to_config(
 
     if parameter_name == "AcceleratorPrefix":
         config.lza.accelerator_prefix = value
-    elif parameter_name == "UseExistingConfigRepo":
-        return
     else:
         config.installer.extra_parameters[parameter_name] = value
 
@@ -202,6 +212,7 @@ def apply_deployed_installer_parameters(
 
 def _resolve_existing_config_repo_params(
     repo_config: Any,
+    use_existing: bool = True,
 ) -> tuple[str, bool, str, str, str, str]:
     config_location = repo_config.type
     if config_location == "codeconnection":
@@ -214,13 +225,14 @@ def _resolve_existing_config_repo_params(
             repo_config.branch or "",
         )
     if config_location == "codecommit":
+        is_existing = bool(use_existing)
         return (
             config_location,
-            True,
+            is_existing,
             "",
             "",
-            repo_config.repository_name or "lza-config-source",
-            repo_config.branch or "main",
+            (repo_config.repository_name or "lza-config-source") if is_existing else "",
+            (repo_config.branch or "main") if is_existing else "",
         )
     return config_location, False, "", "", "", ""
 
@@ -267,7 +279,10 @@ def build_installer_cfn_parameters(
         existing_owner,
         existing_name,
         existing_branch,
-    ) = _resolve_existing_config_repo_params(repo_config)
+    ) = _resolve_existing_config_repo_params(
+        repo_config,
+        use_existing=options.use_existing_config_repo,
+    )
 
     params: dict[str, str] = {
         "RepositorySource": repo_source,

@@ -4,8 +4,8 @@ import { card, escapeHtml, formatFieldValue, renderBadge } from "./overview.js";
 const FORM_SECTIONS = [
   {
     id: "source-repo",
-    title: "Source & Repository",
-    description: "Configuration repository source location, repository name, and branch settings.",
+    title: "Installer Engine Source",
+    description: "LZA engine source code location, repository name, and branch settings.",
     fields: [
       "RepositorySource",
       "RepositoryOwner",
@@ -13,6 +13,19 @@ const FORM_SECTIONS = [
       "RepositoryBranchName",
       "RepositoryBucketName",
       "RepositoryBucketObject",
+    ],
+  },
+  {
+    id: "config-repo",
+    title: "Customer Configuration Repository",
+    description: "Repository hosting the customer landing zone configuration files (accounts-config, etc.).",
+    fields: [
+      "ConfigurationRepositoryLocation",
+      "UseExistingConfigRepo",
+      "ExistingConfigRepositoryName",
+      "ExistingConfigRepositoryBranchName",
+      "ExistingConfigRepositoryOwner",
+      "ConfigCodeConnectionArn",
     ],
   },
   {
@@ -83,11 +96,12 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     ["Last Updated", formatTimestamp(deployed.lastUpdatedTime || deployed.creationTime)],
   ];
 
-  // 2. Current Configuration Summary Fields (Bug 3: renamed from Canonical Settings to Current Settings)
+  // 2. Current Configuration Summary Fields
   const canonicalFields = [
-    ["Source Type", canonicalSettings.repositorySource?.toUpperCase() || "—", { mono: true }],
-    ["Repository Name", canonicalSettings.repositoryName || "—", { mono: true }],
-    ["Branch", canonicalSettings.repositoryBranch || "—", { mono: true }],
+    ["Engine Source", canonicalSettings.repositorySource?.toUpperCase() || "—", { mono: true }],
+    ["Engine Branch", canonicalSettings.repositoryBranch || "—", { mono: true }],
+    ["Config Location", canonicalSettings.configRepositoryLocation?.toUpperCase() || "—", { mono: true }],
+    ["Config Repo Name", canonicalSettings.configRepositoryName || (canonicalSettings.configRepositoryLocation === "s3" ? "(S3 Bucket)" : "—"), { mono: true }],
     ["Accelerator Prefix", canonicalSettings.acceleratorPrefix || "—", { mono: true }],
     ["Management Email", canonicalSettings.managementAccountEmail || "—", { mono: true, truncate: true }],
     ["Log Archive Email", canonicalSettings.logArchiveAccountEmail || "—", { mono: true, truncate: true }],
@@ -155,9 +169,11 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
       `;
     } else {
       const patternAttr = field.allowedPattern ? ` data-pattern="${escapeHtml(field.allowedPattern)}"` : "";
+      const isEmail = field.name.toLowerCase().includes("email") && !field.name.toLowerCase().includes("list");
+      const inputType = isEmail ? "email" : "text";
       inputControlHtml = `
         <input
-          type="text"
+          type="${inputType}"
           id="${fieldId}"
           name="${escapeHtml(field.name)}"
           value="${escapeHtml(currentValue)}"
@@ -248,7 +264,10 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
       <section class="card installer-settings-card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Installer Parameters &amp; Settings</h2>
+            <div style="display: flex; align-items: center; gap: 0.625rem;">
+              <h2 class="card-title">Installer Parameters &amp; Settings</h2>
+              <span id="installer-dirty-badge" class="badge badge-warning" style="display:none; font-size: 0.75rem;">Unsaved Changes</span>
+            </div>
             <p class="section-subtitle">Parameters derived from the installer CloudFormation template. Changes will be validated before saving to <code>lza-workspace.yaml</code>.</p>
           </div>
         </div>
@@ -368,6 +387,62 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     const approvalVal = approvalEl ? approvalEl.value : "No";
     const approvalEnabled = approvalVal === "Yes";
     setFieldVisibility("ApprovalStageNotifyEmailList", approvalEnabled, approvalEnabled);
+
+    // 3. Customer Configuration Repository conditional visibility
+    const configLocEl = container.querySelector("#installer-field-ConfigurationRepositoryLocation");
+    const configLoc = (configLocEl ? configLocEl.value : "codecommit").toLowerCase();
+    const useExistingEl = container.querySelector("#installer-field-UseExistingConfigRepo");
+    const useExistingVal = useExistingEl ? useExistingEl.value : "No";
+    const isUsingExisting = useExistingVal === "Yes";
+
+    if (configLoc === "s3") {
+      setFieldVisibility("UseExistingConfigRepo", false, false);
+      setFieldVisibility("ExistingConfigRepositoryName", false, false);
+      setFieldVisibility("ExistingConfigRepositoryBranchName", false, false);
+      setFieldVisibility("ExistingConfigRepositoryOwner", false, false);
+      setFieldVisibility("ConfigCodeConnectionArn", false, false);
+    } else if (configLoc === "codeconnection") {
+      setFieldVisibility("UseExistingConfigRepo", true, true);
+      if (useExistingEl && useExistingEl.value !== "Yes") {
+        useExistingEl.value = "Yes";
+      }
+      setFieldVisibility("ExistingConfigRepositoryName", true, true);
+      setFieldVisibility("ExistingConfigRepositoryBranchName", true, true);
+      setFieldVisibility("ExistingConfigRepositoryOwner", true, true);
+      setFieldVisibility("ConfigCodeConnectionArn", true, true);
+    } else {
+      // codecommit
+      setFieldVisibility("UseExistingConfigRepo", true, true);
+      setFieldVisibility("ExistingConfigRepositoryOwner", false, false);
+      setFieldVisibility("ConfigCodeConnectionArn", false, false);
+      if (isUsingExisting) {
+        setFieldVisibility("ExistingConfigRepositoryName", true, true);
+        setFieldVisibility("ExistingConfigRepositoryBranchName", true, true);
+      } else {
+        setFieldVisibility("ExistingConfigRepositoryName", false, false);
+        setFieldVisibility("ExistingConfigRepositoryBranchName", false, false);
+      }
+    }
+  }
+
+  const dirtyBadge = container.querySelector("#installer-dirty-badge");
+
+  function checkDirtyState() {
+    let isDirty = false;
+    form.fields.forEach((field) => {
+      const group = container.querySelector(`.form-group[data-field-name="${field.name}"]`);
+      if (!group || group.classList.contains("form-group-hidden")) return;
+      const input = container.querySelector(`#installer-field-${field.name}`);
+      if (!input || input.disabled) return;
+      const initialVal = String(currentParams[field.name] ?? field.default ?? "").trim();
+      const currentVal = String(input.value).trim();
+      if (initialVal !== currentVal) {
+        isDirty = true;
+      }
+    });
+    if (dirtyBadge) {
+      dirtyBadge.style.display = isDirty ? "inline-block" : "none";
+    }
   }
 
   function validateForm() {
@@ -400,6 +475,19 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
         return;
       }
 
+      if (input.type === "email" && val) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(val)) {
+          hasError = true;
+          input.classList.add("has-error");
+          if (errorEl) {
+            errorEl.textContent = "Please enter a valid email address.";
+            errorEl.hidden = false;
+          }
+          return;
+        }
+      }
+
       const pattern = input.dataset.pattern;
       if (pattern && val) {
         try {
@@ -425,9 +513,11 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
   // Reactive visibility updates on change/input
   formElement.addEventListener("change", () => {
     updateFieldVisibility();
+    checkDirtyState();
   });
   formElement.addEventListener("input", () => {
     updateFieldVisibility();
+    checkDirtyState();
   });
   // Run initial visibility update to reflect current loaded state
   updateFieldVisibility();
@@ -827,9 +917,14 @@ function renderPlanPreview(container, plan, onClose) {
 
           ${ghWarning}
 
-          <div class="notice info" style="margin-top: 1.25rem;">
-            <strong>Deployment mutation is disabled in this preview.</strong><br>
-            To execute this deployment, run <code>lza installer deploy</code> from your terminal.
+          <div class="notice info" style="margin-top: 1.25rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+            <div>
+              <strong>Deployment mutation is disabled in this preview.</strong><br>
+              To execute this deployment, run <code>lza installer deploy</code> from your terminal.
+            </div>
+            <button type="button" id="btn-copy-deploy-cmd" class="btn btn-secondary btn-sm" style="white-space: nowrap;">
+              <span>Copy Command</span>
+            </button>
           </div>
         </div>
         <div class="plan-modal-footer">
@@ -838,6 +933,21 @@ function renderPlanPreview(container, plan, onClose) {
       </div>
     </div>
   `;
+
+  const copyBtn = container.querySelector("#btn-copy-deploy-cmd");
+  copyBtn?.addEventListener("click", () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText("lza installer deploy");
+      const span = copyBtn.querySelector("span");
+      if (span) {
+        const orig = span.textContent;
+        span.textContent = "Copied!";
+        setTimeout(() => {
+          span.textContent = orig;
+        }, 2000);
+      }
+    }
+  });
 
   const closeHandler = typeof onClose === "function" ? onClose : () => {
     container.hidden = true;

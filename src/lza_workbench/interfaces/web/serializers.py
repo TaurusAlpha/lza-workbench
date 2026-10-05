@@ -323,6 +323,12 @@ def serialize_installer_status(
         "controlTowerEnabled": cfg.installer.options.control_tower_enabled,
         "enableApprovalStage": cfg.installer.options.enable_approval_stage,
         "approvalStageNotifyEmailList": cfg.installer.options.approval_stage_notify_email_list,
+        "configRepositoryLocation": cfg.configuration.repository.type,
+        "useExistingConfigRepo": cfg.installer.options.use_existing_config_repo,
+        "configRepositoryName": cfg.configuration.repository.repository_name,
+        "configRepositoryBranch": cfg.configuration.repository.branch,
+        "configRepositoryOwner": cfg.configuration.repository.owner,
+        "configCodeConnectionArn": cfg.configuration.repository.codeconnection_arn,
     }
 
     deployed = {

@@ -132,6 +132,10 @@ class InstallerOptionsConfig(BaseModel):
         description="Enable pipeline diagnostics pack.",
     )
     anonymous_data: bool = False
+    use_existing_config_repo: bool = Field(
+        default=True,
+        description="Deploying with an existing configuration repository.",
+    )
 
 
 class LzaInstaller(BaseModel):
