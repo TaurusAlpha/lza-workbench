@@ -50,6 +50,7 @@ from lza_workbench.pipeline.status import (
     get_pipeline_snapshot_workflow,
 )
 from lza_workbench.status.observer import get_root_status_workflow
+from lza_workbench.workspace.context import load_workspace_context
 from lza_workbench.workspace.import_workspace import (
     ImportWorkspaceRequest,
     apply_workspace_import,
@@ -113,24 +114,24 @@ def _register_workspace_routes(router: APIRouter, context: ActiveWorkspaceContex
         if context.workspace_dir is None:
             return {"hasWorkspace": False, "workspaceDir": None, "devMode": context.dev_mode}
         try:
-            status_res = get_root_status_workflow(target_dir=context.workspace_dir)
+            ws_ctx = load_workspace_context(context.workspace_dir)
             return {
                 "hasWorkspace": True,
-                "workspaceDir": str(status_res.workspace_dir),
-                "customerName": status_res.customer_name,
-                "lzaVersion": status_res.lza_version,
+                "workspaceDir": str(ws_ctx.workspace_dir),
+                "customerName": ws_ctx.config.customer.name,
+                "lzaVersion": ws_ctx.config.lza.version,
                 "devMode": context.dev_mode,
                 "assessment": (
                     {
-                        "metadataValid": status_res.assessment.metadata_valid,
-                        "configurationPresent": status_res.assessment.configuration_present,
-                        "installerConfigured": status_res.assessment.installer_configured,
+                        "metadataValid": ws_ctx.assessment.metadata_valid,
+                        "configurationPresent": ws_ctx.assessment.configuration_present,
+                        "installerConfigured": ws_ctx.assessment.installer_configured,
                         "installerRecordedDeployed": (
-                            status_res.assessment.installer_recorded_deployed
+                            ws_ctx.assessment.installer_recorded_deployed
                         ),
-                        "imported": status_res.assessment.imported,
+                        "imported": ws_ctx.assessment.imported,
                     }
-                    if status_res.assessment
+                    if ws_ctx.assessment
                     else None
                 ),
             }
@@ -146,13 +147,13 @@ def _register_workspace_routes(router: APIRouter, context: ActiveWorkspaceContex
         target = Path(payload.directory).expanduser().resolve()
         if not target.is_dir():
             raise LzaError(f"Directory does not exist: {target}")
-        status_res = get_root_status_workflow(target_dir=target)
+        ws_ctx = load_workspace_context(target)
         context.set_workspace_dir(target)
         return {
             "success": True,
-            "workspaceDir": str(status_res.workspace_dir),
-            "customerName": status_res.customer_name,
-            "lzaVersion": status_res.lza_version,
+            "workspaceDir": str(ws_ctx.workspace_dir),
+            "customerName": ws_ctx.config.customer.name,
+            "lzaVersion": ws_ctx.config.lza.version,
         }
 
     @router.post("/api/workspace/init/preview")
@@ -240,20 +241,38 @@ def _register_workspace_import_routes(router: APIRouter, context: ActiveWorkspac
 
 def _register_status_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
     @router.get("/api/status")
-    def get_status() -> dict[str, Any]:
-        return serialize_root_status(get_root_status_workflow(target_dir=context.require_workspace_dir()))
+    def get_status(refresh: bool = False) -> dict[str, Any]:
+        if not refresh:
+            cached = context.get_cached("status", ttl=30.0)
+            if cached is not None:
+                return cached
+        res = serialize_root_status(get_root_status_workflow(target_dir=context.require_workspace_dir()))
+        context.set_cached("status", res)
+        return res
 
     @router.get("/api/status/config")
-    def get_config_status() -> dict[str, Any]:
+    def get_config_status(refresh: bool = False) -> dict[str, Any]:
+        if not refresh:
+            cached = context.get_cached("config_status", ttl=30.0)
+            if cached is not None:
+                return cached
         status_res = get_config_status_workflow(target_dir=context.require_workspace_dir())
-        return serialize_configuration_status(status_res)
+        res = serialize_configuration_status(status_res)
+        context.set_cached("config_status", res)
+        return res
 
     @router.get("/api/status/installer")
-    def get_installer_status() -> dict[str, Any]:
+    def get_installer_status(refresh: bool = False) -> dict[str, Any]:
+        if not refresh:
+            cached = context.get_cached("installer_status", ttl=30.0)
+            if cached is not None:
+                return cached
         target = context.require_workspace_dir()
         status_res = get_installer_status_workflow(target_dir=target)
         form_res = get_installer_parameters_schema(target_dir=target, all_fields=True)
-        return serialize_installer_status(status_res, form_res)
+        res = serialize_installer_status(status_res, form_res)
+        context.set_cached("installer_status", res)
+        return res
 
 
 def _register_installer_routes(router: APIRouter, context: ActiveWorkspaceContext) -> None:
@@ -262,6 +281,7 @@ def _register_installer_routes(router: APIRouter, context: ActiveWorkspaceContex
         result = apply_installer_settings(
             InstallerSettingsRequest(target_dir=context.require_workspace_dir(), values=payload.values)
         )
+        context.clear_cache()
         return {
             "success": True,
             "message": "Installer settings saved successfully.",
@@ -277,6 +297,7 @@ def _register_installer_routes(router: APIRouter, context: ActiveWorkspaceContex
     @router.post("/api/installer/reset")
     def reset_installer_settings_endpoint() -> dict[str, Any]:
         result = reset_installer_settings(target_dir=context.require_workspace_dir())
+        context.clear_cache()
         return {
             "success": True,
             "message": "Installer settings reset to deployed configuration.",
@@ -298,6 +319,7 @@ def _register_config_routes(router: APIRouter, context: ActiveWorkspaceContext) 
             force=payload.force if payload else False,
         )
         res = apply_config_pull(req)
+        context.clear_cache()
         return serialize_config_pull_result(res)
 
     @router.post("/api/config/push/prepare")
@@ -313,6 +335,7 @@ def _register_config_routes(router: APIRouter, context: ActiveWorkspaceContext) 
             force=payload.force if payload else False,
         )
         res = apply_config_push(req)
+        context.clear_cache()
         return serialize_config_push_result(res)
 
     @router.post("/api/config/deploy")
@@ -324,6 +347,7 @@ def _register_config_routes(router: APIRouter, context: ActiveWorkspaceContext) 
             overwrite_confirmed=payload.overwrite_confirmed if payload else False,
             watch=False,
         )
+        context.clear_cache()
         push_data = (
             serialize_config_push_result(deploy_res.push_result) if deploy_res.push_result else None
         )
@@ -351,25 +375,41 @@ def _register_pipeline_routes(router: APIRouter, context: ActiveWorkspaceContext
     def pipeline_snapshot(
         type: str = "configuration",
         execution_id: str | None = None,
+        refresh: bool = False,
     ) -> dict[str, Any]:
+        cache_key = f"pipeline_snapshot:{type}:{execution_id}"
+        if not refresh:
+            cached = context.get_cached(cache_key, ttl=10.0)
+            if cached is not None:
+                return cached
         snapshot = get_pipeline_snapshot_workflow(
             target_dir=context.require_workspace_dir(),
             pipeline_type=type,
             execution_id=execution_id,
         )
-        return serialize_pipeline_snapshot(snapshot)
+        res = serialize_pipeline_snapshot(snapshot)
+        context.set_cached(cache_key, res)
+        return res
 
     @router.get("/api/pipeline/diagnostics")
     def pipeline_diagnostics(
         type: str = "configuration",
         execution_id: str | None = None,
+        refresh: bool = False,
     ) -> list[dict[str, Any]]:
+        cache_key = f"pipeline_diagnostics:{type}:{execution_id}"
+        if not refresh:
+            cached = context.get_cached(cache_key, ttl=15.0)
+            if cached is not None:
+                return cached
         failures = get_pipeline_diagnostics_workflow(
             target_dir=context.require_workspace_dir(),
             pipeline_type=type,
             execution_id=execution_id,
         )
-        return serialize_pipeline_diagnostics(failures)
+        res = serialize_pipeline_diagnostics(failures)
+        context.set_cached(cache_key, res)
+        return res
 
 
 def create_status_router(

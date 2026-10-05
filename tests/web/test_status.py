@@ -744,26 +744,16 @@ def test_config_deploy_api_success() -> None:
 
 def test_workspace_active_api() -> None:
     from lza_workbench.interfaces.web.status import ActiveWorkspaceContext
-    from lza_workbench.workspace.context import WorkspaceAssessment
+    from lza_workbench.workspace.context import WorkspaceAssessment, WorkspaceContext
+    from lza_workbench.workspace.schema import WorkspaceState
 
     context = ActiveWorkspaceContext(Path("/workspaces/acme"))
     app = create_app(workspace_dir=context)
 
-    dummy_root = RootStatusResult(
+    mock_ws_ctx = WorkspaceContext(
         workspace_dir=Path("/workspaces/acme"),
-        customer_name="Acme",
-        lza_version="v1.15.5",
-        profile="acme-root",
-        region="us-east-1",
-        aws_identity=None,
-        aws_error=None,
-        installer=InstallerStackSummary(name="AWSAccelerator-InstallerStack", exists=False),
-        installer_pipeline=PipelineSummary(name="AWSAccelerator-Pipeline", exists=False),
-        configuration_repo=ConfigurationRepoSummary(repository_type="S3"),
-        configuration_pipeline=PipelineSummary(name="AWSAccelerator-ConfigPipeline", exists=False),
-        health=OverallHealthSummary(
-            installer="Not Deployed", configuration="Clean", workspace="Clean"
-        ),
+        config=_workspace_config(),
+        state=WorkspaceState(),
         assessment=WorkspaceAssessment(
             metadata_valid=True,
             configuration_present=True,
@@ -774,7 +764,7 @@ def test_workspace_active_api() -> None:
     )
 
     with patch(
-        "lza_workbench.interfaces.web.status.get_root_status_workflow", return_value=dummy_root
+        "lza_workbench.interfaces.web.status.load_workspace_context", return_value=mock_ws_ctx
     ):
         response = TestClient(app).get("/api/workspace/active")
 
@@ -789,6 +779,8 @@ def test_workspace_active_api() -> None:
 
 def test_workspace_open_api(tmp_path: Path) -> None:
     from lza_workbench.interfaces.web.status import ActiveWorkspaceContext
+    from lza_workbench.workspace.context import WorkspaceAssessment, WorkspaceContext
+    from lza_workbench.workspace.schema import WorkspaceState
 
     context = ActiveWorkspaceContext(None)
     app = create_app(workspace_dir=context)
@@ -796,25 +788,27 @@ def test_workspace_open_api(tmp_path: Path) -> None:
     target_ws = tmp_path / "customer-a"
     target_ws.mkdir()
 
-    dummy_root = RootStatusResult(
+    mock_ws_ctx = WorkspaceContext(
         workspace_dir=target_ws,
-        customer_name="Customer A",
-        lza_version="v1.15.5",
-        profile="cust-a-root",
-        region="us-east-1",
-        aws_identity=None,
-        aws_error=None,
-        installer=InstallerStackSummary(name="AWSAccelerator-InstallerStack", exists=False),
-        installer_pipeline=PipelineSummary(name="AWSAccelerator-Pipeline", exists=False),
-        configuration_repo=ConfigurationRepoSummary(repository_type="S3"),
-        configuration_pipeline=PipelineSummary(name="AWSAccelerator-ConfigPipeline", exists=False),
-        health=OverallHealthSummary(
-            installer="Not Deployed", configuration="Clean", workspace="Clean"
+        config=WorkspaceConfig.create(
+            customer_name="Customer A",
+            customer_slug="customer-a",
+            aws_profile="cust-a-root",
+            aws_region="us-east-1",
+            lza_version="v1.15.5",
+        ),
+        state=WorkspaceState(),
+        assessment=WorkspaceAssessment(
+            metadata_valid=True,
+            configuration_present=True,
+            installer_configured=False,
+            installer_recorded_deployed=False,
+            imported=False,
         ),
     )
 
     with patch(
-        "lza_workbench.interfaces.web.status.get_root_status_workflow", return_value=dummy_root
+        "lza_workbench.interfaces.web.status.load_workspace_context", return_value=mock_ws_ctx
     ):
         response = TestClient(app).post("/api/workspace/open", json={"directory": str(target_ws)})
 

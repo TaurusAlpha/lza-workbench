@@ -172,6 +172,7 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
         global _is_uninstall_running
 
         target_dir = workspace_dir.require_workspace_dir()
+        workspace_dir.clear_cache()
         context = load_workspace_context(
             target_dir=target_dir,
             required_capabilities=(WorkspaceCapability.METADATA_VALID,),

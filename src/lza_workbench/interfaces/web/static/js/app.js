@@ -1,6 +1,8 @@
 import {
   applyConfigDeploy,
+  clearApiCache,
   getActiveWorkspace,
+  getCachedData,
   getConfigurationStatus,
   getInstallerStatus,
   getPipelineDiagnostics,
@@ -426,17 +428,32 @@ async function loadWelcome() {
   refresh.disabled = false;
 }
 
-async function loadOverview() {
+async function loadOverview(options = {}) {
+  const isRefresh = options?.refresh === true;
   updateNavHighlight("overview");
   if (pageHeader) pageHeader.hidden = false;
   viewContent.className = "card-grid";
-  viewContent.setAttribute("aria-busy", "true");
-  clearNotice();
-  refresh.disabled = true;
   if (breadcrumb) breadcrumb.hidden = true;
 
+  const cached = !isRefresh ? getCachedData("status") : null;
+  if (cached) {
+    if (pageEyebrow) pageEyebrow.textContent = "Workspace Overview";
+    if (pageTitle) pageTitle.textContent = cached.workspace.customerName || "Default Workspace";
+    if (workspacePath) {
+      workspacePath.textContent = "";
+      workspacePath.hidden = true;
+    }
+    updateOfflineStatus(cached.aws);
+    renderOverview(viewContent, cached);
+    clearNotice();
+  } else {
+    viewContent.setAttribute("aria-busy", "true");
+    refresh.disabled = true;
+    clearNotice();
+  }
+
   try {
-    const status = await getStatus();
+    const status = await getStatus({ refresh: isRefresh });
 
     if (pageEyebrow) pageEyebrow.textContent = "Workspace Overview";
     if (pageTitle) pageTitle.textContent = status.workspace.customerName || "Default Workspace";
@@ -466,35 +483,51 @@ async function loadOverview() {
       window.location.hash = "#/welcome";
       return;
     }
-    workspacePath.textContent = "Workspace status unavailable";
-    workspacePath.removeAttribute("title");
-    viewContent.replaceChildren();
-    showNotice(error.message, "error");
+    if (!cached) {
+      workspacePath.textContent = "Workspace status unavailable";
+      workspacePath.removeAttribute("title");
+      viewContent.replaceChildren();
+      showNotice(error.message, "error");
+    }
   } finally {
     viewContent.setAttribute("aria-busy", "false");
     refresh.disabled = false;
   }
 }
 
-async function loadConfiguration() {
+async function loadConfiguration(options = {}) {
+  const isRefresh = options?.refresh === true;
   updateNavHighlight("configuration");
   if (pageHeader) pageHeader.hidden = false;
   viewContent.className = "view-container";
-  viewContent.setAttribute("aria-busy", "true");
-  clearNotice();
-  refresh.disabled = true;
   if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench / Configuration";
   if (pageTitle) pageTitle.textContent = "Configuration Details";
   if (breadcrumb) breadcrumb.hidden = false;
 
+  const cached = !isRefresh ? getCachedData("config_status") : null;
+  if (cached) {
+    if (workspacePath) {
+      workspacePath.hidden = false;
+      workspacePath.textContent = cached.workspace.directory;
+      workspacePath.title = cached.workspace.directory;
+    }
+    renderConfigurationDetails(viewContent, cached, () => loadConfiguration({ refresh: true }));
+    updateOfflineStatus({ isLive: cached.workspace.isLive, error: cached.workspace.error });
+    clearNotice();
+  } else {
+    viewContent.setAttribute("aria-busy", "true");
+    refresh.disabled = true;
+    clearNotice();
+  }
+
   try {
-    const status = await getConfigurationStatus();
+    const status = await getConfigurationStatus({ refresh: isRefresh });
     if (workspacePath) {
       workspacePath.hidden = false;
       workspacePath.textContent = status.workspace.directory;
       workspacePath.title = status.workspace.directory;
     }
-    renderConfigurationDetails(viewContent, status, loadConfiguration);
+    renderConfigurationDetails(viewContent, status, () => loadConfiguration({ refresh: true }));
     updateOfflineStatus({ isLive: status.workspace.isLive, error: status.workspace.error });
     clearNotice();
   } catch (error) {
@@ -503,24 +536,24 @@ async function loadConfiguration() {
       window.location.hash = "#/welcome";
       return;
     }
-    workspacePath.textContent = "Configuration status unavailable";
-    workspacePath.removeAttribute("title");
-    viewContent.replaceChildren();
-    showNotice(error.message, "error");
+    if (!cached) {
+      workspacePath.textContent = "Configuration status unavailable";
+      workspacePath.removeAttribute("title");
+      viewContent.replaceChildren();
+      showNotice(error.message, "error");
+    }
   } finally {
     viewContent.setAttribute("aria-busy", "false");
     refresh.disabled = false;
   }
 }
 
-async function loadPipeline(pipelineType = "configuration", executionId = null) {
+async function loadPipeline(pipelineType = "configuration", executionId = null, options = {}) {
   stopPipelinePolling();
+  const isRefresh = options?.refresh === true;
   updateNavHighlight("pipeline");
   if (pageHeader) pageHeader.hidden = false;
   viewContent.className = "view-container";
-  viewContent.setAttribute("aria-busy", "true");
-  clearNotice();
-  refresh.disabled = true;
 
   const isInstaller = pipelineType === "installer";
   if (pageEyebrow) {
@@ -535,6 +568,23 @@ async function loadPipeline(pipelineType = "configuration", executionId = null) 
   }
   if (breadcrumb) breadcrumb.hidden = false;
 
+  const cacheKey = `pipeline_snapshot:${pipelineType}:${executionId || ""}`;
+  const cachedSnap = !isRefresh ? getCachedData(cacheKey, 10000) : null;
+  if (cachedSnap) {
+    renderPipelineDetails(
+      viewContent,
+      cachedSnap,
+      () => loadPipeline(pipelineType, executionId, { refresh: true }),
+      null,
+      () => fetchAndRenderDiagnostics(cachedSnap)
+    );
+    clearNotice();
+  } else {
+    viewContent.setAttribute("aria-busy", "true");
+    refresh.disabled = true;
+    clearNotice();
+  }
+
   let currentDiagnostics = null;
 
   async function fetchAndRenderDiagnostics(snap) {
@@ -542,11 +592,12 @@ async function loadPipeline(pipelineType = "configuration", executionId = null) 
       currentDiagnostics = await getPipelineDiagnostics({
         type: pipelineType,
         executionId: snap.executionId || executionId,
+        refresh: isRefresh,
       });
       renderPipelineDetails(
         viewContent,
         snap,
-        () => loadPipeline(pipelineType, executionId),
+        () => loadPipeline(pipelineType, executionId, { refresh: true }),
         currentDiagnostics,
         () => fetchAndRenderDiagnostics(snap)
       );
@@ -559,6 +610,7 @@ async function loadPipeline(pipelineType = "configuration", executionId = null) 
     const snapshot = await getPipelineSnapshot({
       type: pipelineType,
       executionId,
+      refresh: isRefresh,
     });
 
     workspacePath.textContent = snapshot.pipelineName;
@@ -569,6 +621,7 @@ async function loadPipeline(pipelineType = "configuration", executionId = null) 
         currentDiagnostics = await getPipelineDiagnostics({
           type: pipelineType,
           executionId: snapshot.executionId || executionId,
+          refresh: isRefresh,
         });
       } catch {
         currentDiagnostics = null;
@@ -578,7 +631,7 @@ async function loadPipeline(pipelineType = "configuration", executionId = null) 
     renderPipelineDetails(
       viewContent,
       snapshot,
-      () => loadPipeline(pipelineType, executionId),
+      () => loadPipeline(pipelineType, executionId, { refresh: true }),
       currentDiagnostics,
       () => fetchAndRenderDiagnostics(snapshot)
     );
@@ -593,17 +646,19 @@ async function loadPipeline(pipelineType = "configuration", executionId = null) 
           const snap = await getPipelineSnapshot({
             type: pipelineType,
             executionId: snapshot.executionId || executionId,
+            refresh: true,
           });
           if (snap.status === "Failed" && !currentDiagnostics) {
             currentDiagnostics = await getPipelineDiagnostics({
               type: pipelineType,
               executionId: snap.executionId || executionId,
+              refresh: true,
             }).catch(() => null);
           }
           renderPipelineDetails(
             viewContent,
             snap,
-            () => loadPipeline(pipelineType, executionId),
+            () => loadPipeline(pipelineType, executionId, { refresh: true }),
             currentDiagnostics,
             () => fetchAndRenderDiagnostics(snap)
           );
@@ -621,33 +676,46 @@ async function loadPipeline(pipelineType = "configuration", executionId = null) 
       window.location.hash = "#/welcome";
       return;
     }
-    workspacePath.textContent = "Pipeline status unavailable";
-    workspacePath.removeAttribute("title");
-    viewContent.replaceChildren();
-    showNotice(error.message, "error");
+    if (!cachedSnap) {
+      workspacePath.textContent = "Pipeline status unavailable";
+      workspacePath.removeAttribute("title");
+      viewContent.replaceChildren();
+      showNotice(error.message, "error");
+    }
   } finally {
     viewContent.setAttribute("aria-busy", "false");
     refresh.disabled = false;
   }
 }
 
-async function loadInstaller() {
+async function loadInstaller(options = {}) {
   stopPipelinePolling();
+  const isRefresh = options?.refresh === true;
   updateNavHighlight("installer");
   if (pageHeader) pageHeader.hidden = false;
   viewContent.className = "view-container";
-  viewContent.setAttribute("aria-busy", "true");
-  clearNotice();
-  refresh.disabled = true;
   if (pageEyebrow) pageEyebrow.textContent = "LZA Workbench / Installer";
   if (pageTitle) pageTitle.textContent = "Installer Settings & Deployment";
   if (breadcrumb) breadcrumb.hidden = false;
 
+  const cached = !isRefresh ? getCachedData("installer_status") : null;
+  if (cached) {
+    workspacePath.textContent = cached.workspace.directory;
+    workspacePath.title = cached.workspace.directory;
+    renderInstallerDetails(viewContent, cached, () => loadInstaller({ refresh: true }));
+    updateOfflineStatus(cached.aws);
+    clearNotice();
+  } else {
+    viewContent.setAttribute("aria-busy", "true");
+    refresh.disabled = true;
+    clearNotice();
+  }
+
   try {
-    const status = await getInstallerStatus();
+    const status = await getInstallerStatus({ refresh: isRefresh });
     workspacePath.textContent = status.workspace.directory;
     workspacePath.title = status.workspace.directory;
-    renderInstallerDetails(viewContent, status, loadInstaller);
+    renderInstallerDetails(viewContent, status, () => loadInstaller({ refresh: true }));
     updateOfflineStatus(status.aws);
     clearNotice();
   } catch (error) {
@@ -656,10 +724,12 @@ async function loadInstaller() {
       window.location.hash = "#/welcome";
       return;
     }
-    workspacePath.textContent = "Installer status unavailable";
-    workspacePath.removeAttribute("title");
-    viewContent.replaceChildren();
-    showNotice(error.message, "error");
+    if (!cached) {
+      workspacePath.textContent = "Installer status unavailable";
+      workspacePath.removeAttribute("title");
+      viewContent.replaceChildren();
+      showNotice(error.message, "error");
+    }
   } finally {
     viewContent.setAttribute("aria-busy", "false");
     refresh.disabled = false;
@@ -751,10 +821,14 @@ function isWorkspaceUnavailableError(error) {
   );
 }
 
-async function handleRoute() {
+async function handleRoute(options = {}) {
   stopPipelinePolling();
   cleanupUninstallPolling();
   const route = parseRoute();
+  const forceRefresh = options?.forceRefresh === true;
+  if (forceRefresh) {
+    clearApiCache();
+  }
 
   const isDefaultRoute = !window.location.hash || window.location.hash === "#" || window.location.hash === "#/";
   if (isDefaultRoute && route.name === "overview") {
@@ -775,23 +849,39 @@ async function handleRoute() {
   } else if (route.name === "setup") {
     loadSetup();
   } else if (route.name === "installer") {
-    loadInstaller();
+    loadInstaller({ refresh: forceRefresh });
   } else if (route.name === "configuration") {
-    loadConfiguration();
+    loadConfiguration({ refresh: forceRefresh });
   } else if (route.name === "pipeline") {
-    loadPipeline(route.pipelineType, route.executionId);
+    loadPipeline(route.pipelineType, route.executionId, { refresh: forceRefresh });
   } else if (route.name === "uninstall") {
     loadUninstall();
   } else {
-    loadOverview();
+    loadOverview({ refresh: forceRefresh });
   }
 }
 
 // Initial setup
 initTheme();
-refresh.addEventListener("click", handleRoute);
-window.addEventListener("hashchange", handleRoute);
+refresh.addEventListener("click", () => handleRoute({ forceRefresh: true }));
+window.addEventListener("hashchange", () => handleRoute());
 handleRoute();
+
+// Background refresh: silently revalidate status every 45 seconds when page is visible
+setInterval(() => {
+  if (document.visibilityState !== "visible") return;
+  const route = parseRoute();
+  if (route.name === "overview") {
+    getStatus({ refresh: true })
+      .then((status) => {
+        if (parseRoute().name === "overview") {
+          renderOverview(viewContent, status);
+          updateOfflineStatus(status.aws);
+        }
+      })
+      .catch(() => {});
+  }
+}, 45000);
 
 // Dev mode live-reload
 let liveReloadInitialized = false;
