@@ -27,18 +27,34 @@ def _get_latest_static_mtime() -> float:
     return latest
 
 
+DEV_SHUTDOWN_EVENT: asyncio.Event | None = None
+
+
+def get_dev_shutdown_event() -> asyncio.Event:
+    global DEV_SHUTDOWN_EVENT
+    if DEV_SHUTDOWN_EVENT is None:
+        DEV_SHUTDOWN_EVENT = asyncio.Event()
+    return DEV_SHUTDOWN_EVENT
+
+
 def create_dev_router() -> APIRouter:
     router = APIRouter()
 
     @router.get("/api/dev/live-reload")
     async def live_reload(request: Request) -> StreamingResponse:
         async def event_generator():
+            shutdown_event = get_dev_shutdown_event()
             yield f"event: init\ndata: {json.dumps({'serverId': SERVER_INSTANCE_ID})}\n\n"
             last_mtime = _get_latest_static_mtime()
             ping_counter = 0
 
-            while True:
-                await asyncio.sleep(0.3)
+            while not shutdown_event.is_set():
+                try:
+                    await asyncio.wait_for(shutdown_event.wait(), timeout=0.3)
+                    break
+                except (asyncio.TimeoutError, TimeoutError):
+                    pass
+
                 if await request.is_disconnected():
                     break
 

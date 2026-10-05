@@ -399,9 +399,12 @@ async function loadWelcome() {
     activeWs = await getActiveWorkspace();
     if (activeWs && activeWs.hasWorkspace) {
       updateWorkspaceSwitcher(activeWs);
+    } else {
+      updateWorkspaceSwitcher({ hasWorkspace: false });
     }
   } catch {
     activeWs = null;
+    updateWorkspaceSwitcher({ hasWorkspace: false });
   }
 
   renderWelcome(
@@ -458,11 +461,7 @@ async function loadOverview() {
     renderOverview(viewContent, status);
     clearNotice();
   } catch (error) {
-    if (
-      error.message?.includes("No active workspace") ||
-      error.message?.includes("No workspace") ||
-      error.message?.includes("workspace_unavailable")
-    ) {
+    if (isWorkspaceUnavailableError(error)) {
       updateWorkspaceSwitcher({ hasWorkspace: false });
       window.location.hash = "#/welcome";
       return;
@@ -499,6 +498,11 @@ async function loadConfiguration() {
     updateOfflineStatus({ isLive: status.workspace.isLive, error: status.workspace.error });
     clearNotice();
   } catch (error) {
+    if (isWorkspaceUnavailableError(error)) {
+      updateWorkspaceSwitcher({ hasWorkspace: false });
+      window.location.hash = "#/welcome";
+      return;
+    }
     workspacePath.textContent = "Configuration status unavailable";
     workspacePath.removeAttribute("title");
     viewContent.replaceChildren();
@@ -612,6 +616,11 @@ async function loadPipeline(pipelineType = "configuration", executionId = null) 
       }, 3000);
     }
   } catch (error) {
+    if (isWorkspaceUnavailableError(error)) {
+      updateWorkspaceSwitcher({ hasWorkspace: false });
+      window.location.hash = "#/welcome";
+      return;
+    }
     workspacePath.textContent = "Pipeline status unavailable";
     workspacePath.removeAttribute("title");
     viewContent.replaceChildren();
@@ -642,6 +651,11 @@ async function loadInstaller() {
     updateOfflineStatus(status.aws);
     clearNotice();
   } catch (error) {
+    if (isWorkspaceUnavailableError(error)) {
+      updateWorkspaceSwitcher({ hasWorkspace: false });
+      window.location.hash = "#/welcome";
+      return;
+    }
     workspacePath.textContent = "Installer status unavailable";
     workspacePath.removeAttribute("title");
     viewContent.replaceChildren();
@@ -725,10 +739,37 @@ async function loadUninstall() {
   }
 }
 
-function handleRoute() {
+function isWorkspaceUnavailableError(error) {
+  if (!error) return false;
+  return (
+    error.code === "workspace_unavailable" ||
+    error.message?.includes("No active workspace") ||
+    error.message?.includes("No workspace") ||
+    error.message?.includes("workspace_unavailable") ||
+    error.message?.includes("missing lza-workspace.yaml") ||
+    error.message?.includes("inside an LZA workspace")
+  );
+}
+
+async function handleRoute() {
   stopPipelinePolling();
   cleanupUninstallPolling();
   const route = parseRoute();
+
+  const isDefaultRoute = !window.location.hash || window.location.hash === "#" || window.location.hash === "#/";
+  if (isDefaultRoute && route.name === "overview") {
+    try {
+      const activeWs = await getActiveWorkspace();
+      if (!activeWs || !activeWs.hasWorkspace) {
+        window.location.hash = "#/welcome";
+        return;
+      }
+    } catch {
+      window.location.hash = "#/welcome";
+      return;
+    }
+  }
+
   if (route.name === "welcome") {
     loadWelcome();
   } else if (route.name === "setup") {

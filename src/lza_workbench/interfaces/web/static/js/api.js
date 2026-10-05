@@ -3,7 +3,10 @@ export async function getStatus() {
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(body?.error?.message ?? "Unable to load workspace status.");
+    const error = new Error(body?.error?.message ?? "Unable to load workspace status.");
+    error.code = body?.error?.code;
+    error.status = response.status;
+    throw error;
   }
   return body;
 }
@@ -13,7 +16,10 @@ export async function getConfigurationStatus() {
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(body?.error?.message ?? body?.detail ?? "Unable to load configuration status.");
+    const error = new Error(body?.error?.message ?? body?.detail ?? "Unable to load configuration status.");
+    error.code = body?.error?.code;
+    error.status = response.status;
+    throw error;
   }
   return body;
 }
@@ -23,7 +29,10 @@ export async function getInstallerStatus() {
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(body?.error?.message ?? body?.detail ?? "Unable to load installer status.");
+    const error = new Error(body?.error?.message ?? body?.detail ?? "Unable to load installer status.");
+    error.code = body?.error?.code;
+    error.status = response.status;
+    throw error;
   }
   return body;
 }

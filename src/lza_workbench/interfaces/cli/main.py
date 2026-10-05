@@ -319,9 +319,17 @@ def ui_command(
 ) -> None:
     """Start the local LZA Workbench Web interface."""
     from lza_workbench.interfaces.web.main import run_web_server
+    from lza_workbench.workspace.paths import resolve_workspace_dir
+
+    target_dir = workspace_dir or Path.cwd()
+    resolved_workspace: Path | None = None
+    try:
+        resolved_workspace = resolve_workspace_dir(target_dir)
+    except LzaError:
+        resolved_workspace = None
 
     run_web_server(
-        workspace_dir=workspace_dir or Path.cwd(),
+        workspace_dir=resolved_workspace,
         host=host,
         port=port,
         open_browser=not no_browser,

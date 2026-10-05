@@ -23,14 +23,21 @@ def create_app(
     open_browser_url: str | None = None,
     dev_mode: bool = False,
 ) -> FastAPI:
+    context = (
+        workspace_dir
+        if isinstance(workspace_dir, ActiveWorkspaceContext)
+        else ActiveWorkspaceContext(workspace_dir, dev_mode=dev_mode)
+    )
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        import os
-
-        if open_browser_url and not os.environ.get("LZA_BROWSER_OPENED"):
-            os.environ["LZA_BROWSER_OPENED"] = "1"
+        if open_browser_url:
             webbrowser.open(open_browser_url)
         yield
+        if context.dev_mode:
+            from lza_workbench.interfaces.web.dev import get_dev_shutdown_event
+
+            get_dev_shutdown_event().set()
 
     app = FastAPI(title="LZA Workbench", lifespan=lifespan)
 
@@ -40,12 +47,6 @@ def create_app(
             status_code=422,
             content={"error": {"code": "workspace_unavailable", "message": str(exc)}},
         )
-
-    context = (
-        workspace_dir
-        if isinstance(workspace_dir, ActiveWorkspaceContext)
-        else ActiveWorkspaceContext(workspace_dir, dev_mode=dev_mode)
-    )
 
     app.include_router(create_status_router(workspace_dir=context))
     app.include_router(create_uninstall_router(workspace_dir=context))
@@ -63,10 +64,9 @@ def create_dev_app() -> FastAPI:
 
     workspace_raw = os.environ.get("LZA_DEV_WORKSPACE_DIR")
     workspace_dir = Path(workspace_raw) if workspace_raw else None
-    browser_url = os.environ.get("LZA_DEV_BROWSER_URL")
     return create_app(
         workspace_dir=workspace_dir,
-        open_browser_url=browser_url,
         dev_mode=True,
     )
+
 
