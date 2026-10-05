@@ -21,10 +21,14 @@ def create_app(
     *,
     workspace_dir: Path | ActiveWorkspaceContext | None = None,
     open_browser_url: str | None = None,
+    dev_mode: bool = False,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        if open_browser_url:
+        import os
+
+        if open_browser_url and not os.environ.get("LZA_BROWSER_OPENED"):
+            os.environ["LZA_BROWSER_OPENED"] = "1"
             webbrowser.open(open_browser_url)
         yield
 
@@ -40,10 +44,29 @@ def create_app(
     context = (
         workspace_dir
         if isinstance(workspace_dir, ActiveWorkspaceContext)
-        else ActiveWorkspaceContext(workspace_dir)
+        else ActiveWorkspaceContext(workspace_dir, dev_mode=dev_mode)
     )
 
     app.include_router(create_status_router(workspace_dir=context))
     app.include_router(create_uninstall_router(workspace_dir=context))
+    if context.dev_mode:
+        from lza_workbench.interfaces.web.dev import create_dev_router
+
+        app.include_router(create_dev_router())
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app
+
+
+def create_dev_app() -> FastAPI:
+    """Application factory for Uvicorn development reload mode."""
+    import os
+
+    workspace_raw = os.environ.get("LZA_DEV_WORKSPACE_DIR")
+    workspace_dir = Path(workspace_raw) if workspace_raw else None
+    browser_url = os.environ.get("LZA_DEV_BROWSER_URL")
+    return create_app(
+        workspace_dir=workspace_dir,
+        open_browser_url=browser_url,
+        dev_mode=True,
+    )
+

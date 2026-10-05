@@ -126,6 +126,11 @@ NoBrowser = Annotated[
     typer.Option("--no-browser", help="Do not open the Overview page."),
 ]
 
+UiDev = Annotated[
+    bool,
+    typer.Option("--dev", help="Enable development mode with automatic reload and live browser refresh."),
+]
+
 Force = Annotated[
     bool,
     typer.Option("--force", help="Reinitialize generated files in an existing workspace."),

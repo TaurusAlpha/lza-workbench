@@ -112,6 +112,7 @@ src/lza_workbench/                                            # LZA Workbench pa
 │       ├── static/                                           # Browser HTML, CSS, and JavaScript assets.
 │       ├── app.py                                            # FastAPI application factory for the local Workbench interface.
 │       ├── context.py                                        # Active workspace state for the local Web interface.
+│       ├── dev.py                                            # Development mode endpoints and live-reload event streaming.
 │       ├── main.py                                           # Local Uvicorn server entrypoint for the Web interface.
 │       ├── serializers.py                                    # Response serialization helpers for the Web interface.
 │       ├── status.py                                         # Status API adapter for the Web interface.

@@ -310,12 +310,12 @@ def uninstall_command(
 
 
 @app.command("ui")
-
 def ui_command(
     workspace_dir: params.UiWorkspaceDir = None,
     host: params.UiHost = "127.0.0.1",
     port: params.UiPort = 8000,
     no_browser: params.NoBrowser = False,
+    dev: params.UiDev = False,
 ) -> None:
     """Start the local LZA Workbench Web interface."""
     from lza_workbench.interfaces.web.main import run_web_server
@@ -325,6 +325,7 @@ def ui_command(
         host=host,
         port=port,
         open_browser=not no_browser,
+        dev=dev,
     )
 
 

@@ -111,7 +111,7 @@ def _register_workspace_routes(router: APIRouter, context: ActiveWorkspaceContex
     @router.get("/api/workspace/active")
     def get_active_workspace() -> dict[str, Any]:
         if context.workspace_dir is None:
-            return {"hasWorkspace": False, "workspaceDir": None}
+            return {"hasWorkspace": False, "workspaceDir": None, "devMode": context.dev_mode}
         try:
             status_res = get_root_status_workflow(target_dir=context.workspace_dir)
             return {
@@ -119,6 +119,7 @@ def _register_workspace_routes(router: APIRouter, context: ActiveWorkspaceContex
                 "workspaceDir": str(status_res.workspace_dir),
                 "customerName": status_res.customer_name,
                 "lzaVersion": status_res.lza_version,
+                "devMode": context.dev_mode,
                 "assessment": (
                     {
                         "metadataValid": status_res.assessment.metadata_valid,
@@ -137,6 +138,7 @@ def _register_workspace_routes(router: APIRouter, context: ActiveWorkspaceContex
             return {
                 "hasWorkspace": False,
                 "workspaceDir": str(context.workspace_dir),
+                "devMode": context.dev_mode,
             }
 
     @router.post("/api/workspace/open")

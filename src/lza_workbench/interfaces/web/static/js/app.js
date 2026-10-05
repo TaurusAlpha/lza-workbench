@@ -751,3 +751,38 @@ initTheme();
 refresh.addEventListener("click", handleRoute);
 window.addEventListener("hashchange", handleRoute);
 handleRoute();
+
+// Dev mode live-reload
+let liveReloadInitialized = false;
+async function checkAndInitLiveReload() {
+  if (liveReloadInitialized) return;
+  try {
+    const ws = await getActiveWorkspace();
+    if (ws && ws.devMode) {
+      liveReloadInitialized = true;
+      let initialServerId = null;
+      const evtSource = new EventSource("/api/dev/live-reload");
+
+      evtSource.addEventListener("init", (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (initialServerId === null) {
+            initialServerId = data.serverId;
+          } else if (initialServerId !== data.serverId) {
+            window.location.reload();
+          }
+        } catch {
+          // ignore
+        }
+      });
+
+      evtSource.addEventListener("reload", () => {
+        window.location.reload();
+      });
+    }
+  } catch {
+    // dev reload check ignored if endpoint unavailable
+  }
+}
+checkAndInitLiveReload();
+

@@ -11,9 +11,10 @@ from lza_workbench.workspace.import_workspace import ImportWorkspacePreparation
 class ActiveWorkspaceContext:
     """Manage the active workspace and in-flight Web operations."""
 
-    def __init__(self, workspace_dir: Path | None = None) -> None:
+    def __init__(self, workspace_dir: Path | None = None, dev_mode: bool = False) -> None:
         self.workspace_dir: Path | None = workspace_dir.resolve() if workspace_dir else None
         self.prepared_import: ImportWorkspacePreparation | None = None
+        self.dev_mode: bool = dev_mode
 
     def set_workspace_dir(self, workspace_dir: Path) -> None:
         self.workspace_dir = workspace_dir.resolve()
