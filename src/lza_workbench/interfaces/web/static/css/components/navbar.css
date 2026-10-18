@@ -274,24 +274,29 @@
    Responsive Navigation
    ========================================================================== */
 
-@media (max-width: 1024px) {
+@media (max-width: 1080px) {
   .app-navbar {
     padding: 0 1rem;
   }
 
   .navbar-left,
   .navbar-right {
-    gap: 0.625rem;
+    gap: 0.5rem;
   }
 
   .ws-switcher-btn {
-    max-width: 11rem;
+    max-width: 9rem;
+  }
+
+  .nav-link {
+    padding: 0.35rem 0.55rem;
+    font-size: 0.8125rem;
   }
 }
 
 @media (max-width: 768px) {
   .app-navbar {
-    padding: 0 0.75rem;
+    padding: 0 0.5rem;
   }
 
   .nav-brand span {
@@ -299,30 +304,68 @@
   }
 
   .ws-switcher-btn {
-    max-width: 8.5rem;
-    padding: 0.3rem 0.5rem;
+    max-width: 7rem;
+    padding: 0.25rem 0.4rem;
     font-size: 0.75rem;
+  }
+
+  .navbar-left,
+  .navbar-right {
+    gap: 0.35rem;
   }
 
   .nav-links {
     gap: 0.125rem;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .nav-links::-webkit-scrollbar {
-    display: none;
   }
 
   .nav-link {
-    padding: 0.3rem 0.5rem;
+    padding: 0.25rem 0.45rem;
     font-size: 0.75rem;
   }
 }
 
 @media (max-width: 560px) {
   .aws-status-pill {
-    padding: 0.2rem 0.45rem;
+    padding: 0.2rem 0.4rem;
     font-size: 0.6875rem;
+  }
+
+  .btn-icon-ghost {
+    padding: 0.3rem;
+  }
+}
+
+/* Keep utilities visible when the navigation needs another row. */
+@media (max-width: 1080px) {
+  .app-navbar {
+    height: auto;
+    min-height: 3.5rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .navbar-left {
+    order: 0;
+    min-width: 0;
+  }
+
+  .navbar-right {
+    order: 1;
+    margin-left: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .nav-links {
+    order: 2;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .ws-switcher-menu {
+    width: min(22rem, calc(100vw - 2rem));
   }
 }

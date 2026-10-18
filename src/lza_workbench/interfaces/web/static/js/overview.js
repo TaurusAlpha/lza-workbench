@@ -46,6 +46,13 @@ export function getStatusVariant(status) {
     return "warning";
   }
 
+  if (norm.includes("unavailable") || norm.includes("unknown") || norm === "—") {
+    return "neutral";
+  }
+  if (norm.includes("not deployed") || norm.includes("not uploaded") || norm.includes("no upstream") || norm.includes("not started")) {
+    return "warning";
+  }
+
   // 3. Recorded/cached states: distinguish healthy recorded vs warning
   if (norm.startsWith("recorded:") || norm.startsWith("last known:")) {
     const stripped = norm.replace(/^(recorded|last known):\s*/, "");
@@ -128,7 +135,7 @@ export function formatFieldValue(fieldValue, options = {}) {
   const escaped = escapeHtml(rawStr);
 
   const copyBtn = options.copy
-    ? `<button type="button" class="btn-copy-inline" data-copy="${escaped}" title="Copy to clipboard">
+    ? `<button type="button" class="btn-copy-inline" data-copy="${escaped}" title="${escapeHtml(options.copyLabel || "Copy value")}" aria-label="${escapeHtml(options.copyLabel || "Copy value")}">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
@@ -166,27 +173,25 @@ export function card(title, fields, status, options = {}) {
   return `<article class="card${interactiveClass}"${dataHref}><div class="card-header">${titleHtml}${badge}</div><dl class="card-body">${rows}</dl></article>`;
 }
 
-function pipelineFields(pipeline) {
-  const isRecorded = !pipeline.isLive && pipeline.status && pipeline.status !== "—";
-  const execStatus = isRecorded ? `Recorded: ${pipeline.status}` : pipeline.status;
-  return [
-    ["Pipeline", pipeline.name, { mono: true, truncate: true, copy: Boolean(pipeline.name) }],
-    ["Latest execution", execStatus, { statusIndicator: Boolean(pipeline.status) }],
-    ["Current work", [pipeline.currentStage, pipeline.currentAction].filter(Boolean).join(" / ") || null, { truncate: true }],
-    ["Failure", pipeline.failureSummary, { truncate: true }],
-  ];
+function renderTimestamp(value) {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return '<span class="val-empty">Time unavailable</span>';
+  return `<time datetime="${escapeHtml(date.toISOString())}">${escapeHtml(date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }))}</time>`;
 }
 
-function pipelineBadge(pipeline) {
-  if (!pipeline.exists || !pipeline.status || pipeline.status === "—") return pipeline.status;
-  if (!pipeline.isLive) {
-    return `Recorded: ${pipeline.status}`;
+function renderLatestRun(pipeline) {
+  if (!pipeline?.status || pipeline.status === "—") {
+    return '<span class="val-empty">No run recorded</span>';
   }
-  return pipeline.status;
+  const label = pipeline.isLive ? pipeline.status : `Recorded: ${pipeline.status}`;
+  return `<div class="overview-latest-run">
+    ${formatFieldValue(label, { statusIndicator: true })}
+    ${pipeline.executionId ? `<span class="run-start-time">${pipeline.startTime ? `Started ${renderTimestamp(pipeline.startTime)}` : "Start time unavailable"}</span>` : ""}
+  </div>`;
 }
 
 function configurationSyncStatus(configuration, isLive = true) {
-  if (!configuration.localGitClean) {
+  if (configuration.localGitClean === false) {
     return "Local changes";
   }
 
@@ -213,200 +218,30 @@ function configurationSyncStatus(configuration, isLive = true) {
   }
 }
 
-function renderLifecycleStepper(status) {
-  // Step 1: Workspace
-  const s1Status = "Complete";
-  const s1Text = status.workspace.customerName || "Configured";
-
-  // Step 2: Installer Stack
-  let s2Status = "Pending";
-  let s2Variant = "neutral";
-  let s2Text = "Not Deployed";
-  let s3Status = "Pending";
-  let s3Variant = "neutral";
-  let s3Text = "Not Deployed";
-  const instStatus = status.installer.status || "";
-  if (instStatus.includes("COMPLETE")) {
-    s2Status = "Complete";
-    s2Variant = "success";
-    s2Text = instStatus;
-  } else if (instStatus.includes("IN_PROGRESS")) {
-    s2Status = "In Progress";
-    s2Variant = "warning";
-    s2Text = instStatus;
-  } else if (instStatus.includes("FAILED") || instStatus.includes("ROLLBACK")) {
-    s2Status = "Failed";
-    s2Variant = "danger";
-    s2Text = instStatus;
-  } else if (instStatus) {
-    s2Status = instStatus;
-    s2Text = instStatus;
-  }
-
-  // Step 3: Configuration & Pipeline
-  let s4Status = "In sync";
-  let s4Variant = "success";
-  let s4Text = "Synced & Ready";
-  if (!status.configuration.localGitClean) {
-    s4Status = "Local changes";
-    s4Variant = "warning";
-    s4Text = `${status.configuration.localGitUncommitted} uncommitted`;
-  } else if (status.configurationPipeline?.status === "Failed") {
-    s4Status = "Failed";
-    s4Variant = "danger";
-    s4Text = "Pipeline Failed";
-  } else if (status.configurationPipeline?.status === "InProgress") {
-    s4Status = "Running";
-    s4Variant = "warning";
-    s4Text = "Pipeline Running";
-  }
-
-  // Overall Lifecycle Badge
-  let overallLifecycleStatus = "In sync";
-  let overallLifecycleVariant = "success";
-
-  if (!status.aws.isLive) {
-    overallLifecycleStatus = "Offline";
-    overallLifecycleVariant = "warning";
-  } else if (
-    s2Variant === "danger" ||
-    s3Variant === "danger" ||
-    s4Variant === "danger"
-  ) {
-    overallLifecycleStatus = "Attention required";
-    overallLifecycleVariant = "danger";
-  } else if (
-    s2Variant === "warning" ||
-    s3Variant === "warning" ||
-    s4Variant === "warning"
-  ) {
-    overallLifecycleStatus = "Action required";
-    overallLifecycleVariant = "warning";
-  } else {
-    overallLifecycleStatus = "In sync";
-    overallLifecycleVariant = "success";
-  }
-
-  const isCollapsed = localStorage.getItem("lza_lifecycle_collapsed") === "true";
-
-  return `
-    <article class="card card-full lifecycle-card${isCollapsed ? " is-collapsed" : ""}" id="lifecycle-card">
-      <div class="card-header lifecycle-header" id="lifecycle-header" role="button" tabindex="0" aria-expanded="${!isCollapsed}" title="${isCollapsed ? "Click to expand lifecycle stepper" : "Click to collapse lifecycle stepper"}">
-        <div class="lifecycle-header-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-          <h2 class="card-title">LZA Environment Lifecycle</h2>
-        </div>
-        <div class="lifecycle-header-actions">
-          <span class="badge badge-${overallLifecycleVariant}">${escapeHtml(overallLifecycleStatus)}</span>
-          <svg class="lifecycle-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform: ${isCollapsed ? "rotate(180deg)" : "rotate(0deg)"}; transition: transform 200ms ease; color: var(--text-muted);">
-            <polyline points="18 15 12 9 6 15"/>
-          </svg>
-        </div>
-      </div>
-      <div class="card-body lifecycle-body" id="lifecycle-body"${isCollapsed ? ' style="display: none;"' : ""}>
-        <div class="stepper-track">
-          <!-- Step 1 -->
-          <a href="#/setup" class="stepper-step complete" title="Workspace Initialized">
-            <div class="step-indicator">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-            </div>
-            <div class="step-content">
-              <span class="step-phase">Phase 1</span>
-              <strong class="step-label">Workspace</strong>
-              <span class="step-state">${escapeHtml(s1Text)}</span>
-            </div>
-            <svg class="step-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </a>
-
-          <div class="stepper-divider ${s2Variant === "success" ? "active" : ""}"></div>
-
-          <!-- Step 2 -->
-          <a href="#/installer" class="stepper-step ${s2Variant}" title="Installer Deployment">
-            <div class="step-indicator">
-              ${
-                s2Variant === "success"
-                  ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
-                  : `<span>2</span>`
-              }
-            </div>
-            <div class="step-content">
-              <span class="step-phase">Phase 2</span>
-              <strong class="step-label">Installer</strong>
-              <span class="step-state">${escapeHtml(s2Text)}</span>
-            </div>
-            <svg class="step-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </a>
-
-          <div class="stepper-divider ${s2Variant === "success" ? "active" : ""}"></div>
-
-          <!-- Step 3 -->
-          <a href="#/installer" class="stepper-step ${s2Variant}" title="Installer Pipeline Stack">
-            <div class="step-indicator">
-              ${
-                s2Variant === "success"
-                  ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
-                  : `<span>3</span>`
-              }
-            </div>
-            <div class="step-content">
-              <span class="step-phase">Phase 3</span>
-              <strong class="step-label">Installer Stack</strong>
-              <span class="step-state">${escapeHtml(s2Text)}</span>
-            </div>
-            <svg class="step-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </a>
-
-          <div class="stepper-divider ${s4Variant === "success" ? "active" : ""}"></div>
-
-          <!-- Step 4 -->
-          <a href="#/configuration" class="stepper-step ${s4Variant}" title="Configuration &amp; Pipelines">
-            <div class="step-indicator">
-              ${
-                s4Variant === "success"
-                  ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
-                  : `<span>4</span>`
-              }
-            </div>
-            <div class="step-content">
-              <span class="step-phase">Phase 4</span>
-              <strong class="step-label">Config &amp; Pipeline</strong>
-              <span class="step-state">${escapeHtml(s4Text)}</span>
-            </div>
-            <svg class="step-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </a>
-        </div>
-      </div>
-    </article>
-  `;
-}
-
 export function renderOverview(container, status) {
-  const repoTarget = status.configuration.target
-    ? `${status.configuration.repositoryType} / ${status.configuration.target}`
-    : status.configuration.repositoryType;
-
-  const uncommittedValue = status.configuration.localGitClean
-    ? "0 (Clean)"
-    : `${status.configuration.localGitUncommitted} uncommitted`;
-
-  const remoteSyncSummary =
-    status.configuration.remoteSync?.summary || status.configuration.gitSync?.summary || "—";
-
-  const installerStatusDisplay = !status.aws.isLive && status.installer.status && status.installer.status !== "—"
-    ? `Recorded: ${status.installer.status}`
-    : status.installer.status || "—";
+  const configuration = status.configuration;
+  const installer = status.installer;
+  const configIsLive = configuration.isLive && status.aws.isLive;
+  const installerIsLive = installer.isLive && status.aws.isLive;
+  const installerStatus = installer.status || "Unknown";
+  const installerStatusDisplay = installerIsLive ? installerStatus : `Recorded: ${installerStatus}`;
+  const installerHealth = status.health?.installer || "Unknown";
+  const installerBadge = installerIsLive || installerHealth.startsWith("Recorded:")
+    ? installerHealth : `Recorded: ${installerHealth}`;
+  const configSync = configurationSyncStatus(configuration, configIsLive);
+  const remoteSync = configuration.remoteSync || configuration.gitSync;
+  const remoteSyncSummary = remoteSync?.summary || remoteSync?.status || "Sync unavailable";
+  const remoteSyncDisplay = configIsLive || !remoteSync ? remoteSyncSummary : `Recorded: ${remoteSyncSummary}`;
+  const configPipeline = status.configurationPipeline;
+  const configPipelineVariant = getStatusVariant(configPipeline?.status);
+  const configBadge = configPipeline?.isLive && ["danger", "warning"].includes(configPipelineVariant)
+    ? configPipeline.status : configSync;
+  const directory = status.workspace.directory || "";
+  const profile = status.aws.profile || "—";
+  const region = status.aws.region || "—";
+  const repoTarget = [configuration.repositoryType, configuration.target].filter(Boolean).join(" / ");
+  const uncommitted = configuration.localGitClean === true ? "0 (Clean)"
+    : configuration.localGitClean === false ? `${configuration.localGitUncommitted} uncommitted` : "Unknown";
 
   function renderNextStepsCard() {
     const steps = [];
@@ -457,344 +292,95 @@ export function renderOverview(container, status) {
     `;
   }
 
-  const lifecycleStepperHtml = renderLifecycleStepper(status);
-  const nextStepsHtml = renderNextStepsCard();
+  function summaryRow(label, value, options = {}) {
+    return `<div class="kv-row"><dt class="kv-label">${escapeHtml(label)}</dt>
+      <dd class="kv-value">${formatFieldValue(value, options)}</dd></div>`;
+  }
 
-  // 1. Tier 1: Workspace & AWS Context Bar
-  const customerName = escapeHtml(status.workspace.customerName || "Default Workspace");
-  const lzaVersion = escapeHtml(status.workspace.lzaVersion || "Unknown");
-  const directory = status.workspace.directory || "";
-  const profile = status.aws.profile || "—";
-  const region = status.aws.region || "—";
+  function renderComponentCard({ title, href, badge, rows, pipeline, pipelineType }) {
+    return `<article class="card workload-card card-interactive" data-href="${href}">
+      <div class="card-header">
+        <h2 class="card-title"><a href="${href}" class="card-title-link">${title}</a></h2>
+        ${renderBadge(badge)}
+      </div>
+      <dl class="card-body">
+        ${rows}
+        <div class="kv-row"><dt class="kv-label">Latest run</dt><dd class="kv-value">${renderLatestRun(pipeline)}</dd></div>
+      </dl>
+      ${pipeline?.failureSummary ? `<p class="workload-error-box error-box-msg">${escapeHtml(pipeline.failureSummary)}</p>` : ""}
+      <div class="card-footer">
+        <a href="${href}" class="btn btn-sm btn-outline">Manage ${title.toLowerCase()} &rarr;</a>
+        <a href="#/pipeline/${pipelineType}" class="btn btn-sm btn-ghost">View pipeline &rarr;</a>
+      </div>
+    </article>`;
+  }
 
-
-  const awsLiveBadgeClass = status.aws.isLive ? "badge-success" : "badge-warning";
-  const awsLiveText = status.aws.isLive ? "Live" : "Offline";
-
-  const contextBarHtml = `
+  container.innerHTML = `
     <article class="card card-full workspace-context-bar">
       <div class="context-bar-header">
-        <div class="context-bar-title-group">
-          <div class="context-bar-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-          </div>
-          <div>
-            <span class="context-bar-eyebrow">Environment Context</span>
-            <h2 class="context-bar-title">AWS &amp; Runtime Configuration</h2>
-          </div>
-        </div>
+        <h2 class="context-bar-title">Workspace &amp; AWS context</h2>
         <div class="context-bar-badges">
-          <span class="badge ${awsLiveBadgeClass}"><span class="badge-dot" aria-hidden="true"></span>${awsLiveText}</span>
-          <span class="badge badge-neutral mono-val">${lzaVersion}</span>
-          <a href="#/welcome" class="btn btn-sm btn-outline" title="Switch or open another workspace">
-            Switch Workspace &rarr;
-          </a>
+          ${renderBadge(status.aws.isLive ? "Live" : "Offline")}
+          <span class="badge badge-neutral">LZA version: ${escapeHtml(status.workspace.lzaVersion || "Unknown")}</span>
+          <a href="#/welcome" class="btn btn-sm btn-outline">Switch workspace &rarr;</a>
         </div>
       </div>
       <div class="context-bar-details">
-        <div class="context-item">
-          <span class="context-label">Directory</span>
-          <div class="context-val">
-            ${formatFieldValue(directory, { mono: true, truncate: true, copy: Boolean(directory) })}
-          </div>
+        <div class="context-item context-directory"><span class="context-label">Directory</span>
+          <div class="context-val">${formatFieldValue(directory, { mono: true, copy: Boolean(directory), copyLabel: "Copy workspace directory" })}</div>
         </div>
-        <div class="context-item">
-          <span class="context-label">AWS Profile</span>
-          <div class="context-val">
-            ${formatFieldValue(profile, { mono: true, copy: Boolean(status.aws.profile) })}
-          </div>
+        <div class="context-item"><span class="context-label">AWS profile</span>
+          <div class="context-val">${formatFieldValue(profile, { mono: true, copy: Boolean(status.aws.profile), copyLabel: "Copy AWS profile" })}</div>
         </div>
-        <div class="context-item">
-          <span class="context-label">AWS Region</span>
-          <div class="context-val">
-            ${formatFieldValue(region, { mono: true, copy: Boolean(region && region !== "—") })}
-          </div>
+        <div class="context-item"><span class="context-label">AWS region</span>
+          <div class="context-val">${formatFieldValue(region, { mono: true, copy: Boolean(status.aws.region), copyLabel: "Copy AWS region" })}</div>
         </div>
       </div>
+      <p class="overview-refreshed">Last refreshed: ${renderTimestamp(status.observedAt)}</p>
     </article>
-  `;
-
-  // 2. Tier 2: Workload Cards (Installer & Configuration)
-  // Installer Card
-  const installerBadgeText = status.health?.installer || installerStatusDisplay;
-  const installerConfigStatus = status.assessment?.installerConfigured ? "Configured" : "Incomplete";
-  const installerDeployedVer = formatFieldValue(status.installer.deployedVersion, { mono: true });
-  const installerName = formatFieldValue(status.installer.name, { mono: true, truncate: true, copy: Boolean(status.installer.name) });
-  const stackStatusDisplay = formatFieldValue(installerStatusDisplay, { statusIndicator: Boolean(status.installer.status) });
-  const installerPipelineName = formatFieldValue(status.installerPipeline?.name, { mono: true, truncate: true, copy: Boolean(status.installerPipeline?.name) });
-
-  const isInstallerPipelineRecorded = !status.installerPipeline?.isLive && status.installerPipeline?.status && status.installerPipeline?.status !== "—";
-  const installerPipelineStatusRaw = isInstallerPipelineRecorded
-    ? `Recorded: ${status.installerPipeline.status}`
-    : status.installerPipeline?.status && status.installerPipeline.status !== "—"
-      ? status.installerPipeline.status
-      : status.aws.isLive
-        ? "No run recorded"
-        : "No run recorded (Offline)";
-  const installerPipelineStatusDisplay = formatFieldValue(installerPipelineStatusRaw, {
-    statusIndicator: Boolean(status.installerPipeline?.status && status.installerPipeline.status !== "—"),
-  });
-
-  const installerFailureHtml = status.installerPipeline?.failureSummary
-    ? `<div class="workload-error-box">
-        <div class="error-box-header">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <strong>Pipeline Execution Failed</strong>
-        </div>
-        <p class="error-box-msg">${escapeHtml(status.installerPipeline.failureSummary)}</p>
-      </div>`
-    : "";
-
-  const installerCardHtml = `
-    <article class="card workload-card card-interactive" data-href="#/installer">
-      <div class="card-header">
-        <h2 class="card-title">
-          <a href="#/installer" class="card-title-link">Installer</a>
-        </h2>
-        ${renderBadge(installerBadgeText)}
-      </div>
-      <div class="card-body">
-        <div class="card-sub-section">
-          <div class="section-divider-label">Setup &amp; Specification</div>
-          <dl class="section-kv-list">
-            <div class="kv-row">
-              <dt class="kv-label">Configuration</dt>
-              <dd class="kv-value">${formatFieldValue(installerConfigStatus, { statusIndicator: true })}</dd>
-            </div>
-            <div class="kv-row">
-              <dt class="kv-label">Deployed Version</dt>
-              <dd class="kv-value">${installerDeployedVer}</dd>
-            </div>
-          </dl>
-        </div>
-        <div class="card-sub-section">
-          <div class="section-divider-label">Workload &amp; Deployment</div>
-          <dl class="section-kv-list">
-            <div class="kv-row">
-              <dt class="kv-label">CloudFormation</dt>
-              <dd class="kv-value">${installerName}</dd>
-            </div>
-            <div class="kv-row">
-              <dt class="kv-label">Stack Status</dt>
-              <dd class="kv-value">${stackStatusDisplay}</dd>
-            </div>
-            <div class="kv-row">
-              <dt class="kv-label">Pipeline</dt>
-              <dd class="kv-value">${installerPipelineName}</dd>
-            </div>
-            <div class="kv-row">
-              <dt class="kv-label">Pipeline Run</dt>
-              <dd class="kv-value">${installerPipelineStatusDisplay}</dd>
-            </div>
-          </dl>
-          ${installerFailureHtml}
-        </div>
-      </div>
-      <div class="card-footer">
-        <a href="#/installer" class="btn btn-sm btn-outline">Configure Installer &rarr;</a>
-        <a href="#/pipeline/installer" class="btn btn-sm btn-ghost">View Pipeline Run &rarr;</a>
-      </div>
-    </article>
-  `;
-
-  // Configuration Card
-  const configSyncBadge = configurationSyncStatus(status.configuration, status.aws.isLive);
-  const repoDisplay = formatFieldValue(repoTarget, { mono: true, truncate: true, copy: Boolean(repoTarget) });
-  const branchDisplay = formatFieldValue(status.configuration.localGitBranch, { mono: true });
-  const uncommittedDisplay = formatFieldValue(uncommittedValue, { statusIndicator: !status.configuration.localGitClean });
-  const remoteSyncDisplay = formatFieldValue(remoteSyncSummary, { statusIndicator: true, truncate: true });
-  const configPipelineName = formatFieldValue(status.configurationPipeline?.name, { mono: true, truncate: true, copy: Boolean(status.configurationPipeline?.name) });
-
-  const isConfigPipelineRecorded = !status.configurationPipeline?.isLive && status.configurationPipeline?.status && status.configurationPipeline?.status !== "—";
-  const configPipelineStatusRaw = isConfigPipelineRecorded
-    ? `Recorded: ${status.configurationPipeline.status}`
-    : status.configurationPipeline?.status && status.configurationPipeline.status !== "—"
-      ? status.configurationPipeline.status
-      : status.aws.isLive
-        ? "No run recorded"
-        : "No run recorded (Offline)";
-  const configPipelineStatusDisplay = formatFieldValue(configPipelineStatusRaw, {
-    statusIndicator: Boolean(status.configurationPipeline?.status && status.configurationPipeline.status !== "—"),
-  });
-
-  const configFailureHtml = status.configurationPipeline?.failureSummary
-    ? `<div class="workload-error-box">
-        <div class="error-box-header">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <strong>Pipeline Execution Failed</strong>
-        </div>
-        <p class="error-box-msg">${escapeHtml(status.configurationPipeline.failureSummary)}</p>
-      </div>`
-    : "";
-
-  const configurationCardHtml = `
-    <article class="card workload-card card-interactive" data-href="#/configuration">
-      <div class="card-header">
-        <h2 class="card-title">
-          <a href="#/configuration" class="card-title-link">Configuration</a>
-        </h2>
-        ${renderBadge(configSyncBadge)}
-      </div>
-      <div class="card-body">
-        <div class="card-sub-section">
-          <div class="section-divider-label">Repository &amp; Git State</div>
-          <dl class="section-kv-list">
-            <div class="kv-row">
-              <dt class="kv-label">Repository</dt>
-              <dd class="kv-value">${repoDisplay}</dd>
-            </div>
-            <div class="kv-row">
-              <dt class="kv-label">Local Branch</dt>
-              <dd class="kv-value">${branchDisplay}</dd>
-            </div>
-            <div class="kv-row">
-              <dt class="kv-label">Uncommitted</dt>
-              <dd class="kv-value">${uncommittedDisplay}</dd>
-            </div>
-            <div class="kv-row">
-              <dt class="kv-label">Remote Sync</dt>
-              <dd class="kv-value">${remoteSyncDisplay}</dd>
-            </div>
-          </dl>
-        </div>
-        <div class="card-sub-section">
-          <div class="section-divider-label">Pipeline Workload</div>
-          <dl class="section-kv-list">
-            <div class="kv-row">
-              <dt class="kv-label">Pipeline</dt>
-              <dd class="kv-value">${configPipelineName}</dd>
-            </div>
-            <div class="kv-row">
-              <dt class="kv-label">Pipeline Run</dt>
-              <dd class="kv-value">${configPipelineStatusDisplay}</dd>
-            </div>
-          </dl>
-          ${configFailureHtml}
-        </div>
-      </div>
-      <div class="card-footer">
-        <a href="#/configuration" class="btn btn-sm btn-outline">Edit Configuration &rarr;</a>
-        <a href="#/pipeline/configuration" class="btn btn-sm btn-ghost">View Pipeline Run &rarr;</a>
-      </div>
-    </article>
-  `;
-
-  const workloadGridHtml = `
+    ${renderNextStepsCard()}
     <div class="workload-grid card-full">
-      ${installerCardHtml}
-      ${configurationCardHtml}
+      ${renderComponentCard({
+        title: "Installer", href: "#/installer", badge: installerBadge,
+        rows: summaryRow("Settings", status.assessment?.installerConfigured === true ? "Configured" : status.assessment?.installerConfigured === false ? "Incomplete" : "Unknown")
+          + summaryRow("Deployed version", installer.deployedVersion, { mono: true })
+          + summaryRow("Stack status", installerStatusDisplay, { statusIndicator: true }),
+        pipeline: status.installerPipeline, pipelineType: "installer",
+      })}
+      ${renderComponentCard({
+        title: "Configuration", href: "#/configuration", badge: configBadge,
+        rows: summaryRow("Repository", repoTarget, { mono: true, copy: Boolean(repoTarget), copyLabel: "Copy configuration repository" })
+          + summaryRow("Local branch", configuration.localGitBranch, { mono: true })
+          + summaryRow("Local changes", uncommitted)
+          + summaryRow("Remote sync", remoteSyncDisplay, { statusIndicator: true }),
+        pipeline: configPipeline, pipelineType: "configuration",
+      })}
     </div>
-  `;
-
-  const dangerZoneCardHtml = `
-    <article class="card card-full card-danger-zone" id="danger-zone-card">
-      <div class="card-header danger-zone-header">
-        <div class="danger-zone-title-group">
-          <div class="danger-zone-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-          </div>
-          <div>
-            <h2 class="card-title">Danger Zone</h2>
-            <span class="danger-zone-desc">Destructive operations and workspace lifecycle decommissioning</span>
-          </div>
-        </div>
-        <span class="badge badge-danger">Irreversible</span>
-      </div>
-      <div class="card-body danger-zone-body">
+    <details class="card card-full card-danger-zone" id="danger-zone-card">
+      <summary class="danger-zone-summary"><h2 class="card-title">Danger Zone</h2><span class="danger-zone-desc">Decommission this LZA environment</span></summary>
+      <div class="danger-zone-body">
         <div class="danger-action-row">
           <div class="danger-action-info">
             <strong class="danger-action-title">Uninstall Landing Zone Accelerator</strong>
-            <p class="danger-action-desc">
-              Discover and tear down accelerator-managed CloudFormation stacks in reverse deployment order,
-              clean up configuration S3 buckets, and selectively purge retained resources across target accounts.
-            </p>
+            <p class="danger-action-desc">Review accelerator-managed resources for removal across target accounts. Deletion is irreversible.</p>
           </div>
-          <div class="danger-action-btn-wrapper">
-            <a href="#/uninstall" class="btn btn-sm btn-outline-danger" id="btn-uninstall-overview">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-              </svg>
-              Uninstall Solution...
-            </a>
-          </div>
+          <a href="#/uninstall" class="btn btn-sm btn-outline-danger" id="btn-uninstall-overview">Uninstall solution…</a>
         </div>
       </div>
-    </article>
-  `;
+    </details>`;
 
-  container.innerHTML = [
-    contextBarHtml,
-    lifecycleStepperHtml,
-    nextStepsHtml,
-    workloadGridHtml,
-    dangerZoneCardHtml,
-  ].filter(Boolean).join("");
-
-  // Bind lifecycle card expand/collapse toggle
-  const lifecycleHeader = container.querySelector("#lifecycle-header");
-  if (lifecycleHeader) {
-    const toggleCollapse = () => {
-      const card = container.querySelector("#lifecycle-card");
-      const body = container.querySelector("#lifecycle-body");
-      const chevron = lifecycleHeader.querySelector(".lifecycle-chevron");
-      if (!body) return;
-      const currentlyCollapsed = body.style.display === "none";
-      if (currentlyCollapsed) {
-        body.style.display = "";
-        if (card) card.classList.remove("is-collapsed");
-        if (chevron) chevron.style.transform = "rotate(0deg)";
-        lifecycleHeader.setAttribute("aria-expanded", "true");
-        lifecycleHeader.title = "Click to collapse lifecycle stepper";
-        localStorage.removeItem("lza_lifecycle_collapsed");
-      } else {
-        body.style.display = "none";
-        if (card) card.classList.add("is-collapsed");
-        if (chevron) chevron.style.transform = "rotate(180deg)";
-        lifecycleHeader.setAttribute("aria-expanded", "false");
-        lifecycleHeader.title = "Click to expand lifecycle stepper";
-        localStorage.setItem("lza_lifecycle_collapsed", "true");
-      }
-    };
-
-    lifecycleHeader.addEventListener("click", toggleCollapse);
-    lifecycleHeader.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        toggleCollapse();
-      }
-    });
-  }
-
-  // Bind interactive cards
   container.querySelectorAll(".card-interactive").forEach((interactiveCard) => {
     interactiveCard.addEventListener("click", (event) => {
-      if (event.target.closest("a, button, input")) return;
-      const href = interactiveCard.dataset.href;
-      if (href) {
-        window.location.hash = href;
-      }
+      if (event.target.closest("a, button, input") || window.getSelection()?.toString()) return;
+      window.location.hash = interactiveCard.dataset.href;
     });
   });
 
-  // Bind inline copy buttons
   container.querySelectorAll(".btn-copy-inline").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const text = btn.dataset.copy;
-      if (!text) return;
+    btn.addEventListener("click", async (event) => {
+      event.stopPropagation();
       try {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(btn.dataset.copy);
         btn.classList.add("copied");
         setTimeout(() => btn.classList.remove("copied"), 1500);
       } catch (err) {

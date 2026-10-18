@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from lza_workbench.configuration.pull import ConfigPullPreparation, ConfigPullResult
@@ -32,6 +33,7 @@ def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
     sync = result.configuration_repo.git_sync_status
     rsync = result.configuration_repo.remote_sync
     return {
+        "observedAt": datetime.now(UTC).isoformat(),
         "workspace": {
             "directory": str(result.workspace_dir),
             "customerName": result.customer_name,

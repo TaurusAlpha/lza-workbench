@@ -271,6 +271,44 @@ def get_pipeline_execution(
         )
 
 
+def get_latest_pipeline_execution(
+    *,
+    client: Any,
+    pipeline_name: str,
+) -> PipelineExecutionResult | None:
+    """Read the latest execution summary, including its observed start time."""
+    clean_pipeline_name = (pipeline_name or "").strip()
+    if not clean_pipeline_name:
+        return None
+    try:
+        response = client.list_pipeline_executions(
+            pipelineName=clean_pipeline_name,
+            maxResults=1,
+        )
+    except (ClientError, BotoCoreError):
+        return None
+    summaries = response.get("pipelineExecutionSummaries", [])
+    if not summaries:
+        return None
+    summary = summaries[0]
+    start = summary.get("startTime")
+    updated = summary.get("lastUpdateTime")
+    return PipelineExecutionResult(
+        pipeline_name=clean_pipeline_name,
+        exists=True,
+        execution_id=summary.get("pipelineExecutionId", ""),
+        status=summary.get("status", "Unknown"),
+        status_summary=summary.get("statusSummary"),
+        start_time=str(start) if start else None,
+        last_update_time=str(updated) if updated else None,
+        duration_seconds=(
+            max(0.0, (updated - start).total_seconds())
+            if isinstance(start, datetime) and isinstance(updated, datetime)
+            else None
+        ),
+    )
+
+
 def get_latest_pipeline_execution_id(
     *,
     client: Any,
@@ -279,19 +317,9 @@ def get_latest_pipeline_execution_id(
     clean_pipeline_name = (pipeline_name or "").strip()
     if not clean_pipeline_name:
         return None
-
-    try:
-        response = client.list_pipeline_executions(
-            pipelineName=clean_pipeline_name,
-            maxResults=1,
-        )
-        summaries = response.get("pipelineExecutionSummaries", [])
-        if summaries:
-            return str(summaries[0].get("pipelineExecutionId"))
-    except (ClientError, BotoCoreError):
-        pass
-
-    # Fallback to get_pipeline_state
+    latest = get_latest_pipeline_execution(client=client, pipeline_name=clean_pipeline_name)
+    if latest and latest.execution_id:
+        return latest.execution_id
     state = get_pipeline_state(client=client, pipeline_name=clean_pipeline_name)
     return state.latest_execution_id
 
@@ -301,6 +329,7 @@ __all__ = [
     "PipelineExecutionResult",
     "PipelineStateResult",
     "StageStateResult",
+    "get_latest_pipeline_execution",
     "get_latest_pipeline_execution_id",
     "get_pipeline_execution",
     "get_pipeline_state",

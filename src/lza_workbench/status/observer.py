@@ -19,7 +19,7 @@ from lza_workbench.configuration.sync import (
 )
 from lza_workbench.infrastructure.aws.cloudformation import get_cloudformation_stack_status
 from lza_workbench.infrastructure.aws.codepipeline import (
-    get_pipeline_execution,
+    get_latest_pipeline_execution,
     get_pipeline_state,
 )
 from lza_workbench.infrastructure.aws.s3 import S3ObjectObservation, inspect_s3_object_safe
@@ -148,13 +148,13 @@ def _resolve_pipeline_summary(
         duration_seconds: float | None = None
 
         if execution_id:
-            exec_res = get_pipeline_execution(
+            exec_res = get_latest_pipeline_execution(
                 client=codepipeline_client,
                 pipeline_name=pipeline_name,
-                execution_id=execution_id,
             )
-            start_time = exec_res.start_time
-            duration_seconds = exec_res.duration_seconds
+            if exec_res and exec_res.execution_id == execution_id:
+                start_time = exec_res.start_time
+                duration_seconds = exec_res.duration_seconds
 
         current_stage, current_action = (
             _resolve_in_progress_stage_action(pipe_state)
