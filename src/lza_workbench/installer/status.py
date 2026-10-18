@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from lza_workbench.infrastructure.aws.cloudformation import (
     CfnStackStatusResult,
     get_cloudformation_stack_status,
 )
-from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult, get_pipeline_state
+from lza_workbench.infrastructure.aws.codepipeline import (
+    PipelineStateResult,
+    get_latest_pipeline_execution,
+    get_pipeline_state,
+)
 from lza_workbench.infrastructure.aws.session import (
     AwsExecutionContext,
     resolve_aws_execution_context,
@@ -18,6 +22,7 @@ from lza_workbench.installer.drift import (
     StateAlignment,
     calculate_configuration_drift,
     calculate_state_alignment,
+    compare_installer_parameters,
 )
 from lza_workbench.installer.versions import (
     normalize_lza_version,
@@ -43,6 +48,7 @@ class InstallerStatusResult:
     state_alignment: StateAlignment | None
     installer_pipeline_name: str
     pipeline_state: PipelineStateResult | None = None
+    parameter_comparison: str = "Not checked"
 
 
 def prepare_installer_status(
@@ -74,6 +80,17 @@ def prepare_installer_status(
         if state and cfn_status.exists
         else None
     )
+    parameter_comparison = "Not checked"
+    if aws_identity is not None and not cfn_status.error:
+        if not cfn_status.exists:
+            parameter_comparison = "Not deployed"
+        elif cfn_status.deployed_parameters:
+            baseline = state.installer.deployed_parameters if state else None
+            if state and state.installer.stack_id and state.installer.stack_id != cfn_status.stack_id:
+                baseline = None
+            parameter_comparison = compare_installer_parameters(
+                config, cfn_status.deployed_parameters, baseline
+            )
     prefix = config.lza.accelerator_prefix or "AWSAccelerator"
     installer_pipeline_name = config.pipelines.installer.name or f"{prefix}-Installer"
     resolved_pipeline_state = pipeline_state or PipelineStateResult(
@@ -95,6 +112,7 @@ def prepare_installer_status(
         state_alignment=alignment,
         installer_pipeline_name=installer_pipeline_name,
         pipeline_state=resolved_pipeline_state,
+        parameter_comparison=parameter_comparison,
     )
 
 
@@ -126,6 +144,13 @@ def _query_live_installer_status(
     pipeline_state = get_pipeline_state(
         client=codepipeline_client, pipeline_name=installer_pipeline_name
     )
+
+    if pipeline_state.exists and not pipeline_state.error:
+        latest = get_latest_pipeline_execution(
+            client=codepipeline_client, pipeline_name=installer_pipeline_name
+        )
+        if latest and latest.execution_id == pipeline_state.latest_execution_id:
+            pipeline_state = replace(pipeline_state, latest_start_time=latest.start_time)
 
     # If a connection/network failure occurred during live execution, fall back to recorded state
     if (

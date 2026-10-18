@@ -46,8 +46,29 @@ def calculate_state_alignment(
     )
 
 
+def compare_installer_parameters(
+    config: WorkspaceConfig,
+    deployed_parameters: dict[str, str],
+    recorded_parameters: dict[str, str] | None,
+) -> str:
+    """Classify saved/live differences against the last recorded parameter snapshot."""
+    configured = build_installer_cfn_parameters(config)
+    deployed = {key: deployed_parameters.get(key, "") for key in configured}
+    if configured == deployed:
+        return "No pending changes"
+    if not recorded_parameters or not configured.keys() <= recorded_parameters.keys():
+        return "Settings differ"
+    recorded = {key: recorded_parameters[key] for key in configured}
+    local_changed = configured != recorded
+    deployed_changed = deployed != recorded
+    if local_changed and deployed_changed:
+        return "Both changed"
+    return "Saved changes not deployed" if local_changed else "Deployed settings changed"
+
+
 __all__ = [
     "StateAlignment",
     "calculate_configuration_drift",
     "calculate_state_alignment",
+    "compare_installer_parameters",
 ]

@@ -11,7 +11,7 @@ import {
   openWorkspace,
 } from "./api.js";
 import { renderConfigurationDetails } from "./configuration.js";
-import { renderInstallerDetails } from "./installer.js";
+import { confirmDiscardInstallerChanges, hasUnsavedInstallerChanges, renderInstallerDetails } from "./installer.js";
 import { escapeHtml, renderOverview } from "./overview.js";
 import { renderPipelineDetails } from "./pipeline.js";
 import { getRecentWorkspaces, recordRecentWorkspace } from "./recents.js";
@@ -53,6 +53,8 @@ const offlineDetailsText = document.querySelector("#offline-details-text");
 let pipelinePollTimer = null;
 let currentActiveWorkspace = null;
 let currentAwsState = null;
+let acceptedHash = window.location.hash;
+let installerLoadId = 0;
 
 // ==========================================
 // Toast Notification System
@@ -160,6 +162,7 @@ function renderSwitcherRecents() {
 
   wsMenuRecents.querySelectorAll(".ws-recent-item").forEach((el) => {
     el.addEventListener("click", async () => {
+      if (!confirmDiscardInstallerChanges(viewContent)) return;
       const dir = el.dataset.dir;
       closeSwitcherMenu();
       try {
@@ -457,6 +460,7 @@ async function loadOverview(options = {}) {
 
   try {
     const status = await getStatus({ refresh: isRefresh });
+    if (parseRoute().name !== "overview") return;
 
     if (pageEyebrow) pageEyebrow.textContent = "Workspace Overview";
     if (pageTitle) pageTitle.textContent = status.workspace.customerName || "Default Workspace";
@@ -525,6 +529,7 @@ async function loadConfiguration(options = {}) {
 
   try {
     const status = await getConfigurationStatus({ refresh: isRefresh });
+    if (parseRoute().name !== "configuration") return;
     if (workspacePath) {
       workspacePath.hidden = false;
       workspacePath.textContent = status.workspace.directory;
@@ -692,6 +697,7 @@ async function loadPipeline(pipelineType = "configuration", executionId = null, 
 }
 
 async function loadInstaller(options = {}) {
+  const loadId = ++installerLoadId;
   stopPipelinePolling();
   const isRefresh = options?.refresh === true;
   updateNavHighlight("installer");
@@ -705,6 +711,7 @@ async function loadInstaller(options = {}) {
   if (cached) {
     workspacePath.textContent = cached.workspace.directory;
     workspacePath.title = cached.workspace.directory;
+    updateWorkspaceSwitcher({ hasWorkspace: true, customerName: cached.workspace.customerName, workspaceDir: cached.workspace.directory });
     renderInstallerDetails(viewContent, cached, () => loadInstaller({ refresh: true }));
     updateOfflineStatus(cached.aws);
     clearNotice();
@@ -716,12 +723,15 @@ async function loadInstaller(options = {}) {
 
   try {
     const status = await getInstallerStatus({ refresh: isRefresh });
+    if (loadId !== installerLoadId || parseRoute().name !== "installer" || hasUnsavedInstallerChanges(viewContent)) return;
     workspacePath.textContent = status.workspace.directory;
     workspacePath.title = status.workspace.directory;
+    updateWorkspaceSwitcher({ hasWorkspace: true, customerName: status.workspace.customerName, workspaceDir: status.workspace.directory });
     renderInstallerDetails(viewContent, status, () => loadInstaller({ refresh: true }));
     updateOfflineStatus(status.aws);
     clearNotice();
   } catch (error) {
+    if (loadId !== installerLoadId || parseRoute().name !== "installer") return;
     if (isWorkspaceUnavailableError(error)) {
       updateWorkspaceSwitcher({ hasWorkspace: false });
       window.location.hash = "#/welcome";
@@ -734,8 +744,10 @@ async function loadInstaller(options = {}) {
       showNotice(error.message, "error");
     }
   } finally {
-    viewContent.setAttribute("aria-busy", "false");
-    refresh.disabled = false;
+    if (loadId === installerLoadId && parseRoute().name === "installer") {
+      viewContent.setAttribute("aria-busy", "false");
+      refresh.disabled = false;
+    }
   }
 }
 
@@ -825,6 +837,11 @@ function isWorkspaceUnavailableError(error) {
 }
 
 async function handleRoute(options = {}) {
+  if ((window.location.hash !== acceptedHash || options.forceRefresh) && !confirmDiscardInstallerChanges(viewContent)) {
+    history.replaceState(null, "", acceptedHash || "#/installer");
+    return;
+  }
+  acceptedHash = window.location.hash;
   stopPipelinePolling();
   cleanupUninstallPolling();
   const route = parseRoute();
@@ -863,6 +880,22 @@ async function handleRoute(options = {}) {
     loadOverview({ refresh: forceRefresh });
   }
 }
+
+// Protect in-browser installer edits before actions that replace the form.
+document.addEventListener("click", event => {
+  const link = event.target.closest("a[href]");
+  if (!link || !hasUnsavedInstallerChanges(viewContent)) return;
+  const target = new URL(link.href, window.location.href);
+  if (target.href !== window.location.href && !confirmDiscardInstallerChanges(viewContent)) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+}, true);
+window.addEventListener("beforeunload", event => {
+  if (!hasUnsavedInstallerChanges(viewContent)) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
 
 // Initial setup
 initTheme();

@@ -347,6 +347,7 @@ def serialize_installer_status(
     }
 
     alignment_data = {
+        "parameterComparison": result.parameter_comparison,
         "status": "In Sync" if (align and align.in_sync) else "Out of Sync" if align else "UNKNOWN",
         "inSync": align.in_sync if align else None,
         "configurationDrift": {
@@ -380,7 +381,8 @@ def serialize_installer_status(
         "failedStage": failed_stage,
         "failedAction": failed_action,
         "failureSummary": failure_summary,
-        "isLive": (pipe.error is None) if pipe else False,
+        "isLive": bool(result.aws_identity is not None and pipe and not pipe.error),
+        "startTime": pipe.latest_start_time if pipe else None,
         "latestExecutionId": pipe.latest_execution_id if pipe else None,
     }
 
@@ -430,6 +432,7 @@ def serialize_installer_plan(plan: InstallerPlanResult) -> dict[str, Any]:
     cc = plan.codecommit_plan
 
     return {
+        "workspaceDir": str(plan.workspace_dir),
         "cloudformation": {
             "stackName": cfn.stack_name,
             "operation": cfn.operation,

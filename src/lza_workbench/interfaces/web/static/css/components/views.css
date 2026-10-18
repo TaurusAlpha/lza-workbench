@@ -882,3 +882,135 @@
     gap: 0.125rem;
   }
 }
+
+/* Installer details and editing */
+.installer-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.installer-view .card {
+  min-width: 0;
+}
+
+.installer-view .card:not(.card-interactive):hover {
+  border-color: var(--border-card);
+  box-shadow: var(--shadow-card);
+}
+
+.installer-view .kv-value {
+  overflow-wrap: anywhere;
+}
+
+.installer-view .kv-row {
+  grid-template-columns: minmax(8.5rem, 0.8fr) minmax(0, 2fr);
+  align-items: start;
+}
+
+.installer-view .status-indicator {
+  white-space: normal;
+}
+
+.installer-pipeline-summary .card-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.installer-comparison {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.installer-section-nav {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-card);
+}
+
+.installer-view .form-section {
+  scroll-margin-top: 9rem;
+}
+
+.installer-view .form-section-body {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.installer-view .form-help,
+.installer-view .form-section-desc,
+.installer-view .form-label,
+.installer-view .form-select,
+.installer-view .form-input {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.installer-view .form-help {
+  color: var(--text-muted);
+}
+
+.installer-view .form-help p {
+  margin: 0.25rem 0;
+}
+
+.installer-view .installer-field-warning {
+  color: var(--text-primary);
+  border-left: 3px solid #f59e0b;
+  padding-left: 0.5rem;
+}
+
+.installer-view .installer-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  margin-top: 1rem;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-card);
+  box-shadow: 0 -4px 12px rgb(0 0 0 / 0.1);
+}
+
+.installer-view .plan-modal-card code {
+  overflow-wrap: anywhere;
+}
+
+.installer-view .plan-modal-footer {
+  flex-wrap: wrap;
+}
+
+.installer-view .plan-diff-table {
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 960px) {
+  .installer-summary-grid,
+  .installer-pipeline-summary .card-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .installer-view .form-section-body,
+  .installer-view .kv-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .installer-view .plan-modal-overlay {
+    padding: 0.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .installer-view .form-section-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

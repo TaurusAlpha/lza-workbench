@@ -40,6 +40,7 @@ class PipelineStateResult:
     status: str | None = None
     stages: list[StageStateResult] = field(default_factory=list)
     latest_execution_id: str | None = None
+    latest_start_time: str | None = None
     created: str | None = None
     updated: str | None = None
     error: str | None = None

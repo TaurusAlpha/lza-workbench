@@ -1,5 +1,5 @@
 import { getInstallerPlan, resetInstallerSettings, saveInstallerSettings } from "./api.js";
-import { card, escapeHtml, formatFieldValue, renderBadge } from "./overview.js";
+import { card, escapeHtml } from "./overview.js";
 
 const FORM_SECTIONS = [
   {
@@ -78,21 +78,38 @@ function formatTimestamp(isoStr) {
   }
 }
 
+export function hasUnsavedInstallerChanges(container) {
+  return container.querySelector("#installer-settings-form")?.dataset.dirty === "true";
+}
+
+export function confirmDiscardInstallerChanges(container) {
+  if (!hasUnsavedInstallerChanges(container)) return true;
+  if (!confirm("Discard unsaved installer edits?")) return false;
+  const form = container.querySelector("#installer-settings-form");
+  form.reset();
+  form.dataset.dirty = "false";
+  return true;
+}
+
 export function renderInstallerDetails(container, installerData, onRefresh) {
   const { deployed, canonicalSettings, alignment, pipeline, form, aws } = installerData;
+
+  const comparison = alignment.parameterComparison || "Not checked";
+  const stackIsLive = aws.isLive && !deployed.error;
+  const stackLabel = stackIsLive ? (deployed.exists ? "Deployed" : "Not deployed") : "Recorded stack";
+  const comparisonVariant = comparison === "No pending changes" ? "success" : comparison === "Not checked" ? "neutral" : "warning";
 
   // 1. Deployed Stack Summary Fields
   const cfnStatus = deployed.stackStatus || (deployed.exists ? "EXISTS" : "NOT_DEPLOYED");
   const driftCount = Object.keys(alignment.configurationDrift || {}).length;
-  const driftDisplay = driftCount === 0 ? "None" : `${driftCount} drifted parameter${driftCount === 1 ? "" : "s"}`;
 
   const deployedFields = [
-    ["Stack Name", deployed.stackName, { mono: true, truncate: true }],
-    ["Stack Status", cfnStatus, { statusIndicator: Boolean(cfnStatus) }],
+    ["Stack Name", deployed.stackName, { mono: true, copy: true, copyLabel: "Copy stack name" }],
+    ["Stack Status", stackIsLive ? cfnStatus : `Recorded: ${cfnStatus}`, { statusIndicator: Boolean(cfnStatus) }],
     ["Deployed Version", deployed.deployedVersion, { mono: true }],
-    ["State Alignment", alignment.status, { statusIndicator: true }],
-    ["Configuration Drift", driftDisplay, { statusIndicator: driftCount > 0 }],
-    ["Stack ID", deployed.stackId, { mono: true, truncate: true }],
+    ["Recorded metadata", stackIsLive ? alignment.status : "Not checked", { statusIndicator: true }],
+    ["Saved vs deployed", comparison],
+    ["Stack ID", deployed.stackId, { mono: true, copy: Boolean(deployed.stackId), copyLabel: "Copy stack ID" }],
     ["Last Updated", formatTimestamp(deployed.lastUpdatedTime || deployed.creationTime)],
   ];
 
@@ -103,19 +120,20 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     ["Config Location", canonicalSettings.configRepositoryLocation?.toUpperCase() || "—", { mono: true }],
     ["Config Repo Name", canonicalSettings.configRepositoryName || (canonicalSettings.configRepositoryLocation === "s3" ? "(S3 Bucket)" : "—"), { mono: true }],
     ["Accelerator Prefix", canonicalSettings.acceleratorPrefix || "—", { mono: true }],
-    ["Management Email", canonicalSettings.managementAccountEmail || "—", { mono: true, truncate: true }],
-    ["Log Archive Email", canonicalSettings.logArchiveAccountEmail || "—", { mono: true, truncate: true }],
-    ["Security Audit Email", canonicalSettings.auditAccountEmail || "—", { mono: true, truncate: true }],
+    ["Management Email", canonicalSettings.managementAccountEmail || "—", { mono: true, copy: Boolean(canonicalSettings.managementAccountEmail), copyLabel: "Copy management email" }],
+    ["Log Archive Email", canonicalSettings.logArchiveAccountEmail || "—", { mono: true, copy: Boolean(canonicalSettings.logArchiveAccountEmail), copyLabel: "Copy log archive email" }],
+    ["Security Audit Email", canonicalSettings.auditAccountEmail || "—", { mono: true, copy: Boolean(canonicalSettings.auditAccountEmail), copyLabel: "Copy security audit email" }],
     ["Control Tower", canonicalSettings.controlTowerEnabled ? "Enabled" : "Disabled"],
     ["Approval Stage", canonicalSettings.enableApprovalStage ? "Enabled" : "Disabled"],
   ];
 
-  // 3. Pipeline Fields
+  const pipelineStatus = pipeline.isLive ? pipeline.status : `Recorded: ${pipeline.status || "Not checked"}`;
   const pipelineFields = [
-    ["Pipeline Name", pipeline.name, { mono: true, truncate: true }],
-    ["Latest Execution", pipeline.status, { statusIndicator: Boolean(pipeline.status) }],
-    ["Current Work", [pipeline.currentStage, pipeline.currentAction].filter(Boolean).join(" / ") || null, { truncate: true }],
-    ["Failure", pipeline.failureSummary, { truncate: true }],
+    ["Pipeline name", pipeline.name, { mono: true, copy: true, copyLabel: "Copy installer pipeline name" }],
+    ["Latest run", pipelineStatus, { statusIndicator: Boolean(pipeline.status) }],
+    ["Started", pipeline.startTime ? formatTimestamp(pipeline.startTime) : "Time unavailable"],
+    ...(pipeline.currentStage || pipeline.currentAction ? [["Current work", [pipeline.currentStage, pipeline.currentAction].filter(Boolean).join(" / ")]] : []),
+    ...(pipeline.failureSummary ? [["Failure", pipeline.failureSummary]] : []),
   ];
 
   // Drift Warning Banner if drift detected
@@ -126,7 +144,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
         <div class="drift-item">
           <span class="drift-param mono-val">${escapeHtml(param)}</span>:
           <span class="drift-deployed">Deployed: <code>${escapeHtml(diff.deployed)}</code></span> &rarr;
-          <span class="drift-target">Configured: <code>${escapeHtml(diff.target)}</code></span>
+          <span class="drift-target">Saved: <code>${escapeHtml(diff.target)}</code></span>
         </div>
       `)
       .join("");
@@ -134,8 +152,8 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     driftBannerHtml = `
       <section class="diagnostic-panel diagnostic-panel-warning">
         <div class="diagnostic-header">
-          <span class="badge badge-warning"><span class="badge-dot" aria-hidden="true"></span>Drift Detected</span>
-          <h2 class="diagnostic-title">Configuration Drift (${driftCount})</h2>
+          <span class="badge badge-warning"><span class="badge-dot" aria-hidden="true"></span>Saved settings differ</span>
+          <h2 class="diagnostic-title">Saved versus deployed parameters (${driftCount})</h2>
         </div>
         <div class="drift-list">${driftItems}</div>
       </section>
@@ -150,9 +168,13 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     const fieldId = `installer-field-${escapeHtml(field.name)}`;
     const currentValue = currentParams[field.name] ?? field.default ?? "";
     const requiredMark = field.required ? '<span class="required-indicator" title="Required">*</span>' : '<span class="required-indicator" style="display:none;" title="Required">*</span>';
-    const helpText = field.description
-      ? `<p class="form-help">${escapeHtml(field.description)}</p>`
-      : "";
+    const description = field.description || "";
+    const warning = description.match(/(?:NOTE:|Note:)[\s\S]*/)?.[0] || "";
+    const hint = description.replace(warning, "").trim().replace(/-\s*$/, "");
+    const helpText = description ? `<div class="form-help" id="help-${fieldId}">
+      ${hint ? `<p>${escapeHtml(hint)}</p>` : ""}
+      ${warning ? `<p class="installer-field-warning">${escapeHtml(warning)}</p>` : ""}
+    </div>` : "";
 
     let inputControlHtml = "";
     if (field.allowedValues && field.allowedValues.length > 0) {
@@ -163,7 +185,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
         })
         .join("");
       inputControlHtml = `
-        <select id="${fieldId}" name="${escapeHtml(field.name)}" class="form-select"${field.required ? " required" : ""}>
+        <select id="${fieldId}" name="${escapeHtml(field.name)}" class="form-select" aria-describedby="help-${fieldId} error-${fieldId}"${field.required ? " required" : ""}>
           ${optionsHtml}
         </select>
       `;
@@ -178,6 +200,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
           name="${escapeHtml(field.name)}"
           value="${escapeHtml(currentValue)}"
           class="form-input"
+          aria-describedby="help-${fieldId} error-${fieldId}"
           ${patternAttr}
           ${field.required ? "required" : ""}
         />
@@ -186,7 +209,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
 
     const driftDiff = (alignment.configurationDrift || {})[field.name];
     const driftBadge = driftDiff
-      ? `<span class="param-pending-badge" title="Deployed: ${escapeHtml(driftDiff.deployed ?? "—")} &rarr; Configured: ${escapeHtml(driftDiff.target ?? "—")}">Pending Deploy</span>`
+      ? `<span class="param-pending-badge" title="Deployed: ${escapeHtml(driftDiff.deployed ?? "—")} &rarr; Configured: ${escapeHtml(driftDiff.target ?? "—")}">Saved difference</span>`
       : "";
     const pendingClass = driftDiff ? " has-pending-change" : "";
 
@@ -252,40 +275,51 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
   container.innerHTML = `
     <div class="installer-view">
       <!-- Summary Cards -->
-      <section class="card-grid">
-        ${card("Deployed Stack", deployedFields, deployed.exists ? "Deployed" : "Not Deployed")}
-        ${card("Current Settings", canonicalFields, canonicalSettings.lzaVersion)}
-        ${card("Installer Pipeline", pipelineFields, pipeline.status)}
+      <section class="installer-summary-grid">
+        ${card("Deployed stack", deployedFields, stackLabel)}
+        ${card("Saved workspace settings", canonicalFields, canonicalSettings.lzaVersion)}
+      </section>
+      <section class="installer-comparison notice ${comparisonVariant === "warning" ? "warning" : "info"}" aria-label="Saved versus deployed stack settings">
+        <strong class="badge badge-${comparisonVariant}">${escapeHtml(comparison)}</strong>
+        <span>${comparison === "No pending changes" ? "Saved parameters match the live stack." : comparison === "Not checked" ? "Live stack parameters could not be compared." : "Review saved and deployed values below."}</span>
+      </section>
+      <section class="installer-pipeline-summary">
+        ${card("Installer pipeline", pipelineFields, pipelineStatus, { href: "#/pipeline/installer" })}
       </section>
 
       ${driftBannerHtml}
 
       <!-- Settings & Form Section (Bug 4: structured sections) -->
       <section class="card installer-settings-card">
+        <nav class="installer-section-nav" aria-label="Installer settings sections">
+          ${FORM_SECTIONS.filter(section => section.fields.some(name => fieldHtmlMap[name])).map(section => `<button type="button" class="btn btn-sm btn-ghost" data-section="section-${section.id}">${escapeHtml(section.title)}</button>`).join("")}
+          ${unassignedFieldsHtml ? '<button type="button" class="btn btn-sm btn-ghost" data-section="section-additional">Additional parameters</button>' : ""}
+        </nav>
         <div class="card-header">
           <div>
             <div style="display: flex; align-items: center; gap: 0.625rem;">
               <h2 class="card-title">Installer Parameters &amp; Settings</h2>
               <span id="installer-dirty-badge" class="badge badge-warning" style="display:none; font-size: 0.75rem;">Unsaved Changes</span>
             </div>
-            <p class="section-subtitle">Parameters derived from the installer CloudFormation template. Changes will be validated before saving to <code>lza-workspace.yaml</code>.</p>
+            <p class="section-subtitle">Save updates <code>lza-workspace.yaml</code>. It does not deploy the stack.</p>
           </div>
         </div>
         <div class="card-body">
           <div id="installer-form-alert" aria-live="polite"></div>
-          <form id="installer-settings-form" novalidate>
+          <form id="installer-settings-form" data-dirty="false" novalidate>
             <div class="form-sections-container">
               ${renderedSectionsHtml}
               ${extraSectionHtml}
             </div>
 
-            <div class="form-actions" style="margin-top: 1.75rem;">
+            <div class="form-actions installer-actions">
               <button type="submit" id="btn-save-installer" class="btn btn-primary">
                 <span>Save Settings</span>
               </button>
               <button type="button" id="btn-reset-installer" class="btn">
-                <span>Reset</span>
+                <span>Discard unsaved edits</span>
               </button>
+              <button type="button" id="btn-restore-installer" class="btn btn-secondary" ${!stackIsLive || !deployed.exists || !Object.keys(deployed.deployedParameters || {}).length || driftCount === 0 ? "disabled" : ""}>Restore deployed settings</button>
               <button type="button" id="btn-preview-installer-plan" class="btn btn-secondary">
                 <span>Preview Deployment Plan</span>
               </button>
@@ -307,9 +341,11 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
   const formAlert = container.querySelector("#installer-form-alert");
   const btnSave = container.querySelector("#btn-save-installer");
   const btnReset = container.querySelector("#btn-reset-installer");
+  const btnRestore = container.querySelector("#btn-restore-installer");
   const btnPreview = container.querySelector("#btn-preview-installer-plan");
   const planContainer = container.querySelector("#installer-plan-modal-container");
   const resetModalContainer = container.querySelector("#installer-reset-modal-container");
+  let saving = false;
 
   function clearErrors() {
     formAlert.innerHTML = "";
@@ -319,6 +355,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     });
     container.querySelectorAll(".form-input, .form-select").forEach((el) => {
       el.classList.remove("has-error");
+      el.removeAttribute("aria-invalid");
     });
   }
 
@@ -451,6 +488,10 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
         isDirty = true;
       }
     });
+    formElement.dataset.dirty = String(isDirty);
+    btnSave.disabled = !isDirty || saving;
+    btnReset.disabled = !isDirty || saving;
+    btnPreview.disabled = saving;
     if (dirtyBadge) {
       dirtyBadge.style.display = isDirty ? "inline-block" : "none";
     }
@@ -488,6 +529,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
       if (isRequired && !val) {
         hasError = true;
         input.classList.add("has-error");
+        input.setAttribute("aria-invalid", "true");
         if (errorEl) {
           errorEl.textContent = `${field.label || field.name} is required.`;
           errorEl.hidden = false;
@@ -500,6 +542,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
         if (!emailRegex.test(val)) {
           hasError = true;
           input.classList.add("has-error");
+        input.setAttribute("aria-invalid", "true");
           if (errorEl) {
             errorEl.textContent = "Please enter a valid email address.";
             errorEl.hidden = false;
@@ -515,6 +558,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
           if (!regex.test(val)) {
             hasError = true;
             input.classList.add("has-error");
+        input.setAttribute("aria-invalid", "true");
             if (errorEl) {
               errorEl.textContent = `Does not match the required pattern (${pattern}).`;
               errorEl.hidden = false;
@@ -530,21 +574,33 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
     return { isValid: !hasError, values };
   }
 
-  // Reactive visibility updates on change/input
-  formElement.addEventListener("change", () => {
+  // Clear stale validation feedback as the user edits the affected field.
+  function handleFormEdit(event) {
+    const input = event.target;
+    input.classList.remove("has-error");
+    input.removeAttribute("aria-invalid");
+    const error = container.querySelector(`#error-${input.id}`);
+    if (error) {
+      error.textContent = "";
+      error.hidden = true;
+    }
+    if (!formElement.querySelector('[aria-invalid="true"]')) formAlert.innerHTML = "";
     updateFieldVisibility();
     checkDirtyState();
-  });
-  formElement.addEventListener("input", () => {
+  }
+  formElement.addEventListener("reset", () => queueMicrotask(() => {
+    clearErrors();
     updateFieldVisibility();
     checkDirtyState();
-  });
+  }));
+  formElement.addEventListener("change", handleFormEdit);
+  formElement.addEventListener("input", handleFormEdit);
   // Run initial visibility update to reflect current loaded state
   updateFieldVisibility();
+  checkDirtyState();
 
-  // Handle Form Submission / Save
-  formElement.addEventListener("submit", async (e) => {
-    e.preventDefault();
+  async function saveSettings({ refreshAfterSave = true } = {}) {
+    if (saving) return false;
     const { isValid, values } = validateForm();
 
     if (!isValid) {
@@ -553,10 +609,12 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
           Please correct the highlighted validation errors before saving.
         </div>
       `;
-      return;
+      container.querySelector('[aria-invalid="true"]')?.focus();
+      return false;
     }
 
-    btnSave.disabled = true;
+    saving = true;
+    checkDirtyState();
     formAlert.innerHTML = `
       <div class="notice info">
         Saving installer settings&hellip;
@@ -568,239 +626,188 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
       if (saveRes && saveRes.resolvedParameters) {
         Object.assign(currentParams, saveRes.resolvedParameters);
       }
+      form.fields.forEach(field => {
+        const input = container.querySelector(`#installer-field-${field.name}`);
+        const savedValue = String(currentParams[field.name] ?? field.default ?? "");
+        if (input?.tagName === "SELECT") {
+          [...input.options].forEach(option => { option.defaultSelected = option.value === savedValue; });
+        } else if (input) {
+          input.defaultValue = savedValue;
+        }
+      });
+      formElement.dataset.dirty = "false";
+      checkDirtyState();
       formAlert.innerHTML = `
         <div class="notice success">
           Installer settings saved successfully.
         </div>
       `;
-      if (typeof onRefresh === "function") {
-        setTimeout(() => onRefresh(), 800);
+      if (refreshAfterSave && typeof onRefresh === "function") {
+        setTimeout(() => {
+          if (formElement.isConnected && !hasUnsavedInstallerChanges(container)) onRefresh();
+        }, 800);
       }
+      return true;
     } catch (err) {
       formAlert.innerHTML = `
         <div class="notice error">
           ${escapeHtml(err.message)}
         </div>
       `;
+      formAlert.tabIndex = -1;
+      formAlert.focus();
+      return false;
     } finally {
-      btnSave.disabled = false;
+      saving = false;
+      checkDirtyState();
     }
+  }
+
+  formElement.addEventListener("submit", async event => {
+    event.preventDefault();
+    await saveSettings();
   });
 
+  let previewRequest = 0;
+  let refreshAfterPreview = false;
+  let modalTrigger = null;
+  function focusModal(modalContainer, trigger) {
+    modalTrigger = trigger;
+    const dialog = modalContainer.querySelector(".plan-modal-card");
+    if (!dialog) return;
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("tabindex", "-1");
+    const title = dialog.querySelector(".plan-modal-title");
+    title.id = `${modalContainer.id}-title`;
+    dialog.setAttribute("aria-labelledby", title.id);
+    dialog.focus();
+  }
+
   function closeAllModals() {
+    const refreshSavedSettings = refreshAfterPreview;
+    refreshAfterPreview = false;
+    previewRequest += 1;
+    checkDirtyState();
     planContainer.hidden = true;
     planContainer.innerHTML = "";
     resetModalContainer.hidden = true;
     resetModalContainer.innerHTML = "";
+    modalTrigger?.focus();
+    modalTrigger = null;
+    if (refreshSavedSettings && formElement.isConnected && !hasUnsavedInstallerChanges(container)) onRefresh?.();
   }
 
-  // Handle Escape key to dismiss modals
-  const onKeyDown = (e) => {
-    if (e.key === "Escape") {
-      closeAllModals();
-    }
-  };
-  document.addEventListener("keydown", onKeyDown);
-
-  // Handle Reset Modal: Revert form fields or reset to deployed configuration
-  function showResetModal() {
-    closeAllModals();
-
-    const driftCount = Object.keys(alignment.configurationDrift || {}).length;
-
-    let bodyHtml = "";
-    let footerHtml = "";
-
-    if (driftCount > 0) {
-      const driftRows = Object.entries(alignment.configurationDrift)
-        .map(([param, diff]) => {
-          const targetVal = diff.target ? escapeHtml(diff.target) : '<span style="color: var(--text-muted); font-style: italic;">(not set)</span>';
-          const deployedVal = diff.deployed ? escapeHtml(diff.deployed) : '<span style="color: var(--text-muted); font-style: italic;">(not set)</span>';
-          return `
-            <tr>
-              <td class="mono-val" style="font-weight: 600; font-size: 0.8125rem;">${escapeHtml(param)}</td>
-              <td><code style="color: #f59e0b; background: rgba(245, 158, 11, 0.12); padding: 0.15rem 0.45rem; border-radius: 0.25rem; font-size: 0.8125rem;">${targetVal}</code></td>
-              <td><code style="color: #10b981; background: rgba(16, 185, 129, 0.12); padding: 0.15rem 0.45rem; border-radius: 0.25rem; font-size: 0.8125rem;">${deployedVal}</code></td>
-            </tr>
-          `;
-        })
-        .join("");
-
-      bodyHtml = `
-        <p style="margin-bottom: 0.75rem; line-height: 1.5; color: var(--text-secondary);">
-          The local configuration in <code>lza-workspace.yaml</code> has <strong>${driftCount} parameter${driftCount === 1 ? "" : "s"}</strong> that differ from the deployed CloudFormation stack:
-        </p>
-        <div class="table-container" style="margin: 0.75rem 0 1.25rem 0; border: 1px solid var(--border-card); border-radius: 0.5rem; overflow: hidden;">
-          <table class="plan-diff-table" style="margin-top: 0;">
-            <thead>
-              <tr>
-                <th style="width: 38%;">Parameter</th>
-                <th style="width: 31%;">Local Target (Discard)</th>
-                <th style="width: 31%;">Deployed Value (Restore)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${driftRows}
-            </tbody>
-          </table>
-        </div>
-        <div class="notice warning" style="margin-bottom: 0.25rem;">
-          <strong>Reset to Deployed Settings</strong> will rewrite <code>lza-workspace.yaml</code> back to the deployed values shown above and clear all pending deployment changes.
-        </div>
-      `;
-
-      footerHtml = `
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 0.75rem;">
-          <div>
-            <button type="button" class="btn btn-ghost btn-close-reset">Cancel</button>
-          </div>
-          <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <button type="button" id="btn-revert-form-only" class="btn btn-secondary">Discard Form Edits</button>
-            <button type="button" id="btn-confirm-revert-deployed" class="btn btn-primary">Reset to Deployed Settings</button>
-          </div>
-        </div>
-      `;
-    } else {
-      bodyHtml = `
-        <p style="margin-bottom: 0.75rem; line-height: 1.5; color: var(--text-secondary);">
-          Are you sure you want to discard your unsaved form edits?
-        </p>
-        <div class="notice info" style="margin-bottom: 0.25rem;">
-          Form inputs will be reloaded from the current configuration in <code>lza-workspace.yaml</code>.
-        </div>
-      `;
-
-      footerHtml = `
-        <div style="display: flex; justify-content: flex-end; align-items: center; width: 100%; gap: 0.75rem;">
-          <button type="button" class="btn btn-ghost btn-close-reset">Cancel</button>
-          <button type="button" id="btn-revert-form-only" class="btn btn-primary">Discard Unsaved Edits</button>
-        </div>
-      `;
-    }
-
-    resetModalContainer.hidden = false;
-    resetModalContainer.innerHTML = `
-      <div class="plan-modal-overlay">
-        <div class="plan-modal-card" style="max-width: 42rem;">
-          <div class="plan-modal-header">
-            <div>
-              <div style="display: flex; align-items: center; gap: 0.625rem;">
-                <h3 class="plan-modal-title">${driftCount > 0 ? "Reset Installer Settings" : "Reset Form Settings"}</h3>
-                ${driftCount > 0 ? `<span class="badge badge-warning">${driftCount} drifted parameter${driftCount === 1 ? "" : "s"}</span>` : ""}
-              </div>
-              <p class="section-subtitle" style="margin-top: 0.25rem;">
-                ${driftCount > 0 ? "Reconcile configuration with the active CloudFormation stack." : "Discard in-browser edits and reload saved configuration."}
-              </p>
-            </div>
-            <button type="button" class="btn btn-close-reset" title="Cancel">✕</button>
-          </div>
-          <div class="plan-modal-body">
-            <div id="reset-modal-alert"></div>
-            ${bodyHtml}
-          </div>
-          <div class="plan-modal-footer">
-            ${footerHtml}
-          </div>
-        </div>
-      </div>
-    `;
-
-    const overlay = resetModalContainer.querySelector(".plan-modal-overlay");
-    overlay?.addEventListener("click", (e) => {
-      if (e.target === overlay) {
+  [planContainer, resetModalContainer].forEach(modalContainer => {
+    modalContainer.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        event.preventDefault();
         closeAllModals();
+      } else if (event.key === "Tab") {
+        const controls = [...modalContainer.querySelectorAll('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), summary')].filter(el => el.getClientRects().length);
+        const first = controls[0];
+        const last = controls.at(-1);
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === modalContainer.querySelector(".plan-modal-card"))) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
       }
     });
+  });
 
-    const closeButtons = resetModalContainer.querySelectorAll(".btn-close-reset");
-    closeButtons.forEach((btn) => {
-      btn.addEventListener("click", closeAllModals);
-    });
+  container.querySelectorAll("[data-section]").forEach(button => button.addEventListener("click", () => {
+    container.querySelector(`#${button.dataset.section}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
+  container.querySelectorAll(".card-interactive").forEach(card => card.addEventListener("click", event => {
+    if (!event.target.closest("a, button") && !window.getSelection()?.toString()) window.location.hash = card.dataset.href;
+  }));
+  container.querySelectorAll(".btn-copy-inline").forEach(button => button.addEventListener("click", async event => {
+    event.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(button.dataset.copy);
+      button.classList.add("copied");
+      setTimeout(() => button.classList.remove("copied"), 1500);
+    } catch (err) {
+      formAlert.textContent = `Unable to copy: ${err.message}`;
+    }
+  }));
 
-    const revertFormBtn = resetModalContainer.querySelector("#btn-revert-form-only");
-    if (revertFormBtn) {
-      revertFormBtn.addEventListener("click", () => {
+  btnReset.addEventListener("click", () => confirmDiscardInstallerChanges(container));
+
+  btnRestore.addEventListener("click", () => {
+    closeAllModals();
+    const rows = Object.entries(deployed.deployedParameters || {}).filter(([name, value]) => form.fields.some(field => field.name === name) && String(currentParams[name] ?? "") !== String(value ?? "")).map(([name, value]) =>
+      `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(currentParams[name] ?? "—")}</td><td>${escapeHtml(value)}</td></tr>`).join("");
+    resetModalContainer.hidden = false;
+    resetModalContainer.innerHTML = `<div class="plan-modal-overlay"><div class="plan-modal-card">
+      <div class="plan-modal-header"><h3 class="plan-modal-title">Restore deployed settings</h3><button type="button" class="btn btn-close-reset" aria-label="Close restore dialog">✕</button></div>
+      <div class="plan-modal-body"><p>This replaces saved workspace settings and discards unsaved edits. It does not change AWS.</p>
+      <div class="table-container"><table class="plan-diff-table"><thead><tr><th>Parameter</th><th>Saved</th><th>Deployed</th></tr></thead><tbody>${rows}</tbody></table></div><div id="reset-modal-alert" aria-live="polite"></div></div>
+      <div class="plan-modal-footer"><button type="button" class="btn btn-close-reset">Cancel</button><button type="button" class="btn btn-primary" id="btn-confirm-revert-deployed">Restore deployed settings</button></div>
+    </div></div>`;
+    resetModalContainer.querySelectorAll(".btn-close-reset").forEach(btn => btn.addEventListener("click", closeAllModals));
+    resetModalContainer.querySelector("#btn-confirm-revert-deployed").addEventListener("click", async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        await resetInstallerSettings();
+        formElement.dataset.dirty = "false";
         closeAllModals();
-        clearErrors();
-
-        form.fields.forEach((field) => {
-          const fieldId = `installer-field-${field.name}`;
-          const input = container.querySelector(`#${fieldId}`);
-          if (input) {
-            input.value = currentParams[field.name] ?? "";
-          }
-        });
-
-        updateFieldVisibility();
-        checkDirtyState();
-
-        formAlert.innerHTML = `
-          <div class="notice info">
-            Form inputs reverted to saved configuration from <code>lza-workspace.yaml</code>.
-          </div>
-        `;
-        setTimeout(() => {
-          if (formAlert.querySelector(".info")) formAlert.innerHTML = "";
-        }, 2500);
-      });
-    }
-
-    const confirmDeployedBtn = resetModalContainer.querySelector("#btn-confirm-revert-deployed");
-    if (confirmDeployedBtn) {
-      confirmDeployedBtn.addEventListener("click", async () => {
-        const modalAlert = resetModalContainer.querySelector("#reset-modal-alert");
-        confirmDeployedBtn.disabled = true;
-        if (revertFormBtn) revertFormBtn.disabled = true;
-        modalAlert.innerHTML = `
-          <div class="notice info" style="margin-bottom: 0.75rem;">
-            Resetting configuration to deployed stack parameters&hellip;
-          </div>
-        `;
-
-        try {
-          const resetRes = await resetInstallerSettings();
-          if (resetRes && resetRes.resolvedParameters) {
-            Object.assign(currentParams, resetRes.resolvedParameters);
-            form.fields.forEach((field) => {
-              const fieldId = `installer-field-${field.name}`;
-              const input = container.querySelector(`#${fieldId}`);
-              if (input) {
-                input.value = currentParams[field.name] ?? "";
-              }
-            });
-            updateFieldVisibility();
-            checkDirtyState();
-          }
-
-          closeAllModals();
-          formAlert.innerHTML = `
-            <div class="notice success">
-              Installer settings successfully reset to deployed CloudFormation stack parameters.
-            </div>
-          `;
-          if (typeof onRefresh === "function") {
-            setTimeout(() => onRefresh(), 600);
-          }
-        } catch (err) {
-          confirmDeployedBtn.disabled = false;
-          if (revertFormBtn) revertFormBtn.disabled = false;
-          modalAlert.innerHTML = `
-            <div class="notice error" style="margin-bottom: 0.75rem;">
-              ${escapeHtml(err.message)}
-            </div>
-          `;
-        }
-      });
-    }
-  }
-
-  btnReset.addEventListener("click", () => {
-    showResetModal();
+        onRefresh?.();
+      } catch (err) {
+        button.disabled = false;
+        resetModalContainer.querySelector("#reset-modal-alert").textContent = err.message;
+      }
+    });
+    focusModal(resetModalContainer, btnRestore);
   });
 
   // Handle Preview Deployment Plan
-  btnPreview.addEventListener("click", async () => {
+  async function previewDeploymentPlan({ refreshOnClose = false } = {}) {
     closeAllModals();
+    refreshAfterPreview = refreshOnClose;
+    if (hasUnsavedInstallerChanges(container)) {
+      planContainer.hidden = false;
+      planContainer.innerHTML = `
+        <div class="plan-modal-overlay">
+          <div class="plan-modal-card">
+            <div class="plan-modal-header">
+              <h3 class="plan-modal-title">Unsaved settings</h3>
+              <button type="button" class="btn btn-close-plan" aria-label="Close warning">✕</button>
+            </div>
+            <div class="plan-modal-body">
+              <p>Save your changes or discard them to preview the deployment plan.</p>
+            </div>
+            <div class="plan-modal-footer">
+              <button type="button" class="btn btn-close-plan">Cancel</button>
+              <button type="button" class="btn btn-secondary" id="btn-discard-and-preview">Discard and preview</button>
+              <button type="button" class="btn btn-primary" id="btn-save-and-preview">Save and preview</button>
+            </div>
+          </div>
+        </div>`;
+      planContainer.querySelectorAll(".btn-close-plan").forEach(button => button.addEventListener("click", closeAllModals));
+      planContainer.querySelector("#btn-discard-and-preview").addEventListener("click", async () => {
+        formElement.reset();
+        clearErrors();
+        updateFieldVisibility();
+        checkDirtyState();
+        await previewDeploymentPlan();
+      });
+      planContainer.querySelector("#btn-save-and-preview").addEventListener("click", async () => {
+        closeAllModals();
+        const saved = await saveSettings({ refreshAfterSave: false });
+        if (saved && formElement.isConnected) await previewDeploymentPlan({ refreshOnClose: true });
+      });
+      planContainer.querySelector(".plan-modal-overlay").addEventListener("click", event => {
+        if (event.target.classList.contains("plan-modal-overlay")) closeAllModals();
+      });
+      focusModal(planContainer, btnPreview);
+      return;
+    }
+    const requestId = ++previewRequest;
     btnPreview.disabled = true;
     planContainer.hidden = false;
     planContainer.innerHTML = `
@@ -817,6 +824,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
       </div>
     `;
 
+    focusModal(planContainer, btnPreview);
     planContainer.querySelector(".btn-close-plan")?.addEventListener("click", closeAllModals);
 
     const overlay = planContainer.querySelector(".plan-modal-overlay");
@@ -828,8 +836,11 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
 
     try {
       const planResult = await getInstallerPlan();
+      if (requestId !== previewRequest || planContainer.hidden || !planContainer.isConnected) return;
       renderPlanPreview(planContainer, planResult, closeAllModals);
+      focusModal(planContainer, btnPreview);
     } catch (err) {
+      if (requestId !== previewRequest || planContainer.hidden || !planContainer.isConnected) return;
       planContainer.innerHTML = `
         <div class="plan-modal-overlay">
           <div class="plan-modal-card">
@@ -849,6 +860,7 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
       planContainer.querySelectorAll(".btn-close-plan").forEach((btn) => {
         btn.addEventListener("click", closeAllModals);
       });
+      focusModal(planContainer, btnPreview);
       const errOverlay = planContainer.querySelector(".plan-modal-overlay");
       errOverlay?.addEventListener("click", (e) => {
         if (e.target === errOverlay) {
@@ -856,14 +868,18 @@ export function renderInstallerDetails(container, installerData, onRefresh) {
         }
       });
     } finally {
-      btnPreview.disabled = false;
+      if (requestId === previewRequest) checkDirtyState();
     }
-  });
+  }
+  btnPreview.addEventListener("click", previewDeploymentPlan);
 }
 
 function renderPlanPreview(container, plan, onClose) {
   const cfn = plan.cloudformation;
   const cc = plan.codecommit;
+  const workspace = String(plan.workspaceDir || "");
+  const quotedWorkspace = "'" + workspace.replaceAll("'", "'\\''") + "'";
+  const deployCommand = `cd ${quotedWorkspace} && lza installer deploy`;
   const diffs = cfn.parameterDiffs || {};
   const diffEntries = Object.entries(diffs);
 
@@ -912,7 +928,7 @@ function renderPlanPreview(container, plan, onClose) {
           <div>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
               <h3 class="plan-modal-title">Installer Deployment Plan</h3>
-              <span class="badge badge-${cfn.operation === "NO_CHANGE" ? "success" : "warning"}">${escapeHtml(cfn.operation)}</span>
+              <span class="badge badge-${cfn.operation === "NO_CHANGE" ? "success" : "warning"}">${escapeHtml(cfn.operation === "NO_CHANGE" ? "No deployment changes" : cfn.operation)}</span>
             </div>
             <p class="section-subtitle" style="margin-top: 0.25rem;">Read-only preview of CloudFormation and repository actions.</p>
           </div>
@@ -930,7 +946,7 @@ function renderPlanPreview(container, plan, onClose) {
             </div>
             <div class="plan-summary-item">
               <span class="plan-summary-label">Source Status</span>
-              <span>${escapeHtml(cc.status || "N/A")}</span>
+              <span>${escapeHtml(!cc.status || cc.status === "N/A" ? "Not applicable" : cc.status)}</span>
             </div>
           </div>
 
@@ -941,8 +957,8 @@ function renderPlanPreview(container, plan, onClose) {
 
           <div class="notice info" style="margin-top: 1.25rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
             <div>
-              <strong>Deployment mutation is disabled in this preview.</strong><br>
-              To execute this deployment, run <code>lza installer deploy</code> from your terminal.
+              <strong>Deploy from your terminal</strong><br>
+              <code>${escapeHtml(deployCommand)}</code>
             </div>
             <button type="button" id="btn-copy-deploy-cmd" class="btn btn-secondary btn-sm" style="white-space: nowrap;">
               <span>Copy Command</span>
@@ -959,7 +975,7 @@ function renderPlanPreview(container, plan, onClose) {
   const copyBtn = container.querySelector("#btn-copy-deploy-cmd");
   copyBtn?.addEventListener("click", () => {
     if (navigator.clipboard) {
-      navigator.clipboard.writeText("lza installer deploy");
+      navigator.clipboard.writeText(deployCommand);
       const span = copyBtn.querySelector("span");
       if (span) {
         const orig = span.textContent;
