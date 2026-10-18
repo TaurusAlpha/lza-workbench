@@ -269,3 +269,60 @@
 .aws-status-pill.offline .status-dot {
   background-color: #f59e0b;
 }
+
+/* ==========================================================================
+   Responsive Navigation
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  .app-navbar {
+    padding: 0 1rem;
+  }
+
+  .navbar-left,
+  .navbar-right {
+    gap: 0.625rem;
+  }
+
+  .ws-switcher-btn {
+    max-width: 11rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-navbar {
+    padding: 0 0.75rem;
+  }
+
+  .nav-brand span {
+    display: none;
+  }
+
+  .ws-switcher-btn {
+    max-width: 8.5rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .nav-links {
+    gap: 0.125rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav-links::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-link {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .aws-status-pill {
+    padding: 0.2rem 0.45rem;
+    font-size: 0.6875rem;
+  }
+}

@@ -26,12 +26,8 @@ export function getStatusVariant(status) {
     return "danger";
   }
 
-  // 2. Warning states (recorded/offline data, attention, drift, in-progress)
+  // 2. Specific Warning states (active attention, drift, in-progress, local changes, live offline)
   if (
-    norm.includes("recorded") ||
-    norm.includes("last known") ||
-    norm.includes("offline") ||
-    norm.includes("not live") ||
     norm.includes("attention") ||
     norm.includes("incomplete") ||
     norm.includes("running") ||
@@ -50,7 +46,27 @@ export function getStatusVariant(status) {
     return "warning";
   }
 
-  // 3. Success states (only live positive outcomes)
+  // 3. Recorded/cached states: distinguish healthy recorded vs warning
+  if (norm.startsWith("recorded:") || norm.startsWith("last known:")) {
+    const stripped = norm.replace(/^(recorded|last known):\s*/, "");
+    if (
+      stripped.includes("complete") ||
+      stripped.includes("in sync") ||
+      stripped.includes("clean") ||
+      stripped.includes("succeeded") ||
+      stripped.includes("healthy") ||
+      stripped.includes("available") ||
+      stripped.includes("present") ||
+      stripped.includes("exists") ||
+      stripped.includes("live") ||
+      stripped === "0"
+    ) {
+      return "recorded";
+    }
+    return "warning";
+  }
+
+  // 4. Success states (live positive outcomes)
   if (
     norm.includes("healthy") ||
     norm.includes("succeeded") ||
@@ -303,6 +319,9 @@ function renderLifecycleStepper(status) {
               <strong class="step-label">Workspace</strong>
               <span class="step-state">${escapeHtml(s1Text)}</span>
             </div>
+            <svg class="step-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
           </a>
 
           <div class="stepper-divider ${s2Variant === "success" ? "active" : ""}"></div>
@@ -321,6 +340,9 @@ function renderLifecycleStepper(status) {
               <strong class="step-label">Installer</strong>
               <span class="step-state">${escapeHtml(s2Text)}</span>
             </div>
+            <svg class="step-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
           </a>
 
           <div class="stepper-divider ${s2Variant === "success" ? "active" : ""}"></div>
@@ -339,6 +361,9 @@ function renderLifecycleStepper(status) {
               <strong class="step-label">Installer Stack</strong>
               <span class="step-state">${escapeHtml(s2Text)}</span>
             </div>
+            <svg class="step-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
           </a>
 
           <div class="stepper-divider ${s4Variant === "success" ? "active" : ""}"></div>
@@ -357,6 +382,9 @@ function renderLifecycleStepper(status) {
               <strong class="step-label">Config &amp; Pipeline</strong>
               <span class="step-state">${escapeHtml(s4Text)}</span>
             </div>
+            <svg class="step-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
           </a>
         </div>
       </div>
@@ -454,7 +482,7 @@ export function renderOverview(container, status) {
           </div>
           <div>
             <span class="context-bar-eyebrow">Environment Context</span>
-            <h3 class="context-bar-title">AWS &amp; Runtime Configuration</h3>
+            <h2 class="context-bar-title">AWS &amp; Runtime Configuration</h2>
           </div>
         </div>
         <div class="context-bar-badges">
@@ -481,7 +509,7 @@ export function renderOverview(container, status) {
         <div class="context-item">
           <span class="context-label">AWS Region</span>
           <div class="context-val">
-            ${formatFieldValue(region, { mono: true })}
+            ${formatFieldValue(region, { mono: true, copy: Boolean(region && region !== "—") })}
           </div>
         </div>
       </div>
@@ -498,8 +526,16 @@ export function renderOverview(container, status) {
   const installerPipelineName = formatFieldValue(status.installerPipeline?.name, { mono: true, truncate: true, copy: Boolean(status.installerPipeline?.name) });
 
   const isInstallerPipelineRecorded = !status.installerPipeline?.isLive && status.installerPipeline?.status && status.installerPipeline?.status !== "—";
-  const installerPipelineStatusRaw = isInstallerPipelineRecorded ? `Recorded: ${status.installerPipeline.status}` : status.installerPipeline?.status || "—";
-  const installerPipelineStatusDisplay = formatFieldValue(installerPipelineStatusRaw, { statusIndicator: Boolean(status.installerPipeline?.status) });
+  const installerPipelineStatusRaw = isInstallerPipelineRecorded
+    ? `Recorded: ${status.installerPipeline.status}`
+    : status.installerPipeline?.status && status.installerPipeline.status !== "—"
+      ? status.installerPipeline.status
+      : status.aws.isLive
+        ? "No run recorded"
+        : "No run recorded (Offline)";
+  const installerPipelineStatusDisplay = formatFieldValue(installerPipelineStatusRaw, {
+    statusIndicator: Boolean(status.installerPipeline?.status && status.installerPipeline.status !== "—"),
+  });
 
   const installerFailureHtml = status.installerPipeline?.failureSummary
     ? `<div class="workload-error-box">
@@ -567,15 +603,23 @@ export function renderOverview(container, status) {
 
   // Configuration Card
   const configSyncBadge = configurationSyncStatus(status.configuration, status.aws.isLive);
-  const repoDisplay = formatFieldValue(repoTarget, { mono: true, truncate: true });
+  const repoDisplay = formatFieldValue(repoTarget, { mono: true, truncate: true, copy: Boolean(repoTarget) });
   const branchDisplay = formatFieldValue(status.configuration.localGitBranch, { mono: true });
   const uncommittedDisplay = formatFieldValue(uncommittedValue, { statusIndicator: !status.configuration.localGitClean });
   const remoteSyncDisplay = formatFieldValue(remoteSyncSummary, { statusIndicator: true, truncate: true });
   const configPipelineName = formatFieldValue(status.configurationPipeline?.name, { mono: true, truncate: true, copy: Boolean(status.configurationPipeline?.name) });
 
   const isConfigPipelineRecorded = !status.configurationPipeline?.isLive && status.configurationPipeline?.status && status.configurationPipeline?.status !== "—";
-  const configPipelineStatusRaw = isConfigPipelineRecorded ? `Recorded: ${status.configurationPipeline.status}` : status.configurationPipeline?.status || "—";
-  const configPipelineStatusDisplay = formatFieldValue(configPipelineStatusRaw, { statusIndicator: Boolean(status.configurationPipeline?.status) });
+  const configPipelineStatusRaw = isConfigPipelineRecorded
+    ? `Recorded: ${status.configurationPipeline.status}`
+    : status.configurationPipeline?.status && status.configurationPipeline.status !== "—"
+      ? status.configurationPipeline.status
+      : status.aws.isLive
+        ? "No run recorded"
+        : "No run recorded (Offline)";
+  const configPipelineStatusDisplay = formatFieldValue(configPipelineStatusRaw, {
+    statusIndicator: Boolean(status.configurationPipeline?.status && status.configurationPipeline.status !== "—"),
+  });
 
   const configFailureHtml = status.configurationPipeline?.failureSummary
     ? `<div class="workload-error-box">

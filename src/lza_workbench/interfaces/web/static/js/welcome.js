@@ -4,7 +4,7 @@
 
 import { openWorkspace } from "./api.js";
 import { escapeHtml } from "./overview.js";
-import { getRecentWorkspaces, recordRecentWorkspace, removeRecentWorkspace } from "./recents.js";
+import { clearRecentWorkspaces, getRecentWorkspaces, recordRecentWorkspace, removeRecentWorkspace } from "./recents.js";
 
 function formatRelativeTime(timestamp) {
   if (!timestamp) return "Recently";
@@ -38,8 +38,8 @@ export function renderWelcome(container, activeWorkspace = null, onWorkspaceSele
               ? `
             <div class="welcome-active-banner">
               <span class="active-dot"></span>
-              <span>Active Workspace: <strong>${escapeHtml(activeWorkspace.customerName || "Customer")}</strong> (${escapeHtml(activeWorkspace.workspaceDir)})</span>
-              <a href="#/overview" class="btn btn-sm btn-primary">Go to Overview &rarr;</a>
+              <span>Selected workspace: <strong>${escapeHtml(activeWorkspace.customerName || "Customer")}</strong> (${escapeHtml(activeWorkspace.workspaceDir)})</span>
+              <a href="#/overview" class="btn btn-sm btn-primary">Open overview &rarr;</a>
             </div>
           `
               : ""
@@ -56,17 +56,20 @@ export function renderWelcome(container, activeWorkspace = null, onWorkspaceSele
               </svg>
             </div>
             <h2 class="action-card-title">Open Workspace</h2>
-            <p class="action-card-desc">Load an existing customer workspace directory from your local filesystem.</p>
+            <p class="action-card-desc">Open a local workspace that has already been initialized in Workbench.</p>
             <form id="welcome-open-form" class="welcome-open-form">
+              <label for="welcome-open-path">Workspace directory</label>
+              <p id="welcome-open-hint" class="section-subtitle">Directory containing lza-workspace.yaml.</p>
               <div class="input-with-action">
                 <input
                   type="text"
                   id="welcome-open-path"
+                  aria-describedby="welcome-open-hint"
                   class="form-input form-input-sm"
                   placeholder="/path/to/customer/workspace"
                   required
                 />
-                <button type="submit" id="welcome-open-btn" class="btn btn-sm btn-primary">Open</button>
+                <button type="submit" id="welcome-open-btn" class="btn btn-sm btn-outline">Open workspace</button>
               </div>
             </form>
           </div>
@@ -80,8 +83,8 @@ export function renderWelcome(container, activeWorkspace = null, onWorkspaceSele
               </svg>
             </div>
             <h2 class="action-card-title">Create Workspace</h2>
-            <p class="action-card-desc">Initialize a clean, declarative customer workspace with custom AWS context and parameters.</p>
-            <a href="#/setup" class="btn btn-sm btn-outline action-card-btn">Initialize New Workspace &rarr;</a>
+            <p class="action-card-desc">Create and initialize a new customer workspace.</p>
+            <a href="#/setup" class="btn btn-sm btn-outline action-card-btn">Create workspace &rarr;</a>
           </div>
 
           <!-- Import Existing -->
@@ -93,9 +96,9 @@ export function renderWelcome(container, activeWorkspace = null, onWorkspaceSele
                 <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
               </svg>
             </div>
-            <h2 class="action-card-title">Import Existing LZA</h2>
-            <p class="action-card-desc">Discover and adopt existing LZA configurations or repositories into Workbench management.</p>
-            <a href="#/setup" class="btn btn-sm btn-outline action-card-btn" id="welcome-import-link">Import Environment &rarr;</a>
+            <h2 class="action-card-title">Import Workspace</h2>
+            <p class="action-card-desc">Import an existing local workspace that has not been initialized in Workbench.</p>
+            <a href="#/setup?tab=import" class="btn btn-sm btn-outline action-card-btn" id="welcome-import-link">Import workspace &rarr;</a>
           </div>
         </section>
 
@@ -161,8 +164,8 @@ export function renderWelcome(container, activeWorkspace = null, onWorkspaceSele
         </section>
 
         <!-- Lifecycle & Architecture Guide -->
-        <section class="welcome-guide-section">
-          <h2 class="section-title">LZA Workbench Lifecycle</h2>
+        <details class="welcome-guide-section">
+          <summary class="section-title">How it works</summary>
           <p class="section-subtitle">Structured progression from empty workspace to operational landing zone</p>
 
           <div class="lifecycle-guide-grid">
@@ -193,7 +196,7 @@ export function renderWelcome(container, activeWorkspace = null, onWorkspaceSele
               <div class="step-cli-tag"><code>lza config push</code></div>
             </div>
           </div>
-        </section>
+        </details>
       </div>
     `;
 
@@ -234,7 +237,7 @@ export function renderWelcome(container, activeWorkspace = null, onWorkspaceSele
         } finally {
           if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.textContent = "Open";
+            submitBtn.textContent = "Open workspace";
           }
         }
       });

@@ -8,8 +8,8 @@ import {
 } from "./api.js";
 import { escapeHtml } from "./overview.js";
 
-export function renderSetup(container, activeWorkspace = null, onDone = null) {
-  let activeTab = "create"; // "create" | "import" | "open"
+export function renderSetup(container, activeWorkspace = null, onDone = null, initialTab = "create") {
+  let activeTab = initialTab; // "create" | "import" | "open"
   let createPreviewData = null;
   let importPreviewData = null;
 

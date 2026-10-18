@@ -9,12 +9,27 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import Headers
+from starlette.responses import Response
+from starlette.types import Scope
 
 from lza_workbench.errors import LzaError
 from lza_workbench.interfaces.web.status import ActiveWorkspaceContext, create_status_router
 from lza_workbench.interfaces.web.uninstall import create_uninstall_router
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+
+class WorkbenchStaticFiles(StaticFiles):
+    """Serve unversioned local UI assets fresh on every browser reload."""
+
+    def is_not_modified(self, response_headers: Headers, request_headers: Headers) -> bool:
+        return False
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
 
 def create_app(
@@ -54,7 +69,7 @@ def create_app(
         from lza_workbench.interfaces.web.dev import create_dev_router
 
         app.include_router(create_dev_router())
-    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+    app.mount("/", WorkbenchStaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app
 
 

@@ -349,7 +349,7 @@ function parseRoute() {
     return { name: "overview" };
   }
   if (clean === "/setup") {
-    return { name: "setup" };
+    return { name: "setup", tab: params.get("tab") === "import" ? "import" : "create" };
   }
   if (clean === "/installer") {
     return { name: "installer" };
@@ -400,6 +400,9 @@ async function loadWelcome() {
   try {
     activeWs = await getActiveWorkspace();
     if (activeWs && activeWs.hasWorkspace) {
+      if (!getRecentWorkspaces().some((item) => item.workspaceDir === activeWs.workspaceDir)) {
+        recordRecentWorkspace(activeWs);
+      }
       updateWorkspaceSwitcher(activeWs);
     } else {
       updateWorkspaceSwitcher({ hasWorkspace: false });
@@ -736,7 +739,7 @@ async function loadInstaller(options = {}) {
   }
 }
 
-async function loadSetup() {
+async function loadSetup(initialTab = "create") {
   stopPipelinePolling();
   updateNavHighlight("overview");
   if (pageHeader) pageHeader.hidden = false;
@@ -773,7 +776,7 @@ async function loadSetup() {
   renderSetup(viewContent, activeWs, () => {
     window.location.hash = "#/overview";
     handleRoute();
-  });
+  }, initialTab);
 
   viewContent.setAttribute("aria-busy", "false");
   refresh.disabled = false;
@@ -847,7 +850,7 @@ async function handleRoute(options = {}) {
   if (route.name === "welcome") {
     loadWelcome();
   } else if (route.name === "setup") {
-    loadSetup();
+    loadSetup(route.tab);
   } else if (route.name === "installer") {
     loadInstaller({ refresh: forceRefresh });
   } else if (route.name === "configuration") {

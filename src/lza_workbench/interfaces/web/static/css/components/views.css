@@ -69,6 +69,18 @@
   box-shadow: var(--shadow-card);
 }
 
+.stepper-step .step-arrow {
+  margin-left: auto;
+  color: var(--text-faded);
+  transition: transform 150ms ease, color 150ms ease;
+  flex-shrink: 0;
+}
+
+.stepper-step:hover .step-arrow {
+  color: var(--brand-primary);
+  transform: translateX(2px);
+}
+
 .step-indicator {
   width: 1.75rem;
   height: 1.75rem;
@@ -141,6 +153,25 @@
 
 .stepper-divider.active {
   background-color: #10b981;
+}
+
+@media (max-width: 768px) {
+  .stepper-track {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .stepper-step {
+    min-width: 100%;
+  }
+
+  .stepper-divider {
+    width: 2px;
+    height: 1rem;
+    margin: -0.25rem 0 -0.25rem 1.625rem;
+    align-self: flex-start;
+  }
 }
 
 /* ==========================================================================
@@ -216,7 +247,7 @@
 /* Actions Grid */
 .welcome-actions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
   gap: 1.5rem;
 }
 
@@ -306,7 +337,7 @@
 
 .recents-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
   gap: 1rem;
 }
 
@@ -364,7 +395,7 @@
 
 .welcome-empty-recents {
   text-align: center;
-  padding: 2.5rem 1.5rem;
+  padding: 1rem 1.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -390,10 +421,44 @@
 }
 
 /* Guide Section */
-.welcome-guide-section {
+.welcome-guide-section > summary {
+  cursor: pointer;
+}
+
+.welcome-guide-section[open] > summary {
+  margin-bottom: 1rem;
+}
+
+.welcome-guide-section .card:hover {
+  box-shadow: var(--shadow-card);
+  border-color: var(--border-card);
+}
+
+.welcome-container a.btn {
+  text-decoration: none;
+}
+
+.welcome-open-form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.welcome-open-form .input-with-action {
+  flex-wrap: wrap;
+}
+
+.welcome-open-form input {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.welcome-active-banner {
+  flex-wrap: wrap;
+  justify-content: center;
+  border-radius: 0.75rem;
+  overflow-wrap: anywhere;
 }
 
 .lifecycle-guide-grid {
@@ -511,7 +576,7 @@
 
 .form-section-body {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
   gap: 1.25rem;
 }
 
@@ -831,6 +896,14 @@
   justify-content: space-between;
   gap: 1.5rem;
   padding: 0.5rem 0;
+}
+
+@media (max-width: 600px) {
+  .danger-action-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
 }
 
 .danger-action-info {
