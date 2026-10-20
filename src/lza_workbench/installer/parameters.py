@@ -8,7 +8,8 @@ from lza_workbench.configuration.schema import get_canonical_config_s3_bucket
 from lza_workbench.installer.versions import version_to_branch
 
 if TYPE_CHECKING:
-    from lza_workbench.workspace.schema import WorkspaceConfig
+    from lza_workbench.installer.schema import LzaInstaller
+    from lza_workbench.workspace.schema import CustomerEnvironmentTarget, WorkspaceConfig
 
 INSTALLER_PARAMETER_LABELS = {
     "RepositorySource": "Source location",
@@ -63,10 +64,36 @@ def resolve_installer_source_branch(
     return "main"
 
 
-def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: str) -> bool:
+def _resolve_installer_and_target(
+    config: WorkspaceConfig | None,
+    installer: LzaInstaller | None,
+    environment_target: CustomerEnvironmentTarget | None,
+) -> tuple[LzaInstaller, CustomerEnvironmentTarget]:
+    resolved_installer = installer or (config.installer if config is not None else None)
+    resolved_target = environment_target or (
+        config.environment_target if config is not None else None
+    )
+    if resolved_installer is None or resolved_target is None:
+        raise ValueError(
+            "Installer parameter resolution requires either config or "
+            "(installer and environment_target)."
+        )
+    return resolved_installer, resolved_target
+
+
+def is_installer_parameter_applicable(
+    config: WorkspaceConfig | None = None,
+    parameter_name: str = "",
+    *,
+    installer: LzaInstaller | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
+) -> bool:
     """Return whether a template parameter applies to the current configuration."""
-    source_type = config.installer.source_code.repository_type
-    approval_enabled = config.installer.options.enable_approval_stage
+    resolved_installer, resolved_target = _resolve_installer_and_target(
+        config, installer, environment_target
+    )
+    source_type = resolved_installer.source_code.repository_type
+    approval_enabled = resolved_installer.options.enable_approval_stage
 
     if parameter_name == "RepositoryOwner":
         return source_type == "github"
@@ -80,7 +107,7 @@ def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: s
     if parameter_name == "ApprovalStageNotifyEmailList":
         return bool(approval_enabled)
 
-    config_repo = config.configuration.repository
+    config_repo = resolved_target.configuration_repository
     if parameter_name == "ConfigurationRepositoryLocation":
         return True
 
@@ -91,7 +118,7 @@ def is_installer_parameter_applicable(config: WorkspaceConfig, parameter_name: s
         if config_repo.type == "s3":
             return False
         if config_repo.type == "codecommit":
-            return config.installer.options.use_existing_config_repo
+            return resolved_installer.options.use_existing_config_repo
         return True
 
     if parameter_name in {"ExistingConfigRepositoryOwner", "ConfigCodeConnectionArn"}:
@@ -254,16 +281,23 @@ def _apply_schema_defaults(
 
 
 def build_installer_cfn_parameters(
-    config: WorkspaceConfig, schema: dict[str, dict[str, Any]] | None = None
+    config: WorkspaceConfig | None = None,
+    schema: dict[str, dict[str, Any]] | None = None,
+    *,
+    installer: LzaInstaller | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
 ) -> dict[str, str]:
-    """Map workspace configuration into CloudFormation parameter key-value pairs.
+    """Map installer specification and environment target into CloudFormation parameter pairs.
 
     Optionally accepts a template parameter schema to collect additional parameters
     and apply template defaults for missing parameters.
     """
-    source_code = config.installer.source_code
-    options = config.installer.options
-    repo_config = config.configuration.repository
+    resolved_installer, resolved_target = _resolve_installer_and_target(
+        config, installer, environment_target
+    )
+    source_code = resolved_installer.source_code
+    options = resolved_installer.options
+    repo_config = resolved_target.configuration_repository
 
     branch = source_code.branch
     enable_approval = options.enable_approval_stage
@@ -295,7 +329,7 @@ def build_installer_cfn_parameters(
         "LogArchiveAccountEmail": options.log_archive_account_email or "",
         "AuditAccountEmail": options.audit_account_email or "",
         "ControlTowerEnabled": "Yes" if options.control_tower_enabled else "No",
-        "AcceleratorPrefix": config.lza.accelerator_prefix or "AWSAccelerator",
+        "AcceleratorPrefix": resolved_target.lza.accelerator_prefix or "AWSAccelerator",
         "ConfigurationRepositoryLocation": config_location,
         "UseExistingConfigRepo": "Yes" if use_existing else "No",
         "ConfigCodeConnectionArn": code_conn_arn,
@@ -305,7 +339,7 @@ def build_installer_cfn_parameters(
         "EnableDiagnosticsPack": "Yes" if options.enable_diagnostics_pack else "No",
     }
 
-    _apply_schema_defaults(params, schema, config.installer.extra_parameters)
+    _apply_schema_defaults(params, schema, resolved_installer.extra_parameters)
     return params
 
 

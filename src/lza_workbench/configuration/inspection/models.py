@@ -18,14 +18,14 @@ from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult
 class ConfigurationWorkspaceStatus:
     """Workspace and local configuration observations."""
 
-    workspace_dir: Path
+    workspace_dir: Path | None
     customer_name: str
     lza_version: str
     profile: str
     region: str
     aws_identity: dict[str, str] | None
     aws_error: str | None
-    config_dir: Path
+    config_dir: Path | None
     config_dir_exists: bool
     yaml_files: tuple[str, ...]
     initialized_at: datetime | None

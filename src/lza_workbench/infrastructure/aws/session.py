@@ -145,6 +145,27 @@ class AwsExecutionContext:
     def is_live(self) -> bool:
         return self.identity is not None
 
+    @property
+    def account_id(self) -> str | None:
+        return self.identity.get("account") or None if self.identity else None
+
+    @property
+    def caller_arn(self) -> str | None:
+        return self.identity.get("arn") or None if self.identity else None
+
+    def require_live(self, expected_account_id: str | None = None) -> dict[str, str]:
+        """Return validated caller identity or raise when unauthenticated or mismatched."""
+        if self.identity is None:
+            raise LzaError(
+                self.error or "AWS identity validation is required before mutating AWS resources."
+            )
+        if expected_account_id and self.identity.get("account") != expected_account_id:
+            raise LzaError(
+                "Authenticated AWS account does not match lza-workspace.yaml: "
+                f"expected {expected_account_id}, received {self.identity.get('account')}."
+            )
+        return self.identity
+
 
 def resolve_aws_execution_context(
     *,
@@ -180,21 +201,18 @@ def resolve_aws_execution_context(
             if require_identity:
                 raise
 
-    if require_expected_account:
-        if identity is None:
-            raise LzaError("AWS identity validation is required before mutating AWS resources.")
-        if expected_account_id and identity["account"] != expected_account_id:
-            raise LzaError(
-                "Authenticated AWS account does not match lza-workspace.yaml: "
-                f"expected {expected_account_id}, received {identity['account']}."
-            )
-
-    return AwsExecutionContext(
+    context = AwsExecutionContext(
         region=resolved_region,
         factory=factory,
         identity=identity,
         error=error,
     )
+    if require_expected_account:
+        if identity is None:
+            raise LzaError("AWS identity validation is required before mutating AWS resources.")
+        context.require_live(expected_account_id=expected_account_id)
+
+    return context
 
 
 __all__ = [

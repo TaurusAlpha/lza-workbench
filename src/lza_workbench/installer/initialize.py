@@ -16,6 +16,7 @@ from lza_workbench.installer.parameters import (
     get_installer_parameter_label,
     is_installer_parameter_applicable,
 )
+from lza_workbench.installer.state import record_installer_template
 from lza_workbench.installer.templates import (
     inspect_template_parameters,
     resolve_installer_template,
@@ -23,8 +24,8 @@ from lza_workbench.installer.templates import (
 )
 from lza_workbench.installer.validation import validate_installer_configuration
 from lza_workbench.workspace.context import load_workspace_context
-from lza_workbench.workspace.persistence import write_workspace_config, write_workspace_state
-from lza_workbench.workspace.schema import WorkspaceConfig
+from lza_workbench.workspace.persistence import update_workspace_state, write_workspace_config
+from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.validation import WorkspaceCapability
 
 __all__ = [
@@ -95,7 +96,7 @@ def get_installer_parameters_schema(
     )
     candidate = ctx.config.model_copy(deep=True)
     _apply_values(candidate, values or {})
-    _ensure_canonical_s3_bucket(candidate, ctx.state.management_account_id if ctx.state else None)
+    _ensure_canonical_s3_bucket(candidate, ctx.state.observed_account_id if ctx.state else None)
     candidate = _validate_candidate(candidate)
     template_path = resolve_installer_template(ctx.workspace_dir, candidate, dry_run=dry_run)
     schema = inspect_template_parameters(template_path)
@@ -136,7 +137,7 @@ def apply_installer_settings(request: InstallerSettingsRequest) -> InstallerSett
     )
     candidate = ctx.config.model_copy(deep=True)
     _apply_values(candidate, request.values)
-    _ensure_canonical_s3_bucket(candidate, ctx.state.management_account_id if ctx.state else None)
+    _ensure_canonical_s3_bucket(candidate, ctx.state.observed_account_id if ctx.state else None)
     candidate = _validate_candidate(candidate)
     template_path = resolve_installer_template(
         ctx.workspace_dir, candidate, dry_run=request.dry_run
@@ -156,19 +157,21 @@ def apply_installer_settings(request: InstallerSettingsRequest) -> InstallerSett
 
     if not request.no_save and not request.dry_run:
         write_workspace_config(ctx.workspace_dir, candidate)
-        ctx.state.installer.template_version = candidate.lza.version
-        if template_path.exists():
-            ctx.state.installer.downloaded_at = datetime.fromtimestamp(
-                template_path.stat().st_mtime, tz=UTC
+        downloaded_at = (
+            datetime.fromtimestamp(template_path.stat().st_mtime, tz=UTC)
+            if template_path.exists()
+            else None
+        )
+
+        def _record_template(current: WorkspaceState) -> None:
+            record_installer_template(
+                current,
+                version=candidate.lza.version,
+                downloaded_at=downloaded_at,
             )
-        deployed = ctx.state.installer.deployed_parameters or {}
-        changed = {
-            k: v
-            for k, v in resolved_parameters.items()
-            if k not in deployed or deployed.get(k) != v
-        }
-        ctx.state.installer.pending_parameters = changed if changed else None
-        write_workspace_state(ctx.workspace_dir, ctx.state)
+
+        _record_template(ctx.state)
+        update_workspace_state(ctx.workspace_dir, _record_template)
 
     return InstallerSettingsResult(
         workspace_dir=ctx.workspace_dir,

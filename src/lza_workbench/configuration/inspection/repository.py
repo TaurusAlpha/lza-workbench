@@ -29,31 +29,45 @@ from lza_workbench.infrastructure.aws.s3 import (
 )
 
 if TYPE_CHECKING:
-    from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
+    from lza_workbench.workspace.schema import (
+        CustomerEnvironmentTarget,
+        WorkspaceConfig,
+        WorkspaceState,
+    )
 
 
 def inspect_s3_repository_status(
     *,
     repo: Any,
-    config_dir: Path,
-    resolved_config: WorkspaceConfig,
-    resolved_state: WorkspaceState | None,
     aws_identity: dict[str, Any] | None,
     region: str,
     factory: Any,
-) -> tuple[S3ConfigurationRepositoryStatus, RemoteSyncStatus]:
+    config_dir: Path | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
+    resolved_config: WorkspaceConfig | None = None,
+    resolved_state: WorkspaceState | None = None,
+    account_id: str | None = None,
+) -> tuple[S3ConfigurationRepositoryStatus, RemoteSyncStatus | None]:
     """Inspect remote S3 configuration bucket and archive object."""
     s3_bucket_name = None
     s3_error = None
+    env_target = environment_target or (
+        resolved_config.environment_target if resolved_config is not None else None
+    )
+    resolved_account_id = (
+        account_id
+        or (env_target.account_id if env_target is not None else None)
+        or (resolved_state.observed_account_id if resolved_state is not None else None)
+        or (aws_identity.get("account") if aws_identity else None)
+    )
+    resolved_region = region or (
+        env_target.region if env_target is not None else "us-east-1"
+    )
     try:
         s3_bucket_name = resolve_s3_configuration_destination(
             configured_bucket=repo.bucket,
-            account_id=(
-                resolved_config.aws.account_id
-                or (resolved_state.management_account_id if resolved_state else None)
-                or (aws_identity.get("account") if aws_identity else None)
-            ),
-            region=region or resolved_config.aws.region,
+            account_id=resolved_account_id,
+            region=resolved_region,
         ).bucket
     except Exception as exc:
         s3_error = str(exc)
@@ -93,14 +107,26 @@ def inspect_s3_repository_status(
             s3_error = str(exc)
             s3_bucket_accessible = False
 
-    remote_sync = evaluate_s3_remote_sync(
-        config_dir=config_dir,
-        exclude_dirs=set(resolved_config.configuration.packaging.exclude.directories),
-        exclude_files=set(resolved_config.configuration.packaging.exclude.files),
-        s3_object_info=obj_info,
-        state=resolved_state,
-        is_live=bool(aws_identity),
-    )
+    remote_sync: RemoteSyncStatus | None = None
+    if config_dir is not None:
+        exclude_dirs = (
+            set(resolved_config.configuration.packaging.exclude.directories)
+            if resolved_config is not None
+            else {".git"}
+        )
+        exclude_files = (
+            set(resolved_config.configuration.packaging.exclude.files)
+            if resolved_config is not None
+            else {".DS_Store"}
+        )
+        remote_sync = evaluate_s3_remote_sync(
+            config_dir=config_dir,
+            exclude_dirs=exclude_dirs,
+            exclude_files=exclude_files,
+            s3_object_info=obj_info,
+            state=resolved_state,
+            is_live=bool(aws_identity),
+        )
 
     repository = S3ConfigurationRepositoryStatus(
         bucket=s3_bucket_name,
@@ -193,24 +219,28 @@ def inspect_codeconnection_repository_status(
 def inspect_configuration_repository(
     *,
     repo: Any,
-    config_dir: Path,
-    resolved_config: WorkspaceConfig,
-    resolved_state: WorkspaceState | None,
     aws_identity: dict[str, Any] | None,
     region: str,
     factory: Any,
-    git_sync_status: Any,
+    config_dir: Path | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
+    resolved_config: WorkspaceConfig | None = None,
+    resolved_state: WorkspaceState | None = None,
+    git_sync_status: Any = None,
+    account_id: str | None = None,
 ) -> tuple[ConfigurationRepositoryStatus, RemoteSyncStatus | None]:
     """Inspect the configured remote repository based on its type."""
     if repo.type == "s3":
         return inspect_s3_repository_status(
             repo=repo,
             config_dir=config_dir,
+            environment_target=environment_target,
             resolved_config=resolved_config,
             resolved_state=resolved_state,
             aws_identity=aws_identity,
             region=region,
             factory=factory,
+            account_id=account_id,
         )
 
     remote_sync = (

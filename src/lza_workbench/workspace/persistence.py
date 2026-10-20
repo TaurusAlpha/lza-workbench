@@ -1,8 +1,14 @@
-"""Workspace persistence: YAML configuration and JSON state loading/saving."""
+"""Workspace persistence: YAML configuration and atomic JSON state loading/saving."""
 
 from __future__ import annotations
 
+import fcntl
+import io
 import json
+import os
+import tempfile
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -22,6 +28,39 @@ def get_state_path(workspace_dir: Path) -> Path:
     return workspace_dir.expanduser().resolve() / WORKSPACE_STATE_FILE
 
 
+def atomic_write_text(path: Path, content: str) -> None:
+    """Atomically write UTF-8 text to a file via a sibling temporary file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
+@contextmanager
+def state_file_lock(state_path: Path) -> Iterator[None]:
+    """Acquire an exclusive advisory lock around workspace state file mutations."""
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = state_path.parent / ".state.lock"
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
 def load_workspace_config(workspace_dir: Path) -> WorkspaceConfig:
     path = get_config_path(workspace_dir)
     yaml = YAML()
@@ -36,12 +75,11 @@ def load_workspace_config(workspace_dir: Path) -> WorkspaceConfig:
 
 def write_workspace_config(workspace_dir: Path, config: WorkspaceConfig) -> None:
     path = get_config_path(workspace_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-
     yaml = YAML()
     yaml.default_flow_style = False
-    with path.open("w", encoding="utf-8") as handle:
-        yaml.dump(config.model_dump(mode="json"), handle)
+    buffer = io.StringIO()
+    yaml.dump(config.model_dump(mode="json"), buffer)
+    atomic_write_text(path, buffer.getvalue())
 
 
 def load_workspace_state(workspace_dir: Path) -> WorkspaceState:
@@ -57,11 +95,23 @@ def load_workspace_state(workspace_dir: Path) -> WorkspaceState:
 
 def write_workspace_state(workspace_dir: Path, state: WorkspaceState) -> None:
     path = get_state_path(workspace_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(state.model_dump(mode="json"), indent=2, sort_keys=False) + "\n",
-        encoding="utf-8",
-    )
+    serialized = json.dumps(state.model_dump(mode="json"), indent=2, sort_keys=False) + "\n"
+    with state_file_lock(path):
+        atomic_write_text(path, serialized)
+
+
+def update_workspace_state(
+    workspace_dir: Path,
+    mutator: Callable[[WorkspaceState], None],
+) -> WorkspaceState:
+    """Atomically load, mutate, and write .lza/state.json under an exclusive file lock."""
+    path = get_state_path(workspace_dir)
+    with state_file_lock(path):
+        state = load_workspace_state(workspace_dir)
+        mutator(state)
+        serialized = json.dumps(state.model_dump(mode="json"), indent=2, sort_keys=False) + "\n"
+        atomic_write_text(path, serialized)
+        return state
 
 
 def _assert_no_persisted_aws_secrets(raw_config: object) -> None:
@@ -87,11 +137,13 @@ def _assert_no_persisted_aws_secrets(raw_config: object) -> None:
 __all__ = [
     "WORKSPACE_CONFIG_FILE",
     "WORKSPACE_STATE_FILE",
+    "atomic_write_text",
     "get_config_path",
     "get_state_path",
     "load_workspace_config",
     "load_workspace_state",
+    "state_file_lock",
+    "update_workspace_state",
     "write_workspace_config",
     "write_workspace_state",
 ]
-

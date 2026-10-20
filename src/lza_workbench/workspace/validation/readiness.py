@@ -68,14 +68,6 @@ def require_capabilities(
             "Workspace is missing required installer configuration parameters in "
             "lza-workspace.yaml. Run 'lza installer plan' or update lza-workspace.yaml."
         )
-    if (
-        WorkspaceCapability.INSTALLER_RECORDED_DEPLOYED in required
-        and not assessment.installer_recorded_deployed
-    ):
-        raise LzaError(
-            "Installer CloudFormation stack has not been deployed for this workspace "
-            "(missing installer.stack_id in .lza/state.json). Run 'lza installer deploy' first."
-        )
 
 
 __all__ = [

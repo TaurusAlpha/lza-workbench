@@ -758,8 +758,6 @@ def test_workspace_active_api() -> None:
             metadata_valid=True,
             configuration_present=True,
             installer_configured=False,
-            installer_recorded_deployed=False,
-            imported=False,
         ),
     )
 
@@ -802,8 +800,6 @@ def test_workspace_open_api(tmp_path: Path) -> None:
             metadata_valid=True,
             configuration_present=True,
             installer_configured=False,
-            installer_recorded_deployed=False,
-            imported=False,
         ),
     )
 
@@ -904,7 +900,7 @@ def test_workspace_import_discover_prepare_apply(tmp_path: Path) -> None:
         lza=LzaConfig(version="v1.15.5"),
     )
     state = WorkspaceState.from_config(cfg)
-    state.imported = True
+    state.workspace.imported = True
 
     discovery = ImportWorkspaceDiscovery(
         workspace_dir=ws_dir,

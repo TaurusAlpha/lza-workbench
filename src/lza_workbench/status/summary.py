@@ -60,7 +60,7 @@ class OverallHealthSummary:
 
 @dataclass(frozen=True)
 class RootStatusResult:
-    workspace_dir: Path
+    workspace_dir: Path | None
     customer_name: str
     lza_version: str
     profile: str

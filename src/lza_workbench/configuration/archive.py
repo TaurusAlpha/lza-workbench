@@ -208,27 +208,95 @@ def scan_directory_files(
     if not directory.is_dir():
         return files_map
 
+    ignore_rules = read_packaging_ignore_rules(directory)
     for path in directory.rglob("*"):
         if not path.is_file():
             continue
         rel_path = path.relative_to(directory)
-        if not is_path_excluded(rel_path, exclude_dirs, exclude_files):
+        if not is_path_excluded(rel_path, exclude_dirs, exclude_files, ignore_rules):
             files_map[str(rel_path)] = hashlib.sha256(path.read_bytes()).hexdigest()
     return files_map
 
 
-def compute_config_directory_digest(
-    directory: Path, exclude_dirs: set[str], exclude_files: set[str]
-) -> str:
+def scan_zip_files(
+    zip_path: Path,
+    exclude_dirs: set[str],
+    exclude_files: set[str] | None = None,
+    *,
+    top_level_dir_name: str | None = None,
+) -> dict[str, str]:
+    """Scan included configuration files and their SHA-256 digests directly from a zip archive."""
+    files_map: dict[str, str] = {}
+    if not zip_path.is_file():
+        return files_map
+
+    with zipfile.ZipFile(zip_path, "r") as archive:
+        infos = archive.infolist()
+        strip_top_level = False
+        if top_level_dir_name:
+            prefix = f"{top_level_dir_name}/"
+            strip_top_level = any(
+                info.filename == prefix or info.filename.startswith(prefix) for info in infos
+            )
+
+        ignore_rules: tuple[PackagingIgnoreRule, ...] = ()
+        gitignore_entry = f"{top_level_dir_name}/.gitignore" if strip_top_level else ".gitignore"
+        for info in infos:
+            if info.filename == gitignore_entry and not info.filename.endswith("/"):
+                ignore_rules = _parse_packaging_ignore_text(
+                    archive.read(info.filename).decode("utf-8", errors="replace")
+                )
+                break
+
+        for info in infos:
+            if info.filename.endswith("/"):
+                continue
+            raw_path = Path(info.filename)
+            if strip_top_level and top_level_dir_name is not None:
+                if raw_path.parts[0] != top_level_dir_name or len(raw_path.parts) < 2:
+                    continue
+                rel_path = raw_path.relative_to(top_level_dir_name)
+            else:
+                rel_path = raw_path
+
+            if not is_path_excluded(rel_path, exclude_dirs, exclude_files, ignore_rules):
+                files_map[str(rel_path)] = hashlib.sha256(archive.read(info.filename)).hexdigest()
+
+    return files_map
+
+
+def _compute_files_map_digest(files_map: dict[str, str]) -> str:
     digest = hashlib.sha256()
-    for relative_path, file_digest in sorted(
-        scan_directory_files(directory, exclude_dirs, exclude_files).items()
-    ):
+    for relative_path, file_digest in sorted(files_map.items()):
         digest.update(relative_path.encode("utf-8"))
         digest.update(b"\0")
         digest.update(file_digest.encode("ascii"))
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def compute_config_directory_digest(
+    directory: Path, exclude_dirs: set[str], exclude_files: set[str]
+) -> str:
+    return _compute_files_map_digest(scan_directory_files(directory, exclude_dirs, exclude_files))
+
+
+def compute_zip_content_digest(
+    zip_path: Path,
+    exclude_dirs: set[str],
+    exclude_files: set[str] | None = None,
+    *,
+    top_level_dir_name: str | None = None,
+) -> str:
+    """Compute configuration content digest directly from a packaged zip archive."""
+    return _compute_files_map_digest(
+        scan_zip_files(
+            zip_path,
+            exclude_dirs,
+            exclude_files,
+            top_level_dir_name=top_level_dir_name,
+        )
+    )
 
 
 def is_path_excluded(
@@ -262,13 +330,9 @@ class PackagingIgnoreRule:
     anchored: bool
 
 
-def read_packaging_ignore_rules(config_dir: Path) -> tuple[PackagingIgnoreRule, ...]:
-    """Read root .gitignore; later matching rules win."""
-    ignore_file = config_dir / ".gitignore"
-    if not ignore_file.is_file():
-        return ()
+def _parse_packaging_ignore_text(text: str) -> tuple[PackagingIgnoreRule, ...]:
     rules = []
-    for line in ignore_file.read_text(encoding="utf-8").splitlines():
+    for line in text.splitlines():
         pattern = line.rstrip()
         if not pattern or pattern.startswith("#"):
             continue
@@ -283,6 +347,14 @@ def read_packaging_ignore_rules(config_dir: Path) -> tuple[PackagingIgnoreRule, 
         if pattern:
             rules.append(PackagingIgnoreRule(pattern, negated, directory_only, anchored))
     return tuple(rules)
+
+
+def read_packaging_ignore_rules(config_dir: Path) -> tuple[PackagingIgnoreRule, ...]:
+    """Read root .gitignore; later matching rules win."""
+    ignore_file = config_dir / ".gitignore"
+    if not ignore_file.is_file():
+        return ()
+    return _parse_packaging_ignore_text(ignore_file.read_text(encoding="utf-8"))
 
 
 def _is_ignored(path: Path, is_directory: bool, rules: tuple[PackagingIgnoreRule, ...]) -> bool:

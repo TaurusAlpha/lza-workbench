@@ -55,17 +55,31 @@ customers/
 
 ### Declarative Configuration
 
-`lza-workspace.yaml` is the declarative source of truth for the workspace.
+`lza-workspace.yaml` is the declarative source of truth for a local workspace.
 
-It contains configuration and user decisions required to reproduce or operate the workspace.
+It remains a single human-readable document (`WorkspaceConfig`) with separated logical ownership between:
+
+- Customer and AWS environment target metadata (`CustomerConfig`, `LzaConfig`, `CustomerEnvironmentTarget`, and target account/region in `AwsConfig`).
+- Installer settings (`LzaInstaller`) and remote configuration source settings (`ConfigurationRepositoryConfig`).
+- Feature-local relative workspace paths (`installer.local_path`, `configuration.local_path`).
+- Engineer-specific AWS execution preferences (`AwsConfig`: optional profile, role ARN, credential priming).
+
+`CustomerEnvironmentTarget` projects the customer and environment resource targets so observation and pipeline workflows can operate without engineer-specific AWS profiles or local filesystem paths.
 
 ### Runtime State
 
-`.lza/state.json` stores operational information discovered or produced during command execution.
-Its installer, configuration, and pipeline sections are feature-owned runtime models; `workspace`
-validates and persists the enclosing document. Persisted documents must match the current schema.
+`.lza/state.json` stores local operational information discovered or produced during command execution.
+Its `workspace`, `installer`, `configuration`, `pipelines`, and `uninstall` sections are feature-owned
+models that distinguish between:
 
-Runtime state must not duplicate declarative configuration already stored in `lza-workspace.yaml` unless specifically required for operational efficiency and state reconciliation.
+- Local workspace and template initialization metadata (`WorkspaceMetadataState`, `InstallerTemplateState`, `ConfigurationTemplateState`).
+- Local synchronization baselines (`ConfigurationSyncBaseline`, local installer template digest).
+- Cached AWS resource observations (`InstallerStackObservation`, `PipelineObservationRecord`).
+- Local operation records (`InstallerDeploymentRecord`, `ConfigurationTransferRecord`, `PipelineOperationRecord`, `UninstallState`).
+
+`workspace` validates and atomically persists the enclosing document. Persisted documents must match the current schema.
+
+Runtime state must not duplicate declarative configuration already stored in `lza-workspace.yaml` unless specifically required for operational efficiency and state reconciliation. Engineer caller identity is an execution-time concern (`AwsExecutionContext`) and is not persisted as customer state.
 
 During active development, backward compatibility across workspace schema changes is not
 guaranteed and automatic schema migration is not supported. Re-import the workspace when metadata
@@ -79,7 +93,8 @@ AWS SDK initialization is centralized.
 AWS authentication is external to LZA Workbench. Workspaces must not persist AWS credentials or secrets; profiles, assumed roles, environment credentials, and workload identity are supplied by the execution environment.
 
 - `AwsClientFactory` is the single mechanism for creating boto3 sessions and service clients.
-- Each AWS-backed action resolves and reuses one request-scoped AWS execution context.
+- `AwsExecutionContext` represents local AWS execution identity and client construction separately from customer resource target identity.
+- Each AWS-backed action resolves or receives a request-scoped `AwsExecutionContext`.
 - Interface handlers pass user intent into feature-owned actions rather than constructing AWS clients.
 - AWS service modules receive clients rather than creating their own sessions.
 - Authentication resolution, retry configuration, and shared AWS client behavior belong in the centralized factory.
@@ -100,15 +115,17 @@ boundaries:
   rendering, and translation of application errors into process results.
 - `interfaces.web` owns HTTP routing, request/response translation, browser-facing presentation,
   and session concerns. It must not own LZA business policy.
-- `workspace` is the workspace document and lifecycle boundary. It owns workspace schema
-  composition, paths, readiness assessment, and persistence of `lza-workspace.yaml` and
-  `.lza/state.json`. Other features load a validated `WorkspaceContext` and explicitly read or
-  write those documents through its persistence API. Workspace owns local workspace lifecycle and
-  persistence. AWS resources belong to the feature whose explicit deployment action requires and
-  manages them.
+- `workspace` is the local workspace document and lifecycle boundary. It owns workspace schema
+  composition, local paths, structural readiness assessment, and persistence of `lza-workspace.yaml`
+  and `.lza/state.json`. `WorkspaceContext` represents a local workspace on disk rather than a
+  universal execution context. File-dependent operations load a `WorkspaceContext` or accept explicit
+  filesystem inputs, while AWS-only operations accept `CustomerEnvironmentTarget`, `WorkspaceConfig`,
+  or explicit resource identifiers alongside `AwsExecutionContext` without requiring local workspace
+  files.
 - `configuration`, `installer`, and `pipeline` own their respective schemas, business rules,
   actions, and runtime-state transition rules. They must not delegate their policy to
-  `workspace`; `workspace` persists the resulting validated state document.
+  `workspace`; `workspace` persists the resulting validated state document when operating against a
+  local workspace.
 - `status` owns unified operational observation and typed summaries shared by both interfaces.
 - `infrastructure.aws` and `infrastructure.github` contain thin external-service adapters that
   accept resolved inputs, call external APIs, and return structured observations without deriving
@@ -143,13 +160,17 @@ Application errors must remain independent of presentation and execution interfa
 
 ### Workspace Readiness
 
-Commands operate against explicit workspace readiness rather than independently repairing missing workspace configuration.
+Local workspace commands operate against explicit local workspace readiness (`WorkspaceCapability` /
+`WorkspaceAssessment`) rather than independently repairing missing workspace configuration.
 
-`lza init` and `lza import` establish or complete the workspace.
+`lza init` and `lza import` establish or complete the local workspace.
 
-Other commands should validate the minimum workspace state they require and fail clearly when it is incomplete.
+`WorkspaceAssessment` evaluates local structural and configuration validity (`METADATA_VALID`,
+`CONFIGURATION_PRESENT`, `INSTALLER_CONFIGURED`) from `lza-workspace.yaml` and local filesystem
+state without depending on `.lza/state.json`.
 
-AWS authentication validity and deployed-resource health are separate from workspace readiness.
+AWS authentication validity, remote resource availability, and deployed-resource health are separate
+from local workspace readiness and are validated by the feature actions that require them.
 
 ## Interface Design Principles
 

@@ -15,6 +15,7 @@ from lza_workbench.configuration.git import (
     is_git_root,
     is_inside_parent_git_repo,
 )
+from lza_workbench.configuration.state import record_config_template_init
 from lza_workbench.configuration.templates import (
     DEFAULT_TEMPLATE_SOURCE,
     ResolvedTemplateSource,
@@ -26,7 +27,7 @@ from lza_workbench.configuration.templates import (
 )
 from lza_workbench.errors import LzaError
 from lza_workbench.workspace.context import load_workspace_context
-from lza_workbench.workspace.persistence import write_workspace_config, write_workspace_state
+from lza_workbench.workspace.persistence import update_workspace_state, write_workspace_config
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.validation import WorkspaceCapability
 
@@ -150,9 +151,9 @@ def _check_existing_config(
     if not has_contents or force:
         return None
 
-    if state and state.configuration.initialized_at:
+    if state and state.configuration.template.initialized_at:
         current_snapshot = capture_init_values_snapshot(config)
-        saved_snapshot = state.configuration.init_values or {}
+        saved_snapshot = state.configuration.template.init_values or {}
         drifted = tuple(
             sorted(k for k, v in current_snapshot.items() if saved_snapshot.get(k) != v)
         )
@@ -166,7 +167,7 @@ def _check_existing_config(
             config=config,
             skipped=True,
             is_managed=True,
-            initialized_at=state.configuration.initialized_at,
+            initialized_at=state.configuration.template.initialized_at,
             drifted_fields=drifted,
             git_skipped=True,
             git_skip_reason="Configuration directory already exists",
@@ -248,10 +249,19 @@ def _persist_config_init_provenance(
         configure_codecommit_credential_helper(target_config_dir, config.aws.profile)
 
     if state:
-        state.configuration.initialized_at = datetime.now(UTC)
-        state.configuration.template_name = resolved_template.source
-        state.configuration.template_source = template_source_type
-        state.configuration.init_values = capture_init_values_snapshot(config)
-        state.configuration.init_digest = compute_config_directory_digest(target_config_dir)
-        state.configuration.files_count = len(written_paths)
-        write_workspace_state(workspace_dir, state)
+        init_values = capture_init_values_snapshot(config)
+        init_digest = compute_config_directory_digest(target_config_dir)
+        files_count = len(written_paths)
+
+        def _apply_init(current_state: WorkspaceState) -> None:
+            record_config_template_init(
+                current_state,
+                template_name=resolved_template.source,
+                template_source=template_source_type,
+                init_values=init_values,
+                init_digest=init_digest,
+                files_count=files_count,
+            )
+            state.configuration = current_state.configuration
+
+        update_workspace_state(workspace_dir, _apply_init)

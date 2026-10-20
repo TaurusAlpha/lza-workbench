@@ -85,7 +85,7 @@ def test_cli_init_creates_workspace_metadata(
     assert (workspace_dir / ".lza" / "state.json").is_file()
     assert (workspace_dir / config.installer.local_path).is_dir()
     assert not (workspace_dir / config.configuration.local_path).exists()
-    assert state.initialized_at is not None
+    assert state.workspace.initialized_at is not None
 
 
 def test_cli_init_existing_directory_directs_user_to_import(

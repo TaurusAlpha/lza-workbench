@@ -55,8 +55,8 @@ def test_evaluate_s3_remote_sync_offline(tmp_path: Path) -> None:
 
     digest = compute_config_directory_digest(config_dir, set(), set())
     state = _make_test_workspace_state()
-    state.configuration.sync_digest = digest
-    state.configuration.artifact_etag = "etag-123"
+    state.configuration.sync.sync_digest = digest
+    state.configuration.sync.artifact_etag = "etag-123"
 
     res = evaluate_s3_remote_sync(
         config_dir=config_dir,
@@ -132,8 +132,8 @@ def test_evaluate_s3_remote_sync_metadata_diverged_and_ahead(tmp_path: Path) -> 
     (config_dir / "global-config.yaml").write_text("v2", encoding="utf-8")
 
     state = _make_test_workspace_state()
-    state.configuration.sync_digest = "digest-v1"
-    state.configuration.artifact_etag = "etag-1"
+    state.configuration.sync.sync_digest = "digest-v1"
+    state.configuration.sync.artifact_etag = "etag-1"
 
     # Local changed, remote matches state etag
     s3_info = S3ObjectObservation(
@@ -160,8 +160,8 @@ def test_evaluate_s3_remote_sync_state_etag_fallback(tmp_path: Path) -> None:
 
     digest = compute_config_directory_digest(config_dir, set(), set())
     state = _make_test_workspace_state()
-    state.configuration.sync_digest = digest
-    state.configuration.artifact_etag = "etag-abc"
+    state.configuration.sync.sync_digest = digest
+    state.configuration.sync.artifact_etag = "etag-abc"
 
     # S3 has no user metadata
     s3_info = S3ObjectObservation(exists=True, etag="etag-abc")

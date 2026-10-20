@@ -45,7 +45,7 @@ def _compile_workspace_warnings(workspace: ConfigurationWorkspaceStatus) -> list
             f"Configured LZA version '{norm}' is old and unwanted (<= v1.5.0). "
             f"Consider upgrading to a supported version (e.g. {PACKAGED_INSTALLER_VERSION} or >= v1.5.1)."
         )
-    if not workspace.config_dir_exists:
+    if workspace.config_dir is not None and not workspace.config_dir_exists:
         warnings.append(
             "Local configuration directory is missing. "
             "Run 'lza config init' or 'lza config pull' to initialize it."

@@ -12,7 +12,8 @@ from lza_workbench.installer.validation.config import (
 )
 
 if TYPE_CHECKING:
-    from lza_workbench.workspace.schema import WorkspaceConfig
+    from lza_workbench.installer.schema import LzaInstaller
+    from lza_workbench.workspace.schema import CustomerEnvironmentTarget, WorkspaceConfig
 
 SAFE_EXISTING_STACK_STATUSES = {
     "CREATE_COMPLETE",
@@ -24,9 +25,18 @@ SAFE_EXISTING_STACK_STATUSES = {
 SAFE_CREATE_STACK_STATUSES = {"ROLLBACK_COMPLETE", "DELETE_COMPLETE", None}
 
 
-def validate_deployment_preflight(config: WorkspaceConfig) -> None:
-    """Validate workspace installer settings before executing deployment mutations."""
-    validation = validate_installer_configuration(config)
+def validate_deployment_preflight(
+    config: WorkspaceConfig | None = None,
+    *,
+    installer: LzaInstaller | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
+) -> None:
+    """Validate installer settings before executing deployment mutations."""
+    validation = validate_installer_configuration(
+        config,
+        installer=installer,
+        environment_target=environment_target,
+    )
     if not validation.is_complete:
         raise InstallerConfigValidationError(validation)
 

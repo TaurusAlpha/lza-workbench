@@ -9,9 +9,13 @@ from pathlib import Path
 from lza_workbench.errors import LzaError
 from lza_workbench.infrastructure.aws.cloudformation import CfnStackStatusResult
 from lza_workbench.installer.parameters import apply_deployed_installer_parameters
+from lza_workbench.installer.state import (
+    record_installer_observation,
+    record_installer_template,
+)
 from lza_workbench.installer.templates import INSTALLER_TEMPLATE_FILENAME
 from lza_workbench.installer.versions import normalize_lza_version
-from lza_workbench.workspace.persistence import write_workspace_config, write_workspace_state
+from lza_workbench.workspace.persistence import update_workspace_state, write_workspace_config
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 
 
@@ -20,6 +24,7 @@ def apply_installer_state_sync(
     state: WorkspaceState,
     cfn_status: CfnStackStatusResult,
     deployed_version: str | None,
+    account_id: str | None = None,
 ) -> WorkspaceState:
     """Apply discovered installer state without persisting it."""
     if not cfn_status.exists:
@@ -27,13 +32,19 @@ def apply_installer_state_sync(
             "Cannot synchronize state: CloudFormation installer stack is not deployed "
             "or inaccessible."
         )
-    state.installer.stack_id = cfn_status.stack_id
-    state.installer.stack_status = cfn_status.stack_status
-    if cfn_status.deployed_parameters:
-        state.installer.deployed_parameters = dict(cfn_status.deployed_parameters)
+    record_installer_observation(
+        state,
+        account_id=account_id,
+        stack_name=cfn_status.stack_name,
+        stack_id=cfn_status.stack_id,
+        stack_status=cfn_status.stack_status,
+        deployed_version=deployed_version,
+        deployed_parameters=(
+            dict(cfn_status.deployed_parameters) if cfn_status.deployed_parameters else None
+        ),
+    )
     if deployed_version is not None:
-        state.installer.template_version = deployed_version
-    state.updated_at = datetime.now(UTC)
+        record_installer_template(state, version=deployed_version)
     return state
 
 
@@ -43,15 +54,31 @@ def sync_installer_state(
     state: WorkspaceState,
     cfn_status: CfnStackStatusResult,
     deployed_version: str | None,
+    account_id: str | None = None,
 ) -> WorkspaceState:
     """Synchronize .lza/state.json deployment metadata with live installer state."""
     apply_installer_state_sync(
         state=state,
         cfn_status=cfn_status,
         deployed_version=deployed_version,
+        account_id=account_id,
     )
-    write_workspace_state(workspace_dir, state)
-    return state
+
+    def _mutate(current: WorkspaceState) -> None:
+        if state.installer.template.digest is not None:
+            current.installer.template.digest = state.installer.template.digest
+        if state.installer.template.downloaded_at is not None:
+            current.installer.template.downloaded_at = state.installer.template.downloaded_at
+        if state.pipelines.installer.observation is not None:
+            current.pipelines.installer.observation = state.pipelines.installer.observation
+        apply_installer_state_sync(
+            state=current,
+            cfn_status=cfn_status,
+            deployed_version=deployed_version,
+            account_id=account_id,
+        )
+
+    return update_workspace_state(workspace_dir, _mutate)
 
 
 def apply_installer_config_sync(
@@ -107,8 +134,11 @@ def prepare_installer_template_sync(
     config.installer.stack_template.path = str(template_path.relative_to(workspace_dir))
     config.installer.stack_template.repository = None
     config.installer.stack_template.ref = None
-    state.installer.template_digest = sha256(template_body.encode("utf-8")).hexdigest()
-    state.installer.downloaded_at = datetime.now(UTC)
+    record_installer_template(
+        state,
+        digest=sha256(template_body.encode("utf-8")).hexdigest(),
+        downloaded_at=datetime.now(UTC),
+    )
     return template_path
 
 

@@ -141,7 +141,7 @@ def render_workspace_header(
     title: str,
     *,
     customer_name: str,
-    workspace_dir: Path | str,
+    workspace_dir: Path | str | None = None,
     lza_version: str | None = None,
     profile: str | None = None,
     region: str | None = None,
@@ -154,7 +154,8 @@ def render_workspace_header(
             expand=False,
         )
     )
-    print_kv("Workspace", workspace_dir, bold_value=True)
+    if workspace_dir is not None:
+        print_kv("Workspace", workspace_dir, bold_value=True)
     if lza_version:
         print_kv("Configured LZA Version", lza_version, bold_value=True)
     print_kv("AWS Profile", profile or "Not specified", bold_value=True)

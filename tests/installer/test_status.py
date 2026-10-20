@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from lza_workbench.installer.runtime import InstallerRuntimeState
+from lza_workbench.installer.state import (
+    InstallerStackObservation,
+    InstallerState,
+    InstallerTemplateState,
+)
 from lza_workbench.installer.status import (
     calculate_configuration_drift,
     calculate_state_alignment,
@@ -38,10 +42,14 @@ def test_calculate_configuration_drift_returns_only_changed_parameters() -> None
 
 def test_calculate_state_alignment_compares_stack_and_version_metadata() -> None:
     state = WorkspaceState(
-        installer=InstallerRuntimeState(
-            stack_id="stack-id",
-            stack_status="CREATE_COMPLETE",
-            template_version="v1.15.5",
+        installer=InstallerState(
+            template=InstallerTemplateState(version="v1.15.5"),
+            observation=InstallerStackObservation(
+                exists=True,
+                stack_id="stack-id",
+                stack_status="CREATE_COMPLETE",
+                deployed_version="v1.15.5",
+            ),
         )
     )
 

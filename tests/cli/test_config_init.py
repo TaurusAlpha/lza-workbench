@@ -164,14 +164,14 @@ def test_config_init_workflow_execution(workspace_without_config: Path) -> None:
     assert len(result.unresolved_placeholders) == 0
 
     state = load_workspace_state(workspace_without_config)
-    assert state.configuration.initialized_at is not None
-    assert state.configuration.template_name == "default"
-    assert state.configuration.template_source == "packaged"
+    assert state.configuration.template.initialized_at is not None
+    assert state.configuration.template.template_name == "default"
+    assert state.configuration.template.template_source == "packaged"
     mgmt_key = "installer.options.management_account_email"
-    assert state.configuration.init_values is not None
-    assert state.configuration.init_values.get(mgmt_key) == "mgmt@example.com"
-    assert state.configuration.init_digest is not None
-    assert state.configuration.files_count == 8
+    assert state.configuration.template.init_values is not None
+    assert state.configuration.template.init_values.get(mgmt_key) == "mgmt@example.com"
+    assert state.configuration.template.init_digest is not None
+    assert state.configuration.sync.files_count == 8
 
 
 def test_config_init_workflow_skips_when_unmanaged(

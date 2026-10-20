@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 
 from lza_workbench.infrastructure.aws.dynamodb import delete_table
 from lza_workbench.infrastructure.aws.ecr import delete_repository
@@ -13,51 +14,135 @@ from lza_workbench.infrastructure.aws.kms import delete_alias, schedule_key_dele
 from lza_workbench.infrastructure.aws.logs import delete_log_group
 from lza_workbench.infrastructure.aws.s3 import empty_and_delete_s3_bucket
 from lza_workbench.infrastructure.aws.session import AwsExecutionContext
-from lza_workbench.workspace.persistence import load_workspace_state, write_workspace_state
-from lza_workbench.workspace.uninstall.models import UninstallAccountTarget
+from lza_workbench.workspace.persistence import (
+    atomic_write_text,
+    load_workspace_state,
+    state_file_lock,
+    update_workspace_state,
+)
+from lza_workbench.workspace.schema import WorkspaceState
+from lza_workbench.workspace.uninstall.models import UninstallAccountTarget, UninstallTarget
 from lza_workbench.workspace.uninstall.state import (
     RetainedResourceRecord,
-    UninstallRuntimeState,
+    UninstallState,
 )
 
-if TYPE_CHECKING:
-    from lza_workbench.workspace.context import WorkspaceContext
+
+RETAINED_RESOURCES_FILE = "retained-resources.json"
 
 
-def read_retained_resources_from_state(context: WorkspaceContext) -> list[RetainedResourceRecord]:
-    """Read the list of retained resources currently stored in .lza/state.json."""
-    state = load_workspace_state(context.workspace_dir)
+def _retained_record_key(record: RetainedResourceRecord) -> tuple[str, str, str, str]:
+    return (
+        record.account_id,
+        record.region,
+        record.resource_type,
+        record.physical_id,
+    )
+
+
+def merge_retained_resource_records(
+    existing: list[RetainedResourceRecord],
+    incoming: list[RetainedResourceRecord],
+) -> list[RetainedResourceRecord]:
+    """Merge existing and newly discovered retained resource records.
+
+    Preserves previously recorded resources whose stacks have already been deleted
+    as well as prior deletion outcomes when restarting an interrupted uninstallation.
+    """
+    merged: dict[tuple[str, str, str, str], RetainedResourceRecord] = {
+        _retained_record_key(rec): rec.model_copy(deep=True) for rec in existing
+    }
+    for rec in incoming:
+        key = _retained_record_key(rec)
+        prev = merged.get(key)
+        if prev is None or rec.status != "retained":
+            merged[key] = rec.model_copy(deep=True)
+    return list(merged.values())
+
+
+def read_retained_resources_from_state(
+    target_or_workspace_dir: Path | UninstallTarget,
+) -> list[RetainedResourceRecord]:
+    """Read the list of retained resources stored in workspace state or record_dir."""
+    if isinstance(target_or_workspace_dir, UninstallTarget):
+        if target_or_workspace_dir.workspace_dir is not None:
+            workspace_dir = target_or_workspace_dir.workspace_dir
+        else:
+            record_dir = target_or_workspace_dir.require_record_dir()
+            retained_file = record_dir / RETAINED_RESOURCES_FILE
+            if not retained_file.is_file():
+                return []
+            runtime_state = UninstallState.model_validate_json(
+                retained_file.read_text(encoding="utf-8")
+            )
+            return list(runtime_state.retained_resources)
+    else:
+        workspace_dir = target_or_workspace_dir
+
+    state = load_workspace_state(workspace_dir)
     uninstall_state = getattr(state, "uninstall", None)
-    if uninstall_state and isinstance(uninstall_state, UninstallRuntimeState):
+    if uninstall_state and isinstance(uninstall_state, UninstallState):
         return list(uninstall_state.retained_resources)
     return []
 
 
 def write_retained_resources_to_state(
-    context: WorkspaceContext,
+    target_or_workspace_dir: Path | UninstallTarget,
     retained_resources: list[RetainedResourceRecord],
     *,
     status: str | None = None,
-) -> None:
-    """Record or update retained resources in .lza/state.json."""
-    state = load_workspace_state(context.workspace_dir)
-    current_uninstall = getattr(state, "uninstall", None) or UninstallRuntimeState()
+) -> list[RetainedResourceRecord]:
+    """Record or update retained resources in workspace state or record_dir."""
+    if isinstance(target_or_workspace_dir, UninstallTarget):
+        if target_or_workspace_dir.workspace_dir is not None:
+            workspace_dir = target_or_workspace_dir.workspace_dir
+        else:
+            record_dir = target_or_workspace_dir.require_record_dir()
+            retained_file = record_dir / RETAINED_RESOURCES_FILE
+            with state_file_lock(retained_file):
+                current_uninstall = (
+                    UninstallState.model_validate_json(retained_file.read_text(encoding="utf-8"))
+                    if retained_file.is_file()
+                    else UninstallState()
+                )
+                merged_records = merge_retained_resource_records(
+                    list(current_uninstall.retained_resources),
+                    retained_resources,
+                )
+                updated_uninstall = current_uninstall.model_copy(
+                    update={
+                        "retained_resources": merged_records,
+                        "status": status or current_uninstall.status or "in_progress",
+                        "uninstalled_at": current_uninstall.uninstalled_at or datetime.now(UTC),
+                    }
+                )
+                atomic_write_text(
+                    retained_file,
+                    updated_uninstall.model_dump_json(indent=2) + "\n",
+                )
+            return merged_records
+    else:
+        workspace_dir = target_or_workspace_dir
 
-    updated_uninstall = current_uninstall.model_copy(
-        update={
-            "retained_resources": retained_resources,
-            "status": status or current_uninstall.status or "in_progress",
-            "uninstalled_at": current_uninstall.uninstalled_at or datetime.now(UTC),
-        }
-    )
+    merged_result: list[RetainedResourceRecord] = []
 
-    updated_state = state.model_copy(
-        update={
-            "uninstall": updated_uninstall,
-            "updated_at": datetime.now(UTC),
-        }
-    )
-    write_workspace_state(context.workspace_dir, updated_state)
+    def _apply(state: WorkspaceState) -> None:
+        nonlocal merged_result
+        current_uninstall = getattr(state, "uninstall", None) or UninstallState()
+        merged_result = merge_retained_resource_records(
+            list(current_uninstall.retained_resources),
+            retained_resources,
+        )
+        state.uninstall = current_uninstall.model_copy(
+            update={
+                "retained_resources": merged_result,
+                "status": status or current_uninstall.status or "in_progress",
+                "uninstalled_at": current_uninstall.uninstalled_at or datetime.now(UTC),
+            }
+        )
+
+    update_workspace_state(workspace_dir, _apply)
+    return merged_result
 
 
 def _get_factory_for_account_region(
@@ -97,28 +182,34 @@ def _dispatch_retained_deletion(factory: Any, res_type: str, phys_id: str) -> No
     elif res_type == "AWS::IAM::Policy":
         delete_policy(client=factory.get_client("iam"), policy_arn=phys_id)
     elif res_type in ("AWS::S3::Bucket", "S3::Bucket"):
-        empty_and_delete_s3_bucket(client=factory.get_client("s3"), bucket_name=phys_id)
+        if not empty_and_delete_s3_bucket(client=factory.get_client("s3"), bucket_name=phys_id):
+            raise RuntimeError(f"Failed to empty and delete S3 bucket '{phys_id}'")
     else:
         raise NotImplementedError(f"Automated deletion not supported for type {res_type}")
 
 
 def delete_selected_retained_resources(
     *,
-    context: WorkspaceContext,
+    target: UninstallTarget,
     execution_context: AwsExecutionContext,
+    retained_resources: list[RetainedResourceRecord] | None = None,
     selected_physical_ids: list[str] | None = None,
     account_targets: dict[str, UninstallAccountTarget] | list[UninstallAccountTarget] | None = None,
     assume_role_name: str = "AWSAccelerator-PipelineRole",
     on_event: Callable[[str, str], None] | None = None,
 ) -> list[RetainedResourceRecord]:
-    """Loop over selected retained resources in state, delete them via AWS adapters, and update state."""
-    records = read_retained_resources_from_state(context)
+    """Loop over selected retained resources, delete them via AWS adapters, and update state."""
+    records = (
+        list(retained_resources)
+        if retained_resources is not None
+        else read_retained_resources_from_state(target)
+    )
     if not records:
         return []
 
     mgmt_account_id = (
-        context.config.aws.account_id
-        or (execution_context.identity.get("account") if execution_context.identity else "")
+        target.management_account_id
+        or execution_context.account_id
         or ""
     )
     targets_map: dict[str, UninstallAccountTarget] = {}
@@ -165,12 +256,13 @@ def delete_selected_retained_resources(
             if on_event:
                 on_event("retained_failed", f"Failed deleting retained {res_type} '{phys_id}': {exc}")
 
-    write_retained_resources_to_state(context, records)
+    write_retained_resources_to_state(target, records)
     return records
 
 
 __all__ = [
     "delete_selected_retained_resources",
+    "merge_retained_resource_records",
     "read_retained_resources_from_state",
     "write_retained_resources_to_state",
 ]

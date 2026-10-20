@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from lza_workbench.errors import LzaError
-from lza_workbench.installer.runtime import InstallerRuntimeState
+from lza_workbench.installer.state import InstallerStackObservation, InstallerState
 from lza_workbench.workspace.context import (
     WorkspaceCapability,
     evaluate_workspace_assessment,
@@ -20,6 +20,7 @@ from lza_workbench.workspace.schema import (
     CustomerConfig,
     LzaConfig,
     WorkspaceConfig,
+    WorkspaceMetadataState,
     WorkspaceState,
 )
 
@@ -52,7 +53,14 @@ def create_minimal_workspace(
         config.installer.options.audit_account_email = "audit@example.com"
 
     state = WorkspaceState(
-        installer=InstallerRuntimeState(stack_id=installer_stack_id), imported=imported
+        workspace=WorkspaceMetadataState(imported=bool(imported)),
+        installer=InstallerState(
+            observation=(
+                InstallerStackObservation(stack_id=installer_stack_id, exists=True)
+                if installer_stack_id
+                else None
+            )
+        ),
     )
 
     if has_config_dir:
@@ -71,16 +79,13 @@ def create_minimal_workspace(
         "has_core_config",
         "has_config_dir",
         "has_installer_params",
-        "installer_stack_id",
-        "imported",
         "expected",
     ),
     [
-        (False, False, False, None, False, (False, False, False, False, False)),
-        (True, False, False, None, True, (True, False, False, False, True)),
-        (True, True, False, None, False, (True, True, False, False, False)),
-        (True, True, True, None, False, (True, True, True, False, False)),
-        (True, True, True, "stack-id", True, (True, True, True, True, True)),
+        (False, False, False, (False, False, False)),
+        (True, False, False, (True, False, False)),
+        (True, True, False, (True, True, False)),
+        (True, True, True, (True, True, True)),
     ],
 )
 def test_evaluate_workspace_assessment(
@@ -88,11 +93,9 @@ def test_evaluate_workspace_assessment(
     has_core_config: bool,
     has_config_dir: bool,
     has_installer_params: bool,
-    installer_stack_id: str | None,
-    imported: bool,
-    expected: tuple[bool, bool, bool, bool, bool],
+    expected: tuple[bool, bool, bool],
 ) -> None:
-    """Each capability is evaluated independently from config, filesystem, and state."""
+    """Each capability is evaluated independently from config and local filesystem."""
     ws_dir = tmp_path / "workspace"
     ws_dir.mkdir()
     config = WorkspaceConfig(
@@ -112,17 +115,11 @@ def test_evaluate_workspace_assessment(
         config.installer.options.log_archive_account_email = "log@example.com"
         config.installer.options.audit_account_email = "audit@example.com"
 
-    state = WorkspaceState(
-        installer=InstallerRuntimeState(stack_id=installer_stack_id), imported=imported
-    )
-
-    assessment = evaluate_workspace_assessment(ws_dir, config, state)
+    assessment = evaluate_workspace_assessment(ws_dir, config)
     assert (
         assessment.metadata_valid,
         assessment.configuration_present,
         assessment.installer_configured,
-        assessment.installer_recorded_deployed,
-        assessment.imported,
     ) == expected
 
 
@@ -165,15 +162,6 @@ def test_load_workspace_context_fails_when_below_min_readiness(tmp_path: Path) -
             ),
             "missing required installer configuration parameters",
         ),
-        (
-            (
-                WorkspaceCapability.METADATA_VALID,
-                WorkspaceCapability.CONFIGURATION_PRESENT,
-                WorkspaceCapability.INSTALLER_CONFIGURED,
-                WorkspaceCapability.INSTALLER_RECORDED_DEPLOYED,
-            ),
-            "Installer CloudFormation stack has not been deployed",
-        ),
     ],
 )
 def test_require_capabilities_preserves_readiness_errors(
@@ -191,17 +179,10 @@ def test_require_capabilities_preserves_readiness_errors(
 
     if required_capabilities == (WorkspaceCapability.METADATA_VALID,):
         context.config.customer.slug = ""
-        assessment = evaluate_workspace_assessment(ws_dir, context.config, context.state)
+        assessment = evaluate_workspace_assessment(ws_dir, context.config)
     if WorkspaceCapability.INSTALLER_CONFIGURED in required_capabilities:
         (ws_dir / context.config.configuration.local_path).mkdir()
-        assessment = evaluate_workspace_assessment(ws_dir, context.config, context.state)
-    if WorkspaceCapability.INSTALLER_RECORDED_DEPLOYED in required_capabilities:
-        context.config.installer.source_code.repository_type = "codecommit"
-        context.config.installer.source_code.repository_name = "test-repo"
-        context.config.installer.options.management_account_email = "mgmt@example.com"
-        context.config.installer.options.log_archive_account_email = "log@example.com"
-        context.config.installer.options.audit_account_email = "audit@example.com"
-        assessment = evaluate_workspace_assessment(ws_dir, context.config, context.state)
+        assessment = evaluate_workspace_assessment(ws_dir, context.config)
 
     with pytest.raises(LzaError, match=expected_error):
         require_capabilities(
@@ -227,9 +208,7 @@ def test_readiness_uses_shared_installer_validation(tmp_path: Path) -> None:
     config.installer.options.log_archive_account_email = "log@example.com"
     config.installer.options.audit_account_email = "audit@example.com"
 
-    assert (
-        not evaluate_workspace_assessment(ws_dir, config, WorkspaceState()).installer_configured
-    )
+    assert not evaluate_workspace_assessment(ws_dir, config).installer_configured
 
 
 def test_workspace_context_path_properties(tmp_path: Path) -> None:

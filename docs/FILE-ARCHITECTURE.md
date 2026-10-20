@@ -38,15 +38,13 @@ src/lza_workbench/                                            # LZA Workbench pa
 │   │   └── rendering.py                                      # Resolve and render dynamic placeholders in LZA configuration templates.
 │   ├── archive.py                                            # Zip archive operations for LZA configuration workspaces.
 │   ├── deploy.py                                             # Workflow for deploying LZA configuration (push -> start pipeline -> watch).
-│   ├── diff.py                                               # Application use case for showing configuration diffs.
 │   ├── git.py                                                # Git integration utilities for LZA configuration repositories.
 │   ├── initialize.py                                         # Workflow for initializing local LZA configuration from a template.
 │   ├── pull.py                                               # Workflow for synchronizing remote LZA configuration to local workspace.
 │   ├── push.py                                               # Workflow for synchronizing local LZA configuration to remote repositories.
 │   ├── repository.py                                         # Resolved destinations and fixed conventions for LZA configuration repositories.
-│   ├── runtime.py                                            # Runtime state owned by configuration synchronization actions.
 │   ├── schema.py                                             # Configuration repository and packaging schema models.
-│   ├── state.py                                              # Operational state updates for configuration archive transfers.
+│   ├── state.py                                              # Configuration operational state models, synchronization baselines, and transfer records.
 │   ├── status.py                                             # Configuration status interpretation, inspection, and reporting workflow.
 │   ├── sync.py                                               # Configuration remote synchronization status evaluation and models.
 │   ├── validation.py                                         # Validation utilities for LZA configuration files and schemas.
@@ -90,9 +88,8 @@ src/lza_workbench/                                            # LZA Workbench pa
 │   ├── parameters.py                                         # CloudFormation parameter mapping, formatting, and template alignment for the LZA installer.
 │   ├── plan.py                                               # Workflow and result models for planning LZA installer CloudFormation deployment.
 │   ├── reset.py                                              # Reset installer settings to current deployed configuration.
-│   ├── runtime.py                                            # Runtime state owned by installer actions.
 │   ├── schema.py                                             # Installer schema and configuration models.
-│   ├── state.py                                              # Operational state updates for installer deployments.
+│   ├── state.py                                              # Installer operational state models, stack observations, and deployment records.
 │   ├── status.py                                             # Installer stack status query, calculations, and reporting.
 │   └── sync.py                                               # Synchronization helpers for reconciling workspace metadata with live AWS installer resources.
 ├── interfaces/                                               # User and machine interfaces for LZA Workbench.
@@ -122,9 +119,8 @@ src/lza_workbench/                                            # LZA Workbench pa
 │   ├── model.py                                              # Pipeline domain models.
 │   ├── observation.py                                        # Single-pass pipeline execution observation.
 │   ├── resolution.py                                         # Resolve configured LZA pipeline identities.
-│   ├── runtime.py                                            # Runtime state owned by pipeline execution actions.
 │   ├── start.py                                              # Workflow for starting AWS CodePipeline executions.
-│   ├── state.py                                              # Operational state updates for pipeline executions.
+│   ├── state.py                                              # Pipeline operational state models, execution observations, and operation records.
 │   ├── status.py                                             # Workflow for single-pass pipeline execution snapshots and diagnostics.
 │   └── watcher.py                                            # Workflow for monitoring AWS CodePipeline executions.
 ├── resources/                                                # Bundled non-code assets used by LZA Workbench.
@@ -144,15 +140,15 @@ src/lza_workbench/                                            # LZA Workbench pa
 │   │   ├── inventory.py                                      # Inventory discovery engine for LZA solution uninstallation.
 │   │   ├── models.py                                         # Data models for LZA solution uninstallation.
 │   │   ├── retained.py                                       # Retained resource state management and selective deletion.
-│   │   └── state.py                                          # Runtime state schema for LZA uninstallation.
+│   │   └── state.py                                          # Operational state schema for LZA uninstallation.
 │   ├── validation/                                           # Workspace capability evaluation and readiness validation.
 │   │   ├── capabilities.py                                   # Workspace capability enumeration and evaluation.
 │   │   └── readiness.py                                      # Workspace readiness enforcement and directory structure validation.
-│   ├── context.py                                            # Workspace execution context.
+│   ├── context.py                                            # Local workspace boundary and context resolution.
 │   ├── import_workspace.py                                   # Workflow for importing and adopting an existing LZA workspace.
 │   ├── initialize.py                                         # Workspace initialization workflow ('lza init').
 │   ├── paths.py                                              # Pure workspace naming and path-discovery helpers.
-│   ├── persistence.py                                        # Workspace persistence: YAML configuration and JSON state loading/saving.
+│   ├── persistence.py                                        # Workspace persistence: YAML configuration and atomic JSON state loading/saving.
 │   └── schema.py                                             # Top-level workspace schema models for LZA Workbench.
 └── errors.py                                                 # Common exception types for LZA Workbench.
 ```
@@ -175,14 +171,14 @@ WorkspaceConfig (lza-workspace.yaml)
 └── cli_defaults
 
 WorkspaceState (.lza/state.json)
-├── timestamps and AWS identity metadata
-├── import metadata
-├── installer                 # InstallerRuntimeState
-├── configuration             # ConfigurationRuntimeState
-├── pipelines
-│   ├── installer             # PipelineExecutionRuntimeState
-│   └── configuration         # PipelineExecutionRuntimeState
-└── uninstall                 # UninstallRuntimeState
+├── schema_version
+├── workspace                 # WorkspaceMetadataState (initialized/imported/updated timestamps)
+├── installer                 # InstallerState (template, observation, last_deployment)
+├── configuration             # ConfigurationState (template, sync, last_push, last_pull)
+├── pipelines                 # PipelinesState
+│   ├── installer             # PipelineTrackState (observation, last_operation)
+│   └── configuration         # PipelineTrackState (observation, last_operation)
+└── uninstall                 # UninstallState (status, uninstalled_at, retained_resources)
 ```
 
 ## Unified Status Snapshot

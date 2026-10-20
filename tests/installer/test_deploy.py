@@ -71,7 +71,7 @@ def test_prepare_installer_deployment_updates_for_changed_template(
         "AWSAccelerator-InstallerStack.template"
     )
     state = load_workspace_state(configured_workspace)
-    state.installer.template_digest = "outdated"
+    state.installer.template.digest = "outdated"
     write_workspace_state(configured_workspace, state)
 
     mock_factory = MagicMock()
@@ -149,5 +149,202 @@ def test_apply_installer_deployment_records_terminal_failure(
         apply_installer_deployment(preparation=preparation)
 
     state = load_workspace_state(configured_workspace)
-    assert state.installer.stack_id == "stack-id"
-    assert state.installer.stack_status == "UPDATE_ROLLBACK_COMPLETE"
+    assert state.installer.observation is not None
+    assert state.installer.observation.stack_id == "stack-id"
+    assert state.installer.observation.stack_status == "UPDATE_ROLLBACK_COMPLETE"
+    assert state.installer.last_deployment is not None
+    assert state.installer.last_deployment.stack_status == "UPDATE_ROLLBACK_COMPLETE"
+
+
+def test_prepare_installer_deployment_validates_injected_aws_context_account(
+    configured_workspace: Path,
+) -> None:
+    config = load_workspace_config(configured_workspace)
+    config.aws.account_id = "123456789012"
+    mismatched_context = AwsExecutionContext(
+        region="us-east-1",
+        factory=MagicMock(),
+        identity={"account": "999999999999", "arn": "arn:aws:iam::999999999999:user/other"},
+        error=None,
+    )
+
+    with pytest.raises(LzaError, match="999999999999"):
+        prepare_installer_deployment(
+            config=config,
+            workspace_dir=configured_workspace,
+            aws_context=mismatched_context,
+        )
+
+
+@patch("lza_workbench.installer.deploy.inspect_cloudformation_stack")
+@patch("lza_workbench.installer.deploy.inspect_installer_source")
+@patch("lza_workbench.installer.deploy.inspect_s3_bucket")
+def test_prepare_installer_deployment_explicit_template_applies_anonymous_data(
+    mock_inspect_bucket: MagicMock,
+    mock_inspect_source: MagicMock,
+    mock_inspect_cfn: MagicMock,
+    configured_workspace: Path,
+    tmp_path: Path,
+) -> None:
+    from lza_workbench.infrastructure.aws.s3 import S3BucketObservation
+
+    source_template = tmp_path / "source-installer.template"
+    source_content = """{
+  "Mappings": {
+    "SendAnonymizedData": {
+      "SendAnonymizedData": {
+        "Data": "Yes"
+      }
+    }
+  },
+  "Parameters": {
+    "ManagementAccountEmail": {"Type": "String"},
+    "LogArchiveAccountEmail": {"Type": "String"},
+    "AuditAccountEmail": {"Type": "String"},
+    "RepositorySource": {"Type": "String", "Default": "github"},
+    "RepositoryBranchName": {"Type": "String", "Default": "release/v1.15.5"}
+  }
+}
+"""
+    source_template.write_text(source_content, encoding="utf-8")
+
+    config = load_workspace_config(configured_workspace)
+    config.installer.options.anonymous_data = False
+    aws_context = AwsExecutionContext(
+        region="us-east-1",
+        factory=MagicMock(),
+        identity={"account": "123456789012", "arn": "arn:aws:iam::123456789012:user/test"},
+        error=None,
+    )
+    mock_inspect_bucket.return_value = S3BucketObservation(
+        exists=True, accessible=True, versioning_enabled=True
+    )
+    mock_inspect_source.return_value = None
+    mock_inspect_cfn.return_value = CfnDeploymentPlanResult(
+        stack_name="AWSAccelerator-InstallerStack",
+        operation="CREATE",
+        stack_status=None,
+        resolved_parameters={},
+    )
+
+    preparation = prepare_installer_deployment(
+        config=config,
+        template_path=source_template,
+        aws_context=aws_context,
+    )
+
+    assert source_template.read_text(encoding="utf-8") == source_content
+    assert preparation.template_path != source_template
+    assert '"Data": "No"' in preparation.template_path.read_text(encoding="utf-8")
+
+
+@patch("lza_workbench.installer.deploy.inspect_cloudformation_stack")
+@patch("lza_workbench.installer.deploy.inspect_installer_source")
+@patch("lza_workbench.installer.deploy.inspect_s3_bucket")
+def test_installer_workflows_accept_target_and_installer_without_workspace_config(
+    mock_inspect_bucket: MagicMock,
+    mock_inspect_source: MagicMock,
+    mock_inspect_cfn: MagicMock,
+    configured_workspace: Path,
+) -> None:
+    from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult
+    from lza_workbench.infrastructure.aws.s3 import S3BucketObservation
+    from lza_workbench.infrastructure.aws.session import AwsClientFactory
+    from lza_workbench.installer.plan import plan_installer_workflow
+    from lza_workbench.installer.status import get_installer_status_workflow
+
+    config = load_workspace_config(configured_workspace)
+    env_target = config.environment_target.model_copy(
+        update={"installer_stack_name": "Customer-Installer"}
+    )
+    installer = config.installer
+    assert installer.stack_name == "AWSAccelerator-InstallerStack"
+    template_path = (
+        configured_workspace
+        / config.installer.local_path
+        / "AWSAccelerator-InstallerStack.template"
+    )
+    factory = AwsClientFactory(profile="agent-profile", region="us-east-1")
+    factory.get_client = MagicMock(return_value=MagicMock())  # type: ignore[method-assign]
+    aws_context = AwsExecutionContext(
+        region="us-east-1",
+        factory=factory,
+        identity={"account": "123456789012", "arn": "arn:aws:iam::123456789012:user/test"},
+        error=None,
+    )
+    mock_inspect_bucket.return_value = S3BucketObservation(
+        exists=True, accessible=True, versioning_enabled=True
+    )
+    mock_inspect_source.return_value = None
+    mock_inspect_cfn.return_value = CfnDeploymentPlanResult(
+        stack_name="Customer-Installer",
+        operation="CREATE",
+        stack_status=None,
+        resolved_parameters={"AcceleratorPrefix": "AWSAccelerator"},
+    )
+
+    with (
+        patch(
+            "lza_workbench.installer.status._query_live_installer_status",
+            return_value=(
+                CfnStackStatusResult(
+                    stack_name="Customer-Installer",
+                    exists=True,
+                    stack_status="CREATE_COMPLETE",
+                    deployed_parameters={"AcceleratorPrefix": "AWSAccelerator"},
+                ),
+                "v1.15.5",
+                PipelineStateResult(
+                    pipeline_name="AWSAccelerator-Installer",
+                    exists=True,
+                    status="Succeeded",
+                ),
+            ),
+        ) as mock_query_live,
+        patch(
+            "lza_workbench.installer.plan.inspect_s3_bucket",
+            return_value=mock_inspect_bucket.return_value,
+        ),
+        patch(
+            "lza_workbench.installer.plan.inspect_cloudformation_stack",
+            return_value=mock_inspect_cfn.return_value,
+        ) as mock_plan_cfn,
+        patch("lza_workbench.installer.plan.inspect_secret_exists", return_value=(True, None)),
+    ):
+        status_result = get_installer_status_workflow(
+            environment_target=env_target,
+            installer=installer,
+            aws_context=aws_context,
+        )
+        plan_result = plan_installer_workflow(
+            environment_target=env_target,
+            installer=installer,
+            template_path=template_path,
+            aws_context=aws_context,
+            dry_run=True,
+        )
+
+    preparation = prepare_installer_deployment(
+        environment_target=env_target,
+        installer=installer,
+        template_path=template_path,
+        aws_context=aws_context,
+        dry_run=True,
+    )
+
+    assert status_result.config is None
+    assert status_result.profile == "agent-profile"
+    assert status_result.environment_target == env_target
+    assert mock_query_live.call_args.kwargs["cfn_stack_name"] == "Customer-Installer"
+    assert plan_result.config is None
+    assert plan_result.profile == "agent-profile"
+    assert plan_result.environment_target == env_target
+    assert plan_result.installer == installer
+    assert mock_plan_cfn.call_args.kwargs["stack_name"] == "Customer-Installer"
+    assert preparation.config is None
+    assert preparation.profile == "agent-profile"
+    assert preparation.stack_name == "Customer-Installer"
+    assert preparation.environment_target == env_target
+    assert preparation.installer == installer
+
+

@@ -102,11 +102,12 @@ def _evaluate_offline_sync(
     local_digest: str,
     state: WorkspaceState | None,
 ) -> RemoteSyncStatus:
-    if state and state.configuration.sync_digest:
-        if local_digest == state.configuration.sync_digest:
+    sync = state.configuration.sync if state else None
+    if sync and sync.sync_digest:
+        if local_digest == sync.sync_digest:
             etag_label = (
-                f" (ETag: {state.configuration.artifact_etag})"
-                if state.configuration.artifact_etag
+                f" (ETag: {sync.artifact_etag})"
+                if sync.artifact_etag
                 else ""
             )
             return RemoteSyncStatus(
@@ -138,6 +139,7 @@ def _check_remote_matches_local(
     remote_etag: str | None,
     state: WorkspaceState | None,
 ) -> RemoteSyncStatus | None:
+    sync = state.configuration.sync if state else None
     if remote_digest:
         if local_digest == remote_digest:
             etag_str = f" (ETag: {remote_etag})" if remote_etag else ""
@@ -152,10 +154,10 @@ def _check_remote_matches_local(
                     "matched_by": "s3_metadata",
                 },
             )
-    elif state and state.configuration.artifact_etag:
+    elif sync and sync.artifact_etag:
         if (
-            remote_etag == state.configuration.artifact_etag
-            and state.configuration.sync_digest == local_digest
+            remote_etag == sync.artifact_etag
+            and sync.sync_digest == local_digest
         ):
             return RemoteSyncStatus(
                 status="Synchronized",
@@ -187,13 +189,14 @@ def _evaluate_live_drift(
         return matched
 
     # Determine drift direction if state is recorded
-    if state and state.configuration.sync_digest:
-        local_changed = local_digest != state.configuration.sync_digest
+    sync = state.configuration.sync if state else None
+    if sync and sync.sync_digest:
+        local_changed = local_digest != sync.sync_digest
         remote_changed = bool(
-            (remote_digest and state.configuration.sync_digest != remote_digest)
+            (remote_digest and sync.sync_digest != remote_digest)
             or (
-                state.configuration.artifact_etag
-                and remote_etag != state.configuration.artifact_etag
+                sync.artifact_etag
+                and remote_etag != sync.artifact_etag
             )
         )
 

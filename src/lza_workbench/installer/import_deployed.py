@@ -19,6 +19,7 @@ from lza_workbench.installer.sync import (
     sync_installer_template,
 )
 from lza_workbench.installer.versions import resolve_deployed_installer_version
+from lza_workbench.pipeline.state import record_pipeline_observation
 from lza_workbench.workspace.context import load_workspace_context
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.validation import WorkspaceCapability
@@ -115,11 +116,20 @@ def import_installer_workflow(
             cfn_status=cfn_status,
             deployed_version=deployed_version,
         )
+        if pipeline_state.exists and pipeline_state.status and pipeline_state.status != "NOT_CHECKED":
+            record_pipeline_observation(
+                state,
+                pipeline_name=installer_pipeline_name,
+                execution_id=pipeline_state.latest_execution_id,
+                status=pipeline_state.status,
+                pipeline_type="installer",
+            )
         state = sync_installer_state(
             workspace_dir=workspace_dir,
             state=state,
             cfn_status=cfn_status,
             deployed_version=deployed_version,
+            account_id=aws_context.identity.get("account") if aws_context.identity else None,
         )
 
     return InstallerImportResult(

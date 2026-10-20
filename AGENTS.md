@@ -62,10 +62,9 @@ Optimize for code that is easy for a human to read, change, and debug.
 
 ### Architecture
 
-- Keep interface-specific presentation in `cli` and `web`.
-- Keep reusable application orchestration in `workflows`.
-- Keep workspace, installer, configuration, and pipeline rules in their owning feature packages.
-- Keep `aws` focused on AWS integration rather than workspace or feature policy.
+- Keep interface-specific presentation in `interfaces.cli` and `interfaces.web`.
+- Keep workspace, installer, configuration, pipeline, and status rules and workflows in their owning feature packages.
+- Keep `infrastructure.aws` and `infrastructure.github` focused on external service integration rather than workspace or feature policy.
 - Preserve the architecture enforced by the configured import-linter contracts.
 - Do not create generic `core`, `utils`, or `helpers` modules when a clear owner exists.
 
@@ -73,8 +72,8 @@ Optimize for code that is easy for a human to read, change, and debug.
 
 - Customer workspaces live outside this repository.
 - `lza-workspace.yaml` is declarative configuration; `.lza/state.json` stores runtime/execution metadata.
-- All boto3 sessions and clients are created through `AwsClientFactory`.
-- Workspace readiness is enforced through `WorkspaceCapability` / `WorkspaceAssessment`.
+- All boto3 sessions and clients are created through `AwsClientFactory` (`AwsExecutionContext`).
+- Local workspace structural readiness is enforced through `WorkspaceCapability` / `WorkspaceAssessment`; AWS-only operations accept explicit feature inputs and `AwsExecutionContext` without requiring a local workspace.
 
 ## Documentation
 

@@ -300,11 +300,20 @@ def download_s3_file(
     bucket_name: str,
     object_key: str,
     file_path: Path,
+    version_id: str | None = None,
 ) -> None:
     clean_bucket = bucket_name.strip()
     clean_key = object_key.strip().lstrip("/")
     try:
-        client.download_file(clean_bucket, clean_key, str(file_path))
+        if version_id:
+            client.download_file(
+                clean_bucket,
+                clean_key,
+                str(file_path),
+                ExtraArgs={"VersionId": version_id},
+            )
+        else:
+            client.download_file(clean_bucket, clean_key, str(file_path))
     except ClientError as exc:
         error = exc.response.get("Error", {})
         error_code = error.get("Code", "Unknown")

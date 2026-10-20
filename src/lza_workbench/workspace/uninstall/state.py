@@ -1,4 +1,4 @@
-"""Runtime state schema for LZA uninstallation."""
+"""Operational state schema for LZA uninstallation."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class RetainedResourceRecord(BaseModel):
-    """Individual retained physical resource tracked in .lza/state.json."""
+    """Individual retained physical resource tracked in .lza/state.json or standalone journal."""
 
     model_config = ConfigDict(extra="forbid", strict=False)
 
@@ -18,23 +18,21 @@ class RetainedResourceRecord(BaseModel):
     logical_id: str
     physical_id: str
     resource_type: str
-    status: str = "retained"  # "retained", "deleted", "failed"
+    status: str = "retained"  # "retained", "deleted", "failed", "unsupported"
     error: str | None = None
 
 
-class UninstallRuntimeState(BaseModel):
-    """Operational uninstall state stored in .lza/state.json."""
+class UninstallState(BaseModel):
+    """Operational uninstall state and retained-resource recovery records."""
 
     model_config = ConfigDict(extra="forbid", strict=False)
 
     uninstalled_at: datetime | None = None
     status: str | None = None  # "in_progress", "completed", "failed"
-    deleted_stacks: list[str] = Field(default_factory=list)
-    deleted_buckets: list[str] = Field(default_factory=list)
     retained_resources: list[RetainedResourceRecord] = Field(default_factory=list)
 
 
 __all__ = [
     "RetainedResourceRecord",
-    "UninstallRuntimeState",
+    "UninstallState",
 ]

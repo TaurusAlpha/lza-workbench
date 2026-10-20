@@ -10,6 +10,7 @@ import pytest
 from lza_workbench.errors import LzaError
 from lza_workbench.infrastructure.aws.codepipeline import PipelineExecutionResult
 from lza_workbench.pipeline.failures import PipelineActionFailure
+from lza_workbench.pipeline.state import record_pipeline_started
 from lza_workbench.pipeline.watcher import (
     PipelineWatchResult,
     PipelineWatchUpdate,
@@ -26,8 +27,12 @@ def _mock_sleep():
 
 def test_watch_pipeline_success(configured_workspace: Path) -> None:
     state = load_workspace_state(configured_workspace)
-    state.pipelines.configuration.execution_id = "exec-test-123"
-    state.pipelines.configuration.name = "AWSAccelerator-Pipeline"
+    record_pipeline_started(
+        state,
+        execution_id="exec-test-123",
+        pipeline_name="AWSAccelerator-Pipeline",
+        pipeline_type="configuration",
+    )
     write_workspace_state(configured_workspace, state)
 
     mock_client = MagicMock()
@@ -78,8 +83,12 @@ def test_watch_pipeline_ignores_execution_for_a_different_recorded_pipeline(
     configured_workspace: Path,
 ) -> None:
     state = load_workspace_state(configured_workspace)
-    state.pipelines.configuration.execution_id = "exec-other-pipeline"
-    state.pipelines.configuration.name = "Other-Pipeline"
+    record_pipeline_started(
+        state,
+        execution_id="exec-other-pipeline",
+        pipeline_name="Other-Pipeline",
+        pipeline_type="configuration",
+    )
     write_workspace_state(configured_workspace, state)
 
     mock_client = MagicMock()

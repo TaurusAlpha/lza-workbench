@@ -125,6 +125,23 @@ def render_installer_plan_report(plan: InstallerPlanResult) -> None:
     """Render structured rich summary plan output for the user."""
     workspace_dir = plan.workspace_dir
     config = plan.config
+    target = plan.environment_target
+    installer = plan.installer
+    customer_name = (
+        target.customer.name
+        if target is not None
+        else (config.customer.name if config is not None else "")
+    )
+    lza_version = (
+        target.lza.version
+        if target is not None
+        else (config.lza.version if config is not None else "")
+    )
+    source_type = (
+        installer.source_code.repository_type
+        if installer is not None
+        else (config.installer.source_code.repository_type if config is not None else "")
+    )
     profile = plan.profile
     region = plan.region
     aws_identity = plan.aws_identity
@@ -132,7 +149,7 @@ def render_installer_plan_report(plan: InstallerPlanResult) -> None:
     codecommit_plan = plan.codecommit_plan
     cfn_plan = plan.cloudformation_plan
     dry_run = plan.dry_run
-    title = f"[bold cyan]LZA Installer Plan - {config.customer.name}[/bold cyan]"
+    title = f"[bold cyan]LZA Installer Plan - {customer_name}[/bold cyan]"
     if dry_run:
         title += " [yellow](Dry Run)[/yellow]"
 
@@ -140,7 +157,7 @@ def render_installer_plan_report(plan: InstallerPlanResult) -> None:
 
     # General info
     print_kv("Workspace", workspace_dir, bold_value=True)
-    print_kv("LZA Version", config.lza.version, bold_value=True)
+    print_kv("LZA Version", lza_version, bold_value=True)
     print_kv("AWS Profile", profile or "Not specified", bold_value=True)
     print_kv("AWS Region", region, bold_value=True)
 
@@ -154,7 +171,7 @@ def render_installer_plan_report(plan: InstallerPlanResult) -> None:
 
     # CodeCommit Section
     print_section(1, "Source Code Repository Planning")
-    print_kv("Source Type", config.installer.source_code.repository_type, bold_value=True)
+    print_kv("Source Type", source_type, bold_value=True)
     print_kv("Repository Name", codecommit_plan.repository_name)
     print_kv("Target Branch", codecommit_plan.branch_name)
     print_kv("Repository Status", codecommit_plan.status, bold_value=True)

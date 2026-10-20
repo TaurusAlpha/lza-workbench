@@ -20,6 +20,7 @@ from lza_workbench.workspace.uninstall.inventory import build_uninstall_plan
 from lza_workbench.workspace.uninstall.models import (
     UninstallOptions,
     UninstallPlan,
+    UninstallTarget,
 )
 from lza_workbench.workspace.uninstall.retained import read_retained_resources_from_state
 
@@ -133,6 +134,7 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
         context = load_workspace_context(
             target_dir=target_dir,
             required_capabilities=(WorkspaceCapability.METADATA_VALID,),
+            include_state=False,
         )
 
         execution_context = resolve_aws_execution_context(
@@ -157,7 +159,7 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
         )
 
         plan = build_uninstall_plan(
-            context=context,
+            target=UninstallTarget.from_workspace(context),
             execution_context=execution_context,
             options=options,
         )
@@ -176,6 +178,7 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
         context = load_workspace_context(
             target_dir=target_dir,
             required_capabilities=(WorkspaceCapability.METADATA_VALID,),
+            include_state=False,
         )
 
         # 1. Validate customer slug confirmation
@@ -215,9 +218,11 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
             skip_pipeline=payload.skip_pipeline,
         )
 
+        target = UninstallTarget.from_workspace(context)
+
         # Build plan
         plan = build_uninstall_plan(
-            context=context,
+            target=target,
             execution_context=execution_context,
             options=options,
         )
@@ -231,7 +236,7 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
             global _is_uninstall_running
             try:
                 execute_uninstall(
-                    context=context,
+                    target=target,
                     execution_context=execution_context,
                     plan=plan,
                     options=options,
@@ -257,10 +262,12 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
         context = load_workspace_context(
             target_dir=target_dir,
             required_capabilities=(WorkspaceCapability.METADATA_VALID,),
+            include_state=False,
         )
+        target = UninstallTarget.from_workspace(context)
 
-        progress = load_or_init_progress(context)
-        retained_records = read_retained_resources_from_state(context)
+        progress = load_or_init_progress(target)
+        retained_records = read_retained_resources_from_state(context.workspace_dir)
 
         status = progress.status
         if not _is_uninstall_running and status == "IN_PROGRESS":
@@ -275,7 +282,9 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
             "deletedStacks": progress.deleted_stacks,
             "failedStacks": progress.failed_stacks,
             "deletedBuckets": progress.deleted_buckets,
+            "failedBuckets": progress.failed_buckets,
             "deletedRetained": progress.deleted_retained,
+            "failedRetained": progress.failed_retained,
             "retainedRemaining": progress.retained_resources_remaining,
             "retainedInState": [
                 {

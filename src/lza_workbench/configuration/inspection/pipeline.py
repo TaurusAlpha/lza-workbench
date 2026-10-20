@@ -12,21 +12,38 @@ from lza_workbench.pipeline.failures import (
 )
 
 if TYPE_CHECKING:
-    from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
+    from lza_workbench.workspace.schema import (
+        CustomerEnvironmentTarget,
+        WorkspaceConfig,
+        WorkspaceState,
+    )
 
 
 def inspect_configuration_pipeline(
     *,
-    resolved_config: WorkspaceConfig,
-    resolved_state: WorkspaceState | None,
     aws_identity: dict[str, Any] | None,
     region: str,
     account_id: str,
     factory: Any,
+    environment_target: CustomerEnvironmentTarget | None = None,
+    resolved_config: WorkspaceConfig | None = None,
+    resolved_state: WorkspaceState | None = None,
+    pipeline_name: str | None = None,
+    accelerator_prefix: str = "AWSAccelerator",
 ) -> ConfigurationPipelineStatus:
     """Query live CodePipeline state or fall back to recorded execution state."""
-    prefix = resolved_config.lza.accelerator_prefix or "AWSAccelerator"
-    config_pipeline_name = resolved_config.pipelines.configuration.name or f"{prefix}-Pipeline"
+    env_target = environment_target or (
+        resolved_config.environment_target if resolved_config is not None else None
+    )
+    prefix = (
+        (env_target.lza.accelerator_prefix if env_target is not None else accelerator_prefix)
+        or "AWSAccelerator"
+    )
+    config_pipeline_name = (
+        pipeline_name
+        or (env_target.configuration_pipeline_name if env_target is not None else None)
+        or f"{prefix}-Pipeline"
+    )
     config_pipeline_arn = f"arn:aws:codepipeline:{region}:{account_id}:{config_pipeline_name}"
 
     pipeline_status: str | None = None
@@ -64,14 +81,15 @@ def inspect_configuration_pipeline(
                     pipeline_error = "\n".join(failure.diagnostic_details) or (
                         failure.error_message or failure.summary
                     )
-    elif resolved_state and resolved_state.pipelines.configuration.status:
-        recorded = resolved_state.pipelines.configuration
-        pipeline_status = recorded.status
-        pipeline_execution_id = recorded.execution_id
-        pipeline_failed_stage = recorded.failed_stage
-        pipeline_failed_action = recorded.failed_action
-        pipeline_failed_build_url = recorded.failed_build_url
-        pipeline_error = recorded.error
+    elif resolved_state:
+        recorded = resolved_state.pipelines.configuration.resolve_offline_observation()
+        if recorded and (recorded.status or recorded.execution_id):
+            pipeline_status = recorded.status or "Unknown"
+            pipeline_execution_id = recorded.execution_id
+            pipeline_failed_stage = recorded.failed_stage
+            pipeline_failed_action = recorded.failed_action
+            pipeline_failed_build_url = recorded.failed_build_url
+            pipeline_error = recorded.error
 
     return ConfigurationPipelineStatus(
         name=config_pipeline_name,

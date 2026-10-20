@@ -13,7 +13,8 @@ from lza_workbench.installer.versions import (
 )
 
 if TYPE_CHECKING:
-    from lza_workbench.workspace.schema import WorkspaceConfig
+    from lza_workbench.installer.schema import LzaInstaller
+    from lza_workbench.workspace.schema import CustomerEnvironmentTarget, WorkspaceConfig
 
 
 @dataclass(frozen=True)
@@ -45,8 +46,23 @@ class InstallerConfigValidationError(LzaError):
         )
 
 
-def validate_installer_configuration(config: WorkspaceConfig) -> InstallerConfigValidationResult:
-    source_code = config.installer.source_code
+def validate_installer_configuration(
+    config: WorkspaceConfig | None = None,
+    *,
+    installer: LzaInstaller | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
+) -> InstallerConfigValidationResult:
+    resolved_installer = installer or (config.installer if config is not None else None)
+    resolved_target = environment_target or (
+        config.environment_target if config is not None else None
+    )
+    if resolved_installer is None or resolved_target is None:
+        raise ValueError(
+            "Installer configuration validation requires either config or "
+            "(installer and environment_target)."
+        )
+
+    source_code = resolved_installer.source_code
     missing: list[MissingInstallerConfigField] = []
 
     def require(label: str, section: str, attribute: str, value: str | None) -> None:
@@ -91,7 +107,7 @@ def validate_installer_configuration(config: WorkspaceConfig) -> InstallerConfig
             source_code.connection_arn,
         )
 
-    options = config.installer.options
+    options = resolved_installer.options
     require(
         "Management Account Email",
         "installer.options",
@@ -110,11 +126,11 @@ def validate_installer_configuration(config: WorkspaceConfig) -> InstallerConfig
         "audit_account_email",
         options.audit_account_email,
     )
-    require("Accelerator Prefix", "lza", "accelerator_prefix", config.lza.accelerator_prefix)
+    require("Accelerator Prefix", "lza", "accelerator_prefix", resolved_target.lza.accelerator_prefix)
 
     warnings: list[str] = []
-    if is_unwanted_lza_version(config.lza.version):
-        norm = normalize_lza_version(config.lza.version)
+    if is_unwanted_lza_version(resolved_target.lza.version):
+        norm = normalize_lza_version(resolved_target.lza.version)
         warnings.append(
             f"Configured LZA version '{norm}' is old and unwanted (<= v1.5.0). "
             f"Consider upgrading to a supported version (e.g. {PACKAGED_INSTALLER_VERSION} or >= v1.5.1)."

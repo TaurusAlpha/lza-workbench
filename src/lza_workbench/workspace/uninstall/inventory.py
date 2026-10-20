@@ -5,7 +5,6 @@ from __future__ import annotations
 import concurrent.futures
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from ruamel.yaml import YAML
 
@@ -18,9 +17,6 @@ from lza_workbench.infrastructure.aws.cloudformation import (
 from lza_workbench.infrastructure.aws.organizations import list_organization_accounts
 from lza_workbench.infrastructure.aws.s3 import list_buckets_by_prefix
 from lza_workbench.infrastructure.aws.session import AwsExecutionContext
-
-if TYPE_CHECKING:
-    from lza_workbench.workspace.context import WorkspaceContext
 from lza_workbench.workspace.uninstall.models import (
     UninstallAccountTarget,
     UninstallOptions,
@@ -28,11 +24,12 @@ from lza_workbench.workspace.uninstall.models import (
     UninstallRetainedResource,
     UninstallS3Bucket,
     UninstallStack,
+    UninstallTarget,
 )
 
 
 def resolve_target_regions(
-    context: WorkspaceContext,
+    target: UninstallTarget,
     execution_context: AwsExecutionContext,
     options: UninstallOptions,
 ) -> list[str]:
@@ -48,33 +45,34 @@ def resolve_target_regions(
         except Exception as exc:
             raise LzaError(f"Failed to query AWS regions: {exc}") from exc
 
-    # Default to global-config.yaml
-    global_config_path = context.config_dir / "global-config.yaml"
-    if not global_config_path.is_file():
-        alt_path = context.config_dir / "global-config.yml"
-        if alt_path.is_file():
-            global_config_path = alt_path
+    # Default to global-config.yaml when a local configuration directory is provided
+    if target.config_dir is not None:
+        global_config_path = target.config_dir / "global-config.yaml"
+        if not global_config_path.is_file():
+            alt_path = target.config_dir / "global-config.yml"
+            if alt_path.is_file():
+                global_config_path = alt_path
 
-    if global_config_path.is_file():
-        try:
-            data = parse_yaml_file(global_config_path)
-            if isinstance(data, dict):
-                regions: set[str] = set()
-                home_region = data.get("homeRegion")
-                if home_region and isinstance(home_region, str):
-                    regions.add(home_region.strip())
-                enabled = data.get("enabledRegions", [])
-                if isinstance(enabled, list):
-                    for r in enabled:
-                        if isinstance(r, str):
-                            regions.add(r.strip())
-                if regions:
-                    return sorted(regions)
-        except Exception:
-            pass
+        if global_config_path.is_file():
+            try:
+                data = parse_yaml_file(global_config_path)
+                if isinstance(data, dict):
+                    regions: set[str] = set()
+                    home_region = data.get("homeRegion")
+                    if home_region and isinstance(home_region, str):
+                        regions.add(home_region.strip())
+                    enabled = data.get("enabledRegions", [])
+                    if isinstance(enabled, list):
+                        for r in enabled:
+                            if isinstance(r, str):
+                                regions.add(r.strip())
+                    if regions:
+                        return sorted(regions)
+            except Exception:
+                pass
 
-    # Fallback to workspace AWS region
-    fallback = context.config.aws.region or "us-east-1"
+    # Fallback to target home region
+    fallback = target.home_region or "us-east-1"
     return [fallback]
 
 
@@ -152,14 +150,14 @@ def _discover_organization_accounts(
 
 
 def resolve_target_accounts(
-    context: WorkspaceContext,
+    target: UninstallTarget,
     execution_context: AwsExecutionContext,
     options: UninstallOptions,
 ) -> list[UninstallAccountTarget]:
-    """Resolve target accounts via profiles file, AWS Organizations, or workspace default."""
+    """Resolve target accounts via profiles file, AWS Organizations, or target default."""
     mgmt_account_id = (
-        context.config.aws.account_id
-        or (execution_context.identity.get("account") if execution_context.identity else None)
+        target.management_account_id
+        or execution_context.account_id
         or ""
     )
 
@@ -178,14 +176,14 @@ def resolve_target_accounts(
     if org_targets:
         return org_targets
 
-    # 3. Fallback to current workspace account
+    # 3. Fallback to current management account
     if mgmt_account_id:
         return [
             UninstallAccountTarget(
                 account_id=mgmt_account_id,
-                name=context.config.customer.name or "Management",
+                name=target.customer_name or "Management",
                 is_management=True,
-                profile=context.config.aws.profile,
+                profile=target.management_profile,
             )
         ]
 
@@ -347,14 +345,14 @@ def sort_stacks_in_reverse_deployment_order(
 
 def build_uninstall_plan(
     *,
-    context: WorkspaceContext,
+    target: UninstallTarget,
     execution_context: AwsExecutionContext,
     options: UninstallOptions,
 ) -> UninstallPlan:
     """Discover all LZA resources and assemble an ordered UninstallPlan."""
-    accelerator_prefix = context.config.lza.accelerator_prefix or "AWSAccelerator"
-    regions = resolve_target_regions(context, execution_context, options)
-    accounts = resolve_target_accounts(context, execution_context, options)
+    accelerator_prefix = target.accelerator_prefix or "AWSAccelerator"
+    regions = resolve_target_regions(target, execution_context, options)
+    accounts = resolve_target_accounts(target, execution_context, options)
 
     all_stacks: list[UninstallStack] = []
     all_retained: list[UninstallRetainedResource] = []
@@ -385,15 +383,15 @@ def build_uninstall_plan(
                 pass
 
     mgmt_account_id = (
-        context.config.aws.account_id
-        or (execution_context.identity.get("account") if execution_context.identity else None)
+        target.management_account_id
+        or execution_context.account_id
         or ""
     )
     ordered_stacks = sort_stacks_in_reverse_deployment_order(all_stacks, mgmt_account_id)
 
     return UninstallPlan(
-        customer_name=context.config.customer.name,
-        customer_slug=context.config.customer.slug,
+        customer_name=target.customer_name,
+        customer_slug=target.customer_slug,
         accelerator_prefix=accelerator_prefix,
         accounts=accounts,
         regions=regions,

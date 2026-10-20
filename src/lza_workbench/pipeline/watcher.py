@@ -29,7 +29,8 @@ from lza_workbench.workspace.context import (
     WorkspaceContext,
     load_workspace_context,
 )
-from lza_workbench.workspace.persistence import write_workspace_state
+from lza_workbench.workspace.persistence import update_workspace_state
+from lza_workbench.workspace.schema import CustomerEnvironmentTarget, WorkspaceState
 from lza_workbench.workspace.validation import WorkspaceCapability
 
 
@@ -46,7 +47,7 @@ class PipelineWatchUpdate:
 
 @dataclass(frozen=True)
 class PipelineWatchResult:
-    workspace_dir: Path
+    workspace_dir: Path | None
     customer_name: str
     pipeline_name: str
     pipeline_arn: str
@@ -88,18 +89,11 @@ def _resolve_watch_execution_id(
     if execution_id:
         return execution_id
 
-    recorded_execution_id = None
-    recorded_pipeline_name = None
     if state is not None:
-        if pipeline_type == "installer":
-            recorded_execution_id = state.pipelines.installer.execution_id
-            recorded_pipeline_name = state.pipelines.installer.name
-        else:
-            recorded_execution_id = state.pipelines.configuration.execution_id
-            recorded_pipeline_name = state.pipelines.configuration.name
-
-    if recorded_execution_id and recorded_pipeline_name == pipeline_name:
-        return recorded_execution_id
+        track = state.pipelines.track(pipeline_type)
+        recorded_execution_id = track.execution_id_for_pipeline(pipeline_name)
+        if recorded_execution_id:
+            return recorded_execution_id
 
     latest = get_latest_pipeline_execution_id(
         client=client,
@@ -177,11 +171,14 @@ def watch_pipeline_workflow(
     target_dir: Path | None = None,
     pipeline_name: str | None = None,
     pipeline_type: str = "configuration",
+    accelerator_prefix: str = "AWSAccelerator",
+    customer_name: str | None = None,
     execution_id: str | None = None,
     poll_interval_seconds: int | None = None,
     initial_delay_seconds: float = 3.0,
     timeout_seconds: int | None = 7200,
     on_update: Callable[[PipelineWatchUpdate], None] | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
     workspace_context: WorkspaceContext | None = None,
     aws_context: AwsExecutionContext | None = None,
 ) -> PipelineWatchResult:
@@ -191,24 +188,48 @@ def watch_pipeline_workflow(
     if initial_delay_seconds < 0:
         raise LzaError("Pipeline initial delay must be greater than or equal to zero seconds.")
 
-    ctx = workspace_context or load_workspace_context(
-        target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
-    )
-    workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
+    ctx = workspace_context
+    if ctx is None and (target_dir is not None or aws_context is None):
+        ctx = load_workspace_context(
+            target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
+        )
 
-    pipeline = resolve_pipeline(config, pipeline_type=pipeline_type, pipeline_name=pipeline_name)
+    workspace_dir = ctx.workspace_dir if ctx is not None else None
+    config = ctx.config if ctx is not None else None
+    state = ctx.state if ctx is not None else None
+    env_target = environment_target or (config.environment_target if config is not None else None)
+
+    pipeline = resolve_pipeline(
+        env_target,
+        pipeline_type=pipeline_type,
+        pipeline_name=pipeline_name,
+        accelerator_prefix=accelerator_prefix,
+    )
     resolved_pipeline_name = pipeline.name
-
-    profile = config.aws.profile or ""
-    resolved_aws_context = aws_context or resolve_aws_execution_context(
-        profile=profile,
-        region=config.aws.region,
-        role_arn=config.aws.role_arn,
-        expected_account_id=config.aws.account_id,
-        require_identity=True,
-        require_expected_account=True,
-        prime_credentials=config.aws.prime_credentials,
+    resolved_customer_name = (
+        customer_name
+        if customer_name is not None
+        else (env_target.customer.name if env_target is not None else "")
     )
+    expected_account_id = env_target.account_id if env_target is not None else None
+
+    if aws_context is not None:
+        resolved_aws_context = aws_context
+        if expected_account_id is not None:
+            resolved_aws_context.require_live(expected_account_id=expected_account_id)
+    elif config is not None:
+        profile = config.aws.profile or ""
+        resolved_aws_context = resolve_aws_execution_context(
+            profile=profile,
+            region=config.aws.region,
+            role_arn=config.aws.role_arn,
+            expected_account_id=expected_account_id,
+            require_identity=True,
+            require_expected_account=True,
+            prime_credentials=config.aws.prime_credentials,
+        )
+    else:
+        raise LzaError("Pipeline watch requires an AWS execution context or workspace.")
 
     region = resolved_aws_context.region
     account_id = (
@@ -232,7 +253,11 @@ def watch_pipeline_workflow(
 
     interval = poll_interval_seconds
     if interval is None:
-        interval = config.pipelines.configuration.poll_interval_seconds or 15
+        interval = (
+            config.pipelines.configuration.poll_interval_seconds
+            if config is not None
+            else 15
+        ) or 15
 
     start_time = time.time()
     last_status = "InProgress"
@@ -300,7 +325,7 @@ def watch_pipeline_workflow(
 
     watch_result = PipelineWatchResult(
         workspace_dir=workspace_dir,
-        customer_name=config.customer.name,
+        customer_name=resolved_customer_name,
         pipeline_name=resolved_pipeline_name,
         pipeline_arn=pipeline_arn,
         execution_id=resolved_execution_id,
@@ -311,18 +336,22 @@ def watch_pipeline_workflow(
         error_message=error_message,
     )
 
-    if state is not None:
-        record_pipeline_watch_result(
-            state,
-            execution_id=resolved_execution_id,
-            pipeline_name=resolved_pipeline_name,
-            status=last_status,
-            stages=stage_summaries,
-            failed_actions=failed_actions,
-            error_message=error_message,
-            pipeline_type=pipeline_type,
-        )
-        write_workspace_state(workspace_dir, state)
+    if state is not None and workspace_dir is not None:
+        def _record_watch(current: WorkspaceState) -> None:
+            record_pipeline_watch_result(
+                current,
+                execution_id=resolved_execution_id,
+                pipeline_name=resolved_pipeline_name,
+                status=last_status,
+                stages=stage_summaries,
+                failed_actions=failed_actions,
+                error_message=error_message,
+                pipeline_type=pipeline_type,
+                observed_pipeline_status=(last_snapshot.status if last_snapshot else None),
+            )
+
+        _record_watch(state)
+        update_workspace_state(workspace_dir, _record_watch)
 
     return watch_result
 

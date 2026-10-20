@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
+import tempfile
 import urllib.request
 from importlib.resources import files
 from pathlib import Path
@@ -17,7 +19,8 @@ from lza_workbench.installer.versions import (
 )
 
 if TYPE_CHECKING:
-    from lza_workbench.workspace.schema import WorkspaceConfig
+    from lza_workbench.installer.schema import LzaInstaller
+    from lza_workbench.workspace.schema import CustomerEnvironmentTarget, WorkspaceConfig
 
 INSTALLER_TEMPLATE_FILENAME = "AWSAccelerator-InstallerStack.template"
 INSTALLER_TEMPLATE_URL_TEMPLATE = (
@@ -166,20 +169,45 @@ def _resolve_amazon_installer_template(installer_dir: Path, version: str, dry_ru
     return template_path
 
 
-def _apply_anonymous_data_setting(template_path: Path, enable_anon: bool) -> None:
+def _apply_anonymous_data_setting(
+    template_path: Path, enable_anon: bool, *, mutate_in_place: bool = True
+) -> Path:
     try:
         content = template_path.read_text(encoding="utf-8")
         configured = configure_anonymous_data(content, enable_anon)
-        if configured != content:
+        if configured == content:
+            return template_path
+        if mutate_in_place:
             template_path.write_text(configured, encoding="utf-8")
+            return template_path
+        digest_prefix = hashlib.sha256(configured.encode("utf-8")).hexdigest()[:16]
+        artifact_dir = Path(tempfile.gettempdir()) / "lza-workbench-installer-templates"
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        artifact_path = artifact_dir / f"{digest_prefix}-{INSTALLER_TEMPLATE_FILENAME}"
+        artifact_path.write_text(configured, encoding="utf-8")
+        return artifact_path
     except OSError as exc:
         raise LzaError(f"Unable to configure installer template {template_path}: {exc}") from exc
 
 
 def resolve_installer_template(
-    workspace_dir: Path, config: WorkspaceConfig, dry_run: bool = False
+    workspace_dir: Path,
+    config: WorkspaceConfig | None = None,
+    dry_run: bool = False,
+    *,
+    installer: LzaInstaller | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
 ) -> Path:
-    template_config = config.installer.stack_template
+    resolved_installer = installer or (config.installer if config is not None else None)
+    resolved_target = environment_target or (
+        config.environment_target if config is not None else None
+    )
+    if resolved_installer is None or resolved_target is None:
+        raise ValueError(
+            "resolve_installer_template requires either config or (installer and environment_target)."
+        )
+
+    template_config = resolved_installer.stack_template
     if template_config.source == "local":
         template_path = _resolve_local_installer_template(workspace_dir, template_config.path)
     elif template_config.source in {"git", "s3"}:
@@ -188,16 +216,25 @@ def resolve_installer_template(
             "Use source 'amazon' or 'local'."
         )
     else:
-        installer_dir = workspace_dir / config.installer.local_path
+        installer_dir = workspace_dir / resolved_installer.local_path
         template_path = _resolve_amazon_installer_template(
             installer_dir=installer_dir,
-            version=config.lza.version,
+            version=resolved_target.lza.version,
             dry_run=dry_run,
         )
 
-    # Configure anonymous data sharing in template if modified/disabled
-    if template_path.exists() and not dry_run:
-        _apply_anonymous_data_setting(template_path, config.installer.options.anonymous_data)
+    # Configure anonymous data sharing in template; avoid mutating read-only or dry-run sources
+    if template_path.exists():
+        mutate_in_place = (
+            not dry_run
+            and template_config.source != "local"
+            and template_path != LOCAL_PACKAGED_INSTALLER_TEMPLATE
+        )
+        template_path = _apply_anonymous_data_setting(
+            template_path,
+            resolved_installer.options.anonymous_data,
+            mutate_in_place=mutate_in_place,
+        )
 
     return template_path
 
@@ -253,16 +290,58 @@ def validate_parameters_against_schema(
 
 
 def prepare_installer_template(
-    *, workspace_dir: Path, config: WorkspaceConfig, dry_run: bool = False
+    *,
+    config: WorkspaceConfig | None = None,
+    installer: LzaInstaller | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
+    workspace_dir: Path | None = None,
+    template_path: Path | None = None,
+    dry_run: bool = False,
 ) -> tuple[Path, dict[str, str]]:
-    """Resolve and validate the local template and its parameters against the schema."""
+    """Resolve, configure, and validate the installer template and its parameters."""
     from lza_workbench.installer.parameters import build_installer_cfn_parameters
 
-    template_path = resolve_installer_template(workspace_dir, config, dry_run=dry_run)
-    schema = inspect_template_parameters(template_path)
-    parameters = build_installer_cfn_parameters(config, schema=schema)
+    resolved_installer = installer or (config.installer if config is not None else None)
+    resolved_target = environment_target or (
+        config.environment_target if config is not None else None
+    )
+    if resolved_installer is None or resolved_target is None:
+        raise ValueError(
+            "prepare_installer_template requires either config or (installer and environment_target)."
+        )
+
+    if template_path is not None:
+        resolved_template_path = (
+            _apply_anonymous_data_setting(
+                template_path,
+                resolved_installer.options.anonymous_data,
+                mutate_in_place=False,
+            )
+            if template_path.is_file()
+            else template_path
+        )
+    elif workspace_dir is not None:
+        resolved_template_path = resolve_installer_template(
+            workspace_dir,
+            config,
+            dry_run=dry_run,
+            installer=resolved_installer,
+            environment_target=resolved_target,
+        )
+    else:
+        raise LzaError(
+            "Installer template preparation requires either template_path or workspace_dir."
+        )
+
+    schema = inspect_template_parameters(resolved_template_path)
+    parameters = build_installer_cfn_parameters(
+        config,
+        schema=schema,
+        installer=resolved_installer,
+        environment_target=resolved_target,
+    )
     validate_parameters_against_schema(parameters, schema)
-    return template_path, parameters
+    return resolved_template_path, parameters
 
 
 __all__ = [

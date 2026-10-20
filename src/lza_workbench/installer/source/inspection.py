@@ -16,7 +16,8 @@ from lza_workbench.installer.source.planning import (
 
 if TYPE_CHECKING:
     from lza_workbench.infrastructure.aws.session import AwsClientFactory
-    from lza_workbench.workspace.schema import WorkspaceConfig
+    from lza_workbench.installer.schema import LzaInstaller
+    from lza_workbench.workspace.schema import CustomerEnvironmentTarget, WorkspaceConfig
 
 
 def build_github_secret_warning(
@@ -136,14 +137,25 @@ def validate_github_repository_access(
 def inspect_installer_source(
     *,
     factory: AwsClientFactory,
-    config: WorkspaceConfig,
     region: str,
+    config: WorkspaceConfig | None = None,
+    installer: LzaInstaller | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
 ) -> CodeCommitPlanResult | None:
     """Validate required remote source preconditions for installer CloudFormation."""
-    source = config.installer.source_code
+    resolved_installer = installer or (config.installer if config is not None else None)
+    resolved_target = environment_target or (
+        config.environment_target if config is not None else None
+    )
+    if resolved_installer is None or resolved_target is None:
+        raise ValueError(
+            "inspect_installer_source requires either config or (installer and environment_target)."
+        )
+
+    source = resolved_installer.source_code
     if source.repository_type == "codecommit":
         version_ref = resolve_installer_source_branch(
-            source.repository_type, source.branch, config.lza.version
+            source.repository_type, source.branch, resolved_target.lza.version
         )
         observation = inspect_codecommit_repository(
             client=factory.get_client("codecommit"),

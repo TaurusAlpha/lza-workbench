@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.configuration.archive import (
     ConfigDiffResult,
-    compute_config_directory_digest,
+    compute_zip_content_digest,
     create_zip_archive,
 )
 from lza_workbench.configuration.git import (
@@ -42,7 +43,7 @@ from lza_workbench.workspace.context import (
     WorkspaceContext,
     load_workspace_context,
 )
-from lza_workbench.workspace.persistence import write_workspace_config, write_workspace_state
+from lza_workbench.workspace.persistence import update_workspace_state, write_workspace_config
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.validation import WorkspaceCapability
 
@@ -201,11 +202,11 @@ def _handle_s3_push(
     repo_cfg = config.configuration.repository
     destination = resolve_s3_configuration_destination(
         configured_bucket=repo_cfg.bucket,
-        account_id=config.aws.account_id or state.management_account_id,
+        account_id=config.aws.account_id or state.observed_account_id,
         region=config.aws.region,
     )
     safety_warning = None
-    if state.imported and state.configuration.sync_digest is None:
+    if state.workspace.imported and state.configuration.sync.sync_digest is None:
         safety_warning = (
             "Remote S3 configuration has not been verified for this imported workspace. "
             "Local configuration may overwrite unknown remote state. "
@@ -258,7 +259,8 @@ def _handle_s3_push(
         repo_cfg.bucket = destination.bucket
         write_workspace_config(workspace_dir, config)
 
-    sync_digest = compute_config_directory_digest(config_dir, exclude_dirs, exclude_files)
+    sync_digest = compute_zip_content_digest(zip_path, exclude_dirs, exclude_files)
+    archive_sha256 = hashlib.sha256(zip_path.read_bytes()).hexdigest()
     etag, version_id = upload_s3_file(
         client=s3_client,
         file_path=zip_path,
@@ -267,19 +269,23 @@ def _handle_s3_push(
         extra_args={"Metadata": {"lza-content-digest": sync_digest}},
     )
 
-    record_config_upload(
-        state,
-        zip_path=zip_path,
-        config_dir=config_dir,
-        manifest=zip_manifest,
-        exclude_dirs=exclude_dirs,
-        exclude_files=exclude_files,
-        diff_result=diff_result,
-        etag=etag,
-        version_id=version_id,
-    )
+    def _apply_s3_push(current_state: WorkspaceState) -> None:
+        record_config_upload(
+            current_state,
+            zip_path=zip_path,
+            config_dir=config_dir,
+            manifest=zip_manifest,
+            exclude_dirs=exclude_dirs,
+            exclude_files=exclude_files,
+            diff_result=diff_result,
+            etag=etag,
+            version_id=version_id,
+            sync_digest=sync_digest,
+            archive_sha256=archive_sha256,
+        )
+        state.configuration = current_state.configuration
 
-    write_workspace_state(workspace_dir, state)
+    update_workspace_state(workspace_dir, _apply_s3_push)
 
     return ConfigPushResult(
         workspace_dir=workspace_dir,
@@ -374,12 +380,16 @@ def _handle_git_push(
 
     push_git_branch(config_dir, remote=remote_name, branch=destination.branch, dry_run=False)
 
-    record_config_git_push(
-        state,
-        files_count=files_count,
-        commit_hash=commit,
-    )
-    write_workspace_state(workspace_dir, state)
+    def _apply_git_push(current_state: WorkspaceState) -> None:
+        record_config_git_push(
+            current_state,
+            files_count=files_count,
+            commit_hash=commit,
+            repository_type=repo_type,
+        )
+        state.configuration = current_state.configuration
+
+    update_workspace_state(workspace_dir, _apply_git_push)
 
     return ConfigPushResult(
         workspace_dir=workspace_dir,

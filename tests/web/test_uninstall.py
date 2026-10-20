@@ -30,6 +30,7 @@ def _mock_workspace_context(slug: str = "acme"):
     context = MagicMock()
     context.config = config
     context.workspace_dir = Path("/workspaces/acme")
+    context.config_dir = Path("/workspaces/acme/aws-accelerator-config")
     return context
 
 

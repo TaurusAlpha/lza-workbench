@@ -126,10 +126,6 @@ def _register_workspace_routes(router: APIRouter, context: ActiveWorkspaceContex
                         "metadataValid": ws_ctx.assessment.metadata_valid,
                         "configurationPresent": ws_ctx.assessment.configuration_present,
                         "installerConfigured": ws_ctx.assessment.installer_configured,
-                        "installerRecordedDeployed": (
-                            ws_ctx.assessment.installer_recorded_deployed
-                        ),
-                        "imported": ws_ctx.assessment.imported,
                     }
                     if ws_ctx.assessment
                     else None

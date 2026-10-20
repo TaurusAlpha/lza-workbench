@@ -46,6 +46,7 @@ from lza_workbench.workspace.persistence import (
     WORKSPACE_STATE_FILE,
     load_workspace_config,
     load_workspace_state,
+    update_workspace_state,
     write_workspace_config,
     write_workspace_state,
 )
@@ -455,23 +456,23 @@ def _initialize_import_state(
     else:
         state = WorkspaceState.from_config(config)
 
-    state.imported = True
-    if state.imported_at is None:
-        state.imported_at = datetime.now(UTC)
+    state.workspace.imported = True
+    if state.workspace.imported_at is None:
+        state.workspace.imported_at = datetime.now(UTC)
 
     if provenance:
-        state.configuration.files_count = provenance.files_count
+        state.configuration.sync.files_count = provenance.files_count
         if provenance.commit:
-            state.configuration.artifact_sha256 = provenance.commit
-        state.configuration.template_source = provenance.repo_type
+            state.configuration.sync.commit_sha = provenance.commit
+        state.configuration.template.template_source = provenance.repo_type
     else:
         exclude = PackagingExcludeConfig()
-        state.configuration.files_count = count_config_files(
+        state.configuration.sync.files_count = count_config_files(
             resolved_config_dir,
             set(exclude.directories),
             set(exclude.files),
         )
-        state.configuration.template_source = "local"
+        state.configuration.template.template_source = "local"
 
     return state
 
@@ -555,6 +556,7 @@ def _inspect_live_installer(
         state=state,
         cfn_status=cfn_status,
         deployed_version=deployed_version,
+        account_id=(aws_ctx.identity.get("account") if aws_ctx.identity else config.aws.account_id),
     )
     if config.installer.source_code.repository_type == "github":
         _check_github_installer_secret(aws_ctx, config, recommendations)
@@ -608,8 +610,6 @@ def _discover_live_aws(
         )
         identity = aws_ctx.identity
         if identity:
-            state.management_account_id = identity.get("account")
-            state.caller_arn = identity.get("arn")
             if not config.aws.account_id and identity.get("account"):
                 config.aws.account_id = identity.get("account")
             (
@@ -650,7 +650,7 @@ def _build_import_recommendations(
     recommendations: list[str],
 ) -> None:
     if installer_discovered:
-        if config.configuration.repository.type == "s3" and state.configuration.downloaded_at is None:
+        if config.configuration.repository.type == "s3" and state.configuration.last_pull is None:
             recommendations.append(
                 "Run 'lza config download' to pull the latest remote S3 configuration archive."
             )
@@ -798,7 +798,77 @@ def apply_workspace_import(preparation: ImportWorkspacePreparation) -> Workspace
     workspace_dir = result.workspace_dir
     paths = result.affected_paths
     (workspace_dir / ".lza").mkdir(parents=True, exist_ok=True)
-    if (
+    if workspace_dir / WORKSPACE_STATE_FILE in paths:
+        state_file = workspace_dir / WORKSPACE_STATE_FILE
+        if state_file.is_file() and not result.repaired:
+            def _apply_import(current_state: WorkspaceState) -> None:
+                current_state.workspace = result.state.workspace
+                current_state.configuration.template = result.state.configuration.template
+                current_state.configuration.sync.files_count = (
+                    result.state.configuration.sync.files_count
+                )
+                if result.state.configuration.sync.commit_sha is not None:
+                    current_state.configuration.sync.commit_sha = (
+                        result.state.configuration.sync.commit_sha
+                    )
+                if result.installer_discovered:
+                    discovered_installer = result.state.installer
+                    discovered_timestamp = (
+                        discovered_installer.observation.observed_at
+                        if discovered_installer.observation and discovered_installer.observation.observed_at
+                        else discovered_installer.template.downloaded_at
+                    )
+                    current_obs = current_state.installer.observation
+                    current_dep = current_state.installer.last_deployment
+                    current_tmpl = current_state.installer.template
+                    is_newer = True
+                    if current_obs and current_obs.observed_at and discovered_timestamp:
+                        if current_obs.observed_at > discovered_timestamp:
+                            is_newer = False
+                    if current_dep and current_dep.recorded_at and discovered_timestamp:
+                        if current_dep.recorded_at > discovered_timestamp:
+                            is_newer = False
+                    if current_tmpl and current_tmpl.downloaded_at and discovered_timestamp:
+                        if current_tmpl.downloaded_at > discovered_timestamp:
+                            is_newer = False
+
+                    if is_newer:
+                        if discovered_installer.template.version is not None:
+                            current_state.installer.template.version = (
+                                discovered_installer.template.version
+                            )
+                        if discovered_installer.template.digest is not None:
+                            current_state.installer.template.digest = (
+                                discovered_installer.template.digest
+                            )
+                        if discovered_installer.template.downloaded_at is not None:
+                            current_state.installer.template.downloaded_at = (
+                                discovered_installer.template.downloaded_at
+                            )
+                        if discovered_installer.observation is not None:
+                            current_state.installer.observation = discovered_installer.observation
+
+                        if (
+                            preparation.installer_template_path in paths
+                            and preparation.installer_template_body is not None
+                        ):
+                            write_installer_template(
+                                template_path=preparation.installer_template_path,
+                                template_body=preparation.installer_template_body,
+                            )
+
+            update_workspace_state(workspace_dir, _apply_import)
+        else:
+            if (
+                preparation.installer_template_path in paths
+                and preparation.installer_template_body is not None
+            ):
+                write_installer_template(
+                    template_path=preparation.installer_template_path,
+                    template_body=preparation.installer_template_body,
+                )
+            write_workspace_state(workspace_dir, result.state)
+    elif (
         preparation.installer_template_path in paths
         and preparation.installer_template_body is not None
     ):
@@ -806,10 +876,9 @@ def apply_workspace_import(preparation: ImportWorkspacePreparation) -> Workspace
             template_path=preparation.installer_template_path,
             template_body=preparation.installer_template_body,
         )
+
     if workspace_dir / WORKSPACE_CONFIG_FILE in paths:
         write_workspace_config(workspace_dir, result.config)
-    if workspace_dir / WORKSPACE_STATE_FILE in paths:
-        write_workspace_state(workspace_dir, result.state)
     return result
 
 

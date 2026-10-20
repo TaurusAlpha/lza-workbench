@@ -8,6 +8,7 @@ import pytest
 from lza_workbench.configuration.pull import pull_configuration_workflow
 from lza_workbench.configuration.push import push_configuration_workflow
 from lza_workbench.errors import LzaError
+from lza_workbench.installer.state import InstallerStackObservation
 from lza_workbench.workspace.persistence import (
     load_workspace_config,
     load_workspace_state,
@@ -36,7 +37,7 @@ def test_s3_destination_persistence(
     config.aws.account_id = None
     write_workspace_config(configured_workspace, config)
     state = load_workspace_state(configured_workspace)
-    state.management_account_id = "123456789012"
+    state.installer.observation = InstallerStackObservation(account_id="123456789012")
     write_workspace_state(configured_workspace, state)
     before = {
         p.relative_to(configured_workspace): p.read_bytes()
@@ -82,7 +83,7 @@ def test_imported_s3_pull_then_push(
     extract,
 ):
     state = load_workspace_state(configured_workspace)
-    state.imported = True
+    state.workspace.imported = True
     write_workspace_state(configured_workspace, state)
     monkeypatch.setattr(
         "lza_workbench.configuration.pull.resolve_aws_execution_context",
@@ -95,9 +96,10 @@ def test_imported_s3_pull_then_push(
     client.head_object.return_value = {}
     pull_configuration_workflow(target_dir=configured_workspace, force=True, extract=extract)
     state = load_workspace_state(configured_workspace)
-    assert state.configuration.downloaded_at
+    assert state.configuration.last_pull is not None
+    assert state.configuration.last_pull.recorded_at is not None
     if extract:
-        assert state.configuration.sync_digest
+        assert state.configuration.sync.sync_digest
         push_configuration_workflow(
             target_dir=configured_workspace,
             aws_context=mock_aws_execution_context,
@@ -105,10 +107,41 @@ def test_imported_s3_pull_then_push(
         client.upload_file.assert_called_once()
     else:
         # Downloading an archive alone does not verify the local configuration.
-        assert state.configuration.sync_digest is None
+        assert state.configuration.sync.sync_digest is None
         with pytest.raises(LzaError, match="has not been verified"):
             push_configuration_workflow(
                 target_dir=configured_workspace,
                 aws_context=mock_aws_execution_context,
             )
         client.upload_file.assert_not_called()
+
+
+def test_s3_pull_pins_version_id_and_rejects_unversioned_etag_mismatch(
+    configured_workspace,
+    monkeypatch,
+    mock_aws_execution_context,
+    sample_config_zip,
+):
+    monkeypatch.setattr(
+        "lza_workbench.configuration.pull.resolve_aws_execution_context",
+        lambda **kwargs: mock_aws_execution_context,
+    )
+    client = mock_aws_execution_context.factory.get_client.return_value
+    client.head_object.return_value = {"ETag": '"etag-v1"', "VersionId": "ver-123"}
+    client.download_file.side_effect = lambda bucket, key, filename, ExtraArgs=None: (
+        sample_config_zip(Path(filename))
+    )
+
+    pull_configuration_workflow(target_dir=configured_workspace, force=True, extract=True)
+    assert client.download_file.call_args.kwargs == {"ExtraArgs": {"VersionId": "ver-123"}}
+    state = load_workspace_state(configured_workspace)
+    assert state.configuration.sync.artifact_version_id == "ver-123"
+    assert state.configuration.sync.artifact_etag == "etag-v1"
+
+    # Unversioned bucket where object is replaced during download
+    client.head_object.side_effect = [
+        {"ETag": '"etag-before"'},
+        {"ETag": '"etag-after"'},
+    ]
+    with pytest.raises(LzaError, match="changed while downloading"):
+        pull_configuration_workflow(target_dir=configured_workspace, force=True, extract=True)

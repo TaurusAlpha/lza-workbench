@@ -88,7 +88,7 @@ def test_plan_installer_workflow_marks_changed_template_for_update(
     configured_workspace: Path,
 ) -> None:
     state = WorkspaceState.from_config(load_workspace_config(configured_workspace))
-    state.installer.template_digest = "outdated"
+    state.installer.template.digest = "outdated"
     write_workspace_state(configured_workspace, state)
 
     with (
@@ -393,8 +393,10 @@ def test_installer_init_populates_s3_config_bucket(tmp_path: Path) -> None:
     assert saved_config.configuration.repository.bucket == expected_bucket
 
 
-def test_apply_installer_settings_tracks_pending_parameters(tmp_path: Path) -> None:
-    """Saving installer settings records pending parameters in state relative to deployed."""
+def test_apply_installer_settings_preserves_deployed_observation(tmp_path: Path) -> None:
+    """Saving installer settings updates lza-workspace.yaml while preserving deployed observation."""
+    from lza_workbench.installer.state import InstallerStackObservation
+
     ws_dir = tmp_path / "pending-ws"
     ws_dir.mkdir(parents=True, exist_ok=True)
     (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
@@ -411,10 +413,13 @@ def test_apply_installer_settings_tracks_pending_parameters(tmp_path: Path) -> N
     write_workspace_config(ws_dir, config)
 
     state = WorkspaceState.from_config(config)
-    state.installer.deployed_parameters = {
-        "EnableApprovalStage": "No",
-        "AcceleratorPrefix": "AWSAccelerator",
-    }
+    state.installer.observation = InstallerStackObservation(
+        exists=True,
+        deployed_parameters={
+            "EnableApprovalStage": "No",
+            "AcceleratorPrefix": "AWSAccelerator",
+        },
+    )
     write_workspace_state(ws_dir, state)
 
     apply_installer_settings(
@@ -427,6 +432,8 @@ def test_apply_installer_settings_tracks_pending_parameters(tmp_path: Path) -> N
         )
     )
 
+    saved_config = load_workspace_config(ws_dir)
+    assert saved_config.installer.options.enable_approval_stage is True
     saved_state = load_workspace_state(ws_dir)
-    assert saved_state.installer.pending_parameters is not None
-    assert saved_state.installer.pending_parameters.get("EnableApprovalStage") == "Yes"
+    assert saved_state.installer.observation is not None
+    assert saved_state.installer.observation.deployed_parameters.get("EnableApprovalStage") == "No"

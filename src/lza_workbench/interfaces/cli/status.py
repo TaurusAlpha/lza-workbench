@@ -193,7 +193,11 @@ def _render_resources(result: InstallerStatusResult) -> None:
     console.print()
     print_section(1, "Installer Stack")
     status = result.cfn_status.stack_status or "UNKNOWN"
-    stack_name = result.config.installer.stack_name or "AWSAccelerator-InstallerStack"
+    stack_name = (
+        (result.environment_target.installer_stack_name if result.environment_target else None)
+        or result.cfn_status.stack_name
+        or "AWSAccelerator-InstallerStack"
+    )
 
     print_kv("Target Region", result.region, bold_value=True)
     print_kv("Installer Stack Name", stack_name, bold_value=True)
@@ -238,7 +242,12 @@ def _render_deployed_details(result: InstallerStatusResult) -> None:
         return
     print_kv("Deployed LZA Version", result.deployed_version, bold_value=True)
     _render_installer_source_details(result, params_data)
-    matches = normalize_lza_version(result.config.lza.version) == normalize_lza_version(
+    configured_version = (
+        result.environment_target.lza.version
+        if result.environment_target is not None
+        else (result.config.lza.version if result.config is not None else result.deployed_version)
+    )
+    matches = normalize_lza_version(configured_version) == normalize_lza_version(
         result.deployed_version
     )
     print_kv(
@@ -246,7 +255,7 @@ def _render_deployed_details(result: InstallerStatusResult) -> None:
         "Match (Configured matches Deployed)"
         if matches
         else (
-            f"Mismatch (Configured: {result.config.lza.version}, "
+            f"Mismatch (Configured: {configured_version}, "
             f"Deployed: {result.deployed_version})"
         ),
         style="green" if matches else "yellow",
@@ -257,32 +266,66 @@ def _render_installer_source_details(
     result: InstallerStatusResult, parameters: dict[str, str]
 ) -> None:
     """Render only the source fields that apply to the active installer source."""
-    source_config = result.config.installer.source_code
-    source_type = parameters.get("RepositorySource", source_config.repository_type).lower()
+    source_config = result.installer.source_code if result.installer is not None else None
+    default_source_type = source_config.repository_type if source_config is not None else "unknown"
+    source_type = parameters.get("RepositorySource", default_source_type).lower()
     print_kv(
         "Source Type",
         source_type,
         bold_value=True,
     )
     if source_type == "s3":
-        print_kv("Bucket", parameters.get("RepositoryBucketName", source_config.bucket or "N/A"))
-        print_kv("Object Key", parameters.get("RepositoryBucketObject", source_config.key or "N/A"))
+        print_kv(
+            "Bucket",
+            parameters.get(
+                "RepositoryBucketName",
+                (source_config.bucket if source_config else None) or "N/A",
+            ),
+        )
+        print_kv(
+            "Object Key",
+            parameters.get(
+                "RepositoryBucketObject",
+                (source_config.key if source_config else None) or "N/A",
+            ),
+        )
     elif source_type == "github":
-        owner = parameters.get("RepositoryOwner", source_config.owner or "N/A")
-        repository_name = parameters.get("RepositoryName", source_config.repository_name or "N/A")
+        owner = parameters.get(
+            "RepositoryOwner",
+            (source_config.owner if source_config else None) or "N/A",
+        )
+        repository_name = parameters.get(
+            "RepositoryName",
+            (source_config.repository_name if source_config else None) or "N/A",
+        )
         print_kv("Repository", f"{owner}/{repository_name}")
-        print_kv("Branch", parameters.get("RepositoryBranchName", source_config.branch or "N/A"))
+        print_kv(
+            "Branch",
+            parameters.get(
+                "RepositoryBranchName",
+                (source_config.branch if source_config else None) or "N/A",
+            ),
+        )
     elif source_type == "codecommit":
         print_kv(
             "Repository",
-            parameters.get("RepositoryName", source_config.repository_name or "N/A"),
+            parameters.get(
+                "RepositoryName",
+                (source_config.repository_name if source_config else None) or "N/A",
+            ),
         )
-        print_kv("Branch", parameters.get("RepositoryBranchName", source_config.branch or "N/A"))
+        print_kv(
+            "Branch",
+            parameters.get(
+                "RepositoryBranchName",
+                (source_config.branch if source_config else None) or "N/A",
+            ),
+        )
     elif source_type == "codeconnection":
         connection_arn = (
             parameters.get("RepositoryCodeConnectionArn")
             or parameters.get("CodeConnectionArn")
-            or source_config.connection_arn
+            or (source_config.connection_arn if source_config else None)
             or "N/A"
         )
         print_kv("Connection ARN", connection_arn)
@@ -313,15 +356,17 @@ def _render_state_alignment(result: InstallerStatusResult) -> None:
         print_info("No recorded workspace state found.", dim=True)
         return
     state = result.state
-    rec_status = (
-        format_status(state.installer.stack_status) if state.installer.stack_status else None
-    )
+    obs = state.installer.observation
+    rec_status = format_status(obs.stack_status) if (obs and obs.stack_status) else None
     for label, value in (
-        ("Recorded Stack ID", state.installer.stack_id),
+        ("Recorded Stack ID", obs.stack_id if obs else None),
         ("Recorded Stack Status", rec_status),
-        ("Recorded Stack Updated", format_timestamp(state.installer.stack_updated_at)),
-        ("Installer Downloaded", format_timestamp(state.installer.downloaded_at)),
-        ("Template Version", state.installer.template_version),
+        ("Recorded Stack Observed", format_timestamp(obs.observed_at if obs else None)),
+        ("Installer Downloaded", format_timestamp(state.installer.template.downloaded_at)),
+        (
+            "Template Version",
+            state.installer.template.version or (obs.deployed_version if obs else None),
+        ),
     ):
         if value:
             print_kv(label, value)
@@ -354,11 +399,22 @@ def _render_recommendations(result: InstallerStatusResult) -> None:
 
 
 def render_installer_status(result: InstallerStatusResult) -> None:
+    target = result.environment_target
+    customer_name = (
+        target.customer.name
+        if target is not None
+        else (result.config.customer.name if result.config is not None else "")
+    )
+    lza_version = (
+        target.lza.version
+        if target is not None
+        else (result.config.lza.version if result.config is not None else result.deployed_version)
+    )
     render_workspace_header(
         "LZA Installer Status",
-        customer_name=result.config.customer.name,
+        customer_name=customer_name,
         workspace_dir=result.workspace_dir,
-        lza_version=result.config.lza.version,
+        lza_version=lza_version,
         profile=result.profile,
         region=result.region,
         aws_identity=result.aws_identity,

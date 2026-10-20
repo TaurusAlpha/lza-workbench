@@ -1,8 +1,8 @@
-"""Workspace execution context."""
+"""Local workspace boundary and context resolution."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from lza_workbench.workspace.paths import resolve_workspace_dir
@@ -12,7 +12,11 @@ from lza_workbench.workspace.persistence import (
     load_workspace_config,
     load_workspace_state,
 )
-from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
+from lza_workbench.workspace.schema import (
+    CustomerEnvironmentTarget,
+    WorkspaceConfig,
+    WorkspaceState,
+)
 from lza_workbench.workspace.validation import (
     WorkspaceAssessment,
     WorkspaceCapability,
@@ -23,12 +27,12 @@ from lza_workbench.workspace.validation import (
 
 @dataclass(frozen=True)
 class WorkspaceContext:
-    """Immutable runtime context containing resolved workspace information."""
+    """Immutable local workspace context containing resolved paths, configuration, and readiness."""
 
     workspace_dir: Path
     config: WorkspaceConfig
-    state: WorkspaceState
-    assessment: WorkspaceAssessment
+    state: WorkspaceState = field(default_factory=WorkspaceState)
+    assessment: WorkspaceAssessment | None = None
 
     @property
     def config_dir(self) -> Path:
@@ -50,23 +54,29 @@ class WorkspaceContext:
     def state_file(self) -> Path:
         return self.workspace_dir / WORKSPACE_STATE_FILE
 
+    @property
+    def environment_target(self) -> CustomerEnvironmentTarget:
+        return self.config.environment_target
+
 
 def load_workspace_context(
     target_dir: Path | None = None,
     required_capabilities: tuple[WorkspaceCapability, ...] = (WorkspaceCapability.METADATA_VALID,),
+    *,
+    include_state: bool = True,
 ) -> WorkspaceContext:
-    """Resolve workspace information and enforce the requested capabilities."""
+    """Resolve local workspace configuration and enforce requested local capabilities."""
     workspace_dir = resolve_workspace_dir(target_dir)
     config = load_workspace_config(workspace_dir)
-    state = load_workspace_state(workspace_dir)
 
-    assessment = evaluate_workspace_assessment(workspace_dir, config, state)
+    assessment = evaluate_workspace_assessment(workspace_dir, config)
     require_capabilities(
         assessment,
         *required_capabilities,
         workspace_dir=workspace_dir,
         config=config,
     )
+    state = load_workspace_state(workspace_dir) if include_state else WorkspaceState()
 
     return WorkspaceContext(
         workspace_dir=workspace_dir,

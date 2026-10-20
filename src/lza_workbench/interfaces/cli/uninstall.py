@@ -38,6 +38,7 @@ from lza_workbench.workspace.uninstall.models import (
     UninstallOptions,
     UninstallPlan,
     UninstallProgress,
+    UninstallTarget,
 )
 from lza_workbench.workspace.uninstall.retained import (
     delete_selected_retained_resources,
@@ -153,7 +154,7 @@ def _confirm_uninstall_interactive(context: WorkspaceContext, plan: UninstallPla
 
 
 def _handle_interactive_post_cleanup(
-    context: WorkspaceContext,
+    target: UninstallTarget,
     execution_context: AwsExecutionContext,
     plan: UninstallPlan,
     options: UninstallOptions,
@@ -174,7 +175,7 @@ def _handle_interactive_post_cleanup(
                 assume_role_name=options.assume_role_name,
             )
             execute_uninstall(
-                context=context,
+                target=target,
                 execution_context=execution_context,
                 plan=plan,
                 options=opt_buckets,
@@ -188,7 +189,7 @@ def _handle_interactive_post_cleanup(
             default=False,
         ):
             delete_selected_retained_resources(
-                context=context,
+                target=target,
                 execution_context=execution_context,
                 account_targets=plan.accounts,
                 assume_role_name=options.assume_role_name,
@@ -198,9 +199,12 @@ def _handle_interactive_post_cleanup(
 
 def _render_final_summary(progress: UninstallProgress, context: WorkspaceContext) -> None:
     """Render the final operation summary with counts and audit log paths."""
-    retained_in_state = read_retained_resources_from_state(context)
+    retained_in_state = read_retained_resources_from_state(context.workspace_dir)
     deleted_retained_count = sum(1 for r in retained_in_state if r.status == "deleted")
-    preserved_retained_count = sum(1 for r in retained_in_state if r.status != "deleted")
+    failed_retained_count = sum(
+        1 for r in retained_in_state if r.status in ("failed", "unsupported")
+    )
+    preserved_retained_count = sum(1 for r in retained_in_state if r.status == "retained")
 
     console.print()
     if progress.status == "COMPLETED":
@@ -213,8 +217,12 @@ def _render_final_summary(progress: UninstallProgress, context: WorkspaceContext
         print_kv("Failed Stacks", len(progress.failed_stacks), style="bold red")
     if progress.deleted_buckets:
         print_kv("Deleted S3 Buckets", len(progress.deleted_buckets), style="green")
+    if progress.failed_buckets:
+        print_kv("Failed S3 Buckets", len(progress.failed_buckets), style="bold red")
     if deleted_retained_count:
         print_kv("Deleted Retained Resources", deleted_retained_count, style="green")
+    if failed_retained_count:
+        print_kv("Failed Retained Resources", failed_retained_count, style="bold red")
     if preserved_retained_count:
         print_kv("Preserved Retained Resources in State", preserved_retained_count, style="yellow")
 
@@ -242,6 +250,7 @@ def uninstall_command(
     context = load_workspace_context(
         target_dir=workspace_dir,
         required_capabilities=(WorkspaceCapability.METADATA_VALID,),
+        include_state=False,
     )
 
     execution_context = resolve_aws_execution_context(
@@ -281,9 +290,11 @@ def uninstall_command(
         skip_pipeline=skip_pipeline,
     )
 
+    target = UninstallTarget.from_workspace(context)
+
     console.print("\n[bold cyan]Phase 1: Discovering LZA resources...[/bold cyan]")
     plan = build_uninstall_plan(
-        context=context,
+        target=target,
         execution_context=execution_context,
         options=options,
     )
@@ -309,13 +320,13 @@ def uninstall_command(
             console.print(f"  [yellow]→[/yellow] {message}...")
         elif event_type == "stack_deleted":
             console.print(f"    [green]✓[/green] {message}")
-        elif event_type == "stack_failed":
+        elif event_type in ("stack_failed", "bucket_failed", "retained_failed"):
             console.print(f"    [bold red]✗[/bold red] {message}")
         elif event_type in ("protect", "delete_bucket", "delete_retained"):
             console.print(f"  [dim]• {message}[/dim]")
 
     progress = execute_uninstall(
-        context=context,
+        target=target,
         execution_context=execution_context,
         plan=plan,
         options=options,
@@ -323,7 +334,7 @@ def uninstall_command(
     )
 
     if interactive and not options.force:
-        _handle_interactive_post_cleanup(context, execution_context, plan, options, on_event)
+        _handle_interactive_post_cleanup(target, execution_context, plan, options, on_event)
 
     _render_final_summary(progress, context)
 

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
 from lza_workbench.configuration.archive import (
     ConfigDiffResult,
     compute_config_directory_digest,
+    compute_zip_content_digest,
     extract_zip_to_workspace,
+    scan_zip_files,
 )
 from lza_workbench.configuration.git import (
     clone_git_repository,
@@ -44,7 +47,7 @@ from lza_workbench.infrastructure.aws.s3 import (
 )
 from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
 from lza_workbench.workspace.context import load_workspace_context
-from lza_workbench.workspace.persistence import write_workspace_config, write_workspace_state
+from lza_workbench.workspace.persistence import update_workspace_state, write_workspace_config
 from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
 from lza_workbench.workspace.validation import WorkspaceCapability
 
@@ -169,9 +172,9 @@ def _get_pull_confirmation(
             and config_dir.is_dir()
             and any(config_dir.iterdir())
             and (
-                context.state.configuration.sync_digest is None
+                context.state.configuration.sync.sync_digest is None
                 or compute_config_directory_digest(config_dir, exclude_dirs, exclude_files)
-                != context.state.configuration.sync_digest
+                != context.state.configuration.sync.sync_digest
             )
         ):
             return (
@@ -260,7 +263,7 @@ def _handle_s3_pull(
     repo_cfg = config.configuration.repository
     destination = resolve_s3_configuration_destination(
         configured_bucket=repo_cfg.bucket,
-        account_id=config.aws.account_id or state.management_account_id,
+        account_id=config.aws.account_id or state.observed_account_id,
         region=config.aws.region,
     )
     zip_path = workspace_dir / CONFIG_ARCHIVE_FILENAME
@@ -293,9 +296,9 @@ def _handle_s3_pull(
         and not force
         and not overwrite_confirmed
         and (
-            state.configuration.sync_digest is None
+            state.configuration.sync.sync_digest is None
             or compute_config_directory_digest(config_dir, exclude_dirs, exclude_files)
-            != state.configuration.sync_digest
+            != state.configuration.sync.sync_digest
         )
     ):
         if not overwrite_confirmed:
@@ -332,9 +335,37 @@ def _handle_s3_pull(
         bucket_name=destination.bucket,
         object_key=destination.object_key,
         file_path=zip_path,
+        version_id=version_id,
     )
+    if version_id is None and etag is not None:
+        post_info = inspect_s3_object_safe(
+            client=s3_client,
+            bucket_name=destination.bucket,
+            object_key=destination.object_key,
+        )
+        if post_info.exists and post_info.etag is not None and post_info.etag != etag:
+            raise LzaError(
+                "Remote S3 configuration archive changed while downloading "
+                f"(expected ETag {etag}, observed {post_info.etag}). Retry `lza config pull`."
+            )
 
+    archive_sha256 = hashlib.sha256(zip_path.read_bytes()).hexdigest() if zip_path.is_file() else None
+    sync_digest: str | None = None
+    files_count: int | None = None
     if extract:
+        zip_files = scan_zip_files(
+            zip_path,
+            exclude_dirs,
+            exclude_files,
+            top_level_dir_name=config_dir.name,
+        )
+        files_count = len(zip_files)
+        sync_digest = compute_zip_content_digest(
+            zip_path,
+            exclude_dirs,
+            exclude_files,
+            top_level_dir_name=config_dir.name,
+        )
         diff_result = extract_zip_to_workspace(
             zip_path=zip_path,
             config_dir=config_dir,
@@ -345,19 +376,24 @@ def _handle_s3_pull(
     else:
         diff_result = ConfigDiffResult(added=[zip_path.name], modified=[], removed=[])
 
-    record_config_download(
-        state,
-        zip_path=zip_path,
-        config_dir=config_dir,
-        exclude_dirs=exclude_dirs,
-        exclude_files=exclude_files,
-        diff_result=diff_result,
-        extracted=extract,
-        etag=etag,
-        version_id=version_id,
-    )
+    def _apply_s3_pull(current_state: WorkspaceState) -> None:
+        record_config_download(
+            current_state,
+            zip_path=zip_path,
+            config_dir=config_dir,
+            exclude_dirs=exclude_dirs,
+            exclude_files=exclude_files,
+            diff_result=diff_result,
+            extracted=extract,
+            etag=etag,
+            version_id=version_id,
+            sync_digest=sync_digest,
+            files_count=files_count,
+            archive_sha256=archive_sha256,
+        )
+        state.configuration = current_state.configuration
 
-    write_workspace_state(workspace_dir, state)
+    update_workspace_state(workspace_dir, _apply_s3_pull)
 
     return ConfigPullResult(
         workspace_dir=workspace_dir,
@@ -526,12 +562,16 @@ def _handle_git_pull(
     commit = get_git_commit(config_dir)
     files_count = count_git_files(config_dir)
 
-    record_config_git_pull(
-        state,
-        files_count=files_count,
-        commit_hash=commit,
-    )
-    write_workspace_state(workspace_dir, state)
+    def _apply_git_pull(current_state: WorkspaceState) -> None:
+        record_config_git_pull(
+            current_state,
+            files_count=files_count,
+            commit_hash=commit,
+            repository_type=repo_type,
+        )
+        state.configuration = current_state.configuration
+
+    update_workspace_state(workspace_dir, _apply_git_pull)
 
     return ConfigPullResult(
         workspace_dir=workspace_dir,

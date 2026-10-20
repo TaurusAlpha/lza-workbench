@@ -25,92 +25,141 @@ from lza_workbench.configuration.inspection import (
 )
 from lza_workbench.configuration.templates import capture_init_values_snapshot
 from lza_workbench.configuration.warnings import compile_configuration_warnings
-from lza_workbench.infrastructure.aws.session import resolve_aws_execution_context
+from lza_workbench.infrastructure.aws.session import (
+    AwsExecutionContext,
+    resolve_aws_execution_context,
+)
 from lza_workbench.workspace.context import load_workspace_context
-from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
+from lza_workbench.workspace.schema import (
+    CustomerEnvironmentTarget,
+    WorkspaceConfig,
+    WorkspaceState,
+)
 from lza_workbench.workspace.validation import WorkspaceCapability
 
 
 def get_config_status_workflow(
     *,
     target_dir: Path | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
     config: WorkspaceConfig | None = None,
     state: WorkspaceState | None = None,
     workspace_dir: Path | None = None,
+    config_dir: Path | None = None,
+    aws_context: AwsExecutionContext | None = None,
 ) -> ConfigurationStatusResult:
     """Query workspace configuration and remote/pipeline status data."""
-    if config is not None and workspace_dir is not None:
+    if config is not None:
         resolved_workspace_dir = workspace_dir
         resolved_config = config
+        resolved_target = environment_target or config.environment_target
         resolved_state = state
-        config_dir = resolved_workspace_dir / resolved_config.configuration.local_path
+        resolved_config_dir = config_dir or (
+            resolved_workspace_dir / resolved_config.configuration.local_path
+            if resolved_workspace_dir is not None
+            else None
+        )
+    elif environment_target is not None:
+        resolved_workspace_dir = workspace_dir
+        resolved_config = None
+        resolved_target = environment_target
+        resolved_state = state
+        resolved_config_dir = config_dir
     else:
         ctx = load_workspace_context(
             target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
         )
         resolved_workspace_dir = ctx.workspace_dir
         resolved_config = ctx.config
+        resolved_target = ctx.environment_target
         resolved_state = ctx.state
-        config_dir = ctx.config_dir
+        resolved_config_dir = config_dir or ctx.config_dir
+
+    config_dir_exists = bool(resolved_config_dir and resolved_config_dir.exists())
     yaml_files = (
         tuple(
             sorted(
                 file.name
-                for file in config_dir.iterdir()
+                for file in resolved_config_dir.iterdir()
                 if file.is_file() and file.suffix in (".yaml", ".yml")
             )
         )
-        if config_dir.exists()
+        if resolved_config_dir is not None and config_dir_exists
         else ()
     )
-    repo = resolved_config.configuration.repository
+    repo = resolved_target.configuration_repository
 
-    profile = resolved_config.aws.profile or ""
-    aws_context = resolve_aws_execution_context(
-        profile=profile,
-        region=resolved_config.aws.region,
-        role_arn=resolved_config.aws.role_arn,
-        expected_account_id=resolved_config.aws.account_id,
-        prime_credentials=resolved_config.aws.prime_credentials,
+    profile = (
+        (resolved_config.aws.profile or "")
+        if resolved_config is not None
+        else (aws_context.factory.profile or "" if aws_context is not None else "")
     )
-    factory = aws_context.factory
-    region = aws_context.region
-    aws_identity = aws_context.identity
-    aws_error = aws_context.error
+    if aws_context is not None:
+        resolved_aws = aws_context
+    elif resolved_config is not None:
+        resolved_aws = resolve_aws_execution_context(
+            profile=profile,
+            region=resolved_config.aws.region,
+            role_arn=resolved_config.aws.role_arn,
+            expected_account_id=resolved_config.aws.account_id,
+            prime_credentials=resolved_config.aws.prime_credentials,
+        )
+    else:
+        resolved_aws = resolve_aws_execution_context(
+            region=resolved_target.region,
+            expected_account_id=resolved_target.account_id,
+        )
+    factory = resolved_aws.factory
+    region = resolved_aws.region
+    aws_identity = resolved_aws.identity
+    aws_error = resolved_aws.error
     account_id = aws_identity["account"] if aws_identity else "UNKNOWN_ACCOUNT"
 
-    initialized_at = resolved_state.configuration.initialized_at if resolved_state else None
-    template_name = resolved_state.configuration.template_name if resolved_state else None
-    template_source = resolved_state.configuration.template_source if resolved_state else None
+    tmpl_state = resolved_state.configuration.template if resolved_state else None
+    initialized_at = tmpl_state.initialized_at if tmpl_state else None
+    template_name = tmpl_state.template_name if tmpl_state else None
+    template_source = tmpl_state.template_source if tmpl_state else None
     drifted_fields: tuple[str, ...] = ()
     has_init_state = bool(
-        resolved_state
-        and resolved_state.configuration.initialized_at
-        and resolved_state.configuration.init_values
+        resolved_config is not None
+        and tmpl_state
+        and tmpl_state.initialized_at
+        and tmpl_state.init_values
     )
-    if has_init_state and resolved_state and resolved_state.configuration.init_values:
+    if (
+        has_init_state
+        and resolved_config is not None
+        and tmpl_state
+        and tmpl_state.init_values
+    ):
         current_snapshot = capture_init_values_snapshot(resolved_config)
-        saved_snapshot = resolved_state.configuration.init_values
+        saved_snapshot = tmpl_state.init_values
         drifted_fields = tuple(
             sorted(k for k, v in current_snapshot.items() if saved_snapshot.get(k) != v)
         )
 
     # Git working tree and remote synchronization
-    git_working_tree = get_git_working_tree_status(config_dir)
+    git_working_tree = (
+        get_git_working_tree_status(resolved_config_dir)
+        if resolved_config_dir is not None
+        else None
+    )
     git_sync_status = (
-        get_git_remote_sync_status(config_dir, branch=repo.branch) if git_working_tree else None
+        get_git_remote_sync_status(resolved_config_dir, branch=repo.branch)
+        if resolved_config_dir is not None and git_working_tree
+        else None
     )
 
     workspace = ConfigurationWorkspaceStatus(
         workspace_dir=resolved_workspace_dir,
-        customer_name=resolved_config.customer.name,
-        lza_version=resolved_config.lza.version,
+        customer_name=resolved_target.customer.name,
+        lza_version=resolved_target.lza.version,
         profile=profile,
         region=region,
         aws_identity=aws_identity,
         aws_error=aws_error,
-        config_dir=config_dir,
-        config_dir_exists=config_dir.exists(),
+        config_dir=resolved_config_dir,
+        config_dir_exists=config_dir_exists,
         yaml_files=yaml_files,
         initialized_at=initialized_at,
         template_name=template_name,
@@ -121,7 +170,8 @@ def get_config_status_workflow(
 
     repository, remote_sync = inspect_configuration_repository(
         repo=repo,
-        config_dir=config_dir,
+        config_dir=resolved_config_dir,
+        environment_target=resolved_target,
         resolved_config=resolved_config,
         resolved_state=resolved_state,
         aws_identity=aws_identity,
@@ -131,6 +181,7 @@ def get_config_status_workflow(
     )
 
     pipeline = inspect_configuration_pipeline(
+        environment_target=resolved_target,
         resolved_config=resolved_config,
         resolved_state=resolved_state,
         aws_identity=aws_identity,
@@ -140,15 +191,20 @@ def get_config_status_workflow(
     )
 
     recorded_pipeline_execution_id = (
-        resolved_state.pipelines.configuration.execution_id if resolved_state else None
+        resolved_state.pipelines.configuration.latest_known_execution_id
+        if resolved_state
+        else None
     )
+    last_push = resolved_state.configuration.last_push if resolved_state else None
+    last_pull = resolved_state.configuration.last_pull if resolved_state else None
+    sync_baseline = resolved_state.configuration.sync if resolved_state else None
     synchronization = ConfigurationSynchronizationStatus(
         has_state=resolved_state is not None,
         recorded_pipeline_execution_id=recorded_pipeline_execution_id,
-        uploaded_at=resolved_state.configuration.uploaded_at if resolved_state else None,
-        downloaded_at=resolved_state.configuration.downloaded_at if resolved_state else None,
-        artifact_etag=resolved_state.configuration.artifact_etag if resolved_state else None,
-        artifact_version_id=resolved_state.configuration.artifact_version_id if resolved_state else None,
+        uploaded_at=last_push.recorded_at if last_push else None,
+        downloaded_at=last_pull.recorded_at if last_pull else None,
+        artifact_etag=sync_baseline.artifact_etag if sync_baseline else None,
+        artifact_version_id=sync_baseline.artifact_version_id if sync_baseline else None,
         remote_sync=remote_sync,
     )
 

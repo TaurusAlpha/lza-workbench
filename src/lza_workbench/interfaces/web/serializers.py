@@ -35,7 +35,7 @@ def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
     return {
         "observedAt": datetime.now(UTC).isoformat(),
         "workspace": {
-            "directory": str(result.workspace_dir),
+            "directory": str(result.workspace_dir) if result.workspace_dir else None,
             "customerName": result.customer_name,
             "lzaVersion": result.lza_version,
         },
@@ -95,8 +95,6 @@ def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
                 "metadataValid": result.assessment.metadata_valid,
                 "configurationPresent": result.assessment.configuration_present,
                 "installerConfigured": result.assessment.installer_configured,
-                "installerRecordedDeployed": result.assessment.installer_recorded_deployed,
-                "imported": result.assessment.imported,
             }
             if result.assessment
             else None
@@ -108,8 +106,6 @@ def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
                     ("metadata_valid", result.assessment.metadata_valid),
                     ("configuration_present", result.assessment.configuration_present),
                     ("installer_configured", result.assessment.installer_configured),
-                    ("installer_recorded_deployed", result.assessment.installer_recorded_deployed),
-                    ("imported", result.assessment.imported),
                 ]
                 if is_supported
             ]
@@ -145,7 +141,7 @@ def serialize_configuration_status(result: ConfigurationStatusResult) -> dict[st
     remote_sync = sync_obj.remote_sync
 
     workspace_data = {
-        "directory": str(ws.workspace_dir),
+        "directory": str(ws.workspace_dir) if ws.workspace_dir else None,
         "customerName": ws.customer_name,
         "lzaVersion": ws.lza_version,
         "profile": ws.profile,
@@ -153,7 +149,7 @@ def serialize_configuration_status(result: ConfigurationStatusResult) -> dict[st
         "identity": ws.aws_identity,
         "error": ws.aws_error,
         "isLive": ws.aws_identity is not None,
-        "configDir": str(ws.config_dir),
+        "configDir": str(ws.config_dir) if ws.config_dir else None,
         "configDirExists": ws.config_dir_exists,
         "yamlFiles": list(ws.yaml_files),
         "yamlFilesCount": len(ws.yaml_files),
@@ -307,30 +303,35 @@ def serialize_installer_status(
     result: InstallerStatusResult, form: InstallerForm
 ) -> dict[str, Any]:
     cfg = result.config
+    target = result.environment_target or (cfg.environment_target if cfg is not None else None)
+    installer = result.installer or (cfg.installer if cfg is not None else None)
+    if target is None or installer is None:
+        raise ValueError("serialize_installer_status requires environment_target and installer.")
     cfn = result.cfn_status
     pipe = result.pipeline_state
     align = result.state_alignment
+    repo = target.configuration_repository
 
     canonical = {
-        "stackName": cfg.installer.stack_name or "AWSAccelerator-InstallerStack",
-        "lzaVersion": cfg.lza.version,
-        "acceleratorPrefix": cfg.lza.accelerator_prefix,
-        "repositorySource": cfg.installer.source_code.repository_type,
-        "repositoryName": cfg.installer.source_code.repository_name,
-        "repositoryBranch": cfg.installer.source_code.branch,
-        "repositoryOwner": cfg.installer.source_code.owner,
-        "managementAccountEmail": cfg.installer.options.management_account_email,
-        "logArchiveAccountEmail": cfg.installer.options.log_archive_account_email,
-        "auditAccountEmail": cfg.installer.options.audit_account_email,
-        "controlTowerEnabled": cfg.installer.options.control_tower_enabled,
-        "enableApprovalStage": cfg.installer.options.enable_approval_stage,
-        "approvalStageNotifyEmailList": cfg.installer.options.approval_stage_notify_email_list,
-        "configRepositoryLocation": cfg.configuration.repository.type,
-        "useExistingConfigRepo": cfg.installer.options.use_existing_config_repo,
-        "configRepositoryName": cfg.configuration.repository.repository_name,
-        "configRepositoryBranch": cfg.configuration.repository.branch,
-        "configRepositoryOwner": cfg.configuration.repository.owner,
-        "configCodeConnectionArn": cfg.configuration.repository.codeconnection_arn,
+        "stackName": target.installer_stack_name or "AWSAccelerator-InstallerStack",
+        "lzaVersion": target.lza.version,
+        "acceleratorPrefix": target.lza.accelerator_prefix,
+        "repositorySource": installer.source_code.repository_type,
+        "repositoryName": installer.source_code.repository_name,
+        "repositoryBranch": installer.source_code.branch,
+        "repositoryOwner": installer.source_code.owner,
+        "managementAccountEmail": installer.options.management_account_email,
+        "logArchiveAccountEmail": installer.options.log_archive_account_email,
+        "auditAccountEmail": installer.options.audit_account_email,
+        "controlTowerEnabled": installer.options.control_tower_enabled,
+        "enableApprovalStage": installer.options.enable_approval_stage,
+        "approvalStageNotifyEmailList": installer.options.approval_stage_notify_email_list,
+        "configRepositoryLocation": repo.type,
+        "useExistingConfigRepo": installer.options.use_existing_config_repo,
+        "configRepositoryName": repo.repository_name,
+        "configRepositoryBranch": repo.branch,
+        "configRepositoryOwner": repo.owner,
+        "configCodeConnectionArn": repo.codeconnection_arn,
     }
 
     deployed = {
@@ -414,9 +415,9 @@ def serialize_installer_status(
 
     return {
         "workspace": {
-            "directory": str(result.workspace_dir),
-            "customerName": cfg.customer.name,
-            "lzaVersion": cfg.lza.version,
+            "directory": str(result.workspace_dir) if result.workspace_dir else None,
+            "customerName": target.customer.name,
+            "lzaVersion": target.lza.version,
         },
         "canonicalSettings": canonical,
         "deployed": deployed,
@@ -432,7 +433,7 @@ def serialize_installer_plan(plan: InstallerPlanResult) -> dict[str, Any]:
     cc = plan.codecommit_plan
 
     return {
-        "workspaceDir": str(plan.workspace_dir),
+        "workspaceDir": str(plan.workspace_dir) if plan.workspace_dir else None,
         "cloudformation": {
             "stackName": cfn.stack_name,
             "operation": cfn.operation,

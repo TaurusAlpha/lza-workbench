@@ -30,7 +30,8 @@ from lza_workbench.workspace.context import (
     WorkspaceContext,
     load_workspace_context,
 )
-from lza_workbench.workspace.schema import WorkspaceState
+from lza_workbench.workspace.persistence import load_workspace_state
+from lza_workbench.workspace.schema import CustomerEnvironmentTarget, WorkspaceState
 from lza_workbench.workspace.validation import WorkspaceCapability
 
 TERMINAL_STATUSES = {"Succeeded", "Failed", "Cancelled", "Stopped", "Superseded"}
@@ -46,7 +47,7 @@ __all__ = [
 
 @dataclass(frozen=True)
 class PipelineSnapshotResult:
-    workspace_dir: Path
+    workspace_dir: Path | None
     customer_name: str
     pipeline_name: str
     pipeline_type: str
@@ -67,31 +68,68 @@ class PipelineSnapshotResult:
     error: str | None = None
 
 
+def _resolve_snapshot_context(
+    *,
+    target_dir: Path | None,
+    workspace_context: WorkspaceContext | None,
+    aws_context: AwsExecutionContext | None,
+) -> tuple[WorkspaceContext | None, AwsExecutionContext]:
+    ctx = workspace_context
+    if ctx is None and (target_dir is not None or aws_context is None):
+        ctx = load_workspace_context(
+            target_dir,
+            required_capabilities=(WorkspaceCapability.METADATA_VALID,),
+            include_state=False,
+        )
+    if aws_context is not None:
+        resolved_aws = aws_context
+    elif ctx is not None:
+        config = ctx.config
+        resolved_aws = resolve_aws_execution_context(
+            profile=config.aws.profile or "",
+            region=config.aws.region,
+            role_arn=config.aws.role_arn,
+            expected_account_id=config.aws.account_id,
+            prime_credentials=config.aws.prime_credentials,
+        )
+    else:
+        raise ValueError("Pipeline status requires an AWS execution context or workspace.")
+    return ctx, resolved_aws
+
+
 def get_pipeline_snapshot_workflow(
     *,
     target_dir: Path | None = None,
+    pipeline_name: str | None = None,
     pipeline_type: str = "configuration",
+    accelerator_prefix: str = "AWSAccelerator",
+    customer_name: str | None = None,
     execution_id: str | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
     workspace_context: WorkspaceContext | None = None,
     aws_context: AwsExecutionContext | None = None,
 ) -> PipelineSnapshotResult:
     """Retrieve an instant snapshot of pipeline execution status and stages."""
-    ctx = workspace_context or load_workspace_context(
-        target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
+    ctx, resolved_aws = _resolve_snapshot_context(
+        target_dir=target_dir,
+        workspace_context=workspace_context,
+        aws_context=aws_context,
     )
-    config = ctx.config
-    state = ctx.state
-    workspace_dir = ctx.workspace_dir
+    config = ctx.config if ctx is not None else None
+    env_target = environment_target or (config.environment_target if config is not None else None)
+    workspace_dir = ctx.workspace_dir if ctx is not None else None
 
-    pipeline = resolve_pipeline(config, pipeline_type=pipeline_type)
+    pipeline = resolve_pipeline(
+        env_target,
+        pipeline_type=pipeline_type,
+        pipeline_name=pipeline_name,
+        accelerator_prefix=accelerator_prefix,
+    )
     resolved_pipeline_name = pipeline.name
-
-    resolved_aws = aws_context or resolve_aws_execution_context(
-        profile=config.aws.profile or "",
-        region=config.aws.region,
-        role_arn=config.aws.role_arn,
-        expected_account_id=config.aws.account_id,
-        prime_credentials=config.aws.prime_credentials,
+    resolved_customer_name = (
+        customer_name
+        if customer_name is not None
+        else (env_target.customer.name if env_target is not None else "")
     )
 
     region = resolved_aws.region
@@ -99,9 +137,14 @@ def get_pipeline_snapshot_workflow(
     pipeline_arn = pipeline.arn(region=region, account_id=account_id)
 
     if not resolved_aws.is_live:
+        state = (
+            ctx.state
+            if (ctx is not None and ctx.state != WorkspaceState())
+            else (load_workspace_state(workspace_dir) if workspace_dir is not None else None)
+        )
         return _build_offline_pipeline_snapshot(
             workspace_dir=workspace_dir,
-            customer_name=config.customer.name,
+            customer_name=resolved_customer_name,
             pipeline_name=resolved_pipeline_name,
             pipeline_type=pipeline_type,
             pipeline_arn=pipeline_arn,
@@ -125,7 +168,7 @@ def get_pipeline_snapshot_workflow(
 
     return PipelineSnapshotResult(
         workspace_dir=workspace_dir,
-        customer_name=config.customer.name,
+        customer_name=resolved_customer_name,
         pipeline_name=resolved_pipeline_name,
         pipeline_type=pipeline_type,
         pipeline_arn=pipeline_arn,
@@ -149,34 +192,32 @@ def get_pipeline_snapshot_workflow(
 def get_pipeline_diagnostics_workflow(
     *,
     target_dir: Path | None = None,
+    pipeline_name: str | None = None,
     pipeline_type: str = "configuration",
+    accelerator_prefix: str = "AWSAccelerator",
+    customer_name: str | None = None,
     execution_id: str | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
     workspace_context: WorkspaceContext | None = None,
     aws_context: AwsExecutionContext | None = None,
 ) -> list[PipelineActionFailure]:
     """Retrieve enriched root-cause failure diagnostics for a pipeline execution."""
-    snapshot = get_pipeline_snapshot_workflow(
+    ctx, resolved_aws = _resolve_snapshot_context(
         target_dir=target_dir,
-        pipeline_type=pipeline_type,
-        execution_id=execution_id,
         workspace_context=workspace_context,
         aws_context=aws_context,
     )
-    if not snapshot.stages or not snapshot.is_live:
-        return []
-
-    ctx = workspace_context or load_workspace_context(
-        target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
+    snapshot = get_pipeline_snapshot_workflow(
+        pipeline_name=pipeline_name,
+        pipeline_type=pipeline_type,
+        accelerator_prefix=accelerator_prefix,
+        customer_name=customer_name,
+        execution_id=execution_id,
+        environment_target=environment_target,
+        workspace_context=ctx,
+        aws_context=resolved_aws,
     )
-    config = ctx.config
-    resolved_aws = aws_context or resolve_aws_execution_context(
-        profile=config.aws.profile or "",
-        region=config.aws.region,
-        role_arn=config.aws.role_arn,
-        expected_account_id=config.aws.account_id,
-        prime_credentials=config.aws.prime_credentials,
-    )
-    if not resolved_aws.is_live:
+    if not snapshot.stages or not snapshot.is_live or not resolved_aws.is_live:
         return []
 
     codebuild_client = resolved_aws.factory.get_client("codebuild")
@@ -193,24 +234,34 @@ def get_pipeline_diagnostics_workflow(
 
 def _build_offline_pipeline_snapshot(
     *,
-    workspace_dir: Path,
+    workspace_dir: Path | None,
     customer_name: str,
     pipeline_name: str,
     pipeline_type: str,
     pipeline_arn: str,
     execution_id: str | None,
-    state: WorkspaceState,
+    state: WorkspaceState | None,
     aws_error: str | None,
 ) -> PipelineSnapshotResult:
-    recorded_status = (
-        state.pipelines.configuration.status
-        if pipeline_type == "configuration"
-        else state.pipelines.installer.status
-    ) or "Unknown"
-    recorded_exec_id = execution_id or (
-        state.pipelines.configuration.execution_id
-        if pipeline_type == "configuration"
-        else state.pipelines.installer.execution_id
+    track = state.pipelines.track(pipeline_type) if state is not None else None
+    obs = track.resolve_offline_observation() if track is not None else None
+    if execution_id is not None:
+        recorded_exec_id = execution_id
+        recorded_status = (
+            (obs.status or "Unknown")
+            if (obs is not None and obs.execution_id == execution_id)
+            else "Unknown"
+        )
+    elif obs is not None:
+        recorded_status = obs.status or "Unknown"
+        recorded_exec_id = obs.execution_id
+    else:
+        recorded_status = "Unknown"
+        recorded_exec_id = None
+    summary = (
+        "Offline - execution started locally; AWS status not yet observed"
+        if (track is not None and track.has_newer_unobserved_operation() and execution_id is None)
+        else "Offline - reflecting last recorded state"
     )
     return PipelineSnapshotResult(
         workspace_dir=workspace_dir,
@@ -220,7 +271,7 @@ def _build_offline_pipeline_snapshot(
         pipeline_arn=pipeline_arn,
         execution_id=recorded_exec_id,
         status=recorded_status,
-        status_summary="Offline - reflecting last recorded state",
+        status_summary=summary,
         is_terminal=True,
         is_live=False,
         error=aws_error,

@@ -31,6 +31,7 @@ from lza_workbench.infrastructure.aws.session import (
     AwsExecutionContext,
     resolve_aws_execution_context,
 )
+from lza_workbench.installer.schema import LzaInstaller
 from lza_workbench.installer.source import (
     inspect_installer_source,
 )
@@ -54,16 +55,20 @@ from lza_workbench.installer.validation import (
 from lza_workbench.workspace.context import load_workspace_context
 from lza_workbench.workspace.persistence import (
     load_workspace_state,
+    update_workspace_state,
     write_workspace_config,
-    write_workspace_state,
 )
-from lza_workbench.workspace.schema import WorkspaceConfig
+from lza_workbench.workspace.schema import (
+    CustomerEnvironmentTarget,
+    WorkspaceConfig,
+    WorkspaceState,
+)
 from lza_workbench.workspace.validation import WorkspaceCapability
 
 
 @dataclass(frozen=True)
 class InstallerDeployResult:
-    workspace_dir: Path
+    workspace_dir: Path | None
     stack_name: str
     operation: str
     cfn_plan: CfnDeploymentPlanResult
@@ -80,8 +85,8 @@ class InstallerDeployResult:
 class InstallerDeploymentPreparation:
     """Validated deployment inputs prepared once for review and execution."""
 
-    workspace_dir: Path
-    config: WorkspaceConfig
+    workspace_dir: Path | None
+    config: WorkspaceConfig | None
     aws_context: AwsExecutionContext
     template_path: Path
     template_digest: str
@@ -94,54 +99,103 @@ class InstallerDeploymentPreparation:
     artifact_bucket: str = ""
     artifact_bucket_observation: S3BucketObservation | None = None
     artifact_bucket_operation: str = "CREATE"
+    environment_target: CustomerEnvironmentTarget | None = None
+    installer: LzaInstaller | None = None
+
+    def __post_init__(self) -> None:
+        if self.environment_target is None and self.config is not None:
+            object.__setattr__(self, "environment_target", self.config.environment_target)
+        if self.installer is None and self.config is not None:
+            object.__setattr__(self, "installer", self.config.installer)
 
 
 def prepare_installer_deployment(
     *,
     target_dir: Path | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
+    installer: LzaInstaller | None = None,
+    config: WorkspaceConfig | None = None,
+    workspace_dir: Path | None = None,
+    template_path: Path | None = None,
+    aws_context: AwsExecutionContext | None = None,
+    deployed_template_digest: str | None = None,
     dry_run: bool = False,
 ) -> InstallerDeploymentPreparation:
     """Prepare one validated installer deployment for confirmation and application."""
-    ctx = load_workspace_context(
-        target_dir,
-        required_capabilities=(
-            WorkspaceCapability.METADATA_VALID,
-            WorkspaceCapability.CONFIGURATION_PRESENT,
-            WorkspaceCapability.INSTALLER_CONFIGURED,
-        ),
-    )
-    workspace_dir, config = ctx.workspace_dir, ctx.config
-    profile = config.aws.profile or ""
-
-    validate_deployment_preflight(config)
-
-    try:
-        aws_context = resolve_aws_execution_context(
-            profile=config.aws.profile,
-            region=config.aws.region,
-            role_arn=config.aws.role_arn,
-            expected_account_id=config.aws.account_id,
-            require_identity=True,
-            require_expected_account=True,
-            prime_credentials=config.aws.prime_credentials,
+    if environment_target is not None and installer is not None:
+        resolved_workspace_dir = workspace_dir
+        resolved_config = config
+        resolved_target = environment_target
+        resolved_installer = installer
+    elif config is not None:
+        resolved_workspace_dir = workspace_dir
+        resolved_config = config
+        resolved_target = environment_target or config.environment_target
+        resolved_installer = installer or config.installer
+    else:
+        ctx = load_workspace_context(
+            target_dir,
+            required_capabilities=(
+                WorkspaceCapability.METADATA_VALID,
+                WorkspaceCapability.INSTALLER_CONFIGURED,
+            ),
+            include_state=False,
         )
-    except LzaError:
-        raise
-    except Exception as exc:
-        raise LzaError(f"AWS identity resolution failed: {exc}") from exc
-    assert aws_context.identity is not None
-    account_id = aws_context.identity["account"]
+        resolved_workspace_dir, resolved_config = ctx.workspace_dir, ctx.config
+        resolved_target = environment_target or ctx.config.environment_target
+        resolved_installer = installer or ctx.config.installer
+    profile = (
+        resolved_config.aws.profile
+        if resolved_config is not None
+        else (aws_context.factory.profile if aws_context is not None else None)
+    ) or ""
 
-    artifact_bucket = (config.assets_bucket or "").strip() or (
-        f"s3-lza-workbench-assets-{account_id}-{aws_context.region}"
+    validate_deployment_preflight(
+        resolved_config,
+        installer=resolved_installer,
+        environment_target=resolved_target,
+    )
+
+    if aws_context is not None:
+        resolved_aws = aws_context
+    else:
+        try:
+            resolved_aws = resolve_aws_execution_context(
+                profile=profile or None,
+                region=resolved_target.region,
+                role_arn=resolved_config.aws.role_arn if resolved_config is not None else None,
+                expected_account_id=resolved_target.account_id,
+                require_identity=True,
+                require_expected_account=True,
+                prime_credentials=(
+                    resolved_config.aws.prime_credentials if resolved_config is not None else False
+                ),
+            )
+        except LzaError:
+            raise
+        except Exception as exc:
+            raise LzaError(f"AWS identity resolution failed: {exc}") from exc
+    resolved_aws.require_live(expected_account_id=resolved_target.account_id)
+    assert resolved_aws.identity is not None
+    account_id = resolved_aws.identity["account"]
+
+    configured_assets_bucket = (
+        resolved_target.assets_bucket
+        if resolved_target.assets_bucket is not None
+        else (resolved_config.assets_bucket if resolved_config is not None else None)
+    )
+    artifact_bucket = (configured_assets_bucket or "").strip() or (
+        f"s3-lza-workbench-assets-{account_id}-{resolved_aws.region}"
     )
     artifact_bucket_observation = inspect_s3_bucket(
-        client=aws_context.factory.get_client("s3"), bucket_name=artifact_bucket
+        client=resolved_aws.factory.get_client("s3"), bucket_name=artifact_bucket
     )
     if artifact_bucket_observation.exists:
         managed_by = artifact_bucket_observation.tags.get("ManagedBy")
         workspace_slug = artifact_bucket_observation.tags.get("Workspace")
-        if managed_by and (managed_by != "lza-workbench" or workspace_slug != config.customer.slug):
+        if managed_by and (
+            managed_by != "lza-workbench" or workspace_slug != resolved_target.customer.slug
+        ):
             raise LzaError(
                 f"S3 bucket '{artifact_bucket}' is tagged for another Workbench workspace "
                 "or owner; refusing to adopt it."
@@ -154,31 +208,52 @@ def prepare_installer_deployment(
         else "NO_CHANGE"
     )
 
-    template_path, resolved_parameters = prepare_installer_template(
-        workspace_dir=workspace_dir, config=config, dry_run=dry_run
+    if template_path is None and resolved_workspace_dir is None:
+        raise LzaError("Installer deployment requires either template_path or workspace_dir.")
+    resolved_template_path, resolved_parameters = prepare_installer_template(
+        config=resolved_config,
+        installer=resolved_installer,
+        environment_target=resolved_target,
+        workspace_dir=resolved_workspace_dir,
+        template_path=template_path,
+        dry_run=dry_run,
     )
-    template_digest = get_installer_template_digest(template_path)
-    inspect_installer_source(factory=aws_context.factory, config=config, region=aws_context.region)
 
-    stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
+    template_digest = get_installer_template_digest(resolved_template_path)
+    inspect_installer_source(
+        factory=resolved_aws.factory,
+        config=resolved_config,
+        installer=resolved_installer,
+        environment_target=resolved_target,
+        region=resolved_aws.region,
+    )
+
+    stack_name = resolved_target.installer_stack_name or "AWSAccelerator-InstallerStack"
     cfn_plan = inspect_cloudformation_stack(
-        client=aws_context.factory.get_client("cloudformation"),
+        client=resolved_aws.factory.get_client("cloudformation"),
         stack_name=stack_name,
         resolved_parameters=resolved_parameters,
     )
-    state = load_workspace_state(workspace_dir)
+    if deployed_template_digest is not None:
+        resolved_deployed_digest = deployed_template_digest
+    elif resolved_workspace_dir is not None:
+        state = load_workspace_state(resolved_workspace_dir)
+        resolved_deployed_digest = state.installer.template.digest
+    else:
+        resolved_deployed_digest = None
+
     cfn_plan = include_template_digest_change(
         cfn_plan,
         template_digest=template_digest,
-        deployed_template_digest=state.installer.template_digest,
+        deployed_template_digest=resolved_deployed_digest,
     )
     operation = validate_cloudformation_plan(cfn_plan)
 
     return InstallerDeploymentPreparation(
-        workspace_dir=workspace_dir,
-        config=config,
-        aws_context=aws_context,
-        template_path=template_path,
+        workspace_dir=resolved_workspace_dir,
+        config=resolved_config,
+        aws_context=resolved_aws,
+        template_path=resolved_template_path,
         template_digest=template_digest,
         resolved_parameters=resolved_parameters,
         stack_name=stack_name,
@@ -189,19 +264,38 @@ def prepare_installer_deployment(
         artifact_bucket=artifact_bucket,
         artifact_bucket_observation=artifact_bucket_observation,
         artifact_bucket_operation=artifact_bucket_operation,
+        environment_target=resolved_target,
+        installer=resolved_installer,
     )
 
 
 def deploy_installer_workflow(
     *,
     target_dir: Path | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
+    installer: LzaInstaller | None = None,
+    config: WorkspaceConfig | None = None,
+    workspace_dir: Path | None = None,
+    template_path: Path | None = None,
+    aws_context: AwsExecutionContext | None = None,
+    deployed_template_digest: str | None = None,
     dry_run: bool = False,
     force: bool = False,
     force_no_change: bool = False,
     on_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> InstallerDeployResult:
     """Execute the installer deployment workflow and return structured results."""
-    preparation = prepare_installer_deployment(target_dir=target_dir, dry_run=dry_run)
+    preparation = prepare_installer_deployment(
+        target_dir=target_dir,
+        environment_target=environment_target,
+        installer=installer,
+        config=config,
+        workspace_dir=workspace_dir,
+        template_path=template_path,
+        aws_context=aws_context,
+        deployed_template_digest=deployed_template_digest,
+        dry_run=dry_run,
+    )
     return apply_installer_deployment(
         preparation=preparation,
         dry_run=dry_run,
@@ -222,8 +316,16 @@ def apply_installer_deployment(
     """Apply a previously prepared installer deployment without repeating discovery."""
     workspace_dir = preparation.workspace_dir
     config = preparation.config
+    env_target = preparation.environment_target or (
+        config.environment_target if config is not None else None
+    )
+    if env_target is None:
+        raise ValueError(
+            "apply_installer_deployment requires preparation with environment_target or config."
+        )
     aws_context = preparation.aws_context
     operation = preparation.operation
+    aws_context.require_live(expected_account_id=env_target.account_id)
     assert aws_context.identity is not None
 
     if (
@@ -282,7 +384,7 @@ def apply_installer_deployment(
             bucket_name=bucket_name,
             tags={
                 "ManagedBy": "lza-workbench",
-                "Workspace": config.customer.slug,
+                "Workspace": env_target.customer.slug,
                 "Purpose": "installer-artifacts",
             },
         )
@@ -293,16 +395,19 @@ def apply_installer_deployment(
     if insp.exists and not actions_taken:
         actions_taken.append(f"Reused installer artifact bucket '{bucket_name}'")
 
-    s3_key = f"installer-templates/{config.lza.version}/AWSAccelerator-InstallerStack.template"
+    s3_key = f"installer-templates/{env_target.lza.version}/AWSAccelerator-InstallerStack.template"
     upload_s3_file(
         client=s3_client,
         file_path=preparation.template_path,
         bucket_name=bucket_name,
         object_key=s3_key,
     )
-    if not config.assets_bucket:
+    if not env_target.assets_bucket:
+        env_target.assets_bucket = bucket_name
+    if config is not None and not config.assets_bucket:
         config.assets_bucket = bucket_name
-        write_workspace_config(workspace_dir, config)
+        if workspace_dir is not None:
+            write_workspace_config(workspace_dir, config)
     template_url = get_s3_https_url(
         bucket_name=bucket_name, object_key=s3_key, region=aws_context.region
     )
@@ -327,36 +432,50 @@ def apply_installer_deployment(
     )
 
     if final_status.stack_status not in {"CREATE_COMPLETE", "UPDATE_COMPLETE"}:
-        state = load_workspace_state(workspace_dir)
-        record_installer_deployment_failure(
-            state,
-            aws_identity=aws_context.identity,
-            stack_id=final_status.stack_id or stack_id,
-            stack_status=final_status.stack_status or "UNKNOWN",
-        )
-        write_workspace_state(workspace_dir, state)
+        if workspace_dir is not None:
+            update_workspace_state(
+                workspace_dir,
+                lambda current: record_installer_deployment_failure(
+                    current,
+                    aws_identity=aws_context.identity,
+                    operation=operation,
+                    stack_name=preparation.stack_name,
+                    stack_id=final_status.stack_id or stack_id,
+                    stack_status=final_status.stack_status or "UNKNOWN",
+                    template_version=env_target.lza.version,
+                    template_digest=preparation.template_digest,
+                    error=final_status.error,
+                ),
+            )
         status_name = final_status.stack_status or "UNKNOWN"
         error_detail = f": {final_status.error}" if final_status.error else ""
         raise LzaError(
             f"CloudFormation stack deployment failed with status ({status_name}){error_detail}"
         )
 
-    state = load_workspace_state(workspace_dir)
-    downloaded_at = (
-        datetime.fromtimestamp(preparation.template_path.stat().st_mtime, tz=UTC)
-        if preparation.template_path.exists()
-        else None
-    )
-    record_installer_deployment(
-        state,
-        aws_identity=aws_context.identity,
-        stack_id=final_status.stack_id or stack_id,
-        stack_status=final_status.stack_status or "CREATE_COMPLETE",
-        template_version=config.lza.version,
-        template_digest=preparation.template_digest,
-        downloaded_at=downloaded_at,
-    )
-    write_workspace_state(workspace_dir, state)
+    if workspace_dir is not None:
+        downloaded_at = (
+            datetime.fromtimestamp(preparation.template_path.stat().st_mtime, tz=UTC)
+            if preparation.template_path.exists()
+            else None
+        )
+        update_workspace_state(
+            workspace_dir,
+            lambda current: record_installer_deployment(
+                current,
+                aws_identity=aws_context.identity,
+                operation=operation,
+                stack_name=preparation.stack_name,
+                stack_id=final_status.stack_id or stack_id,
+                stack_status=final_status.stack_status or "CREATE_COMPLETE",
+                template_version=env_target.lza.version,
+                template_digest=preparation.template_digest,
+                deployed_parameters=dict(
+                    final_status.deployed_parameters or preparation.resolved_parameters
+                ),
+                downloaded_at=downloaded_at,
+            ),
+        )
 
     return InstallerDeployResult(
         workspace_dir=workspace_dir,

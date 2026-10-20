@@ -12,6 +12,7 @@ from lza_workbench.installer.initialize import (
     apply_installer_settings,
 )
 from lza_workbench.installer.reset import reset_installer_settings
+from lza_workbench.installer.state import InstallerStackObservation
 from lza_workbench.workspace.persistence import (
     load_workspace_config,
     load_workspace_state,
@@ -45,17 +46,24 @@ def test_reset_installer_settings_reverts_to_deployed_parameters(tmp_path: Path)
     config.installer.options.enable_approval_stage = False
     write_workspace_config(ws_dir, config)
 
+    from datetime import UTC, datetime
+
+    original_observed_at = datetime(2026, 3, 15, 9, 30, 0, tzinfo=UTC)
     state = WorkspaceState.from_config(config)
-    state.installer.deployed_parameters = {
-        "EnableApprovalStage": "No",
-        "AcceleratorPrefix": "AWSAccelerator",
-        "ManagementAccountEmail": "mgmt@example.com",
-        "LogArchiveAccountEmail": "log@example.com",
-        "AuditAccountEmail": "audit@example.com",
-    }
+    state.installer.observation = InstallerStackObservation(
+        exists=True,
+        deployed_parameters={
+            "EnableApprovalStage": "No",
+            "AcceleratorPrefix": "AWSAccelerator",
+            "ManagementAccountEmail": "mgmt@example.com",
+            "LogArchiveAccountEmail": "log@example.com",
+            "AuditAccountEmail": "audit@example.com",
+        },
+        observed_at=original_observed_at,
+    )
     write_workspace_state(ws_dir, state)
 
-    # Apply changes creating pending deployment parameters
+    # Apply changes to local configuration
     apply_installer_settings(
         InstallerSettingsRequest(
             target_dir=ws_dir,
@@ -68,21 +76,18 @@ def test_reset_installer_settings_reverts_to_deployed_parameters(tmp_path: Path)
 
     modified_config = load_workspace_config(ws_dir)
     assert modified_config.installer.options.enable_approval_stage is True
-    modified_state = load_workspace_state(ws_dir)
-    assert modified_state.installer.pending_parameters is not None
 
     # Now reset back to deployed parameters
     result = reset_installer_settings(target_dir=ws_dir)
 
     assert result.resolved_parameters.get("EnableApprovalStage") == "No"
 
-    # Verify workspace config was rewritten back
+    # Verify workspace config was rewritten back and cached observation timestamp preserved
     restored_config = load_workspace_config(ws_dir)
     assert restored_config.installer.options.enable_approval_stage is False
-
-    # Verify state pending_parameters was cleared
     restored_state = load_workspace_state(ws_dir)
-    assert restored_state.installer.pending_parameters is None
+    assert restored_state.installer.observation is not None
+    assert restored_state.installer.observation.observed_at == original_observed_at
 
 
 def test_reset_installer_settings_no_deployed_parameters_raises(tmp_path: Path) -> None:

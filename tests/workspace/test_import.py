@@ -88,8 +88,8 @@ def test_import_workspace_workflow_execution(tmp_path: Path) -> None:
     assert result.dry_run is False
     assert (ws_dir / "lza-workspace.yaml").is_file()
     assert (ws_dir / ".lza" / "state.json").is_file()
-    assert result.state.configuration.files_count is not None
-    assert result.state.configuration.files_count > 0
+    assert result.state.configuration.sync.files_count is not None
+    assert result.state.configuration.sync.files_count > 0
 
 
 def test_prepare_workspace_import_is_read_only_until_applied(tmp_path: Path) -> None:
@@ -261,11 +261,13 @@ def test_import_workspace_live_aws_discovery(tmp_path: Path) -> None:
     assert result.config.installer.options.enable_approval_stage is True
     assert result.config.installer.source_code.repository_type == "codecommit"
     assert result.config.configuration.repository.type == "codecommit"
-    assert result.state.installer.stack_id == stack_id
-    assert result.state.installer.stack_status == "UPDATE_COMPLETE"
-    assert result.state.installer.template_version == "v1.15.5"
-    assert result.state.imported is True
-    assert result.state.imported_at is not None
+    assert result.state.installer.observation is not None
+    assert result.state.installer.observation.stack_id == stack_id
+    assert result.state.installer.observation.stack_status == "UPDATE_COMPLETE"
+    assert result.state.installer.observation.deployed_version == "v1.15.5"
+    assert result.state.installer.template.version == "v1.15.5"
+    assert result.state.workspace.imported is True
+    assert result.state.workspace.imported_at is not None
     assert len(result.recommendations) > 0
 
 
@@ -337,7 +339,7 @@ def test_import_workspace_live_aws_discovery_s3_repository(tmp_path: Path) -> No
 
     assert result.installer_discovered is True
     assert result.config.lza.version == "v1.15.5"
-    assert result.state.installer.template_version == "v1.15.5"
+    assert result.state.installer.template.version == "v1.15.5"
     assert result.config.installer.source_code.repository_type == "s3"
     assert result.config.installer.source_code.bucket == "s3-aws-accelerator-source-123456789012"
     assert result.config.installer.source_code.key == "lza-v1.15.5.zip"
@@ -364,3 +366,102 @@ def test_import_workspace_live_aws_discovery_s3_repository(tmp_path: Path) -> No
         == "aws-accelerator-config-123456789012-eu-west-1"
     )
     assert any("lza config download" in rec for rec in result.recommendations)
+
+
+def test_apply_workspace_import_preserves_existing_installer_deployment(tmp_path: Path) -> None:
+    from datetime import UTC, datetime, timedelta
+    from unittest.mock import MagicMock, patch
+
+    from lza_workbench.installer.state import (
+        InstallerDeploymentRecord,
+        InstallerStackObservation,
+    )
+    from lza_workbench.workspace.persistence import load_workspace_state, write_workspace_state
+    from lza_workbench.workspace.schema import WorkspaceState
+
+    ws_dir = tmp_path / "preserve-deploy-ws"
+    config_dir = ws_dir / "aws-accelerator-config"
+    _copy_default_templates(config_dir)
+
+    stack_id = "arn:aws:cloudformation:eu-west-1:123456789012:stack/AWSAccelerator-InstallerStack/old"
+    mock_cfn = MagicMock()
+    mock_cfn.describe_stacks.return_value = {
+        "Stacks": [
+            {
+                "StackName": "AWSAccelerator-InstallerStack",
+                "StackId": stack_id,
+                "StackStatus": "UPDATE_COMPLETE",
+                "Parameters": [
+                    {"ParameterKey": "ManagementAccountEmail", "ParameterValue": "mgmt@example.com"},
+                    {"ParameterKey": "LogArchiveAccountEmail", "ParameterValue": "log@example.com"},
+                    {"ParameterKey": "AuditAccountEmail", "ParameterValue": "audit@example.com"},
+                ],
+            }
+        ]
+    }
+    mock_cfn.get_parameter.return_value = {"Parameter": {"Value": "1.15.5"}}
+    mock_cfn.get_template.return_value = {
+        "TemplateBody": '{"Description": "Imported installer", "Parameters": {}}'
+    }
+
+    with (
+        patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
+        patch(
+            "lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client",
+            return_value=mock_cfn,
+        ),
+    ):
+        mock_val.return_value = {
+            "account": "123456789012",
+            "arn": "arn:aws:iam::123456789012:user/admin",
+        }
+        preparation = prepare_workspace_import(
+            ImportWorkspaceRequest(
+                workspace_dir=ws_dir,
+                customer_name="Deploy Customer",
+                aws_profile="deploy-root",
+                aws_region="eu-west-1",
+                skip_aws_check=False,
+            )
+        )
+
+    # Simulate that .lza/state.json was created and has a newer deployment recorded before apply
+    t0 = datetime(2026, 6, 1, 10, 0, 0, tzinfo=UTC)
+    t_newer = t0 + timedelta(hours=1)
+    state = WorkspaceState.from_config(preparation.result.config)
+    state.installer.last_deployment = InstallerDeploymentRecord(
+        operation="DEPLOY",
+        stack_name="AWSAccelerator-InstallerStack",
+        stack_id="arn:aws:cloudformation:eu-west-1:123456789012:stack/AWSAccelerator-InstallerStack/newer",
+        status="UPDATE_COMPLETE",
+        template_version="v1.16.0",
+        template_digest="new-digest-abc",
+        recorded_at=t_newer,
+    )
+    state.installer.observation = InstallerStackObservation(
+        account_id="123456789012",
+        stack_name="AWSAccelerator-InstallerStack",
+        stack_id="arn:aws:cloudformation:eu-west-1:123456789012:stack/AWSAccelerator-InstallerStack/newer",
+        stack_status="UPDATE_COMPLETE",
+        deployed_version="v1.16.0",
+        observed_at=t_newer,
+    )
+    state.installer.template.version = "v1.16.0"
+    state.installer.template.digest = "new-digest-abc"
+    state.installer.template.downloaded_at = t_newer
+    (ws_dir / ".lza").mkdir(parents=True, exist_ok=True)
+    write_workspace_state(ws_dir, state)
+
+    apply_workspace_import(preparation)
+
+    final_state = load_workspace_state(ws_dir)
+    assert final_state.installer.last_deployment is not None
+    assert final_state.installer.last_deployment.recorded_at == t_newer
+    assert final_state.installer.last_deployment.template_version == "v1.16.0"
+    # Newer observation and template baseline are preserved
+    assert final_state.installer.observation is not None
+    assert final_state.installer.observation.observed_at == t_newer
+    assert final_state.installer.observation.deployed_version == "v1.16.0"
+    assert final_state.installer.template.digest == "new-digest-abc"
+    assert final_state.installer.template.version == "v1.16.0"
+    assert final_state.installer.template.downloaded_at == t_newer

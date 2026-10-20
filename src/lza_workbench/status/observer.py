@@ -23,7 +23,11 @@ from lza_workbench.infrastructure.aws.codepipeline import (
     get_pipeline_state,
 )
 from lza_workbench.infrastructure.aws.s3 import S3ObjectObservation, inspect_s3_object_safe
-from lza_workbench.infrastructure.aws.session import AwsClientFactory, resolve_aws_execution_context
+from lza_workbench.infrastructure.aws.session import (
+    AwsClientFactory,
+    AwsExecutionContext,
+    resolve_aws_execution_context,
+)
 from lza_workbench.installer.versions import resolve_deployed_installer_version
 from lza_workbench.pipeline.failures import (
     collect_pipeline_action_failures,
@@ -38,9 +42,16 @@ from lza_workbench.status.summary import (
     RootStatusResult,
 )
 from lza_workbench.workspace.context import load_workspace_context
-from lza_workbench.workspace.schema import WorkspaceConfig, WorkspaceState
+from lza_workbench.workspace.persistence import get_state_path, load_workspace_state
+from lza_workbench.workspace.schema import (
+    CustomerEnvironmentTarget,
+    WorkspaceConfig,
+    WorkspaceState,
+)
 from lza_workbench.workspace.validation import (
+    WorkspaceAssessment,
     WorkspaceCapability,
+    evaluate_workspace_assessment,
 )
 
 
@@ -86,19 +97,18 @@ def _resolve_pipeline_failure_details(
 def _resolve_recorded_pipeline_summary(
     pipeline_type: str, state: WorkspaceState | None, pipeline_name: str
 ) -> PipelineSummary:
-    if pipeline_type == "installer" and state:
-        recorded = state.pipelines.installer
-    elif pipeline_type == "configuration" and state:
-        recorded = state.pipelines.configuration
-    else:
-        recorded = None
+    obs = (
+        state.pipelines.track(pipeline_type).resolve_offline_observation()
+        if state is not None and pipeline_type in {"installer", "configuration"}
+        else None
+    )
 
-    if recorded is not None:
-        status = recorded.status
-        execution_id = recorded.execution_id
-        failed_stage = recorded.failed_stage
-        failed_action = recorded.failed_action
-        failure_summary = recorded.error
+    if obs is not None:
+        status = obs.status
+        execution_id = obs.execution_id
+        failed_stage = obs.failed_stage
+        failed_action = obs.failed_action
+        failure_summary = obs.error
     else:
         status, execution_id, failed_stage, failed_action, failure_summary = (
             None,
@@ -276,7 +286,12 @@ def _derive_overall_health(
         installer_health = f"Recorded: {inst_status}" if inst_status else "Unknown"
         config_status = config_pipe.status
         configuration_health = f"Recorded: {config_status}" if config_status else "Unknown"
-        has_any_state = bool(inst_status or config_status)
+        has_any_state = bool(
+            inst_status
+            or config_status
+            or installer_pipe.execution_id
+            or config_pipe.execution_id
+        )
         workspace_health = (
             "AWS Unavailable - Showing Last Known State"
             if has_any_state
@@ -302,12 +317,12 @@ def _derive_overall_health(
 
 
 def _resolve_installer_stack_summary(
-    config: WorkspaceConfig,
+    target: CustomerEnvironmentTarget,
     state: WorkspaceState | None,
     factory: AwsClientFactory | None,
     is_live: bool,
 ) -> InstallerStackSummary:
-    cfn_stack_name = config.installer.stack_name or "AWSAccelerator-InstallerStack"
+    cfn_stack_name = target.installer_stack_name or "AWSAccelerator-InstallerStack"
     if is_live and factory is not None:
         cfn_client = factory.get_client("cloudformation")
         cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=cfn_stack_name)
@@ -319,7 +334,7 @@ def _resolve_installer_stack_summary(
                 stack_name=cfn_stack_name,
                 accelerator_prefix=(
                     cfn_status.deployed_parameters.get("AcceleratorPrefix")
-                    or config.lza.accelerator_prefix
+                    or target.lza.accelerator_prefix
                 ),
             )
             if cfn_status.exists
@@ -329,38 +344,42 @@ def _resolve_installer_stack_summary(
             name=cfn_stack_name,
             status=cfn_status.stack_status,
             exists=cfn_status.exists,
-            deployed_version=deployed_version or config.lza.version,
+            deployed_version=deployed_version or target.lza.version,
             is_live=True,
         )
 
-    recorded_status = state.installer.stack_status if state else None
-    recorded_version = state.installer.template_version if state else None
+    obs = state.installer.observation if state else None
+    recorded_status = obs.stack_status if obs else None
+    recorded_version = (
+        (obs.deployed_version if obs else None)
+        or (state.installer.template.version if state else None)
+    )
     return InstallerStackSummary(
         name=cfn_stack_name,
         status=recorded_status,
-        exists=bool(recorded_status),
+        exists=bool(obs.exists) if obs is not None else False,
         deployed_version=recorded_version,
         is_live=False,
     )
 
 
 def _resolve_repo_target(
-    repo: Any,
-    config: WorkspaceConfig,
+    target: CustomerEnvironmentTarget,
     state: WorkspaceState | None,
     aws_identity: dict[str, Any] | None,
     region: str | None,
 ) -> str | None:
+    repo = target.configuration_repository
     if repo.type == "s3":
         try:
             return resolve_s3_configuration_destination(
                 configured_bucket=repo.bucket,
                 account_id=(
-                    config.aws.account_id
-                    or (state.management_account_id if state else None)
+                    target.account_id
+                    or (state.observed_account_id if state else None)
                     or (aws_identity.get("account") if aws_identity else None)
                 ),
-                region=region or config.aws.region,
+                region=region or target.region,
             ).bucket
         except Exception:
             return repo.bucket or "Not configured"
@@ -377,8 +396,9 @@ def _resolve_repo_target(
 
 def _resolve_remote_sync_status(
     repo: Any,
-    config: WorkspaceConfig,
-    config_dir: Path,
+    exclude_dirs: set[str],
+    exclude_files: set[str],
+    config_dir: Path | None,
     remote_target: str | None,
     git_sync_status: Any,
     factory: AwsClientFactory | None,
@@ -386,6 +406,8 @@ def _resolve_remote_sync_status(
     is_live: bool,
 ) -> RemoteSyncStatus | None:
     if repo.type == "s3":
+        if config_dir is None:
+            return None
         s3_info: S3ObjectObservation | None = None
         if is_live and remote_target and remote_target != "Not configured" and factory is not None:
             try:
@@ -397,8 +419,6 @@ def _resolve_remote_sync_status(
                 )
             except Exception:
                 s3_info = None
-        exclude_dirs = set(config.configuration.packaging.exclude.directories)
-        exclude_files = set(config.configuration.packaging.exclude.files)
         return evaluate_s3_remote_sync(
             config_dir=config_dir,
             exclude_dirs=exclude_dirs,
@@ -415,29 +435,78 @@ def _resolve_remote_sync_status(
 def get_root_status_workflow(
     *,
     target_dir: Path | None = None,
+    environment_target: CustomerEnvironmentTarget | None = None,
+    config: WorkspaceConfig | None = None,
+    aws_context: AwsExecutionContext | None = None,
+    state: WorkspaceState | None = None,
+    workspace_dir: Path | None = None,
+    config_dir: Path | None = None,
 ) -> RootStatusResult:
     """Query workspace and AWS to collect root summary status."""
-    ctx = load_workspace_context(
-        target_dir, required_capabilities=(WorkspaceCapability.METADATA_VALID,)
-    )
-    workspace_dir, config, state = ctx.workspace_dir, ctx.config, ctx.state
+    assessment: WorkspaceAssessment | None = None
+    resolved_config_dir: Path | None = config_dir
+    if config is None and environment_target is None:
+        ctx = load_workspace_context(
+            target_dir,
+            required_capabilities=(WorkspaceCapability.METADATA_VALID,),
+            include_state=False,
+        )
+        workspace_dir, config = ctx.workspace_dir, ctx.config
+        state = ctx.state if ctx.state != WorkspaceState() else None
+        assessment = ctx.assessment
+        if resolved_config_dir is None:
+            resolved_config_dir = (
+                ctx.config_dir
+                if isinstance(getattr(ctx, "config_dir", None), Path)
+                else (workspace_dir / config.configuration.local_path)
+            )
+    else:
+        workspace_dir = workspace_dir or target_dir
+        if workspace_dir is not None and config is not None:
+            if resolved_config_dir is None:
+                resolved_config_dir = workspace_dir / config.configuration.local_path
+            assessment = evaluate_workspace_assessment(workspace_dir, config)
 
-    profile = config.aws.profile or ""
-    aws_context = resolve_aws_execution_context(
-        profile=profile,
-        region=config.aws.region,
-        role_arn=config.aws.role_arn,
-        expected_account_id=config.aws.account_id,
-        prime_credentials=config.aws.prime_credentials,
+    resolved_target = environment_target or (
+        config.environment_target if config is not None else None
     )
+    assert resolved_target is not None
+    profile = (
+        (config.aws.profile or "")
+        if config is not None
+        else (aws_context.factory.profile or "" if aws_context is not None else "")
+    )
+    if aws_context is None:
+        if config is not None:
+            aws_context = resolve_aws_execution_context(
+                profile=profile,
+                region=config.aws.region,
+                role_arn=config.aws.role_arn,
+                expected_account_id=config.aws.account_id,
+                prime_credentials=config.aws.prime_credentials,
+            )
+        else:
+            aws_context = resolve_aws_execution_context(
+                region=resolved_target.region,
+                expected_account_id=resolved_target.account_id,
+            )
     factory = aws_context.factory
     region = aws_context.region
     aws_identity = aws_context.identity
     aws_error = aws_context.error
     is_live = aws_identity is not None
 
+    repo = resolved_target.configuration_repository
+    if (
+        state is None
+        and workspace_dir is not None
+        and (not is_live or repo.type == "s3")
+        and get_state_path(workspace_dir).exists()
+    ):
+        state = load_workspace_state(workspace_dir)
+
     installer_stack_summary = _resolve_installer_stack_summary(
-        config=config,
+        target=resolved_target,
         state=state,
         factory=factory,
         is_live=is_live,
@@ -445,8 +514,8 @@ def get_root_status_workflow(
 
     # Pipelines
     codepipeline_client = factory.get_client("codepipeline") if is_live else None
-    installer_pipeline_name = resolve_pipeline(config, pipeline_type="installer").name
-    config_pipeline_name = resolve_pipeline(config, pipeline_type="configuration").name
+    installer_pipeline_name = resolve_pipeline(resolved_target, pipeline_type="installer").name
+    config_pipeline_name = resolve_pipeline(resolved_target, pipeline_type="configuration").name
 
     installer_pipe_summary = _resolve_pipeline_summary(
         pipeline_name=installer_pipeline_name,
@@ -466,35 +535,45 @@ def get_root_status_workflow(
     )
 
     # Configuration Repository & Local Git
-    config_dir = (
-        ctx.config_dir
-        if isinstance(getattr(ctx, "config_dir", None), Path)
-        else (workspace_dir / config.configuration.local_path)
-    )
-    config_dir_exists = config_dir.exists()
-    repo = config.configuration.repository
+    config_dir_exists = resolved_config_dir.exists() if resolved_config_dir is not None else False
 
     target = _resolve_repo_target(
-        repo=repo,
-        config=config,
+        target=resolved_target,
         state=state,
         aws_identity=aws_identity,
         region=region,
     )
 
-    gwt = get_git_working_tree_status(config_dir) if config_dir_exists else None
+    gwt = (
+        get_git_working_tree_status(resolved_config_dir)
+        if resolved_config_dir is not None and config_dir_exists
+        else None
+    )
     local_git_branch = gwt.branch if gwt else None
     local_git_clean = not gwt.has_uncommitted if gwt else True
     local_git_uncommitted = gwt.uncommitted_count if gwt else 0
 
     git_sync_status = (
-        get_git_remote_sync_status(config_dir, branch=repo.branch) if gwt is not None else None
+        get_git_remote_sync_status(resolved_config_dir, branch=repo.branch)
+        if resolved_config_dir is not None and gwt is not None
+        else None
     )
 
+    exclude_dirs = (
+        set(config.configuration.packaging.exclude.directories)
+        if config is not None
+        else {".git"}
+    )
+    exclude_files = (
+        set(config.configuration.packaging.exclude.files)
+        if config is not None
+        else {".DS_Store"}
+    )
     remote_sync = _resolve_remote_sync_status(
         repo=repo,
-        config=config,
-        config_dir=config_dir,
+        exclude_dirs=exclude_dirs,
+        exclude_files=exclude_files,
+        config_dir=resolved_config_dir,
         remote_target=target,
         git_sync_status=git_sync_status,
         factory=factory,
@@ -523,8 +602,8 @@ def get_root_status_workflow(
 
     return RootStatusResult(
         workspace_dir=workspace_dir,
-        customer_name=config.customer.name,
-        lza_version=config.lza.version,
+        customer_name=resolved_target.customer.name,
+        lza_version=resolved_target.lza.version,
         profile=profile,
         region=region,
         aws_identity=aws_identity,
@@ -534,7 +613,7 @@ def get_root_status_workflow(
         configuration_repo=config_repo_summary,
         configuration_pipeline=config_pipe_summary,
         health=health,
-        assessment=ctx.assessment,
+        assessment=assessment,
     )
 
 
