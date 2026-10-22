@@ -221,9 +221,14 @@ def observe_pipeline_status(
                 else None
             )
             if obs is not None:
+                exists = (
+                    obs.exists
+                    if obs.exists is not None
+                    else (obs.status not in (None, "Not Deployed", "NOT_DEPLOYED"))
+                )
                 return PipelineSummary(
                     name=pipeline_name,
-                    exists=bool(obs.status or obs.execution_id),
+                    exists=exists,
                     status=obs.status,
                     execution_id=obs.execution_id,
                     failed_stage=obs.failed_stage,
@@ -234,7 +239,7 @@ def observe_pipeline_status(
                     outcome=outcome,
                     observed_at=obs.observed_at,
                     last_attempt_at=now,
-                    error=pipe_state.error,
+                    error=pipe_state.error or obs.last_attempt_error,
                     raw_state=pipe_state,
                 )
             return PipelineSummary(
@@ -325,9 +330,14 @@ def observe_pipeline_status(
         else None
     )
     if obs is not None:
+        exists = (
+            obs.exists
+            if obs.exists is not None
+            else (obs.status not in (None, "Not Deployed", "NOT_DEPLOYED"))
+        )
         return PipelineSummary(
             name=pipeline_name,
-            exists=bool(obs.status or obs.execution_id),
+            exists=exists,
             status=obs.status,
             execution_id=obs.execution_id,
             failed_stage=obs.failed_stage,
@@ -337,7 +347,8 @@ def observe_pipeline_status(
             is_live=False,
             outcome=ObservationOutcome.NOT_COLLECTED,
             observed_at=obs.observed_at,
-            last_attempt_at=None,
+            last_attempt_at=obs.last_attempt_at,
+            error=obs.last_attempt_error,
         )
 
     return PipelineSummary(

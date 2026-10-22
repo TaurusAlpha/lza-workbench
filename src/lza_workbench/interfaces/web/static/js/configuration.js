@@ -245,21 +245,30 @@ export function renderConfigurationDetails(container, status, onRefresh) {
 
   // 6. Configuration Pipeline Fields
   const pipe = status.pipeline;
+  const pipelineStatus = pipe.isLive
+    ? (pipe.status || "Not Executed")
+    : (pipe.status ? `Recorded: ${pipe.status}` : "Offline");
   const pipeFields = [
     ["Pipeline name", pipe.name, { mono: true, truncate: true }],
     ["Pipeline ARN", pipe.arn, { mono: true, truncate: true }],
-    ["Status", pipe.status || "Not Executed", { statusIndicator: Boolean(pipe.status) }],
+    ["Status", pipelineStatus, { statusIndicator: Boolean(pipe.status) }],
     ["Latest execution ID", pipe.executionId || "—", { mono: true, truncate: true }],
   ];
 
+  if (pipe.observedAt) {
+    pipeFields.push(["Last observed", formatTimestamp(pipe.observedAt)]);
+  }
   if (pipe.failedStage) {
     pipeFields.push(["Failed stage", pipe.failedStage, { mono: true }]);
   }
   if (pipe.failedAction) {
     pipeFields.push(["Failed action", pipe.failedAction, { mono: true }]);
   }
+  if (pipe.failureSummary) {
+    pipeFields.push(["Failure details", pipe.failureSummary]);
+  }
   if (pipe.error) {
-    pipeFields.push(["Failure details", pipe.error]);
+    pipeFields.push(["Collection notice", pipe.error]);
   }
   if (pipe.failedBuildUrl) {
     pipeFields.push(["Build console", pipe.failedBuildUrl, { mono: true, truncate: true }]);
@@ -289,7 +298,7 @@ export function renderConfigurationDetails(container, status, onRefresh) {
         ${card("Git State", gitFields, wt ? (wt.hasUncommitted ? "Dirty" : "Clean") : "Not Git")}
         ${card("Remote Sync State", syncFields, sync ? sync.status : "Unavailable")}
         ${card("Synchronization History", historyFields, syncHistory.hasState ? "Recorded" : "None")}
-        ${card("Configuration Pipeline", pipeFields, pipe.status || "Not Executed", { href: "#/pipeline/configuration" })}
+        ${card("Configuration Pipeline", pipeFields, pipelineStatus, { href: "#/pipeline/configuration" })}
       </div>
 
       <div id="config-action-modal-container" hidden></div>

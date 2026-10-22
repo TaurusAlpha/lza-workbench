@@ -28,6 +28,8 @@ class PipelineObservationRecord(BaseModel):
     error: str | None = None
     observed_at: datetime | None = None
     last_attempt_at: datetime | None = None
+    last_attempt_error: str | None = None
+    exists: bool = False
 
 
 class PipelineOperationRecord(BaseModel):
@@ -160,13 +162,14 @@ def record_pipeline_attempt(
     track = state.pipelines.track(pipeline_type)
     if track.observation is not None:
         track.observation = track.observation.model_copy(
-            update={"last_attempt_at": now, "error": error}
+            update={"last_attempt_at": now, "last_attempt_error": error}
         )
     else:
         track.observation = PipelineObservationRecord(
             observed_at=None,
             last_attempt_at=now,
-            error=error,
+            last_attempt_error=error,
+            exists=False,
         )
     state.touch(now)
 
@@ -184,10 +187,16 @@ def record_pipeline_observation(
     error: str | None = None,
     observed_at: datetime | None = None,
     last_attempt_at: datetime | None = None,
+    exists: bool | None = None,
 ) -> PipelineObservationRecord:
     """Record a verified AWS CodePipeline execution observation."""
     now = observed_at or datetime.now(UTC)
     track = state.pipelines.track(pipeline_type)
+    resolved_exists = (
+        exists
+        if exists is not None
+        else (bool(status and status != "Not Deployed"))
+    )
     observation = PipelineObservationRecord(
         pipeline_name=pipeline_name,
         execution_id=execution_id,
@@ -198,6 +207,8 @@ def record_pipeline_observation(
         error=error,
         observed_at=now,
         last_attempt_at=last_attempt_at or now,
+        last_attempt_error=None,
+        exists=resolved_exists,
     )
     track.observation = observation
     state.touch(now)

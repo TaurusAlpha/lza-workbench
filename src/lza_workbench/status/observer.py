@@ -114,6 +114,7 @@ def _persist_live_observations(
             error=installer_pipe.failure_summary,
             observed_at=installer_pipe.observed_at or now,
             last_attempt_at=installer_pipe.last_attempt_at or now,
+            exists=True,
         )
     elif installer_pipe.outcome == ObservationOutcome.ABSENT:
         record_pipeline_observation(
@@ -124,6 +125,7 @@ def _persist_live_observations(
             pipeline_type="installer",
             observed_at=installer_pipe.observed_at or now,
             last_attempt_at=installer_pipe.last_attempt_at or now,
+            exists=False,
         )
     elif installer_pipe.outcome in (
         ObservationOutcome.COLLECTION_FAILED,
@@ -151,6 +153,7 @@ def _persist_live_observations(
             error=config_pipe.failure_summary,
             observed_at=config_pipe.observed_at or now,
             last_attempt_at=config_pipe.last_attempt_at or now,
+            exists=True,
         )
     elif config_pipe.outcome == ObservationOutcome.ABSENT:
         record_pipeline_observation(
@@ -161,6 +164,7 @@ def _persist_live_observations(
             pipeline_type="configuration",
             observed_at=config_pipe.observed_at or now,
             last_attempt_at=config_pipe.last_attempt_at or now,
+            exists=False,
         )
     elif config_pipe.outcome in (
         ObservationOutcome.COLLECTION_FAILED,
@@ -290,10 +294,6 @@ def get_root_status_workflow(
         is_live
         and workspace_dir is not None
         and get_state_path(workspace_dir).exists()
-        and any(
-            summary.is_live and summary.outcome == ObservationOutcome.OBSERVED
-            for summary in (installer_stack_summary, installer_pipe_summary, config_pipe_summary)
-        )
     ):
         try:
             update_workspace_state(

@@ -287,6 +287,7 @@ def serialize_configuration_status(result: ConfigurationStatusResult) -> dict[st
         "failedStage": pipe.failed_stage,
         "failedAction": pipe.failed_action,
         "failedBuildUrl": pipe.failed_build_url,
+        "failureSummary": pipe.failure_summary,
         "error": pipe.error,
         "stages": pipe_stages,
         "isLive": pipe.is_live,

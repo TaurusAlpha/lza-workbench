@@ -39,6 +39,30 @@ class CfnStackStatusResult:
     error: str | None = None
     error_info: AwsErrorInfo | None = None
 
+    def __init__(
+        self,
+        stack_name: str,
+        exists: bool,
+        stack_status: str | None = None,
+        stack_id: str | None = None,
+        deployed_parameters: dict[str, str] | None = None,
+        outputs: dict[str, str] | None = None,
+        creation_time: str | None = None,
+        last_updated_time: str | None = None,
+        error: str | None = None,
+        error_info: AwsErrorInfo | None = None,
+    ) -> None:
+        self.stack_name = stack_name
+        self.exists = exists
+        self.stack_status = stack_status
+        self.stack_id = stack_id
+        self.deployed_parameters = deployed_parameters if deployed_parameters is not None else {}
+        self.outputs = outputs if outputs is not None else {}
+        self.creation_time = creation_time
+        self.last_updated_time = last_updated_time
+        self.error = error
+        self.error_info = error_info
+
 
 def _is_stack_not_found(exc: Exception) -> bool:
     """Check if an AWS exception indicates that the CloudFormation stack does not exist."""

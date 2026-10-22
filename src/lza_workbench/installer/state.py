@@ -36,6 +36,7 @@ class InstallerStackObservation(BaseModel):
     version_observed_at: datetime | None = None
     parameters_observed_at: datetime | None = None
     last_attempt_at: datetime | None = None
+    last_attempt_error: str | None = None
     error: str | None = None
     exists: bool = False
 
@@ -94,13 +95,13 @@ def record_installer_attempt(
     existing = state.installer.observation
     if existing is not None:
         state.installer.observation = existing.model_copy(
-            update={"last_attempt_at": now, "error": error}
+            update={"last_attempt_at": now, "last_attempt_error": error}
         )
     else:
         state.installer.observation = InstallerStackObservation(
             observed_at=None,
             last_attempt_at=now,
-            error=error,
+            last_attempt_error=error,
             exists=False,
         )
     state.touch(now)
@@ -146,6 +147,7 @@ def record_installer_observation(
             version_observed_at=None,
             parameters_observed_at=None,
             last_attempt_at=last_attempt_at or now,
+            last_attempt_error=None,
             error=error,
             exists=False,
         )
@@ -181,6 +183,7 @@ def record_installer_observation(
             version_observed_at=version_observed_at,
             parameters_observed_at=parameters_observed_at,
             last_attempt_at=last_attempt_at or now,
+            last_attempt_error=None,
             error=error,
             exists=True,
         )

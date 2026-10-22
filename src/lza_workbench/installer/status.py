@@ -80,11 +80,43 @@ class InstallerStatusResult:
     environment_target: CustomerEnvironmentTarget | None = None
     installer: LzaInstaller | None = None
 
-    def __post_init__(self) -> None:
-        if self.environment_target is None and self.config is not None:
-            object.__setattr__(self, "environment_target", self.config.environment_target)
-        if self.installer is None and self.config is not None:
-            object.__setattr__(self, "installer", self.config.installer)
+    def __init__(
+        self,
+        workspace_dir: Path | None,
+        config: WorkspaceConfig | None,
+        state: WorkspaceState | None,
+        profile: str,
+        region: str,
+        aws_identity: dict[str, str] | None,
+        aws_error: str | None,
+        cfn_status: CfnStackStatusResult,
+        deployed_version: str | None,
+        configuration_drift: dict[str, tuple[str, str]],
+        state_alignment: StateAlignment | None,
+        installer_pipeline_name: str,
+        pipeline_state: PipelineStateResult | None = None,
+        parameter_comparison: str = "Not checked",
+        environment_target: CustomerEnvironmentTarget | None = None,
+        installer: LzaInstaller | None = None,
+    ) -> None:
+        object.__setattr__(self, "workspace_dir", workspace_dir)
+        object.__setattr__(self, "config", config)
+        object.__setattr__(self, "state", state)
+        object.__setattr__(self, "profile", profile)
+        object.__setattr__(self, "region", region)
+        object.__setattr__(self, "aws_identity", aws_identity)
+        object.__setattr__(self, "aws_error", aws_error)
+        object.__setattr__(self, "cfn_status", cfn_status)
+        object.__setattr__(self, "deployed_version", deployed_version)
+        object.__setattr__(self, "configuration_drift", configuration_drift)
+        object.__setattr__(self, "state_alignment", state_alignment)
+        object.__setattr__(self, "installer_pipeline_name", installer_pipeline_name)
+        object.__setattr__(self, "pipeline_state", pipeline_state)
+        object.__setattr__(self, "parameter_comparison", parameter_comparison)
+        env_target = environment_target or (config.environment_target if config is not None else None)
+        inst = installer or (config.installer if config is not None else None)
+        object.__setattr__(self, "environment_target", env_target)
+        object.__setattr__(self, "installer", inst)
 
 
 def prepare_installer_status(
@@ -209,18 +241,23 @@ def observe_installer_stack(
                 )
             # Live query failed: preserve last-known observation while recording failure attempt
             obs = state.installer.observation if state else None
-            if obs and obs.stack_status:
+            if obs and (obs.stack_status or obs.exists is not None):
+                exists = (
+                    obs.exists
+                    if obs.exists is not None
+                    else (obs.stack_status not in (None, "NOT_DEPLOYED"))
+                )
                 return InstallerStackSummary(
                     name=cfn_stack_name,
                     status=obs.stack_status,
-                    exists=bool(obs.stack_status),
-                    deployed_version=obs.deployed_version,
+                    exists=exists,
+                    deployed_version=obs.deployed_version if exists else None,
                     is_live=False,
                     outcome=outcome,
                     observed_at=obs.observed_at,
                     last_attempt_at=now,
-                    error=cfn_status.error,
-                    stack_id=obs.stack_id,
+                    error=cfn_status.error or obs.last_attempt_error,
+                    stack_id=obs.stack_id if exists else None,
                 )
             return InstallerStackSummary(
                 name=cfn_stack_name,
@@ -272,17 +309,23 @@ def observe_installer_stack(
 
     # Offline / No factory
     obs = state.installer.observation if state else None
-    if obs and obs.stack_status:
+    if obs and (obs.stack_status or obs.exists is not None):
+        exists = (
+            obs.exists
+            if obs.exists is not None
+            else (obs.stack_status not in (None, "NOT_DEPLOYED"))
+        )
         return InstallerStackSummary(
             name=cfn_stack_name,
             status=obs.stack_status,
-            exists=bool(obs.stack_status),
-            deployed_version=obs.deployed_version,
+            exists=exists,
+            deployed_version=obs.deployed_version if exists else None,
             is_live=False,
             outcome=ObservationOutcome.NOT_COLLECTED,
             observed_at=obs.observed_at,
-            last_attempt_at=None,
-            stack_id=obs.stack_id,
+            last_attempt_at=obs.last_attempt_at,
+            error=obs.last_attempt_error or obs.error,
+            stack_id=obs.stack_id if exists else None,
         )
 
     return InstallerStackSummary(
@@ -326,32 +369,41 @@ def _query_live_installer_status(
         state=resolved_state,
         fetch_diagnostics=False,
     )
-    pipeline_state = pipe_summary.raw_state or PipelineStateResult(
-        pipeline_name=installer_pipeline_name,
-        exists=pipe_summary.exists,
-        status=pipe_summary.status or "NOT_CHECKED",
-        latest_execution_id=pipe_summary.execution_id,
-        latest_start_time=pipe_summary.start_time,
-        error=pipe_summary.error,
-        error_info=getattr(pipe_summary.raw_state, "error_info", None) if pipe_summary.raw_state else None,
-    )
+    if pipe_summary.raw_state and not pipe_summary.raw_state.error:
+        pipeline_state = pipe_summary.raw_state
+    else:
+        pipeline_state = PipelineStateResult(
+            pipeline_name=installer_pipeline_name,
+            exists=pipe_summary.exists,
+            status=pipe_summary.status or "NOT_CHECKED",
+            latest_execution_id=pipe_summary.execution_id,
+            latest_start_time=pipe_summary.start_time,
+            stages=pipe_summary.raw_state.stages if pipe_summary.raw_state else [],
+            error=pipe_summary.error,
+            error_info=getattr(pipe_summary.raw_state, "error_info", None) if pipe_summary.raw_state else None,
+        )
 
     # If live CloudFormation query failed, fall back to recorded state without inventing data
     if cfn_status.error and resolved_state:
         obs = resolved_state.installer.observation
         recorded_status = obs.stack_status if obs else None
-        if recorded_status:
+        if recorded_status or (obs and obs.exists is not None):
+            recorded_exists = (
+                obs.exists
+                if (obs and obs.exists is not None)
+                else (recorded_status not in (None, "NOT_DEPLOYED"))
+            )
             cfn_status = CfnStackStatusResult(
                 stack_name=cfn_stack_name,
-                exists=True,
-                stack_id=obs.stack_id if obs else None,
+                exists=recorded_exists,
+                stack_id=obs.stack_id if (obs and recorded_exists) else None,
                 stack_status=recorded_status,
-                deployed_parameters=dict(obs.deployed_parameters) if (obs and obs.deployed_parameters) else {},
+                deployed_parameters=dict(obs.deployed_parameters) if (obs and recorded_exists and obs.deployed_parameters) else {},
                 error=cfn_status.error,
                 error_info=cfn_status.error_info,
             )
         recorded_version = obs.deployed_version if obs else None
-        if not deployed_version and recorded_version:
+        if not deployed_version and recorded_version and (obs and obs.exists):
             deployed_version = recorded_version
 
     return cfn_status, deployed_version, pipeline_state
@@ -366,13 +418,18 @@ def _query_recorded_installer_status(
 ) -> tuple[CfnStackStatusResult, str | None, PipelineStateResult]:
     obs = resolved_state.installer.observation if resolved_state else None
     recorded_status = obs.stack_status if obs else None
-    recorded_version = obs.deployed_version if obs else None
+    recorded_exists = (
+        obs.exists
+        if (obs and obs.exists is not None)
+        else (recorded_status not in (None, "NOT_DEPLOYED"))
+    )
+    recorded_version = obs.deployed_version if (obs and recorded_exists) else None
     cfn_status = CfnStackStatusResult(
         stack_name=cfn_stack_name,
-        exists=bool(recorded_status),
-        stack_id=obs.stack_id if obs else None,
+        exists=recorded_exists,
+        stack_id=obs.stack_id if (obs and recorded_exists) else None,
         stack_status=recorded_status,
-        deployed_parameters=dict(obs.deployed_parameters) if (obs and obs.deployed_parameters) else {},
+        deployed_parameters=dict(obs.deployed_parameters) if (obs and recorded_exists and obs.deployed_parameters) else {},
         error=aws_error,
     )
     pipe_summary = observe_pipeline_status(

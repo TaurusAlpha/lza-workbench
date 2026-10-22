@@ -619,14 +619,22 @@ def _render_pipeline_status(result: ConfigurationStatusResult) -> None:
         print_kv("Failed Stage", pipeline.failed_stage, style="red")
     if pipeline.failed_action:
         print_kv("Failed Action", pipeline.failed_action, style="red")
+    if pipeline.failure_summary:
+        failure_lines = [line.strip() for line in pipeline.failure_summary.splitlines() if line.strip()]
+        if len(failure_lines) == 1:
+            print_kv("Failure Details", failure_lines[0], style="red")
+        elif failure_lines:
+            console.print("[red]Failure Details:[/red]")
+            for line in failure_lines:
+                console.print(f"  [red]{line}[/red]")
     if pipeline.error:
         error_lines = [line.strip() for line in pipeline.error.splitlines() if line.strip()]
         if len(error_lines) == 1:
-            print_kv("Error", error_lines[0], style="red")
+            print_kv("Collection Notice", error_lines[0], style="yellow")
         elif error_lines:
-            console.print("[red]Error:[/red]")
+            console.print("[yellow]Collection Notice:[/yellow]")
             for line in error_lines:
-                console.print(f"  [red]{line}[/red]")
+                console.print(f"  [yellow]{line}[/yellow]")
     if pipeline.failed_build_url:
         print_kv("Build Console", pipeline.failed_build_url, style="dim")
 

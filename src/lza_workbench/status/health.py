@@ -21,32 +21,7 @@ def derive_installer_health(
     installer_pipe: PipelineSummary,
 ) -> str:
     """Derive operational health for the LZA installer stack and deployment pipeline."""
-    # 1. Running executions
-    if (
-        installer_stack.status in (
-            "CREATE_IN_PROGRESS",
-            "UPDATE_IN_PROGRESS",
-            "ROLLBACK_IN_PROGRESS",
-        )
-        or installer_pipe.status == "InProgress"
-    ):
-        return "Running"
-
-    # 2. Operational failures
-    if (
-        installer_stack.status in (
-            "CREATE_FAILED",
-            "UPDATE_FAILED",
-            "UPDATE_ROLLBACK_FAILED",
-            "ROLLBACK_FAILED",
-            "UPDATE_ROLLBACK_COMPLETE",
-            "ROLLBACK_COMPLETE",
-        )
-        or installer_pipe.status in ("Failed", "Cancelled")
-    ):
-        return "Failed"
-
-    # 3. Collection / verification failures
+    # 1. Collection / verification failures take precedence over cached statuses
     stack_failed = (
         installer_stack.outcome in (
             ObservationOutcome.COLLECTION_FAILED,
@@ -69,6 +44,31 @@ def derive_installer_health(
             return f"Attention Required (Verification Failed: Recorded {recorded})"
         return "Attention Required (Verification Failed)"
 
+    # 2. Verified running executions
+    if (
+        installer_stack.status in (
+            "CREATE_IN_PROGRESS",
+            "UPDATE_IN_PROGRESS",
+            "ROLLBACK_IN_PROGRESS",
+        )
+        or installer_pipe.status == "InProgress"
+    ):
+        return "Running"
+
+    # 3. Verified operational failures
+    if (
+        installer_stack.status in (
+            "CREATE_FAILED",
+            "UPDATE_FAILED",
+            "UPDATE_ROLLBACK_FAILED",
+            "ROLLBACK_FAILED",
+            "UPDATE_ROLLBACK_COMPLETE",
+            "ROLLBACK_COMPLETE",
+        )
+        or installer_pipe.status in ("Failed", "Cancelled")
+    ):
+        return "Failed"
+
     # 4. Verified healthy
     if installer_stack.status in ("CREATE_COMPLETE", "UPDATE_COMPLETE", "IMPORT_COMPLETE"):
         if installer_pipe.status in ("Succeeded", "Not Started") or (
@@ -88,15 +88,7 @@ def derive_configuration_health(
     config_pipe: PipelineSummary,
 ) -> str:
     """Derive operational health for remote configuration repository and pipeline."""
-    # 1. Running executions
-    if config_pipe.status == "InProgress":
-        return "Running"
-
-    # 2. Operational failures
-    if config_pipe.status in ("Failed", "Cancelled"):
-        return "Failed"
-
-    # 3. Collection / verification failures
+    # 1. Collection / verification failures take precedence over cached statuses
     pipe_failed = (
         config_pipe.outcome in (
             ObservationOutcome.COLLECTION_FAILED,
@@ -117,6 +109,14 @@ def derive_configuration_health(
         if config_pipe.status:
             return f"Attention Required (Verification Failed: Recorded {config_pipe.status})"
         return "Attention Required (Verification Failed)"
+
+    # 2. Verified running executions
+    if config_pipe.status == "InProgress":
+        return "Running"
+
+    # 3. Verified operational failures
+    if config_pipe.status in ("Failed", "Cancelled"):
+        return "Failed"
 
     # 4. Verified healthy
     if config_pipe.status == "Succeeded":
@@ -219,12 +219,20 @@ def derive_overall_health(
         and config_pipe.is_live
         and (config_repo.is_live or config_repo.outcome == ObservationOutcome.NOT_COLLECTED)
     )
+    has_any_state = bool(
+        installer_pipe.status
+        or installer_stack.status
+        or config_pipe.status
+        or installer_pipe.execution_id
+        or config_pipe.execution_id
+    )
     workspace_health = derive_workspace_health(
         installer_health=installer_health,
         configuration_health=configuration_health,
         config_repo=config_repo,
         assessment=assessment,
-        is_live=all_live,
+        is_live=is_live,
+        has_recorded_state=has_any_state,
     )
 
     return OverallHealthSummary(

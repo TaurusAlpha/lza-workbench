@@ -129,7 +129,8 @@ class ConfigurationPipelineStatus:
     failed_stage: str | None
     failed_action: str | None
     failed_build_url: str | None
-    error: str | None
+    error: str | None = None
+    failure_summary: str | None = None
     state: PipelineStateResult | None = None
     is_live: bool = True
     outcome: ObservationOutcome = ObservationOutcome.OBSERVED
