@@ -58,6 +58,7 @@ class PipelineExecutionResult:
     last_update_time: str | None = None
     duration_seconds: float | None = None
     error: str | None = None
+    error_info: AwsErrorInfo | None = None
 
 
 def _parse_stage_state(stage: dict[str, Any]) -> StageStateResult:
@@ -264,6 +265,7 @@ def get_pipeline_execution(
                 execution_id=clean_execution_id,
                 status="NOT_FOUND",
                 error=info.message,
+                error_info=info,
             )
         prefix = "Connection failure: " if info.is_unavailable else ""
         return PipelineExecutionResult(
@@ -272,6 +274,7 @@ def get_pipeline_execution(
             execution_id=clean_execution_id,
             status="UNKNOWN",
             error=f"{prefix}{info.message}",
+            error_info=info,
         )
 
 
@@ -289,8 +292,13 @@ def get_latest_pipeline_execution(
             pipelineName=clean_pipeline_name,
             maxResults=1,
         )
-    except (ClientError, BotoCoreError):
-        return None
+    except (ClientError, BotoCoreError) as exc:
+        info = classify_aws_error(exc)
+        return PipelineExecutionResult(
+            pipeline_name=clean_pipeline_name,
+            error=info.message,
+            error_info=info,
+        )
     summaries = response.get("pipelineExecutionSummaries", [])
     if not summaries:
         return None

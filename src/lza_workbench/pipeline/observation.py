@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -267,21 +268,61 @@ def observe_pipeline_status(
                 raw_state=pipe_state,
             )
 
-        status = pipe_state.status
-        execution_id = target_execution_id or pipe_state.latest_execution_id
-        start_time: str | None = None
-        duration_seconds: float | None = None
-
-        if execution_id:
-            exec_res = get_latest_pipeline_execution(
+        if target_execution_id:
+            execution = get_pipeline_execution(
+                client=resolved_client,
+                pipeline_name=pipeline_name,
+                execution_id=target_execution_id,
+            )
+        else:
+            execution = get_latest_pipeline_execution(
                 client=resolved_client,
                 pipeline_name=pipeline_name,
             )
-            if exec_res and exec_res.execution_id == execution_id:
-                start_time = exec_res.start_time
-                duration_seconds = exec_res.duration_seconds
 
-        stages = [stage_state_to_pipeline_stage(s) for s in pipe_state.stages]
+        if execution is not None and execution.error:
+            recorded = observe_pipeline_status(
+                pipeline_name=pipeline_name,
+                pipeline_type=pipeline_type,
+                state=state,
+                fetch_diagnostics=False,
+            )
+            return replace(
+                recorded,
+                exists=True,
+                outcome=(
+                    outcome_from_aws_error(execution.error_info)
+                    if execution.error_info is not None and not execution.error_info.is_not_found
+                    else ObservationOutcome.COLLECTION_FAILED
+                ),
+                last_attempt_at=now,
+                error=execution.error,
+                raw_state=replace(pipe_state, error=execution.error, error_info=execution.error_info),
+            )
+
+        execution_id = execution.execution_id if execution is not None else None
+        status = execution.status if execution is not None else "Not Started"
+        start_time = execution.start_time if execution is not None else None
+        duration_seconds = execution.duration_seconds if execution is not None else None
+        matching_stages = [
+            replace(
+                stage,
+                actions=[
+                    action for action in stage.actions
+                    if not action.execution_id or action.execution_id == execution_id
+                ],
+            )
+            for stage in pipe_state.stages
+            if execution_id is not None and stage.execution_id == execution_id
+        ]
+        pipe_state = replace(
+            pipe_state,
+            status=status,
+            latest_execution_id=execution_id,
+            latest_start_time=start_time,
+            stages=matching_stages,
+        )
+        stages = [stage_state_to_pipeline_stage(s) for s in matching_stages]
         current_stage, current_action = (
             _resolve_in_progress_stage_action(stages)
             if status == "InProgress"

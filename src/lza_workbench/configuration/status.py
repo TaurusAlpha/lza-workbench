@@ -75,6 +75,7 @@ class ConfigurationRepoSummary:
     observed_at: datetime | None = None
     last_attempt_at: datetime | None = None
     error: str | None = None
+    connection_status: str | None = None
 
 
 def _resolve_repo_target(
@@ -128,6 +129,7 @@ def observe_configuration_repository(
     error: str | None = None
     last_attempt_at: datetime | None = None
     observed_at: datetime | None = None
+    connection_status: str | None = None
 
     config_dir_exists = config_dir.exists() if config_dir is not None else False
     gwt = (
@@ -245,6 +247,7 @@ def observe_configuration_repository(
                     client=conn_client,
                     connection_arn=repo.codeconnection_arn,
                 )
+                connection_status = conn_res.status
                 if conn_res.error:
                     error = conn_res.error
                     outcome = (
@@ -284,6 +287,7 @@ def observe_configuration_repository(
         observed_at=observed_at,
         last_attempt_at=last_attempt_at,
         error=error,
+        connection_status=connection_status,
     )
 
 

@@ -120,6 +120,14 @@ def derive_configuration_health(
 
     # 4. Verified healthy
     if config_pipe.status == "Succeeded":
+        if config_repo.outcome == ObservationOutcome.ABSENT:
+            return "Incomplete"
+        if (
+            config_repo.repository_type == "codeconnection"
+            and config_repo.outcome == ObservationOutcome.OBSERVED
+            and config_repo.connection_status != "AVAILABLE"
+        ):
+            return "Attention Required"
         if config_repo.remote_sync is not None and config_repo.remote_sync.status == "Diverged":
             return "Attention Required"
         return "Healthy"

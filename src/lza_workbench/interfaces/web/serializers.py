@@ -60,6 +60,7 @@ def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
         "installerPipeline": _serialize_pipeline(result.installer_pipeline),
         "configuration": {
             "repositoryType": result.configuration_repo.repository_type,
+            "connectionStatus": result.configuration_repo.connection_status,
             "target": result.configuration_repo.target,
             "localGitBranch": result.configuration_repo.local_git_branch,
             "localGitClean": result.configuration_repo.local_git_clean,
