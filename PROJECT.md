@@ -126,7 +126,10 @@ boundaries:
   actions, and runtime-state transition rules. They must not delegate their policy to
   `workspace`; `workspace` persists the resulting validated state document when operating against a
   local workspace.
-- `status` owns unified operational observation and typed summaries shared by both interfaces.
+- `status` owns cross-feature observation composition, operational health derivation, and unified
+  typed summaries shared by CLI and Web interfaces. AWS collection outcomes (`OBSERVED`, `ABSENT`,
+  `ACCESS_DENIED`, `AUTH_UNAVAILABLE`, `COLLECTION_FAILED`, `NOT_COLLECTED`) and observation timestamps
+  are kept separate from operational health and persistence.
 - `infrastructure.aws` and `infrastructure.github` contain thin external-service adapters that
   accept resolved inputs, call external APIs, and return structured observations without deriving
   feature policy.

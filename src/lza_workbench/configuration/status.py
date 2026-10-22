@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from lza_workbench.configuration.git import (
+    GitRemoteSyncStatus,
     get_git_remote_sync_status,
     get_git_working_tree_status,
 )
@@ -23,8 +27,24 @@ from lza_workbench.configuration.inspection import (
     inspect_configuration_pipeline,
     inspect_configuration_repository,
 )
+from lza_workbench.configuration.repository import (
+    CONFIG_S3_OBJECT_KEY,
+    resolve_s3_configuration_destination,
+)
+from lza_workbench.configuration.sync import (
+    RemoteSyncStatus,
+    evaluate_s3_remote_sync,
+)
 from lza_workbench.configuration.templates import capture_init_values_snapshot
 from lza_workbench.configuration.warnings import compile_configuration_warnings
+from lza_workbench.infrastructure.aws.codecommit import inspect_codecommit_repository
+from lza_workbench.infrastructure.aws.codeconnections import inspect_codeconnection
+from lza_workbench.infrastructure.aws.errors import (
+    ObservationOutcome,
+    classify_aws_error,
+    outcome_from_aws_error,
+)
+from lza_workbench.infrastructure.aws.s3 import inspect_s3_object_safe
 from lza_workbench.infrastructure.aws.session import (
     AwsExecutionContext,
     resolve_aws_execution_context,
@@ -36,6 +56,235 @@ from lza_workbench.workspace.schema import (
     WorkspaceState,
 )
 from lza_workbench.workspace.validation import WorkspaceCapability
+
+if TYPE_CHECKING:
+    from lza_workbench.infrastructure.aws.session import AwsClientFactory
+
+
+@dataclass(frozen=True)
+class ConfigurationRepoSummary:
+    repository_type: str
+    target: str | None = None
+    local_git_branch: str | None = None
+    local_git_clean: bool = True
+    local_git_uncommitted: int = 0
+    git_sync_status: GitRemoteSyncStatus | None = None
+    remote_sync: RemoteSyncStatus | None = None
+    is_live: bool = True
+    outcome: ObservationOutcome = ObservationOutcome.NOT_COLLECTED
+    observed_at: datetime | None = None
+    last_attempt_at: datetime | None = None
+    error: str | None = None
+
+
+def _resolve_repo_target(
+    target: CustomerEnvironmentTarget,
+    state: WorkspaceState | None,
+    aws_identity: dict[str, Any] | None,
+    region: str | None,
+) -> str | None:
+    repo = target.configuration_repository
+    if repo.type == "s3":
+        try:
+            return resolve_s3_configuration_destination(
+                configured_bucket=repo.bucket,
+                account_id=(
+                    target.account_id
+                    or (state.observed_account_id if state else None)
+                    or (aws_identity.get("account") if aws_identity else None)
+                ),
+                region=region or target.region,
+            ).bucket
+        except Exception:
+            return repo.bucket or "Not configured"
+    if repo.type == "codecommit":
+        return repo.repository_name or "aws-accelerator-config"
+    if repo.type == "codeconnection":
+        if repo.owner and repo.repository_name:
+            return f"{repo.owner}/{repo.repository_name}"
+        return repo.repository_name or "Not configured"
+    if repo.type == "git":
+        return repo.repository or repo.repository_name or "Not configured"
+    return None
+
+
+def observe_configuration_repository(
+    *,
+    target: CustomerEnvironmentTarget,
+    factory: AwsClientFactory | None = None,
+    config_dir: Path | None = None,
+    resolved_config: WorkspaceConfig | None = None,
+    state: WorkspaceState | None = None,
+    aws_identity: dict[str, Any] | None = None,
+    region: str | None = None,
+) -> ConfigurationRepoSummary:
+    """Collect unified configuration repository observation and local git synchronization."""
+    now = datetime.now(UTC)
+    repo = target.configuration_repository
+    resolved_target = _resolve_repo_target(target, state, aws_identity, region)
+
+    is_live = False
+    outcome = ObservationOutcome.NOT_COLLECTED
+    error: str | None = None
+    last_attempt_at: datetime | None = None
+    observed_at: datetime | None = None
+
+    config_dir_exists = config_dir.exists() if config_dir is not None else False
+    gwt = (
+        get_git_working_tree_status(config_dir)
+        if config_dir is not None and config_dir_exists
+        else None
+    )
+    local_git_branch = gwt.branch if gwt else None
+    local_git_clean = not gwt.has_uncommitted if gwt else True
+    local_git_uncommitted = gwt.uncommitted_count if gwt else 0
+
+    git_sync_status = (
+        get_git_remote_sync_status(config_dir, branch=repo.branch)
+        if config_dir is not None and gwt is not None
+        else None
+    )
+
+    remote_sync: RemoteSyncStatus | None = None
+    if repo.type == "s3":
+        s3_info = None
+        if (
+            aws_identity is not None
+            and factory is not None
+            and resolved_target
+            and resolved_target != "Not configured"
+        ):
+            last_attempt_at = now
+            try:
+                s3_client = factory.get_client("s3")
+                s3_info = inspect_s3_object_safe(
+                    client=s3_client,
+                    bucket_name=resolved_target,
+                    object_key=CONFIG_S3_OBJECT_KEY,
+                )
+                if s3_info.error:
+                    error = s3_info.error
+                    outcome = (
+                        outcome_from_aws_error(s3_info.error_info)
+                        if s3_info.error_info is not None
+                        else ObservationOutcome.COLLECTION_FAILED
+                    )
+                    is_live = False
+                elif not s3_info.exists:
+                    outcome = ObservationOutcome.ABSENT
+                    is_live = True
+                    observed_at = now
+                else:
+                    outcome = ObservationOutcome.OBSERVED
+                    is_live = True
+                    observed_at = now
+            except Exception as exc:
+                info = classify_aws_error(exc)
+                outcome = outcome_from_aws_error(info)
+                error = str(exc)
+                is_live = False
+
+        if config_dir is not None:
+            exclude_dirs = (
+                set(resolved_config.configuration.packaging.exclude.directories)
+                if resolved_config is not None
+                else {".git"}
+            )
+            exclude_files = (
+                set(resolved_config.configuration.packaging.exclude.files)
+                if resolved_config is not None
+                else {".DS_Store"}
+            )
+            remote_sync = evaluate_s3_remote_sync(
+                config_dir=config_dir,
+                exclude_dirs=exclude_dirs,
+                exclude_files=exclude_files,
+                s3_object_info=s3_info,
+                state=state,
+                is_live=is_live,
+            )
+    elif repo.type == "codecommit":
+        if aws_identity is not None and factory is not None:
+            last_attempt_at = now
+            try:
+                cc_client = factory.get_client("codecommit")
+                cc_info = inspect_codecommit_repository(
+                    client=cc_client,
+                    repository_name=repo.repository_name or "aws-accelerator-config",
+                    branch_name=repo.branch or "main",
+                )
+                if cc_info.error:
+                    error = cc_info.error
+                    outcome = (
+                        outcome_from_aws_error(cc_info.error_info)
+                        if cc_info.error_info is not None
+                        else ObservationOutcome.COLLECTION_FAILED
+                    )
+                    is_live = False
+                elif not cc_info.exists:
+                    outcome = ObservationOutcome.ABSENT
+                    is_live = True
+                    observed_at = now
+                else:
+                    outcome = ObservationOutcome.OBSERVED
+                    is_live = True
+                    observed_at = now
+            except Exception as exc:
+                info = classify_aws_error(exc)
+                outcome = outcome_from_aws_error(info)
+                error = str(exc)
+                is_live = False
+        if git_sync_status is not None:
+            remote_sync = RemoteSyncStatus.from_git_sync(git_sync_status)
+    elif repo.type == "codeconnection":
+        if aws_identity is not None and factory is not None and repo.codeconnection_arn:
+            last_attempt_at = now
+            try:
+                conn_client = factory.get_client("codeconnections")
+                conn_res = inspect_codeconnection(
+                    client=conn_client,
+                    connection_arn=repo.codeconnection_arn,
+                )
+                if conn_res.error:
+                    error = conn_res.error
+                    outcome = (
+                        outcome_from_aws_error(conn_res.error_info)
+                        if conn_res.error_info is not None
+                        else ObservationOutcome.COLLECTION_FAILED
+                    )
+                    is_live = False
+                elif conn_res.status == "NOT_FOUND":
+                    outcome = ObservationOutcome.ABSENT
+                    is_live = True
+                    observed_at = now
+                else:
+                    outcome = ObservationOutcome.OBSERVED
+                    is_live = True
+                    observed_at = now
+            except Exception as exc:
+                info = classify_aws_error(exc)
+                outcome = outcome_from_aws_error(info)
+                error = str(exc)
+                is_live = False
+        if git_sync_status is not None:
+            remote_sync = RemoteSyncStatus.from_git_sync(git_sync_status)
+    elif git_sync_status is not None:
+        remote_sync = RemoteSyncStatus.from_git_sync(git_sync_status)
+
+    return ConfigurationRepoSummary(
+        repository_type=repo.type,
+        target=resolved_target,
+        local_git_branch=local_git_branch,
+        local_git_clean=local_git_clean,
+        local_git_uncommitted=local_git_uncommitted,
+        git_sync_status=git_sync_status,
+        remote_sync=remote_sync,
+        is_live=is_live,
+        outcome=outcome,
+        observed_at=observed_at,
+        last_attempt_at=last_attempt_at,
+        error=error,
+    )
 
 
 def get_config_status_workflow(
@@ -229,6 +478,7 @@ __all__ = [
     "CodeConnectionConfigurationRepositoryStatus",
     "ConfigurationPipelineActionFailure",
     "ConfigurationPipelineStatus",
+    "ConfigurationRepoSummary",
     "ConfigurationRepositoryStatus",
     "ConfigurationStatusResult",
     "ConfigurationSynchronizationStatus",
@@ -238,4 +488,5 @@ __all__ = [
     "S3ConfigurationRepositoryStatus",
     "compile_configuration_warnings",
     "get_config_status_workflow",
+    "observe_configuration_repository",
 ]

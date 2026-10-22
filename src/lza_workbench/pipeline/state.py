@@ -27,6 +27,7 @@ class PipelineObservationRecord(BaseModel):
     failed_build_url: str | None = None
     error: str | None = None
     observed_at: datetime | None = None
+    last_attempt_at: datetime | None = None
 
 
 class PipelineOperationRecord(BaseModel):
@@ -147,6 +148,29 @@ def record_pipeline_started(
     state.touch(now)
 
 
+def record_pipeline_attempt(
+    state: WorkspaceState,
+    *,
+    pipeline_type: str = "configuration",
+    last_attempt_at: datetime | None = None,
+    error: str | None = None,
+) -> None:
+    """Record an attempted but failed pipeline observation without overwriting last-known observation."""
+    now = last_attempt_at or datetime.now(UTC)
+    track = state.pipelines.track(pipeline_type)
+    if track.observation is not None:
+        track.observation = track.observation.model_copy(
+            update={"last_attempt_at": now, "error": error}
+        )
+    else:
+        track.observation = PipelineObservationRecord(
+            observed_at=None,
+            last_attempt_at=now,
+            error=error,
+        )
+    state.touch(now)
+
+
 def record_pipeline_observation(
     state: WorkspaceState,
     *,
@@ -159,6 +183,7 @@ def record_pipeline_observation(
     failed_build_url: str | None = None,
     error: str | None = None,
     observed_at: datetime | None = None,
+    last_attempt_at: datetime | None = None,
 ) -> PipelineObservationRecord:
     """Record a verified AWS CodePipeline execution observation."""
     now = observed_at or datetime.now(UTC)
@@ -172,6 +197,7 @@ def record_pipeline_observation(
         failed_build_url=failed_build_url,
         error=error,
         observed_at=now,
+        last_attempt_at=last_attempt_at or now,
     )
     track.observation = observation
     state.touch(now)
@@ -292,6 +318,7 @@ __all__ = [
     "PipelineOperationRecord",
     "PipelineTrackState",
     "PipelinesState",
+    "record_pipeline_attempt",
     "record_pipeline_observation",
     "record_pipeline_started",
     "record_pipeline_watch_result",

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from lza_workbench.infrastructure.aws.errors import classify_aws_error
+from lza_workbench.infrastructure.aws.errors import AwsErrorInfo, classify_aws_error
 
 
 @dataclass(frozen=True)
@@ -17,6 +17,7 @@ class CodeConnectionStatusResult:
     provider_type: str | None = None
     owner_account_id: str | None = None
     error: str | None = None
+    error_info: AwsErrorInfo | None = None
 
 
 def inspect_codeconnection(
@@ -49,23 +50,27 @@ def inspect_codeconnection(
                 arn=clean_arn,
                 status="NOT_FOUND",
                 error=info.message,
+                error_info=info,
             )
         if info.is_access_denied:
             return CodeConnectionStatusResult(
                 arn=clean_arn,
                 status="INACCESSIBLE",
                 error=f"AWS Access Denied: {info.message}",
+                error_info=info,
             )
         if info.is_unavailable:
             return CodeConnectionStatusResult(
                 arn=clean_arn,
                 status="INACCESSIBLE",
                 error=f"AWS connection failure: {info.message}",
+                error_info=info,
             )
         return CodeConnectionStatusResult(
             arn=clean_arn,
             status="ERROR",
             error=info.message,
+            error_info=info,
         )
 
 

@@ -263,6 +263,7 @@ def _build_offline_pipeline_snapshot(
         if (track is not None and track.has_newer_unobserved_operation() and execution_id is None)
         else "Offline - reflecting last recorded state"
     )
+    is_terminal = recorded_status in TERMINAL_STATUSES
     return PipelineSnapshotResult(
         workspace_dir=workspace_dir,
         customer_name=customer_name,
@@ -272,7 +273,7 @@ def _build_offline_pipeline_snapshot(
         execution_id=recorded_exec_id,
         status=recorded_status,
         status_summary=summary,
-        is_terminal=True,
+        is_terminal=is_terminal,
         is_live=False,
         error=aws_error,
     )

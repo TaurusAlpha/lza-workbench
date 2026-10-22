@@ -128,9 +128,10 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
 
     @router.post("/api/uninstall/plan")
     def get_uninstall_plan_endpoint(
-        payload: UninstallPlanRequest = UninstallPlanRequest(),
+        payload: UninstallPlanRequest | None = None,
     ) -> dict[str, Any]:
         target_dir = workspace_dir.require_workspace_dir()
+        resolved_payload = payload or UninstallPlanRequest()
         context = load_workspace_context(
             target_dir=target_dir,
             required_capabilities=(WorkspaceCapability.METADATA_VALID,),
@@ -149,13 +150,13 @@ def create_uninstall_router(workspace_dir: ActiveWorkspaceContext) -> APIRouter:
 
         options = UninstallOptions(
             dry_run=True,
-            regions=payload.regions,
-            all_regions=payload.all_regions,
-            accounts=payload.accounts,
-            assume_role_name=payload.assume_role_name,
-            profiles_file=payload.profiles_file,
-            skip_installer=payload.skip_installer,
-            skip_pipeline=payload.skip_pipeline,
+            regions=resolved_payload.regions,
+            all_regions=resolved_payload.all_regions,
+            accounts=resolved_payload.accounts,
+            assume_role_name=resolved_payload.assume_role_name,
+            profiles_file=resolved_payload.profiles_file,
+            skip_installer=resolved_payload.skip_installer,
+            skip_pipeline=resolved_payload.skip_pipeline,
         )
 
         plan = build_uninstall_plan(

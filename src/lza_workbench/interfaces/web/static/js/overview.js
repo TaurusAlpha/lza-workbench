@@ -297,7 +297,7 @@ export function renderOverview(container, status) {
       <dd class="kv-value">${formatFieldValue(value, options)}</dd></div>`;
   }
 
-  function renderComponentCard({ title, href, badge, rows, pipeline, pipelineType }) {
+  function renderComponentCard({ title, href, badge, rows, pipeline, pipelineType, error }) {
     return `<article class="card workload-card card-interactive" data-href="${href}">
       <div class="card-header">
         <h2 class="card-title"><a href="${href}" class="card-title-link">${title}</a></h2>
@@ -307,7 +307,9 @@ export function renderOverview(container, status) {
         ${rows}
         <div class="kv-row"><dt class="kv-label">Latest run</dt><dd class="kv-value">${renderLatestRun(pipeline)}</dd></div>
       </dl>
+      ${error ? `<p class="workload-error-box error-box-msg">${escapeHtml(error)}</p>` : ""}
       ${pipeline?.failureSummary ? `<p class="workload-error-box error-box-msg">${escapeHtml(pipeline.failureSummary)}</p>` : ""}
+      ${pipeline?.error && !pipeline?.failureSummary ? `<p class="workload-error-box error-box-msg">${escapeHtml(pipeline.error)}</p>` : ""}
       <div class="card-footer">
         <a href="${href}" class="btn btn-sm btn-outline">Manage ${title.toLowerCase()} &rarr;</a>
         <a href="#/pipeline/${pipelineType}" class="btn btn-sm btn-ghost">View pipeline &rarr;</a>
@@ -346,6 +348,7 @@ export function renderOverview(container, status) {
           + summaryRow("Deployed version", installer.deployedVersion, { mono: true })
           + summaryRow("Stack status", installerStatusDisplay, { statusIndicator: true }),
         pipeline: status.installerPipeline, pipelineType: "installer",
+        error: installer.error,
       })}
       ${renderComponentCard({
         title: "Configuration", href: "#/configuration", badge: configBadge,
@@ -354,6 +357,7 @@ export function renderOverview(container, status) {
           + summaryRow("Local changes", uncommitted)
           + summaryRow("Remote sync", remoteSyncDisplay, { statusIndicator: true }),
         pipeline: configPipeline, pipelineType: "configuration",
+        error: configuration.error,
       })}
     </div>
     <details class="card card-full card-danger-zone" id="danger-zone-card">

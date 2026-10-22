@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -789,6 +790,87 @@ def prepare_workspace_import(request: ImportWorkspaceRequest) -> ImportWorkspace
     )
 
 
+def _persist_installer_template_if_needed(
+    preparation: ImportWorkspacePreparation,
+    affected_paths: Collection[Path],
+) -> None:
+    template_path = preparation.installer_template_path
+    template_body = preparation.installer_template_body
+    if (
+        template_path is not None
+        and template_path in affected_paths
+        and template_body is not None
+    ):
+        write_installer_template(
+            template_path=template_path,
+            template_body=template_body,
+        )
+
+
+def _is_discovered_installer_newer(
+    current_state: WorkspaceState,
+    discovered_timestamp: datetime | None,
+) -> bool:
+    if not discovered_timestamp:
+        return True
+    current_obs = current_state.installer.observation
+    current_dep = current_state.installer.last_deployment
+    current_tmpl = current_state.installer.template
+    if current_obs and current_obs.observed_at and current_obs.observed_at > discovered_timestamp:
+        return False
+    if current_dep and current_dep.recorded_at and current_dep.recorded_at > discovered_timestamp:
+        return False
+    if (
+        current_tmpl
+        and current_tmpl.downloaded_at
+        and current_tmpl.downloaded_at > discovered_timestamp
+    ):
+        return False
+    return True
+
+
+def _merge_discovered_installer(
+    current_state: WorkspaceState,
+    result: WorkspaceImportResult,
+    preparation: ImportWorkspacePreparation,
+) -> None:
+    discovered_installer = result.state.installer
+    discovered_timestamp = (
+        discovered_installer.observation.observed_at
+        if discovered_installer.observation and discovered_installer.observation.observed_at
+        else discovered_installer.template.downloaded_at
+    )
+    if not _is_discovered_installer_newer(current_state, discovered_timestamp):
+        return
+
+    if discovered_installer.template.version is not None:
+        current_state.installer.template.version = discovered_installer.template.version
+    if discovered_installer.template.digest is not None:
+        current_state.installer.template.digest = discovered_installer.template.digest
+    if discovered_installer.template.downloaded_at is not None:
+        current_state.installer.template.downloaded_at = (
+            discovered_installer.template.downloaded_at
+        )
+    if discovered_installer.observation is not None:
+        current_state.installer.observation = discovered_installer.observation
+
+    _persist_installer_template_if_needed(preparation, result.affected_paths)
+
+
+def _merge_imported_state(
+    current_state: WorkspaceState,
+    result: WorkspaceImportResult,
+    preparation: ImportWorkspacePreparation,
+) -> None:
+    current_state.workspace = result.state.workspace
+    current_state.configuration.template = result.state.configuration.template
+    current_state.configuration.sync.files_count = result.state.configuration.sync.files_count
+    if result.state.configuration.sync.commit_sha is not None:
+        current_state.configuration.sync.commit_sha = result.state.configuration.sync.commit_sha
+    if result.installer_discovered:
+        _merge_discovered_installer(current_state, result, preparation)
+
+
 def apply_workspace_import(preparation: ImportWorkspacePreparation) -> WorkspaceImportResult:
     """Persist a prepared import without repeating discovery or validation."""
     result = preparation.result
@@ -798,84 +880,19 @@ def apply_workspace_import(preparation: ImportWorkspacePreparation) -> Workspace
     workspace_dir = result.workspace_dir
     paths = result.affected_paths
     (workspace_dir / ".lza").mkdir(parents=True, exist_ok=True)
+
     if workspace_dir / WORKSPACE_STATE_FILE in paths:
         state_file = workspace_dir / WORKSPACE_STATE_FILE
         if state_file.is_file() and not result.repaired:
-            def _apply_import(current_state: WorkspaceState) -> None:
-                current_state.workspace = result.state.workspace
-                current_state.configuration.template = result.state.configuration.template
-                current_state.configuration.sync.files_count = (
-                    result.state.configuration.sync.files_count
-                )
-                if result.state.configuration.sync.commit_sha is not None:
-                    current_state.configuration.sync.commit_sha = (
-                        result.state.configuration.sync.commit_sha
-                    )
-                if result.installer_discovered:
-                    discovered_installer = result.state.installer
-                    discovered_timestamp = (
-                        discovered_installer.observation.observed_at
-                        if discovered_installer.observation and discovered_installer.observation.observed_at
-                        else discovered_installer.template.downloaded_at
-                    )
-                    current_obs = current_state.installer.observation
-                    current_dep = current_state.installer.last_deployment
-                    current_tmpl = current_state.installer.template
-                    is_newer = True
-                    if current_obs and current_obs.observed_at and discovered_timestamp:
-                        if current_obs.observed_at > discovered_timestamp:
-                            is_newer = False
-                    if current_dep and current_dep.recorded_at and discovered_timestamp:
-                        if current_dep.recorded_at > discovered_timestamp:
-                            is_newer = False
-                    if current_tmpl and current_tmpl.downloaded_at and discovered_timestamp:
-                        if current_tmpl.downloaded_at > discovered_timestamp:
-                            is_newer = False
+            def _apply(current: WorkspaceState) -> None:
+                _merge_imported_state(current, result, preparation)
 
-                    if is_newer:
-                        if discovered_installer.template.version is not None:
-                            current_state.installer.template.version = (
-                                discovered_installer.template.version
-                            )
-                        if discovered_installer.template.digest is not None:
-                            current_state.installer.template.digest = (
-                                discovered_installer.template.digest
-                            )
-                        if discovered_installer.template.downloaded_at is not None:
-                            current_state.installer.template.downloaded_at = (
-                                discovered_installer.template.downloaded_at
-                            )
-                        if discovered_installer.observation is not None:
-                            current_state.installer.observation = discovered_installer.observation
-
-                        if (
-                            preparation.installer_template_path in paths
-                            and preparation.installer_template_body is not None
-                        ):
-                            write_installer_template(
-                                template_path=preparation.installer_template_path,
-                                template_body=preparation.installer_template_body,
-                            )
-
-            update_workspace_state(workspace_dir, _apply_import)
+            update_workspace_state(workspace_dir, _apply)
         else:
-            if (
-                preparation.installer_template_path in paths
-                and preparation.installer_template_body is not None
-            ):
-                write_installer_template(
-                    template_path=preparation.installer_template_path,
-                    template_body=preparation.installer_template_body,
-                )
+            _persist_installer_template_if_needed(preparation, paths)
             write_workspace_state(workspace_dir, result.state)
-    elif (
-        preparation.installer_template_path in paths
-        and preparation.installer_template_body is not None
-    ):
-        write_installer_template(
-            template_path=preparation.installer_template_path,
-            template_body=preparation.installer_template_body,
-        )
+    else:
+        _persist_installer_template_if_needed(preparation, paths)
 
     if workspace_dir / WORKSPACE_CONFIG_FILE in paths:
         write_workspace_config(workspace_dir, result.config)

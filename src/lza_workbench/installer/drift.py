@@ -47,7 +47,7 @@ def calculate_state_alignment(
     *,
     stack_id: str | None,
     stack_status: str | None,
-    deployed_version: str,
+    deployed_version: str | None,
 ) -> StateAlignment:
     """Compare recorded stack observation with the current stack metadata."""
     obs = state.installer.observation
@@ -56,8 +56,9 @@ def calculate_state_alignment(
     stack_id_matches = obs.stack_id is None or obs.stack_id == stack_id
     stack_status_matches = obs.stack_status == stack_status
     recorded_version = obs.deployed_version or state.installer.template.version
-    version_matches = normalize_lza_version(recorded_version) == normalize_lza_version(
+    version_matches = bool(
         deployed_version
+        and normalize_lza_version(recorded_version) == normalize_lza_version(deployed_version)
     )
     return StateAlignment(
         in_sync=stack_id_matches and stack_status_matches and version_matches,

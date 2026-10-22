@@ -52,7 +52,7 @@ def create_dev_router() -> APIRouter:
                 try:
                     await asyncio.wait_for(shutdown_event.wait(), timeout=0.3)
                     break
-                except (asyncio.TimeoutError, TimeoutError):
+                except TimeoutError:
                     pass
 
                 if await request.is_disconnected():

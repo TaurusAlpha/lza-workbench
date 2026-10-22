@@ -3,51 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from lza_workbench.configuration.git import GitRemoteSyncStatus
-from lza_workbench.configuration.sync import RemoteSyncStatus
+from lza_workbench.configuration.status import ConfigurationRepoSummary
+from lza_workbench.installer.status import InstallerStackSummary
+from lza_workbench.pipeline.model import PipelineSummary
 
 if TYPE_CHECKING:
     from lza_workbench.workspace.validation import WorkspaceAssessment
-
-
-@dataclass(frozen=True)
-class PipelineSummary:
-    name: str
-    exists: bool = False
-    status: str | None = None
-    execution_id: str | None = None
-    start_time: str | None = None
-    duration_seconds: float | None = None
-    current_stage: str | None = None
-    current_action: str | None = None
-    failed_stage: str | None = None
-    failed_action: str | None = None
-    failure_summary: str | None = None
-    is_live: bool = True
-
-
-@dataclass(frozen=True)
-class InstallerStackSummary:
-    name: str
-    status: str | None = None
-    exists: bool = False
-    deployed_version: str | None = None
-    is_live: bool = True
-
-
-@dataclass(frozen=True)
-class ConfigurationRepoSummary:
-    repository_type: str
-    target: str | None = None
-    local_git_branch: str | None = None
-    local_git_clean: bool = True
-    local_git_uncommitted: int = 0
-    git_sync_status: GitRemoteSyncStatus | None = None
-    remote_sync: RemoteSyncStatus | None = None
-    is_live: bool = True
 
 
 @dataclass(frozen=True)
@@ -73,6 +38,8 @@ class RootStatusResult:
     configuration_pipeline: PipelineSummary
     health: OverallHealthSummary
     assessment: WorkspaceAssessment | None = None
+    observed_at: datetime | None = None
+    last_attempt_at: datetime | None = None
 
 
 __all__ = [

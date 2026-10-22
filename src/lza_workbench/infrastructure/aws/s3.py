@@ -11,7 +11,7 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.errors import LzaError
-from lza_workbench.infrastructure.aws.errors import classify_aws_error
+from lza_workbench.infrastructure.aws.errors import AwsErrorInfo, classify_aws_error
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,7 @@ class S3ObjectObservation:
     last_modified: datetime | None = None
     metadata: dict[str, str] = field(default_factory=dict)
     error: str | None = None
+    error_info: AwsErrorInfo | None = None
 
 
 def get_s3_https_url(bucket_name: str, object_key: str, region: str = "us-east-1") -> str:
@@ -352,9 +353,11 @@ def inspect_s3_object_safe(
     except Exception as exc:
         info = classify_aws_error(exc)
         if info.is_not_found:
-            return S3ObjectObservation(exists=False)
+            return S3ObjectObservation(exists=False, error_info=info)
         prefix = "Connection failure: " if info.is_unavailable else ""
-        return S3ObjectObservation(exists=False, error=f"{prefix}{info.message}")
+        return S3ObjectObservation(
+            exists=False, error=f"{prefix}{info.message}", error_info=info
+        )
 
 
 def list_buckets_by_prefix(

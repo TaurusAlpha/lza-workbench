@@ -7,7 +7,7 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
-from lza_workbench.infrastructure.aws.errors import classify_aws_error
+from lza_workbench.infrastructure.aws.errors import AwsErrorInfo, classify_aws_error
 
 
 @dataclass(frozen=True)
@@ -19,6 +19,7 @@ class CodeCommitRepositoryStatus:
     branch_exists: bool
     error: str | None = None
     not_found: bool = False
+    error_info: AwsErrorInfo | None = None
 
 
 def inspect_codecommit_repository(
@@ -40,6 +41,7 @@ def inspect_codecommit_repository(
             branch_exists=False,
             error=info.message,
             not_found=info.is_not_found,
+            error_info=info,
         )
     try:
         client.get_branch(repositoryName=repository_name, branchName=branch_name)
@@ -56,6 +58,7 @@ def inspect_codecommit_repository(
             accessible=accessible,
             branch_exists=branch_exists,
             error=err,
+            error_info=info if err else None,
         )
 
 

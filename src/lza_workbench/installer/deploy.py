@@ -61,7 +61,6 @@ from lza_workbench.workspace.persistence import (
 from lza_workbench.workspace.schema import (
     CustomerEnvironmentTarget,
     WorkspaceConfig,
-    WorkspaceState,
 )
 from lza_workbench.workspace.validation import WorkspaceCapability
 

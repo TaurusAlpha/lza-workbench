@@ -9,7 +9,7 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.errors import LzaError
-from lza_workbench.infrastructure.aws.errors import classify_aws_error
+from lza_workbench.infrastructure.aws.errors import AwsErrorInfo, classify_aws_error
 
 
 @dataclass(frozen=True)
@@ -44,6 +44,7 @@ class PipelineStateResult:
     created: str | None = None
     updated: str | None = None
     error: str | None = None
+    error_info: AwsErrorInfo | None = None
 
 
 @dataclass(frozen=True)
@@ -160,6 +161,7 @@ def get_pipeline_state(
                 pipeline_name=clean_pipeline_name,
                 exists=False,
                 status="NOT_DEPLOYED",
+                error_info=info,
             )
         prefix = "Connection failure: " if info.is_unavailable else ""
         return PipelineStateResult(
@@ -167,6 +169,7 @@ def get_pipeline_state(
             exists=False,
             status="UNKNOWN",
             error=f"{prefix}{info.message}",
+            error_info=info,
         )
 
 

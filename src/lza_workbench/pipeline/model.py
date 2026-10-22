@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from lza_workbench.infrastructure.aws.errors import ObservationOutcome
+
+if TYPE_CHECKING:
+    from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult
 
 
 @dataclass(frozen=True)
@@ -31,6 +38,31 @@ class PipelineStageState:
 
 
 @dataclass(frozen=True)
+class PipelineSummary:
+    """Structured summary observation of a pipeline execution."""
+
+    name: str
+    exists: bool = False
+    status: str | None = None
+    execution_id: str | None = None
+    start_time: str | None = None
+    duration_seconds: float | None = None
+    current_stage: str | None = None
+    current_action: str | None = None
+    failed_stage: str | None = None
+    failed_action: str | None = None
+    failure_summary: str | None = None
+    failed_build_url: str | None = None
+    stages: list[PipelineStageState] = field(default_factory=list)
+    raw_state: PipelineStateResult | None = None
+    is_live: bool = True
+    outcome: ObservationOutcome = ObservationOutcome.NOT_COLLECTED
+    observed_at: datetime | None = None
+    last_attempt_at: datetime | None = None
+    error: str | None = None
+
+
+@dataclass(frozen=True)
 class PipelineExecutionSnapshot:
     """A single provider-neutral observation of a pipeline or execution."""
 
@@ -53,4 +85,5 @@ __all__ = [
     "PipelineActionState",
     "PipelineExecutionSnapshot",
     "PipelineStageState",
+    "PipelineSummary",
 ]

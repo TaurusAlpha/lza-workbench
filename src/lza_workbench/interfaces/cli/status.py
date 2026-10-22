@@ -51,6 +51,8 @@ def _render_recorded_pipeline_summary(pipe: PipelineSummary) -> None:
         print_kv("Failed Action", f"{pipe.failed_action} (Recorded)", style="red")
     if pipe.failure_summary:
         print_kv("Failure", pipe.failure_summary, style="red")
+    if pipe.error and pipe.error != pipe.failure_summary:
+        print_kv("Notice", pipe.error, style="yellow")
 
 
 def _render_live_pipeline_details(pipe: PipelineSummary) -> None:
@@ -124,6 +126,8 @@ def render_root_status(result: RootStatusResult) -> None:
             print_kv("Deployed Version", f"{inst_stack.deployed_version} (Recorded)")
         else:
             print_kv("Deployed Version", "Not Recorded", style="dim")
+        if inst_stack.error:
+            print_kv("Notice", inst_stack.error, style="yellow")
 
     console.print()
     _render_pipeline_summary(result.installer_pipeline, label_prefix="Installer")

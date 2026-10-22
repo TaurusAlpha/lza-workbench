@@ -12,7 +12,7 @@ from typing import Any
 from botocore.exceptions import BotoCoreError, ClientError
 
 from lza_workbench.errors import LzaError
-from lza_workbench.infrastructure.aws.errors import classify_aws_error
+from lza_workbench.infrastructure.aws.errors import AwsErrorInfo, classify_aws_error
 
 
 @dataclass
@@ -37,6 +37,7 @@ class CfnStackStatusResult:
     creation_time: str | None = None
     last_updated_time: str | None = None
     error: str | None = None
+    error_info: AwsErrorInfo | None = None
 
 
 def _is_stack_not_found(exc: Exception) -> bool:
@@ -171,6 +172,7 @@ def get_cloudformation_stack_status(
                 stack_name=clean_stack_name,
                 exists=False,
                 stack_status="NOT_DEPLOYED",
+                error_info=info,
             )
         prefix = "Connection failure: " if info.is_unavailable else ""
         return CfnStackStatusResult(
@@ -178,6 +180,7 @@ def get_cloudformation_stack_status(
             exists=False,
             stack_status="UNKNOWN",
             error=f"{prefix}{info.message}",
+            error_info=info,
         )
 
 

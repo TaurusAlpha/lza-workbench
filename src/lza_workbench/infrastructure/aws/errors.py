@@ -15,6 +15,15 @@ class AwsErrorCategory(StrEnum):
     API_ERROR = "API_ERROR"
 
 
+class ObservationOutcome(StrEnum):
+    OBSERVED = "OBSERVED"
+    ABSENT = "ABSENT"
+    ACCESS_DENIED = "ACCESS_DENIED"
+    AUTH_UNAVAILABLE = "AUTH_UNAVAILABLE"
+    COLLECTION_FAILED = "COLLECTION_FAILED"
+    NOT_COLLECTED = "NOT_COLLECTED"
+
+
 @dataclass(frozen=True)
 class AwsErrorInfo:
     category: AwsErrorCategory
@@ -159,3 +168,37 @@ def classify_aws_error(exc: Exception) -> AwsErrorInfo:
         code=exc_type_name,
         original_exception=exc,
     )
+
+
+def outcome_from_aws_error(error_info: AwsErrorInfo) -> ObservationOutcome:
+    """Map classified AWS error to an observation collection outcome."""
+    if error_info.category == AwsErrorCategory.NOT_FOUND:
+        return ObservationOutcome.ABSENT
+    if error_info.category == AwsErrorCategory.ACCESS_DENIED:
+        return ObservationOutcome.ACCESS_DENIED
+    if error_info.category == AwsErrorCategory.UNAVAILABLE:
+        return ObservationOutcome.AUTH_UNAVAILABLE
+    return ObservationOutcome.COLLECTION_FAILED
+
+
+def classify_observation_outcome(
+    *,
+    error_info: AwsErrorInfo | None = None,
+    exists: bool | None = None,
+) -> ObservationOutcome:
+    """Determine outcome from AWS error info and resource presence."""
+    if error_info is None:
+        if exists is False:
+            return ObservationOutcome.ABSENT
+        return ObservationOutcome.OBSERVED
+    return outcome_from_aws_error(error_info)
+
+
+__all__ = [
+    "AwsErrorCategory",
+    "AwsErrorInfo",
+    "ObservationOutcome",
+    "classify_aws_error",
+    "classify_observation_outcome",
+    "outcome_from_aws_error",
+]

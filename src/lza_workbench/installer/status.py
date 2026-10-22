@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from lza_workbench.infrastructure.aws.cloudformation import (
     CfnStackStatusResult,
@@ -11,8 +13,10 @@ from lza_workbench.infrastructure.aws.cloudformation import (
 )
 from lza_workbench.infrastructure.aws.codepipeline import (
     PipelineStateResult,
-    get_latest_pipeline_execution,
-    get_pipeline_state,
+)
+from lza_workbench.infrastructure.aws.errors import (
+    ObservationOutcome,
+    outcome_from_aws_error,
 )
 from lza_workbench.infrastructure.aws.session import (
     AwsExecutionContext,
@@ -29,6 +33,7 @@ from lza_workbench.installer.versions import (
     normalize_lza_version,
     resolve_deployed_installer_version,
 )
+from lza_workbench.pipeline.observation import observe_pipeline_status
 from lza_workbench.workspace.context import load_workspace_context
 from lza_workbench.workspace.schema import (
     CustomerEnvironmentTarget,
@@ -36,6 +41,24 @@ from lza_workbench.workspace.schema import (
     WorkspaceState,
 )
 from lza_workbench.workspace.validation import WorkspaceCapability
+
+if TYPE_CHECKING:
+    from lza_workbench.infrastructure.aws.session import AwsClientFactory
+
+
+@dataclass(frozen=True)
+class InstallerStackSummary:
+    name: str
+    status: str | None = None
+    exists: bool = False
+    deployed_version: str | None = None
+    is_live: bool = True
+    outcome: ObservationOutcome = ObservationOutcome.NOT_COLLECTED
+    observed_at: datetime | None = None
+    last_attempt_at: datetime | None = None
+    error: str | None = None
+    stack_id: str | None = None
+    resource_updated_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -48,7 +71,7 @@ class InstallerStatusResult:
     aws_identity: dict[str, str] | None
     aws_error: str | None
     cfn_status: CfnStackStatusResult
-    deployed_version: str
+    deployed_version: str | None
     configuration_drift: dict[str, tuple[str, str]]
     state_alignment: StateAlignment | None
     installer_pipeline_name: str
@@ -76,7 +99,7 @@ def prepare_installer_status(
     aws_identity: dict[str, str] | None,
     aws_error: str | None,
     cfn_status: CfnStackStatusResult,
-    deployed_version: str,
+    deployed_version: str | None,
     pipeline_state: PipelineStateResult | None = None,
 ) -> InstallerStatusResult:
     """Prepare report data without calling AWS, writing files, or rendering output."""
@@ -149,13 +172,135 @@ def prepare_installer_status(
     )
 
 
+def observe_installer_stack(
+    *,
+    target: CustomerEnvironmentTarget,
+    factory: AwsClientFactory | None = None,
+    state: WorkspaceState | None = None,
+) -> InstallerStackSummary:
+    """Collect unified installer stack observation with CloudFormation query and offline fallback."""
+    now = datetime.now(UTC)
+    cfn_stack_name = target.installer_stack_name or "AWSAccelerator-InstallerStack"
+
+    if factory is not None:
+        cfn_client = factory.get_client("cloudformation")
+        cfn_status = get_cloudformation_stack_status(client=cfn_client, stack_name=cfn_stack_name)
+        if cfn_status.error:
+            outcome = (
+                outcome_from_aws_error(cfn_status.error_info)
+                if cfn_status.error_info is not None
+                else ObservationOutcome.COLLECTION_FAILED
+            )
+            is_not_found = (
+                cfn_status.error_info.is_not_found
+                if cfn_status.error_info is not None
+                else False
+            )
+            if is_not_found or cfn_status.stack_status == "NOT_DEPLOYED":
+                return InstallerStackSummary(
+                    name=cfn_stack_name,
+                    status="NOT_DEPLOYED",
+                    exists=False,
+                    deployed_version=None,
+                    is_live=True,
+                    outcome=ObservationOutcome.ABSENT,
+                    observed_at=now,
+                    last_attempt_at=now,
+                )
+            # Live query failed: preserve last-known observation while recording failure attempt
+            obs = state.installer.observation if state else None
+            if obs and obs.stack_status:
+                return InstallerStackSummary(
+                    name=cfn_stack_name,
+                    status=obs.stack_status,
+                    exists=bool(obs.stack_status),
+                    deployed_version=obs.deployed_version,
+                    is_live=False,
+                    outcome=outcome,
+                    observed_at=obs.observed_at,
+                    last_attempt_at=now,
+                    error=cfn_status.error,
+                    stack_id=obs.stack_id,
+                )
+            return InstallerStackSummary(
+                name=cfn_stack_name,
+                status=None,
+                exists=False,
+                deployed_version=None,
+                is_live=False,
+                outcome=outcome,
+                observed_at=None,
+                last_attempt_at=now,
+                error=cfn_status.error,
+            )
+
+        if not cfn_status.exists:
+            return InstallerStackSummary(
+                name=cfn_stack_name,
+                status="NOT_DEPLOYED",
+                exists=False,
+                deployed_version=None,
+                is_live=True,
+                outcome=ObservationOutcome.ABSENT,
+                observed_at=now,
+                last_attempt_at=now,
+            )
+
+        ssm_client = factory.get_client("ssm")
+        deployed_version = resolve_deployed_installer_version(
+            cfn_client=cfn_client,
+            ssm_client=ssm_client,
+            stack_name=cfn_stack_name,
+            accelerator_prefix=(
+                cfn_status.deployed_parameters.get("AcceleratorPrefix")
+                or target.lza.accelerator_prefix
+            ),
+        )
+
+        return InstallerStackSummary(
+            name=cfn_stack_name,
+            status=cfn_status.stack_status,
+            exists=True,
+            deployed_version=deployed_version,
+            is_live=True,
+            outcome=ObservationOutcome.OBSERVED,
+            observed_at=now,
+            last_attempt_at=now,
+            stack_id=cfn_status.stack_id,
+            resource_updated_at=cfn_status.last_updated_time or cfn_status.creation_time,
+        )
+
+    # Offline / No factory
+    obs = state.installer.observation if state else None
+    if obs and obs.stack_status:
+        return InstallerStackSummary(
+            name=cfn_stack_name,
+            status=obs.stack_status,
+            exists=bool(obs.stack_status),
+            deployed_version=obs.deployed_version,
+            is_live=False,
+            outcome=ObservationOutcome.NOT_COLLECTED,
+            observed_at=obs.observed_at,
+            last_attempt_at=None,
+            stack_id=obs.stack_id,
+        )
+
+    return InstallerStackSummary(
+        name=cfn_stack_name,
+        status=None,
+        exists=False,
+        deployed_version=None,
+        is_live=False,
+        outcome=ObservationOutcome.NOT_COLLECTED,
+    )
+
+
 def _query_live_installer_status(
     *,
     aws_context: AwsExecutionContext,
     cfn_stack_name: str,
     installer_pipeline_name: str,
     accelerator_prefix: str,
-    resolved_config_version: str,
     resolved_state: WorkspaceState | None,
 ) -> tuple[CfnStackStatusResult, str | None, PipelineStateResult]:
     cfn_client = aws_context.factory.get_client("cloudformation")
@@ -173,24 +318,26 @@ def _query_live_installer_status(
         if cfn_status.exists
         else None
     )
-    codepipeline_client = aws_context.factory.get_client("codepipeline")
-    pipeline_state = get_pipeline_state(
-        client=codepipeline_client, pipeline_name=installer_pipeline_name
+
+    pipe_summary = observe_pipeline_status(
+        pipeline_name=installer_pipeline_name,
+        pipeline_type="installer",
+        factory=aws_context.factory,
+        state=resolved_state,
+        fetch_diagnostics=False,
+    )
+    pipeline_state = pipe_summary.raw_state or PipelineStateResult(
+        pipeline_name=installer_pipeline_name,
+        exists=pipe_summary.exists,
+        status=pipe_summary.status or "NOT_CHECKED",
+        latest_execution_id=pipe_summary.execution_id,
+        latest_start_time=pipe_summary.start_time,
+        error=pipe_summary.error,
+        error_info=getattr(pipe_summary.raw_state, "error_info", None) if pipe_summary.raw_state else None,
     )
 
-    if pipeline_state.exists and not pipeline_state.error:
-        latest = get_latest_pipeline_execution(
-            client=codepipeline_client, pipeline_name=installer_pipeline_name
-        )
-        if latest and latest.execution_id == pipeline_state.latest_execution_id:
-            pipeline_state = replace(pipeline_state, latest_start_time=latest.start_time)
-
-    # If a connection/network failure occurred during live execution, fall back to recorded state
-    if (
-        isinstance(cfn_status.error, str)
-        and cfn_status.error.startswith("Connection failure")
-        and resolved_state
-    ):
+    # If live CloudFormation query failed, fall back to recorded state without inventing data
+    if cfn_status.error and resolved_state:
         obs = resolved_state.installer.observation
         recorded_status = obs.stack_status if obs else None
         if recorded_status:
@@ -201,26 +348,12 @@ def _query_live_installer_status(
                 stack_status=recorded_status,
                 deployed_parameters=dict(obs.deployed_parameters) if (obs and obs.deployed_parameters) else {},
                 error=cfn_status.error,
+                error_info=cfn_status.error_info,
             )
-        recorded_version = (
-            (obs.deployed_version if obs else None)
-            or resolved_state.installer.template.version
-        )
+        recorded_version = obs.deployed_version if obs else None
         if not deployed_version and recorded_version:
             deployed_version = recorded_version
-    if (
-        isinstance(pipeline_state.error, str)
-        and pipeline_state.error.startswith("Connection failure")
-        and resolved_state
-    ):
-        pipe_obs = resolved_state.pipelines.installer.resolve_offline_observation()
-        pipeline_state = PipelineStateResult(
-            pipeline_name=installer_pipeline_name,
-            exists=bool(pipe_obs and (pipe_obs.status or pipe_obs.execution_id)),
-            status=(pipe_obs.status if pipe_obs else None) or "NOT_CHECKED",
-            latest_execution_id=pipe_obs.execution_id if pipe_obs else None,
-            error=pipeline_state.error,
-        )
+
     return cfn_status, deployed_version, pipeline_state
 
 
@@ -229,15 +362,11 @@ def _query_recorded_installer_status(
     cfn_stack_name: str,
     installer_pipeline_name: str,
     aws_error: str | None,
-    resolved_config_version: str,
     resolved_state: WorkspaceState | None,
-) -> tuple[CfnStackStatusResult, str, PipelineStateResult]:
+) -> tuple[CfnStackStatusResult, str | None, PipelineStateResult]:
     obs = resolved_state.installer.observation if resolved_state else None
     recorded_status = obs.stack_status if obs else None
-    recorded_version = (
-        (obs.deployed_version if obs else None)
-        or (resolved_state.installer.template.version if resolved_state else None)
-    )
+    recorded_version = obs.deployed_version if obs else None
     cfn_status = CfnStackStatusResult(
         stack_name=cfn_stack_name,
         exists=bool(recorded_status),
@@ -246,21 +375,22 @@ def _query_recorded_installer_status(
         deployed_parameters=dict(obs.deployed_parameters) if (obs and obs.deployed_parameters) else {},
         error=aws_error,
     )
-    deployed_version = recorded_version or resolved_config_version
-    pipe_obs = (
-        resolved_state.pipelines.installer.resolve_offline_observation()
-        if resolved_state
-        else None
+    pipe_summary = observe_pipeline_status(
+        pipeline_name=installer_pipeline_name,
+        pipeline_type="installer",
+        factory=None,
+        state=resolved_state,
+        fetch_diagnostics=False,
     )
-    recorded_pipe_status = pipe_obs.status if pipe_obs else None
-    recorded_exec_id = pipe_obs.execution_id if pipe_obs else None
     pipeline_state = PipelineStateResult(
         pipeline_name=installer_pipeline_name,
-        exists=bool(recorded_pipe_status or recorded_exec_id),
-        status=recorded_pipe_status or "NOT_CHECKED",
-        latest_execution_id=recorded_exec_id,
+        exists=pipe_summary.exists,
+        status=pipe_summary.status or "NOT_CHECKED",
+        latest_execution_id=pipe_summary.execution_id,
+        latest_start_time=pipe_summary.start_time,
+        error=pipe_summary.error,
     )
-    return cfn_status, deployed_version, pipeline_state
+    return cfn_status, recorded_version, pipeline_state
 
 
 def get_installer_status_workflow(
@@ -319,7 +449,6 @@ def get_installer_status_workflow(
             cfn_stack_name=cfn_stack_name,
             installer_pipeline_name=installer_pipeline_name,
             accelerator_prefix=prefix,
-            resolved_config_version=resolved_target.lza.version,
             resolved_state=resolved_state,
         )
     else:
@@ -327,7 +456,6 @@ def get_installer_status_workflow(
             cfn_stack_name=cfn_stack_name,
             installer_pipeline_name=installer_pipeline_name,
             aws_error=resolved_aws.error,
-            resolved_config_version=resolved_target.lza.version,
             resolved_state=resolved_state,
         )
 
@@ -342,17 +470,19 @@ def get_installer_status_workflow(
         aws_identity=resolved_aws.identity,
         aws_error=resolved_aws.error,
         cfn_status=cfn_status,
-        deployed_version=deployed_version or resolved_target.lza.version,
+        deployed_version=deployed_version,
         pipeline_state=pipeline_state,
     )
 
 
 __all__ = [
+    "InstallerStackSummary",
     "InstallerStatusResult",
     "StateAlignment",
     "calculate_configuration_drift",
     "calculate_state_alignment",
     "get_installer_status_workflow",
     "normalize_lza_version",
+    "observe_installer_stack",
     "prepare_installer_status",
 ]

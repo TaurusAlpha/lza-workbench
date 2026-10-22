@@ -21,7 +21,10 @@ from lza_workbench.pipeline.failures import (
     collect_pipeline_action_failures,
     fetch_codebuild_diagnostics,
 )
-from lza_workbench.pipeline.model import PipelineStageState
+from lza_workbench.pipeline.model import (
+    PipelineExecutionSnapshot,
+    PipelineStageState,
+)
 from lza_workbench.pipeline.observation import observe_pipeline_execution
 from lza_workbench.pipeline.resolution import resolve_pipeline
 from lza_workbench.pipeline.state import record_pipeline_watch_result
@@ -30,7 +33,11 @@ from lza_workbench.workspace.context import (
     load_workspace_context,
 )
 from lza_workbench.workspace.persistence import update_workspace_state
-from lza_workbench.workspace.schema import CustomerEnvironmentTarget, WorkspaceState
+from lza_workbench.workspace.schema import (
+    CustomerEnvironmentTarget,
+    WorkspaceConfig,
+    WorkspaceState,
+)
 from lza_workbench.workspace.validation import WorkspaceCapability
 
 
@@ -166,6 +173,148 @@ def _calculate_watch_elapsed(
     return None
 
 
+def _resolve_watch_aws_context(
+    *,
+    aws_context: AwsExecutionContext | None,
+    config: WorkspaceConfig | None,
+    expected_account_id: str | None,
+) -> AwsExecutionContext:
+    if aws_context is not None:
+        if expected_account_id is not None:
+            aws_context.require_live(expected_account_id=expected_account_id)
+        return aws_context
+    if config is not None:
+        profile = config.aws.profile or ""
+        return resolve_aws_execution_context(
+            profile=profile,
+            region=config.aws.region,
+            role_arn=config.aws.role_arn,
+            expected_account_id=expected_account_id,
+            require_identity=True,
+            require_expected_account=True,
+            prime_credentials=config.aws.prime_credentials,
+        )
+    raise LzaError("Pipeline watch requires an AWS execution context or workspace.")
+
+
+def _poll_pipeline_execution(
+    *,
+    client: Any,
+    pipeline_name: str,
+    execution_id: str,
+    aws_context: AwsExecutionContext,
+    interval: int,
+    timeout_seconds: int | None,
+    on_update: Callable[[PipelineWatchUpdate], None] | None,
+) -> tuple[
+    str,
+    list[PipelineStageState],
+    list[PipelineActionFailure],
+    str | None,
+    PipelineExecutionSnapshot | None,
+    float,
+]:
+    start_time = time.time()
+    last_status = "InProgress"
+    stage_summaries: list[PipelineStageState] = []
+    failed_actions: list[PipelineActionFailure] = []
+    error_message: str | None = None
+    last_snapshot = None
+    not_found_attempts = 0
+    max_not_found_attempts = 3
+
+    while True:
+        elapsed = time.time() - start_time
+        if timeout_seconds and elapsed > timeout_seconds:
+            last_status = "TimedOut"
+            error_message = f"Watch timed out after {int(elapsed)} seconds."
+            break
+
+        snapshot = observe_pipeline_execution(
+            client=client,
+            pipeline_name=pipeline_name,
+            execution_id=execution_id,
+        )
+        last_snapshot = snapshot
+
+        if snapshot.status == "NOT_FOUND":
+            not_found_attempts += 1
+            if not_found_attempts < max_not_found_attempts:
+                time.sleep(interval)
+                continue
+            raise LzaError(
+                f"Pipeline execution '{execution_id}' was not found for pipeline '{pipeline_name}'."
+            )
+
+        stage_summaries = snapshot.stages
+
+        if snapshot.status and snapshot.status not in {"UNKNOWN", "NOT_FOUND"}:
+            last_status = snapshot.status
+
+        if on_update is not None:
+            on_update(
+                PipelineWatchUpdate(
+                    pipeline_name=pipeline_name,
+                    execution_id=execution_id,
+                    status=last_status,
+                    stages=stage_summaries,
+                    elapsed_seconds=elapsed,
+                )
+            )
+
+        if last_status in TERMINAL_STATUSES:
+            failed_actions, error_message = _resolve_terminal_failures(
+                stage_summaries=stage_summaries,
+                last_status=last_status,
+                aws_context=aws_context,
+            )
+            break
+
+        time.sleep(interval)
+
+    return (
+        last_status,
+        stage_summaries,
+        failed_actions,
+        error_message,
+        last_snapshot,
+        start_time,
+    )
+
+
+def _persist_watch_state(
+    *,
+    workspace_dir: Path | None,
+    state: WorkspaceState | None,
+    execution_id: str,
+    pipeline_name: str,
+    last_status: str,
+    stage_summaries: list[PipelineStageState],
+    failed_actions: list[PipelineActionFailure],
+    error_message: str | None,
+    pipeline_type: str,
+    last_snapshot: PipelineExecutionSnapshot | None,
+) -> None:
+    if state is None or workspace_dir is None:
+        return
+
+    def _record_watch(current: WorkspaceState) -> None:
+        record_pipeline_watch_result(
+            current,
+            execution_id=execution_id,
+            pipeline_name=pipeline_name,
+            status=last_status,
+            stages=stage_summaries,
+            failed_actions=failed_actions,
+            error_message=error_message,
+            pipeline_type=pipeline_type,
+            observed_pipeline_status=(last_snapshot.status if last_snapshot else None),
+        )
+
+    _record_watch(state)
+    update_workspace_state(workspace_dir, _record_watch)
+
+
 def watch_pipeline_workflow(
     *,
     target_dir: Path | None = None,
@@ -213,23 +362,11 @@ def watch_pipeline_workflow(
     )
     expected_account_id = env_target.account_id if env_target is not None else None
 
-    if aws_context is not None:
-        resolved_aws_context = aws_context
-        if expected_account_id is not None:
-            resolved_aws_context.require_live(expected_account_id=expected_account_id)
-    elif config is not None:
-        profile = config.aws.profile or ""
-        resolved_aws_context = resolve_aws_execution_context(
-            profile=profile,
-            region=config.aws.region,
-            role_arn=config.aws.role_arn,
-            expected_account_id=expected_account_id,
-            require_identity=True,
-            require_expected_account=True,
-            prime_credentials=config.aws.prime_credentials,
-        )
-    else:
-        raise LzaError("Pipeline watch requires an AWS execution context or workspace.")
+    resolved_aws_context = _resolve_watch_aws_context(
+        aws_context=aws_context,
+        config=config,
+        expected_account_id=expected_account_id,
+    )
 
     region = resolved_aws_context.region
     account_id = (
@@ -259,64 +396,22 @@ def watch_pipeline_workflow(
             else 15
         ) or 15
 
-    start_time = time.time()
-    last_status = "InProgress"
-    stage_summaries: list[PipelineStageState] = []
-    failed_actions: list[PipelineActionFailure] = []
-    error_message: str | None = None
-    last_snapshot = None
-    not_found_attempts = 0
-    max_not_found_attempts = 3
-
-    while True:
-        elapsed = time.time() - start_time
-        if timeout_seconds and elapsed > timeout_seconds:
-            last_status = "TimedOut"
-            error_message = f"Watch timed out after {int(elapsed)} seconds."
-            break
-
-        snapshot = observe_pipeline_execution(
-            client=client,
-            pipeline_name=resolved_pipeline_name,
-            execution_id=resolved_execution_id,
-        )
-        last_snapshot = snapshot
-
-        if snapshot.status == "NOT_FOUND":
-            not_found_attempts += 1
-            if not_found_attempts < max_not_found_attempts:
-                time.sleep(interval)
-                continue
-            raise LzaError(
-                f"Pipeline execution '{resolved_execution_id}' was not found for "
-                f"pipeline '{resolved_pipeline_name}'."
-            )
-
-        stage_summaries = snapshot.stages
-
-        if snapshot.status and snapshot.status not in {"UNKNOWN", "NOT_FOUND"}:
-            last_status = snapshot.status
-
-        if on_update is not None:
-            on_update(
-                PipelineWatchUpdate(
-                    pipeline_name=resolved_pipeline_name,
-                    execution_id=resolved_execution_id,
-                    status=last_status,
-                    stages=stage_summaries,
-                    elapsed_seconds=elapsed,
-                )
-            )
-
-        if last_status in TERMINAL_STATUSES:
-            failed_actions, error_message = _resolve_terminal_failures(
-                stage_summaries=stage_summaries,
-                last_status=last_status,
-                aws_context=resolved_aws_context,
-            )
-            break
-
-        time.sleep(interval)
+    (
+        last_status,
+        stage_summaries,
+        failed_actions,
+        error_message,
+        last_snapshot,
+        start_time,
+    ) = _poll_pipeline_execution(
+        client=client,
+        pipeline_name=resolved_pipeline_name,
+        execution_id=resolved_execution_id,
+        aws_context=resolved_aws_context,
+        interval=interval,
+        timeout_seconds=timeout_seconds,
+        on_update=on_update,
+    )
 
     total_elapsed = _calculate_watch_elapsed(
         last_snapshot=last_snapshot,
@@ -336,22 +431,18 @@ def watch_pipeline_workflow(
         error_message=error_message,
     )
 
-    if state is not None and workspace_dir is not None:
-        def _record_watch(current: WorkspaceState) -> None:
-            record_pipeline_watch_result(
-                current,
-                execution_id=resolved_execution_id,
-                pipeline_name=resolved_pipeline_name,
-                status=last_status,
-                stages=stage_summaries,
-                failed_actions=failed_actions,
-                error_message=error_message,
-                pipeline_type=pipeline_type,
-                observed_pipeline_status=(last_snapshot.status if last_snapshot else None),
-            )
-
-        _record_watch(state)
-        update_workspace_state(workspace_dir, _record_watch)
+    _persist_watch_state(
+        workspace_dir=workspace_dir,
+        state=state,
+        execution_id=resolved_execution_id,
+        pipeline_name=resolved_pipeline_name,
+        last_status=last_status,
+        stage_summaries=stage_summaries,
+        failed_actions=failed_actions,
+        error_message=error_message,
+        pipeline_type=pipeline_type,
+        last_snapshot=last_snapshot,
+    )
 
     return watch_result
 

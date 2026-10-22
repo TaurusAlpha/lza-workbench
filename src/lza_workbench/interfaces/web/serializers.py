@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
 from lza_workbench.configuration.pull import ConfigPullPreparation, ConfigPullResult
@@ -33,7 +32,8 @@ def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
     sync = result.configuration_repo.git_sync_status
     rsync = result.configuration_repo.remote_sync
     return {
-        "observedAt": datetime.now(UTC).isoformat(),
+        "observedAt": result.observed_at.isoformat() if result.observed_at else None,
+        "lastAttemptAt": result.last_attempt_at.isoformat() if result.last_attempt_at else None,
         "workspace": {
             "directory": str(result.workspace_dir) if result.workspace_dir else None,
             "customerName": result.customer_name,
@@ -52,6 +52,10 @@ def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
             "exists": result.installer.exists,
             "deployedVersion": result.installer.deployed_version,
             "isLive": result.installer.is_live,
+            "outcome": result.installer.outcome.value,
+            "observedAt": result.installer.observed_at.isoformat() if result.installer.observed_at else None,
+            "lastAttemptAt": result.installer.last_attempt_at.isoformat() if result.installer.last_attempt_at else None,
+            "error": result.installer.error,
         },
         "installerPipeline": _serialize_pipeline(result.installer_pipeline),
         "configuration": {
@@ -82,6 +86,10 @@ def serialize_root_status(result: RootStatusResult) -> dict[str, Any]:
                 else None
             ),
             "isLive": result.configuration_repo.is_live,
+            "outcome": result.configuration_repo.outcome.value,
+            "observedAt": result.configuration_repo.observed_at.isoformat() if result.configuration_repo.observed_at else None,
+            "lastAttemptAt": result.configuration_repo.last_attempt_at.isoformat() if result.configuration_repo.last_attempt_at else None,
+            "error": result.configuration_repo.error,
         },
         "configurationPipeline": _serialize_pipeline(result.configuration_pipeline),
         "health": {
@@ -129,6 +137,10 @@ def _serialize_pipeline(pipeline: PipelineSummary) -> dict[str, Any]:
         "failedAction": pipeline.failed_action,
         "failureSummary": pipeline.failure_summary,
         "isLive": pipeline.is_live,
+        "outcome": pipeline.outcome.value,
+        "observedAt": pipeline.observed_at.isoformat() if pipeline.observed_at else None,
+        "lastAttemptAt": pipeline.last_attempt_at.isoformat() if pipeline.last_attempt_at else None,
+        "error": pipeline.error,
     }
 
 
@@ -277,6 +289,9 @@ def serialize_configuration_status(result: ConfigurationStatusResult) -> dict[st
         "failedBuildUrl": pipe.failed_build_url,
         "error": pipe.error,
         "stages": pipe_stages,
+        "isLive": pipe.is_live,
+        "outcome": pipe.outcome.value,
+        "observedAt": pipe.observed_at.isoformat() if pipe.observed_at else None,
     }
 
     synchronization_data = {

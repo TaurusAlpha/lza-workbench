@@ -12,6 +12,7 @@ from lza_workbench.configuration.git import (
 )
 from lza_workbench.configuration.sync import RemoteSyncStatus
 from lza_workbench.infrastructure.aws.codepipeline import PipelineStateResult
+from lza_workbench.infrastructure.aws.errors import ObservationOutcome
 
 
 @dataclass(frozen=True)
@@ -129,7 +130,10 @@ class ConfigurationPipelineStatus:
     failed_action: str | None
     failed_build_url: str | None
     error: str | None
-    state: PipelineStateResult | None
+    state: PipelineStateResult | None = None
+    is_live: bool = True
+    outcome: ObservationOutcome = ObservationOutcome.OBSERVED
+    observed_at: datetime | None = None
 
 
 @dataclass(frozen=True)

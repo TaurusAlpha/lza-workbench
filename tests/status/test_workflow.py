@@ -66,7 +66,7 @@ def test_get_root_status_workflow(configured_workspace: Path) -> None:
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
         patch(
-            "lza_workbench.status.observer.get_pipeline_state",
+            "lza_workbench.pipeline.observation.get_pipeline_state",
             wraps=status_root_mod.get_pipeline_state,
         ) as mock_pipe_state,
     ):
@@ -335,9 +335,9 @@ def test_get_root_status_workflow_live_healthy(configured_workspace: Path) -> No
     with (
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.status.observer.get_cloudformation_stack_status") as mock_cfn,
-        patch("lza_workbench.status.observer.get_pipeline_state") as mock_pipe_state,
-        patch("lza_workbench.status.observer.get_pipeline_execution") as mock_pipe_exec,
+        patch("lza_workbench.infrastructure.aws.cloudformation.get_cloudformation_stack_status") as mock_cfn,
+        patch("lza_workbench.pipeline.observation.get_pipeline_state") as mock_pipe_state,
+        patch("lza_workbench.pipeline.observation.get_latest_pipeline_execution") as mock_pipe_exec,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -557,7 +557,7 @@ def test_get_root_status_evaluates_git_sync_when_aws_unavailable(
         ),
     )
     monkeypatch.setattr(
-        "lza_workbench.status.observer.get_git_working_tree_status",
+        "lza_workbench.configuration.status.get_git_working_tree_status",
         lambda _dir: MagicMock(branch="main", has_uncommitted=False, uncommitted_count=0),
     )
     sync_status = GitRemoteSyncStatus(
@@ -568,7 +568,7 @@ def test_get_root_status_evaluates_git_sync_when_aws_unavailable(
     )
     mock_get_sync = MagicMock(return_value=sync_status)
     monkeypatch.setattr(
-        "lza_workbench.status.observer.get_git_remote_sync_status",
+        "lza_workbench.configuration.status.get_git_remote_sync_status",
         mock_get_sync,
     )
 
@@ -685,7 +685,7 @@ def test_get_installer_status_workflow(configured_workspace: Path) -> None:
         patch(
             "lza_workbench.installer.status.get_cloudformation_stack_status"
         ) as mock_st,
-        patch("lza_workbench.installer.status.get_pipeline_state") as mock_pipe,
+        patch("lza_workbench.pipeline.observation.get_pipeline_state") as mock_pipe,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()
@@ -862,7 +862,7 @@ def test_get_config_status_prefers_observed_pipeline_state_over_recorded_state(
     with (
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.configuration.inspection.pipeline.get_pipeline_state") as mock_pipeline_state,
+        patch("lza_workbench.pipeline.observation.get_pipeline_state") as mock_pipeline_state,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_pipeline_state.return_value = MagicMock(
@@ -916,8 +916,8 @@ def test_get_config_status_extracts_codebuild_diagnostics_on_fallback(tmp_path: 
     with (
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.validate_identity") as mock_val,
         patch("lza_workbench.infrastructure.aws.session.AwsClientFactory.get_client") as mock_client,
-        patch("lza_workbench.configuration.inspection.pipeline.get_pipeline_state") as mock_get_pipe,
-        patch("lza_workbench.configuration.inspection.pipeline.fetch_codebuild_diagnostics") as mock_diag,
+        patch("lza_workbench.pipeline.observation.get_pipeline_state") as mock_get_pipe,
+        patch("lza_workbench.pipeline.observation.fetch_codebuild_diagnostics") as mock_diag,
     ):
         mock_val.return_value = {"account": "123456789012", "arn": "arn:aws:iam::123:user/test"}
         mock_client.return_value = MagicMock()

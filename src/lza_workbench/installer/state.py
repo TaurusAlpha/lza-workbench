@@ -33,6 +33,11 @@ class InstallerStackObservation(BaseModel):
     deployed_version: str | None = None
     deployed_parameters: dict[str, str] = Field(default_factory=dict)
     observed_at: datetime | None = None
+    version_observed_at: datetime | None = None
+    parameters_observed_at: datetime | None = None
+    last_attempt_at: datetime | None = None
+    error: str | None = None
+    exists: bool = False
 
 
 class InstallerDeploymentRecord(BaseModel):
@@ -78,6 +83,29 @@ def record_installer_template(
     state.touch(now)
 
 
+def record_installer_attempt(
+    state: WorkspaceState,
+    *,
+    last_attempt_at: datetime | None = None,
+    error: str | None = None,
+) -> None:
+    """Record an attempted but failed installer stack observation without overwriting last-known observation."""
+    now = last_attempt_at or datetime.now(UTC)
+    existing = state.installer.observation
+    if existing is not None:
+        state.installer.observation = existing.model_copy(
+            update={"last_attempt_at": now, "error": error}
+        )
+    else:
+        state.installer.observation = InstallerStackObservation(
+            observed_at=None,
+            last_attempt_at=now,
+            error=error,
+            exists=False,
+        )
+    state.touch(now)
+
+
 def record_installer_observation(
     state: WorkspaceState,
     *,
@@ -88,6 +116,9 @@ def record_installer_observation(
     deployed_version: str | None = None,
     deployed_parameters: dict[str, str] | None = None,
     observed_at: datetime | None = None,
+    last_attempt_at: datetime | None = None,
+    error: str | None = None,
+    exists: bool | None = None,
 ) -> InstallerStackObservation:
     """Update the last-known AWS CloudFormation installer stack observation."""
     now = observed_at or datetime.now(UTC)
@@ -96,31 +127,64 @@ def record_installer_observation(
         existing is not None
         and (stack_id is None or existing.stack_id is None or existing.stack_id == stack_id)
     )
-    resolved_parameters: dict[str, str]
-    if deployed_parameters is not None:
-        resolved_parameters = dict(deployed_parameters)
-    elif existing is not None and same_stack:
-        resolved_parameters = dict(existing.deployed_parameters)
-    else:
-        resolved_parameters = {}
 
-    observation = InstallerStackObservation(
-        account_id=account_id if account_id is not None else (existing.account_id if existing else None),
-        stack_name=stack_name if stack_name is not None else (existing.stack_name if existing else None),
-        stack_id=stack_id if stack_id is not None else (existing.stack_id if existing else None),
-        stack_status=(
-            stack_status
-            if stack_status is not None
-            else (existing.stack_status if existing and same_stack else None)
-        ),
-        deployed_version=(
+    resolved_exists = (
+        exists
+        if exists is not None
+        else (bool(stack_status and stack_status != "NOT_DEPLOYED") if stack_status is not None else (existing.exists if existing else False))
+    )
+
+    if not resolved_exists or stack_status == "NOT_DEPLOYED":
+        observation = InstallerStackObservation(
+            account_id=account_id if account_id is not None else (existing.account_id if existing else None),
+            stack_name=stack_name if stack_name is not None else (existing.stack_name if existing else None),
+            stack_id=None,
+            stack_status="NOT_DEPLOYED",
+            deployed_version=None,
+            deployed_parameters={},
+            observed_at=now,
+            version_observed_at=None,
+            parameters_observed_at=None,
+            last_attempt_at=last_attempt_at or now,
+            error=error,
+            exists=False,
+        )
+    else:
+        version_observed_at = (
+            now
+            if deployed_version is not None
+            else (existing.version_observed_at if existing and same_stack else None)
+        )
+        parameters_observed_at = (
+            now
+            if deployed_parameters is not None
+            else (existing.parameters_observed_at if existing and same_stack else None)
+        )
+        resolved_version = (
             deployed_version
             if deployed_version is not None
             else (existing.deployed_version if existing and same_stack else None)
-        ),
-        deployed_parameters=resolved_parameters,
-        observed_at=now,
-    )
+        )
+        resolved_params = (
+            dict(deployed_parameters)
+            if deployed_parameters is not None
+            else (dict(existing.deployed_parameters) if existing and same_stack else {})
+        )
+        observation = InstallerStackObservation(
+            account_id=account_id if account_id is not None else (existing.account_id if existing else None),
+            stack_name=stack_name if stack_name is not None else (existing.stack_name if existing else None),
+            stack_id=stack_id if stack_id is not None else (existing.stack_id if existing else None),
+            stack_status=stack_status if stack_status is not None else (existing.stack_status if existing and same_stack else None),
+            deployed_version=resolved_version,
+            deployed_parameters=resolved_params,
+            observed_at=now,
+            version_observed_at=version_observed_at,
+            parameters_observed_at=parameters_observed_at,
+            last_attempt_at=last_attempt_at or now,
+            error=error,
+            exists=True,
+        )
+
     state.installer.observation = observation
     state.touch(now)
     return observation
@@ -214,6 +278,7 @@ __all__ = [
     "InstallerStackObservation",
     "InstallerState",
     "InstallerTemplateState",
+    "record_installer_attempt",
     "record_installer_deployment",
     "record_installer_deployment_failure",
     "record_installer_observation",

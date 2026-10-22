@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.13"
 
 [[package]]
@@ -295,7 +295,7 @@ wheels = [
 
 [[package]]
 name = "lza-workbench"
-version = "0.40.5"
+version = "0.40.6"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },

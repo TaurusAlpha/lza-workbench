@@ -130,6 +130,7 @@ src/lza_workbench/                                            # LZA Workbench pa
 │   │   └── v1.16.0/                                          # Packaged installer template v1.16.0.
 │   └── workspace_examples/                                   # Reference workspace YAML configurations for development and documentation.
 ├── status/                                                   # Status and operational observation package.
+│   ├── health.py                                             # Operational health calculation and aggregation for root and detailed status.
 │   ├── observer.py                                           # Workflow for gathering root workspace status data.
 │   └── summary.py                                            # Summary presentation models for root status reporting.
 ├── workspace/                                                # Stable public API for loading and persisting LZA workspaces.

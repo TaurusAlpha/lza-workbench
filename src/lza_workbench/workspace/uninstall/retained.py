@@ -27,7 +27,6 @@ from lza_workbench.workspace.uninstall.state import (
     UninstallState,
 )
 
-
 RETAINED_RESOURCES_FILE = "retained-resources.json"
 
 
